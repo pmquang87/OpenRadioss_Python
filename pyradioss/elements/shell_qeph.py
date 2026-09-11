@@ -566,10 +566,10 @@ def init_group(group, model, log):
     npt1 = np.zeros(n, dtype=bool)
     for sl, mat, prop in group.state["slices"]:
         nu = getattr(mat, "nu", 0.3)
-        E_mod = getattr(mat, "E", 0.0)
+        E_mod = getattr(mat, "E", 0.0) or getattr(mat, "e1", 0.0)
         a11[sl] = E_mod / max(1.0 - nu * nu, EM20)
         a12[sl] = nu * a11[sl]
-        gmod[sl] = getattr(mat, "G", E_mod / max(2.0 * (1.0 + nu), EM20))
+        gmod[sl] = getattr(mat, "G", 0.0) or getattr(mat, "g5", 0.0) or getattr(mat, "g0", 0.0) or (E_mod / max(2.0 * (1.0 + nu), EM20))
         params = getattr(prop, "params", {})
         nip = int(params.get("nip", 1)) if "nip" in params else getattr(prop, "nip", 1)
         one_pt = nip == 1
@@ -577,8 +577,17 @@ def init_group(group, model, log):
         shf[sl] = 0.0 if one_pt else SHEAR_FACTOR    # GEO(38) default 5/6
         dn_val = float(params.get("dn", 0.0)) if "dn" in params else float(getattr(prop, "dn", 0.0))
         amu[sl] = dn_val if dn_val > 0.0 else _DN_DEFAULT
-        if getattr(mat, "rho0", 0.0) > 0.0 and getattr(mat, "E", 0.0) > 0.0 and getattr(mat, "law", 1) != 0:
-            cspd[sl] = mat.sound_speed_shell()
+        is_law58 = getattr(mat, "law", None) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A")
+        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58
+        if getattr(mat, "rho0", 0.0) > 0.0 and has_stiff and getattr(mat, "law", 1) != 0:
+            if is_law58:
+                try:
+                    from ..materials import law58_fabr_a
+                    cspd[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    cspd[sl] = mat.sound_speed_shell()
+            else:
+                cspd[sl] = mat.sound_speed_shell()
         else:
             cspd[sl] = 0.0            # /MAT/VOID skin: claims no dt
     gs = gmod * shf
@@ -1081,7 +1090,7 @@ def forces(group, x, v, vr, dt, fint, mint):
             s_old = sig[sl, k, :].copy()
             s_new, ep_new = materials.shell_update(
                 mat, sig[sl, k, :], deps, st["epsp"][sl, k], dt,
-                _layer_extra(st, sl, k))
+                _layer_extra(st, sl, k, area=area))
             if ep_new is not None:
                 st["epsp"][sl, k] = ep_new
             if st["chk_fail"]:

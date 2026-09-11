@@ -551,7 +551,7 @@ def _init_material_state(group, nip_max):
         for _, mat, _ in st["slices"])
 
 
-def _layer_extra(st, sl, k):
+def _layer_extra(st, sl, k, area=None):
     """The ``extra`` dict for one layer of one part slice: views into the
     law-specific arrays plus the shared layer-failure flags."""
     extra = {name: arr[sl, k] for name, arr in st["mat_extra"].items()}
@@ -565,6 +565,10 @@ def _layer_extra(st, sl, k):
         extra["thklyl"] = st["thick0"][sl]
     elif "thick" in st:
         extra["thklyl"] = st["thick"][sl]
+    if area is not None:
+        extra["area"] = area[sl]
+    elif "area" in st:
+        extra["area"] = st["area"][sl]
     return extra
 
 
@@ -816,6 +820,9 @@ def forces(group, x, v, vr, dt, fint, mint):
         for sl, mat, prop in st.get("slices", []):
             if getattr(mat, "law", 1) == 0:
                 is_void[sl] = True
+            elif getattr(mat, "law", 1) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A"):
+                from ..materials import law58_fabr_a
+                c[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))
             else:
                 c[sl] = mat.sound_speed_shell()
         alive = st["off"] > 0.0
@@ -1015,7 +1022,7 @@ def forces(group, x, v, vr, dt, fint, mint):
             s_old = sig[sl, k, :].copy()
             s_new, ep_new = materials.shell_update(
                 mat, sig[sl, k, :], deps, st["epsp"][sl, k], dt,
-                _layer_extra(st, sl, k))
+                _layer_extra(st, sl, k, area=area))
             if ep_new is not None:
                 st["epsp"][sl, k] = ep_new
             if st["chk_fail"]:
@@ -1029,10 +1036,15 @@ def forces(group, x, v, vr, dt, fint, mint):
                 if cs is not None else s_new        # fiber -> elem
             Nres[sl] += wk[:, None] * s_res
             Mres[sl] += (wk * zk)[:, None] * s_res
-        c[sl] = mat.sound_speed_shell()
+        if getattr(mat, "law", 1) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A"):
+            from ..materials import law58_fabr_a
+            c[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))
+        else:
+            c[sl] = mat.sound_speed_shell()
         # elastic transverse shear resultant stress (with 5/6 factor)
         qold = st["qshear"][sl].copy()
-        st["qshear"][sl] += SHEAR_FACTOR * mat.G * gs[sl] * dt
+        g_val = getattr(mat, "G", 0.0) or getattr(mat, "g5", 0.0) or getattr(mat, "g0", 0.0)
+        st["qshear"][sl] += SHEAR_FACTOR * g_val * gs[sl] * dt
         de_layers[sl] += t_sl * np.einsum(
             "nk,nk->n", 0.5 * (qold + st["qshear"][sl]), gs[sl] * dt)
 

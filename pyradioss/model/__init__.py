@@ -24,4 +24,6 @@ from .entities import (  # noqa: F401
     InitialVelocity, Gravity, ConcentratedLoad, ImposedVelocity,
     RigidWall, Interface, Line, THRequest, Box,
     MatLaw25, MatCompPlas, MatCompsh, MatTsaiWu, MatCrasurv, MatCompositePlas,
+    MatLaw58, MatFabrA, MatFabricA,
 )
+

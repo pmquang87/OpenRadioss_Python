@@ -352,7 +352,7 @@ def forces(group, x, v, vr, dt, fint, mint):
             s_old = sig[sl, k, :].copy()
             s_new, ep_new = materials.shell_update(
                 mat, sig[sl, k, :], deps, st["epsp"][sl, k], dt,
-                _layer_extra(st, sl, k))
+                _layer_extra(st, sl, k, area=area))
             if ep_new is not None:
                 st["epsp"][sl, k] = ep_new
             if st["chk_fail"]:
@@ -364,13 +364,23 @@ def forces(group, x, v, vr, dt, fint, mint):
                 if cs is not None else s_new        # fiber -> elem
             Nres[sl] += wk[:, None] * s_res
             Mres[sl] += (wk * zk)[:, None] * s_res
-        if getattr(mat, "law", 1) == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or getattr(mat, "E", 0.0) <= 0.0:
+        is_law58 = getattr(mat, "law", None) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A")
+        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58
+        if getattr(mat, "law", 1) == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or not has_stiff:
             c[sl] = 0.0
         else:
-            c[sl] = mat.sound_speed_shell()
+            if is_law58:
+                try:
+                    from ..materials import law58_fabr_a
+                    c[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    c[sl] = mat.sound_speed_shell()
+            else:
+                c[sl] = mat.sound_speed_shell()
         # elastic transverse shear resultant stress (with 5/6 factor)
         qold = st["qshear"][sl].copy()
-        st["qshear"][sl] += SHEAR_FACTOR * mat.G * gs[sl] * dt
+        g_val = getattr(mat, "G", 0.0) or getattr(mat, "g5", 0.0) or getattr(mat, "g0", 0.0)
+        st["qshear"][sl] += SHEAR_FACTOR * g_val * gs[sl] * dt
         de_layers[sl] += t_sl * np.einsum(
             "nk,nk->n", 0.5 * (qold + st["qshear"][sl]), gs[sl] * dt)
 

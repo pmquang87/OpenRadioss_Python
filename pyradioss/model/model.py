@@ -105,7 +105,7 @@ from .entities import (
     MatLaw12, MatLaw13, MatLaw15, MatLaw18, MatLaw22, MatLaw25, MatLaw28, PropType9, PropType10, PropType51, PropType5, PropType6, PropType20,
     MatLaw52, MatLaw16, MatLaw14, MatLaw59, MatLaw64, FailLadDama, FailPuck, FailWierzbicki, FailWilkins, FailSpalling,
     PropType14, PropType8, PropType25, PropType32, PropType43,
-    MatLaw68, MatLaw72, MatLaw65, MatLaw58, MatLaw20, MatLaw38, MatLaw29, MatLaw34, MatLaw23, MatLaw78,
+    MatLaw68, MatLaw72, MatLaw65, MatLaw58, MatFabrA, MatFabricA, MatLaw20, MatLaw38, MatLaw29, MatLaw34, MatLaw23, MatLaw78,
     FailHashin, FailTensstrain, FailEnergy, FailUser,
     PropType34, PropType29, PropType30, PropType31,
     MatLaw100, MatLaw97, MatLaw71, MatLaw73, MatLaw84, MatLaw93, MatLaw133, MatLaw101, MatLaw43,

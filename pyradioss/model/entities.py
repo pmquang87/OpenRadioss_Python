@@ -112,6 +112,10 @@ class Material:
             return float(self.params["e0"])
         if "MAT_E" in self.params:
             return float(self.params["MAT_E"])
+        if "e1" in self.params:
+            return float(self.params["e1"])
+        if "MAT_E1" in self.params:
+            return float(self.params["MAT_E1"])
         g = self.G
         if g > 0.0:
             return 2.0 * g * (1.0 + self.nu)
@@ -162,6 +166,14 @@ class Material:
             return float(self.params["e0"]) / (2.0 * (1.0 + self.nu))
         if "MAT_E" in self.params:
             return float(self.params["MAT_E"]) / (2.0 * (1.0 + self.nu))
+        if "g5" in self.params and float(self.params["g5"]) > 0.0:
+            return float(self.params["g5"])
+        if "MAT_G5" in self.params and float(self.params["MAT_G5"]) > 0.0:
+            return float(self.params["MAT_G5"])
+        if "g0" in self.params and float(self.params["g0"]) > 0.0:
+            return float(self.params["g0"])
+        if "MAT_G0" in self.params and float(self.params["MAT_G0"]) > 0.0:
+            return float(self.params["MAT_G0"])
         return 0.0
 
     @property
@@ -302,6 +314,27 @@ class Material:
                 return float(law48_zhao.sound_speed_shell_law48(self, rho0=self.rho0))
             except Exception:
                 pass
+        if self.law in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A") or getattr(self, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A"):
+            try:
+                from ..materials import law58_fabr_a
+                return float(law58_fabr_a.sound_speed_shell_law58(self, rho0=self.rho0))
+            except Exception:
+                pass
+            rho0 = self.rho0 or (self.params.get("rho", 0.0) if hasattr(self, "params") and isinstance(self.params, dict) else 0.0)
+            if rho0 > 0.0:
+                p = getattr(self, "params", {}) or {}
+                nc = max(p.get("n1", p.get("n1_warp", 1)) or 1, 1) if isinstance(p, dict) else 1
+                nt = max(p.get("n2", p.get("n2_weft", 1)) or 1, 1) if isinstance(p, dict) else 1
+                e1 = p.get("e1", 0.0) or 0.0 if isinstance(p, dict) else 0.0
+                e2 = p.get("e2", 0.0) or 0.0 if isinstance(p, dict) else 0.0
+                g0 = p.get("g0", 0.0) or 0.0 if isinstance(p, dict) else 0.0
+                kc = e1 / nc
+                kt = e2 / nt
+                young = max(kc, kt, g0)
+                if young <= 0.0:
+                    young = max(e1, e2)
+                if young > 0.0:
+                    return float(np.sqrt(young / rho0))
         return float(np.sqrt(self.E / (self.rho0 * (1.0 - self.nu ** 2))))
 
     def __getstate__(self) -> Dict[str, Any]:
@@ -11201,33 +11234,268 @@ class MatLaw65:
 MatElastomer = MatLaw65
 
 
+class CallableFloat(float):
+    """Float that is also callable returning itself (compatible with both property and method access)."""
+    def __call__(self) -> float:
+        return float(self)
+
+
 @dataclass
 class MatLaw58:
-    """``/MAT/LAW58`` or ``/MAT/FABR_A``: Anisotropic fabric material model."""
+    """``/MAT/LAW58`` or ``/MAT/FABR_A`` (M553): Anisotropic fabric material model.
+
+    Fortran origin: ``starter/source/materials/mat/mat058/hm_read_mat58.F``,
+    ``engine/source/materials/mat/mat058/sig_mat58.F``, and
+    ``radioss2017/MAT/matl58_fabr_a.cfg``.
+    """
     id: int = 0
-    rho0: float = 0.0
-    rhor: float = 0.0
+    title: str = ""
+    rho: float = 0.0
+    refer_rho: float = 0.0
     e1: float = 0.0
     b1: float = 0.0
     e2: float = 0.0
     b2: float = 0.0
-    flex: float = 0.0
+    f: float = 0.01
     g0: float = 0.0
-    gt: float = 0.0
-    alphat: float = 0.0
-    sensor_id: int = 0
-    df: float = 0.0
+    gi: float = 0.0
+    alpha: float = 0.0
+    g5: float = 0.0
+    isensor: int = 0
+    df: float = 0.05
     ds: float = 0.0
-    gfrot: float = 0.0
-    zero_stress: float = 0.0
-    n1: int = 0
-    n2: int = 0
-    s1: float = 0.0
-    s2: float = 0.0
-    title: str = ""
+    friction_phi: float = 0.0
+    m58_zerostress: float = 0.0
+    n1_warp: int = 1
+    n2_weft: int = 1
+    s1: float = 0.1
+    s2: float = 0.1
+    c4: float = 0.0
+    c5: float = 0.0
+    fun_a1: int = 0
+    c1: float = 1.0
+    fun_a2: int = 0
+    c2: float = 1.0
+    fun_a3: int = 0
+    c3: float = 1.0
+    fun_a4: int = 0
+    scale4: float = 1.0
+    fun_a5: int = 0
+    scale5: float = 1.0
+    fun_a6: int = 0
+    scale6: float = 1.0
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @rho0.setter
+    def rho0(self, value: float) -> None:
+        self.rho = value
+
+    @property
+    def sound_speed_shell(self) -> CallableFloat:
+        """Shell/membrane sound speed: c = sqrt(E / rho0) with E = max(E1/N1, E2/N2)."""
+        import math
+        rho_val = self.rho if self.rho > 0.0 else self.refer_rho
+        if rho_val <= 0.0:
+            return CallableFloat(0.0)
+        nc = max(self.n1_warp, 1) if self.n1_warp != 0 else 1
+        nt = max(self.n2_weft, 1) if self.n2_weft != 0 else 1
+        kc = self.e1 / nc
+        kt = self.e2 / nt
+        young = max(kc, kt)
+        if young <= 0.0:
+            young = max(self.e1, self.e2)
+        c = math.sqrt(young / rho_val) if young > 0.0 else 0.0
+        return CallableFloat(c)
+
+    # Backward compatibility aliases
+    @property
+    def rhor(self) -> float:
+        return self.refer_rho
+
+    @rhor.setter
+    def rhor(self, val: float) -> None:
+        self.refer_rho = val
+
+    @property
+    def ref_rho(self) -> float:
+        return self.refer_rho
+
+    @ref_rho.setter
+    def ref_rho(self, val: float) -> None:
+        self.refer_rho = val
+
+    @property
+    def flex(self) -> float:
+        return self.f
+
+    @flex.setter
+    def flex(self, val: float) -> None:
+        self.f = val
+
+    @property
+    def gt(self) -> float:
+        return self.gi
+
+    @gt.setter
+    def gt(self, val: float) -> None:
+        self.gi = val
+
+    @property
+    def alphat(self) -> float:
+        return self.alpha
+
+    @alphat.setter
+    def alphat(self, val: float) -> None:
+        self.alpha = val
+
+    @property
+    def sensor_id(self) -> int:
+        return self.isensor
+
+    @sensor_id.setter
+    def sensor_id(self, val: int) -> None:
+        self.isensor = val
+
+    @property
+    def gfrot(self) -> float:
+        return self.friction_phi
+
+    @gfrot.setter
+    def gfrot(self, val: float) -> None:
+        self.friction_phi = val
+
+    @property
+    def zero_stress(self) -> float:
+        return self.m58_zerostress
+
+    @zero_stress.setter
+    def zero_stress(self, val: float) -> None:
+        self.m58_zerostress = val
+
+    @property
+    def n1(self) -> int:
+        return self.n1_warp
+
+    @n1.setter
+    def n1(self, val: int) -> None:
+        self.n1_warp = val
+
+    @property
+    def n2(self) -> int:
+        return self.n2_weft
+
+    @n2.setter
+    def n2(self, val: int) -> None:
+        self.n2_weft = val
+
+    @property
+    def fun_id1(self) -> int:
+        return self.fun_a1
+
+    @fun_id1.setter
+    def fun_id1(self, val: int) -> None:
+        self.fun_a1 = val
+
+    @property
+    def fun_id2(self) -> int:
+        return self.fun_a2
+
+    @fun_id2.setter
+    def fun_id2(self, val: int) -> None:
+        self.fun_a2 = val
+
+    @property
+    def fun_id3(self) -> int:
+        return self.fun_a3
+
+    @fun_id3.setter
+    def fun_id3(self, val: int) -> None:
+        self.fun_a3 = val
+
+    @property
+    def fun_id4(self) -> int:
+        return self.fun_a4
+
+    @fun_id4.setter
+    def fun_id4(self, val: int) -> None:
+        self.fun_a4 = val
+
+    @property
+    def fun_id5(self) -> int:
+        return self.fun_a5
+
+    @fun_id5.setter
+    def fun_id5(self, val: int) -> None:
+        self.fun_a5 = val
+
+    @property
+    def fun_id6(self) -> int:
+        return self.fun_a6
+
+    @fun_id6.setter
+    def fun_id6(self, val: int) -> None:
+        self.fun_a6 = val
+
+    @property
+    def fscale1(self) -> float:
+        return self.c1
+
+    @fscale1.setter
+    def fscale1(self, val: float) -> None:
+        self.c1 = val
+
+    @property
+    def fscale2(self) -> float:
+        return self.c2
+
+    @fscale2.setter
+    def fscale2(self, val: float) -> None:
+        self.c2 = val
+
+    @property
+    def fscale3(self) -> float:
+        return self.c3
+
+    @fscale3.setter
+    def fscale3(self, val: float) -> None:
+        self.c3 = val
+
+    @property
+    def fscale4(self) -> float:
+        return self.scale4
+
+    @fscale4.setter
+    def fscale4(self, val: float) -> None:
+        self.scale4 = val
+
+    @property
+    def fscale5(self) -> float:
+        return self.scale5
+
+    @fscale5.setter
+    def fscale5(self, val: float) -> None:
+        self.scale5 = val
+
+    @property
+    def fscale6(self) -> float:
+        return self.scale6
+
+    @fscale6.setter
+    def fscale6(self, val: float) -> None:
+        self.scale6 = val
 
 
 MatFabrA = MatLaw58
+MatFabricA = MatLaw58
+class FabricAMaterial(Material):
+    """Container for /MAT/LAW58 (/MAT/FABR_A) fabric material."""
+    pass
+
+
+MaterialLaw58 = FabricAMaterial
 
 
 @dataclass

@@ -1974,6 +1974,274 @@ class StarterDeck:
         kwargs.setdefault("law_name", "PLAS_ZHAO")
         return self.mat_law48(*args, **kwargs)
 
+    def mat_law58(
+        self,
+        mid: int = 0,
+        title: str = "",
+        rho: float = 0.0,
+        refer_rho: Optional[float] = None,
+        e1: float = 0.0,
+        b1: float = 0.0,
+        e2: float = 0.0,
+        b2: float = 0.0,
+        f: float = 0.01,
+        g0: float = 0.0,
+        gi: float = 0.0,
+        alpha: float = 0.0,
+        g5: float = 0.0,
+        isensor: int = 0,
+        df: float = 0.05,
+        ds: float = 0.0,
+        friction_phi: float = 0.0,
+        m58_zerostress: float = 0.0,
+        n1_warp: int = 1,
+        n2_weft: int = 1,
+        s1: float = 0.1,
+        s2: float = 0.1,
+        c4: float = 0.0,
+        c5: float = 0.0,
+        fun_a1: int = 0,
+        c1: float = 1.0,
+        fun_a2: int = 0,
+        c2: float = 1.0,
+        fun_a3: int = 0,
+        c3: float = 1.0,
+        fun_a4: int = 0,
+        scale4: float = 1.0,
+        fun_a5: int = 0,
+        scale5: float = 1.0,
+        fun_a6: int = 0,
+        scale6: float = 1.0,
+        fixed_format: bool = True,
+        law_name: str = "LAW58",
+        unit_id: Optional[int] = None,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW58`` (/MAT/FABR_A, /MAT/FABRIC_A) — cfg radioss2017/MAT/matl58_fabr_a.cfg & hm_read_mat58.F:
+        Card 1: RHO, Refer_Rho (%20lg%20lg)
+        Card 2: E1, B1, E2, B2, Flex (%20lg%20lg%20lg%20lg%20lg)
+        Card 3: G0, GT, AlphaT, Gsh, sensor_ID (%20lg%20lg%20lg%20lg          %10d)
+        Card 4: Df, Ds, Friction_phi, blank, ZERO_STRESS (%20lg%20lg%20lg                    %20lg)
+        Card 5: N1, N2, S1, S2, FLEX1, FLEX2 (%10d%10d%20lg%20lg%20lg%20lg)
+        Cards 6-8: FUN_A1..3, MAT_C1..3 (%10d          %20lg)
+        Card 9: FUN_A4, FUN_A5, scale4, scale5, FUN_A6, scale6 (%10d%10d%20lg%20lg%10d%20lg)
+        """
+        mat_obj = None
+        if hasattr(mid, "e1") or hasattr(mid, "n1_warp") or hasattr(mid, "n1") or hasattr(mid, "m58_zerostress") or hasattr(mid, "flex"):
+            mat_obj = mid
+        elif "mat" in kwargs and (hasattr(kwargs["mat"], "e1") or hasattr(kwargs["mat"], "n1_warp")):
+            mat_obj = kwargs["mat"]
+        elif "mat_law58" in kwargs and (hasattr(kwargs["mat_law58"], "e1") or hasattr(kwargs["mat_law58"], "n1_warp")):
+            mat_obj = kwargs["mat_law58"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", 0)
+            if not title:
+                title = getattr(mat_obj, "title", "")
+            if rho == 0.0:
+                rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", 0.0))
+            if refer_rho is None:
+                refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "ref_rho", getattr(mat_obj, "rhor", None)))
+            if e1 == 0.0:
+                e1 = getattr(mat_obj, "e1", 0.0)
+            if b1 == 0.0:
+                b1 = getattr(mat_obj, "b1", 0.0)
+            if e2 == 0.0:
+                e2 = getattr(mat_obj, "e2", 0.0)
+            if b2 == 0.0:
+                b2 = getattr(mat_obj, "b2", 0.0)
+            if f == 0.01:
+                f = getattr(mat_obj, "f", getattr(mat_obj, "flex", 0.01))
+            if g0 == 0.0:
+                g0 = getattr(mat_obj, "g0", 0.0)
+            if gi == 0.0:
+                gi = getattr(mat_obj, "gi", getattr(mat_obj, "gt", 0.0))
+            if alpha == 0.0:
+                alpha = getattr(mat_obj, "alpha", getattr(mat_obj, "alphat", 0.0))
+            if g5 == 0.0:
+                g5 = getattr(mat_obj, "g5", 0.0)
+            if isensor == 0:
+                isensor = getattr(mat_obj, "isensor", getattr(mat_obj, "sensor_id", 0))
+            if df == 0.05:
+                df = getattr(mat_obj, "df", 0.05)
+            if ds == 0.0:
+                ds = getattr(mat_obj, "ds", 0.0)
+            if friction_phi == 0.0:
+                friction_phi = getattr(mat_obj, "friction_phi", getattr(mat_obj, "gfrot", 0.0))
+            if m58_zerostress == 0.0:
+                m58_zerostress = getattr(mat_obj, "m58_zerostress", getattr(mat_obj, "zero_stress", 0.0))
+            if n1_warp == 1:
+                n1_warp = getattr(mat_obj, "n1_warp", getattr(mat_obj, "n1", 1))
+            if n2_weft == 1:
+                n2_weft = getattr(mat_obj, "n2_weft", getattr(mat_obj, "n2", 1))
+            if s1 == 0.1:
+                s1 = getattr(mat_obj, "s1", 0.1)
+            if s2 == 0.1:
+                s2 = getattr(mat_obj, "s2", 0.1)
+            if c4 == 0.0:
+                c4 = getattr(mat_obj, "c4", 0.0)
+            if c5 == 0.0:
+                c5 = getattr(mat_obj, "c5", 0.0)
+            if fun_a1 == 0:
+                fun_a1 = getattr(mat_obj, "fun_a1", getattr(mat_obj, "fun_id1", 0))
+            if c1 == 1.0:
+                c1 = getattr(mat_obj, "c1", getattr(mat_obj, "fscale1", 1.0))
+            if fun_a2 == 0:
+                fun_a2 = getattr(mat_obj, "fun_a2", getattr(mat_obj, "fun_id2", 0))
+            if c2 == 1.0:
+                c2 = getattr(mat_obj, "c2", getattr(mat_obj, "fscale2", 1.0))
+            if fun_a3 == 0:
+                fun_a3 = getattr(mat_obj, "fun_a3", getattr(mat_obj, "fun_id3", 0))
+            if c3 == 1.0:
+                c3 = getattr(mat_obj, "c3", getattr(mat_obj, "fscale3", 1.0))
+            if fun_a4 == 0:
+                fun_a4 = getattr(mat_obj, "fun_a4", getattr(mat_obj, "fun_id4", 0))
+            if scale4 == 1.0:
+                scale4 = getattr(mat_obj, "scale4", getattr(mat_obj, "fscale4", 1.0))
+            if fun_a5 == 0:
+                fun_a5 = getattr(mat_obj, "fun_a5", getattr(mat_obj, "fun_id5", 0))
+            if scale5 == 1.0:
+                scale5 = getattr(mat_obj, "scale5", getattr(mat_obj, "fscale5", 1.0))
+            if fun_a6 == 0:
+                fun_a6 = getattr(mat_obj, "fun_a6", getattr(mat_obj, "fun_id6", 0))
+            if scale6 == 1.0:
+                scale6 = getattr(mat_obj, "scale6", getattr(mat_obj, "fscale6", 1.0))
+
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+        if "mat_id" in kw_low and mid == 0:
+            mid = kw_low["mat_id"]
+        if "id" in kw_low and mid == 0:
+            mid = kw_low["id"]
+        if "rho0" in kw_low and rho == 0.0:
+            rho = kw_low["rho0"]
+        if "refer_rho" in kw_low and refer_rho is None:
+            refer_rho = kw_low["refer_rho"]
+        if "ref_rho" in kw_low and refer_rho is None:
+            refer_rho = kw_low["ref_rho"]
+        if "rhor" in kw_low and refer_rho is None:
+            refer_rho = kw_low["rhor"]
+        if "flex" in kw_low and f == 0.01:
+            f = kw_low["flex"]
+        if "gt" in kw_low and gi == 0.0:
+            gi = kw_low["gt"]
+        if "alphat" in kw_low and alpha == 0.0:
+            alpha = kw_low["alphat"]
+        if "sensor_id" in kw_low and isensor == 0:
+            isensor = kw_low["sensor_id"]
+        if "gfrot" in kw_low and friction_phi == 0.0:
+            friction_phi = kw_low["gfrot"]
+        if "zero_stress" in kw_low and m58_zerostress == 0.0:
+            m58_zerostress = kw_low["zero_stress"]
+        if "n1" in kw_low and n1_warp == 1:
+            n1_warp = kw_low["n1"]
+        if "n2" in kw_low and n2_weft == 1:
+            n2_weft = kw_low["n2"]
+        if "fun_id1" in kw_low and fun_a1 == 0:
+            fun_a1 = kw_low["fun_id1"]
+        if "fscale1" in kw_low and c1 == 1.0:
+            c1 = kw_low["fscale1"]
+        if "fun_id2" in kw_low and fun_a2 == 0:
+            fun_a2 = kw_low["fun_id2"]
+        if "fscale2" in kw_low and c2 == 1.0:
+            c2 = kw_low["fscale2"]
+        if "fun_id3" in kw_low and fun_a3 == 0:
+            fun_a3 = kw_low["fun_id3"]
+        if "fscale3" in kw_low and c3 == 1.0:
+            c3 = kw_low["fscale3"]
+        if "fun_id4" in kw_low and fun_a4 == 0:
+            fun_a4 = kw_low["fun_id4"]
+        if "fscale4" in kw_low and scale4 == 1.0:
+            scale4 = kw_low["fscale4"]
+        if "fun_id5" in kw_low and fun_a5 == 0:
+            fun_a5 = kw_low["fun_id5"]
+        if "fscale5" in kw_low and scale5 == 1.0:
+            scale5 = kw_low["fscale5"]
+        if "fun_id6" in kw_low and fun_a6 == 0:
+            fun_a6 = kw_low["fun_id6"]
+        if "fscale6" in kw_low and scale6 == 1.0:
+            scale6 = kw_low["fscale6"]
+        if "fixed_format" in kw_low:
+            fixed_format = bool(kw_low["fixed_format"])
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        if fixed_format:
+            # Card 1: RHO, Refer_Rho (MAT_LAW58_1: [20, 20])
+            if refer_rho is not None and float(refer_rho) != 0.0:
+                self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(refer_rho, 20)}")
+            else:
+                self.lines.append(fmt_float(rho, 20))
+
+            # Card 2: E1, B1, E2, B2, Flex (MAT_LAW58_2: [20, 20, 20, 20, 20])
+            self.lines.append(
+                f"{fmt_float(e1, 20)}{fmt_float(b1, 20)}{fmt_float(e2, 20)}{fmt_float(b2, 20)}{fmt_float(f, 20)}"
+            )
+
+            # Card 3: G0, GT, AlphaT, Gsh, sensor_ID (MAT_LAW58_3: [20, 20, 20, 20, 10, 10])
+            self.lines.append(
+                f"{fmt_float(g0, 20)}{fmt_float(gi, 20)}{fmt_float(alpha, 20)}{fmt_float(g5, 20)}{' ' * 10}{fmt_int(isensor, 10)}"
+            )
+
+            # Card 4: Df, Ds, Friction_phi, blank, ZERO_STRESS (MAT_LAW58_4: [20, 20, 20, 20, 20])
+            self.lines.append(
+                f"{fmt_float(df, 20)}{fmt_float(ds, 20)}{fmt_float(friction_phi, 20)}{' ' * 20}{fmt_float(m58_zerostress, 20)}"
+            )
+
+            # Card 5: N1, N2, S1, S2, FLEX1, FLEX2 (MAT_LAW58_5: [10, 10, 20, 20, 20, 20])
+            self.lines.append(
+                f"{fmt_int(n1_warp, 10)}{fmt_int(n2_weft, 10)}{fmt_float(s1, 20)}{fmt_float(s2, 20)}{fmt_float(c4, 20)}{fmt_float(c5, 20)}"
+            )
+
+            # Cards 6-8: Loading curves (if any active)
+            has_curves = any(x != 0 for x in (fun_a1, fun_a2, fun_a3, fun_a4, fun_a5, fun_a6))
+            if has_curves:
+                self.lines.append(f"{fmt_int(fun_a1, 10)}{' ' * 10}{fmt_float(c1, 20)}")
+                self.lines.append(f"{fmt_int(fun_a2, 10)}{' ' * 10}{fmt_float(c2, 20)}")
+                self.lines.append(f"{fmt_int(fun_a3, 10)}{' ' * 10}{fmt_float(c3, 20)}")
+
+                # Card 9: Unloading curves (if active)
+                if any(x != 0 for x in (fun_a4, fun_a5, fun_a6)):
+                    self.lines.append(
+                        f"{fmt_int(fun_a4, 10)}{fmt_int(fun_a5, 10)}{fmt_float(scale4, 20)}{fmt_float(scale5, 20)}{fmt_int(fun_a6, 10)}{fmt_float(scale6, 20)}"
+                    )
+        else:
+            delim = kw_low.get("delimiter", ", " if (kw_low.get("comma") or kw_low.get("comma_delimited")) else " ")
+            if refer_rho is not None and float(refer_rho) != 0.0:
+                self.lines.append(f"{rho}{delim}{refer_rho}")
+            else:
+                self.lines.append(f"{rho}")
+
+            self.lines.append(f"{e1}{delim}{b1}{delim}{e2}{delim}{b2}{delim}{f}")
+            self.lines.append(f"{g0}{delim}{gi}{delim}{alpha}{delim}{g5}{delim}{isensor}")
+            self.lines.append(f"{df}{delim}{ds}{delim}{friction_phi}{delim}0.0{delim}{m58_zerostress}")
+            self.lines.append(f"{n1_warp}{delim}{n2_weft}{delim}{s1}{delim}{s2}{delim}{c4}{delim}{c5}")
+
+            has_curves = any(x != 0 for x in (fun_a1, fun_a2, fun_a3, fun_a4, fun_a5, fun_a6))
+            if has_curves:
+                self.lines.append(f"{fun_a1}{delim}{c1}")
+                self.lines.append(f"{fun_a2}{delim}{c2}")
+                self.lines.append(f"{fun_a3}{delim}{c3}")
+
+                if any(x != 0 for x in (fun_a4, fun_a5, fun_a6)):
+                    self.lines.append(f"{fun_a4}{delim}{fun_a5}{delim}{scale4}{delim}{scale5}{delim}{fun_a6}{delim}{scale6}")
+
+        return self
+
+    def mat_fabr_a(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/FABR_A`` — synonym for ``/MAT/LAW58``."""
+        kwargs.setdefault("law_name", "FABR_A")
+        return self.mat_law58(*args, **kwargs)
+
+    def mat_fabric_a(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/FABRIC_A`` — synonym for ``/MAT/LAW58``."""
+        kwargs.setdefault("law_name", "FABRIC_A")
+        return self.mat_law58(*args, **kwargs)
+
+
     def mat_law94(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/LAW94``."""
         self._header("MAT", "LAW94", mid)
@@ -4853,7 +5121,88 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
                     nu=nu if nu > 0 else 0.495)
     elif law in ("LAW6", "HYD_VISC"):
         d.mat_hyd_visc(mid, title, cards)
-    elif law in ("LAW58", "FABRI"):
+    elif law in ("LAW58", "FABR_A", "MAT_FABR_A", "FABRIC_A", "MAT_FABRIC_A", "LAW58_FABR_A"):
+        kw: Dict = {}
+        rho_ref = None
+        is_fixed = getattr(b, "fixed", False)
+        vcards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
+
+        def _get_toks_58(c, layout_name):
+            if is_fixed and hasattr(c, "cut"):
+                return c.cut(layout_name)
+            raw = c.raw if hasattr(c, "raw") else str(c)
+            if "," in raw:
+                return [t.strip() for t in raw.split(",") if t.strip()]
+            return c.tokens()
+
+        if len(vcards) >= 1:
+            toks = _get_toks_58(vcards[0], "MAT_LAW58_1")
+            if len(toks) >= 1 and toks[0]: kw["rho"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: rho_ref = float(toks[1])
+        if len(vcards) >= 2:
+            toks = _get_toks_58(vcards[1], "MAT_LAW58_2")
+            if len(toks) >= 1 and toks[0]: kw["e1"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["b1"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["e2"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["b2"] = float(toks[3])
+            if len(toks) >= 5 and toks[4]: kw["f"] = float(toks[4])
+        if len(vcards) >= 3:
+            toks = _get_toks_58(vcards[2], "MAT_LAW58_3")
+            if len(toks) >= 1 and toks[0]: kw["g0"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["gi"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["alpha"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["g5"] = float(toks[3])
+            if len(toks) >= 6 and toks[5]: kw["isensor"] = int(toks[5])
+            elif len(toks) >= 5 and toks[4]: kw["isensor"] = int(toks[4])
+        if len(vcards) >= 4:
+            toks = _get_toks_58(vcards[3], "MAT_LAW58_4")
+            if len(toks) >= 1 and toks[0]: kw["df"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["ds"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["friction_phi"] = float(toks[2])
+            if len(toks) >= 5 and toks[4]: kw["m58_zerostress"] = float(toks[4])
+            elif len(toks) >= 4 and toks[3]: kw["m58_zerostress"] = float(toks[3])
+        if len(vcards) >= 5:
+            toks = _get_toks_58(vcards[4], "MAT_LAW58_5")
+            if len(toks) >= 1 and toks[0]: kw["n1_warp"] = int(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["n2_weft"] = int(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["s1"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["s2"] = float(toks[3])
+            if len(toks) >= 5 and toks[4]: kw["c4"] = float(toks[4])
+            if len(toks) >= 6 and toks[5]: kw["c5"] = float(toks[5])
+        if len(vcards) >= 6:
+            toks = _get_toks_58(vcards[5], "MAT_LAW58_6")
+            if len(vcards) == 6 and len(vcards[5].tokens()) >= 4:
+                t_u = _get_toks_58(vcards[5], "MAT_LAW58_7")
+                if len(t_u) >= 1 and t_u[0]: kw["fun_a4"] = int(t_u[0])
+                if len(t_u) >= 2 and t_u[1]: kw["fun_a5"] = int(t_u[1])
+                if len(t_u) >= 3 and t_u[2]: kw["scale4"] = float(t_u[2])
+                if len(t_u) >= 4 and t_u[3]: kw["scale5"] = float(t_u[3])
+                if len(t_u) >= 5 and t_u[4]: kw["fun_a6"] = int(t_u[4])
+                if len(t_u) >= 6 and t_u[5]: kw["scale6"] = float(t_u[5])
+            else:
+                if len(toks) >= 1 and toks[0]: kw["fun_a1"] = int(toks[0])
+                if len(toks) >= 3 and toks[2]: kw["c1"] = float(toks[2])
+                elif len(toks) >= 2 and toks[1]: kw["c1"] = float(toks[1])
+        if len(vcards) >= 7:
+            toks = _get_toks_58(vcards[6], "MAT_LAW58_6")
+            if len(toks) >= 1 and toks[0]: kw["fun_a2"] = int(toks[0])
+            if len(toks) >= 3 and toks[2]: kw["c2"] = float(toks[2])
+            elif len(toks) >= 2 and toks[1]: kw["c2"] = float(toks[1])
+        if len(vcards) >= 8:
+            toks = _get_toks_58(vcards[7], "MAT_LAW58_6")
+            if len(toks) >= 1 and toks[0]: kw["fun_a3"] = int(toks[0])
+            if len(toks) >= 3 and toks[2]: kw["c3"] = float(toks[2])
+            elif len(toks) >= 2 and toks[1]: kw["c3"] = float(toks[1])
+        if len(vcards) >= 9:
+            toks = _get_toks_58(vcards[8], "MAT_LAW58_7")
+            if len(toks) >= 1 and toks[0]: kw["fun_a4"] = int(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["fun_a5"] = int(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["scale4"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["scale5"] = float(toks[3])
+            if len(toks) >= 5 and toks[4]: kw["fun_a6"] = int(toks[4])
+            if len(toks) >= 6 and toks[5]: kw["scale6"] = float(toks[5])
+        d.mat_law58(mid, title, refer_rho=rho_ref, law_name=law, fixed_format=is_fixed, **kw)
+    elif law in ("FABRI",):
         d.mat_fabri(mid, title, cards)
     elif law in ("LAW60", "PLAS_T3", "FABRIC", "MAT_PLAS_T3", "MAT_FABRIC"):
         kw: Dict = {}

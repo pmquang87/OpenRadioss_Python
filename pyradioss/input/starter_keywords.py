@@ -1141,7 +1141,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW65", "ELASTOMER", "MAT_ELASTOMER", "LAW65_ELASTOMER"):
         read_mat_law65(block, model, log)
         return
-    if lawname in ("LAW58", "FABR_A", "MAT_FABR_A", "FABRIC_A", "LAW58_FABR_A"):
+    if lawname in ("LAW58", "FABR_A", "MAT_FABR_A", "FABRIC_A", "MAT_FABRIC_A", "MAT_LAW58", "LAW58_FABR_A"):
         read_mat_law58(block, model, log)
         return
     if lawname in ("LAW20", "BIMAT", "MAT_BIMAT", "LAW20_BIMAT"):
@@ -41873,99 +41873,296 @@ def read_mat_law65(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law58(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW58`` or ``/MAT/FABR_A`` (M190): Anisotropic fabric material model."""
+    """``/MAT/LAW58``, ``/MAT/FABR_A``, or ``/MAT/FABRIC_A`` (M190/M553): Anisotropic fabric material model.
+
+    Fortran origin: ``starter/source/materials/mat/mat058/hm_read_mat58.F`` and
+    ``radioss2017/MAT/matl58_fabr_a.cfg``.
+    """
     from ..model.entities import MatLaw58, Material
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
     if not valid_cards:
         log.error(f"/MAT/LAW58/{mat_id}: missing data card", block.source)
         return
 
-    rho0, rhor = 0.0, 0.0
-    e1, b1, e2, b2, flex = 0.0, 0.0, 0.0, 0.0, 0.0
-    g0, gt, alphat, sensor_id = 0.0, 0.0, 0.0, 0
-    df, ds, gfrot, zero_stress = 0.0, 0.0, 0.0, 0.0
-    n1, n2 = 0, 0
-    s1, s2 = 0.0, 0.0
+    rho, refer_rho = 0.0, 0.0
+    e1, b1, e2, b2, f = 0.0, 0.0, 0.0, 0.0, 0.01
+    g0, gi, alpha, g5, isensor = 0.0, 0.0, 0.0, 0.0, 0
+    df, ds, friction_phi, m58_zerostress = 0.05, 0.0, 0.0, 0.0
+    n1_warp, n2_weft, s1, s2, c4, c5 = 1, 1, 0.1, 0.1, 0.0, 0.0
+    fun_a1, c1 = 0, 1.0
+    fun_a2, c2 = 0, 1.0
+    fun_a3, c3 = 0, 1.0
+    fun_a4, scale4 = 0, 1.0
+    fun_a5, scale5 = 0, 1.0
+    fun_a6, scale6 = 0, 1.0
 
-    if block.fixed:
+    is_fixed = getattr(block, "fixed", False)
+    if is_fixed and valid_cards:
+        raw0 = valid_cards[0].raw.rstrip()
+        raw1 = valid_cards[1].raw.rstrip() if len(valid_cards) > 1 else ""
+        raw2 = valid_cards[2].raw.rstrip() if len(valid_cards) > 2 else ""
+        if "," in raw0 or "," in raw1 or "," in raw2:
+            is_fixed = False
+        elif len(valid_cards) > 1 and len(valid_cards[1].tokens()) >= 2 and len(raw1) < 80:
+            is_fixed = False
+        elif len(valid_cards) > 2 and len(valid_cards[2].tokens()) >= 2 and len(raw2) < 80:
+            is_fixed = False
+
+    if is_fixed:
+        # Card 1: RHO, Refer_Rho (MAT_LAW58_1: [20, 20])
         if len(valid_cards) > 0:
             c0 = valid_cards[0].cut("MAT_LAW58_1")
-            rho0 = _safe_float(c0[0]) if len(c0) > 0 else 0.0
-            rhor = _safe_float(c0[1]) if len(c0) > 1 else 0.0
+            rho = _safe_float(c0[0]) if len(c0) > 0 and c0[0] else 0.0
+            refer_rho = _safe_float(c0[1]) if len(c0) > 1 and c0[1] else 0.0
+        # Card 2: E1, B1, E2, B2, Flex (MAT_LAW58_2: [20, 20, 20, 20, 20])
         if len(valid_cards) > 1:
-            c1 = valid_cards[1].cut("MAT_LAW58_2")
-            e1 = _safe_float(c1[0]) if len(c1) > 0 else 0.0
-            b1 = _safe_float(c1[1]) if len(c1) > 1 else 0.0
-            e2 = _safe_float(c1[2]) if len(c1) > 2 else 0.0
-            b2 = _safe_float(c1[3]) if len(c1) > 3 else 0.0
-            flex = _safe_float(c1[4]) if len(c1) > 4 else 0.0
+            c1_cut = valid_cards[1].cut("MAT_LAW58_2")
+            e1 = _safe_float(c1_cut[0]) if len(c1_cut) > 0 and c1_cut[0] else 0.0
+            b1 = _safe_float(c1_cut[1]) if len(c1_cut) > 1 and c1_cut[1] else 0.0
+            e2 = _safe_float(c1_cut[2]) if len(c1_cut) > 2 and c1_cut[2] else 0.0
+            b2 = _safe_float(c1_cut[3]) if len(c1_cut) > 3 and c1_cut[3] else 0.0
+            f = _safe_float(c1_cut[4]) if len(c1_cut) > 4 and c1_cut[4] else 0.0
+        # Card 3: G0, GT, AlphaT, Gsh, blank, sensor_ID (MAT_LAW58_3: [20, 20, 20, 20, 10, 10])
         if len(valid_cards) > 2:
-            c2 = valid_cards[2].cut("MAT_LAW58_3")
-            g0 = _safe_float(c2[0]) if len(c2) > 0 else 0.0
-            gt = _safe_float(c2[1]) if len(c2) > 1 else 0.0
-            alphat = _safe_float(c2[2]) if len(c2) > 2 else 0.0
-            sensor_id = _safe_int(c2[3]) if len(c2) > 3 else 0
+            c2_cut = valid_cards[2].cut("MAT_LAW58_3")
+            g0 = _safe_float(c2_cut[0]) if len(c2_cut) > 0 and c2_cut[0] else 0.0
+            gi = _safe_float(c2_cut[1]) if len(c2_cut) > 1 and c2_cut[1] else 0.0
+            alpha = _safe_float(c2_cut[2]) if len(c2_cut) > 2 and c2_cut[2] else 0.0
+            g5 = _safe_float(c2_cut[3]) if len(c2_cut) > 3 and c2_cut[3] else 0.0
+            isensor = _safe_int(c2_cut[5]) if len(c2_cut) > 5 and c2_cut[5] else (_safe_int(c2_cut[4]) if len(c2_cut) > 4 and c2_cut[4] else 0)
+        # Card 4: Df, Ds, Friction_phi, blank, ZERO_STRESS (MAT_LAW58_4: [20, 20, 20, 20, 20])
         if len(valid_cards) > 3:
-            c3 = valid_cards[3].cut("MAT_LAW58_4")
-            df = _safe_float(c3[0]) if len(c3) > 0 else 0.0
-            ds = _safe_float(c3[1]) if len(c3) > 1 else 0.0
-            gfrot = _safe_float(c3[2]) if len(c3) > 2 else 0.0
-            zero_stress = _safe_float(c3[3]) if len(c3) > 3 else 0.0
+            c3_cut = valid_cards[3].cut("MAT_LAW58_4")
+            df = _safe_float(c3_cut[0]) if len(c3_cut) > 0 and c3_cut[0] else 0.0
+            ds = _safe_float(c3_cut[1]) if len(c3_cut) > 1 and c3_cut[1] else 0.0
+            friction_phi = _safe_float(c3_cut[2]) if len(c3_cut) > 2 and c3_cut[2] else 0.0
+            m58_zerostress = _safe_float(c3_cut[4]) if len(c3_cut) > 4 and c3_cut[4] else (_safe_float(c3_cut[3]) if len(c3_cut) > 3 and c3_cut[3] else 0.0)
+        # Card 5: N1_warp, N2_weft, S1, S2, C4, C5 (MAT_LAW58_5: [10, 10, 20, 20, 20, 20])
         if len(valid_cards) > 4:
-            c4 = valid_cards[4].cut("MAT_LAW58_5")
-            n1 = _safe_int(c4[0]) if len(c4) > 0 else 0
-            n2 = _safe_int(c4[1]) if len(c4) > 1 else 0
-            s1 = _safe_float(c4[2]) if len(c4) > 2 else 0.0
-            s2 = _safe_float(c4[3]) if len(c4) > 3 else 0.0
+            c4_cut = valid_cards[4].cut("MAT_LAW58_5")
+            n1_warp = _safe_int(c4_cut[0]) if len(c4_cut) > 0 and c4_cut[0] else 0
+            n2_weft = _safe_int(c4_cut[1]) if len(c4_cut) > 1 and c4_cut[1] else 0
+            s1 = _safe_float(c4_cut[2]) if len(c4_cut) > 2 and c4_cut[2] else 0.0
+            s2 = _safe_float(c4_cut[3]) if len(c4_cut) > 3 and c4_cut[3] else 0.0
+            c4 = _safe_float(c4_cut[4]) if len(c4_cut) > 4 and c4_cut[4] else 0.0
+            c5 = _safe_float(c4_cut[5]) if len(c4_cut) > 5 and c4_cut[5] else 0.0
+        # Optional tabulated loading curves:
+        # Card 6: FUN_A1, blank, MAT_C1 (MAT_LAW58_6: [10, 10, 20])
+        if len(valid_cards) > 5:
+            c5_toks = valid_cards[5].tokens()
+            if len(valid_cards) == 6 and len(c5_toks) >= 4:
+                c_unl = valid_cards[5].cut("MAT_LAW58_7")
+                fun_a4 = _safe_int(c_unl[0]) if len(c_unl) > 0 and c_unl[0] else 0
+                fun_a5 = _safe_int(c_unl[1]) if len(c_unl) > 1 and c_unl[1] else 0
+                scale4 = _safe_float(c_unl[2]) if len(c_unl) > 2 and c_unl[2] else 1.0
+                scale5 = _safe_float(c_unl[3]) if len(c_unl) > 3 and c_unl[3] else 1.0
+                fun_a6 = _safe_int(c_unl[4]) if len(c_unl) > 4 and c_unl[4] else 0
+                scale6 = _safe_float(c_unl[5]) if len(c_unl) > 5 and c_unl[5] else 1.0
+            else:
+                c5_cut = valid_cards[5].cut("MAT_LAW58_6")
+                fun_a1 = _safe_int(c5_cut[0]) if len(c5_cut) > 0 and c5_cut[0] else 0
+                c1 = _safe_float(c5_cut[2]) if len(c5_cut) > 2 and c5_cut[2] else (_safe_float(c5_cut[1]) if len(c5_cut) > 1 and c5_cut[1] else 1.0)
+        # Card 7: FUN_A2, blank, MAT_C2
+        if len(valid_cards) > 6:
+            c6_cut = valid_cards[6].cut("MAT_LAW58_6")
+            fun_a2 = _safe_int(c6_cut[0]) if len(c6_cut) > 0 and c6_cut[0] else 0
+            c2 = _safe_float(c6_cut[2]) if len(c6_cut) > 2 and c6_cut[2] else (_safe_float(c6_cut[1]) if len(c6_cut) > 1 and c6_cut[1] else 1.0)
+        # Card 8: FUN_A3, blank, MAT_C3
+        if len(valid_cards) > 7:
+            c7_cut = valid_cards[7].cut("MAT_LAW58_6")
+            fun_a3 = _safe_int(c7_cut[0]) if len(c7_cut) > 0 and c7_cut[0] else 0
+            c3 = _safe_float(c7_cut[2]) if len(c7_cut) > 2 and c7_cut[2] else (_safe_float(c7_cut[1]) if len(c7_cut) > 1 and c7_cut[1] else 1.0)
+        # Card 9: FUN_A4, FUN_A5, scale4, scale5, FUN_A6, scale6 (MAT_LAW58_7: [10, 10, 20, 20, 10, 20])
+        if len(valid_cards) > 8:
+            c8_cut = valid_cards[8].cut("MAT_LAW58_7")
+            fun_a4 = _safe_int(c8_cut[0]) if len(c8_cut) > 0 and c8_cut[0] else 0
+            fun_a5 = _safe_int(c8_cut[1]) if len(c8_cut) > 1 and c8_cut[1] else 0
+            scale4 = _safe_float(c8_cut[2]) if len(c8_cut) > 2 and c8_cut[2] else 1.0
+            scale5 = _safe_float(c8_cut[3]) if len(c8_cut) > 3 and c8_cut[3] else 1.0
+            fun_a6 = _safe_int(c8_cut[4]) if len(c8_cut) > 4 and c8_cut[4] else 0
+            scale6 = _safe_float(c8_cut[5]) if len(c8_cut) > 5 and c8_cut[5] else 1.0
     else:
+        def _get_tokens(card: Card) -> List[str]:
+            raw = card.raw.strip()
+            if "," in raw:
+                return [t.strip() for t in raw.split(",") if t.strip()]
+            return card.tokens()
+
         if len(valid_cards) > 0:
-            t0 = valid_cards[0].tokens()
-            rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
-            rhor = _safe_float(t0[1]) if len(t0) > 1 else 0.0
+            t0 = _get_tokens(valid_cards[0])
+            rho = _safe_float(t0[0]) if len(t0) > 0 and t0[0] else 0.0
+            refer_rho = _safe_float(t0[1]) if len(t0) > 1 and t0[1] else 0.0
         if len(valid_cards) > 1:
-            t1 = valid_cards[1].tokens()
-            e1 = _safe_float(t1[0]) if len(t1) > 0 else 0.0
-            b1 = _safe_float(t1[1]) if len(t1) > 1 else 0.0
-            e2 = _safe_float(t1[2]) if len(t1) > 2 else 0.0
-            b2 = _safe_float(t1[3]) if len(t1) > 3 else 0.0
-            flex = _safe_float(t1[4]) if len(t1) > 4 else 0.0
+            t1 = _get_tokens(valid_cards[1])
+            e1 = _safe_float(t1[0]) if len(t1) > 0 and t1[0] else 0.0
+            b1 = _safe_float(t1[1]) if len(t1) > 1 and t1[1] else 0.0
+            e2 = _safe_float(t1[2]) if len(t1) > 2 and t1[2] else 0.0
+            b2 = _safe_float(t1[3]) if len(t1) > 3 and t1[3] else 0.0
+            f = _safe_float(t1[4]) if len(t1) > 4 and t1[4] else 0.0
         if len(valid_cards) > 2:
-            t2 = valid_cards[2].tokens()
-            g0 = _safe_float(t2[0]) if len(t2) > 0 else 0.0
-            gt = _safe_float(t2[1]) if len(t2) > 1 else 0.0
-            alphat = _safe_float(t2[2]) if len(t2) > 2 else 0.0
-            sensor_id = _safe_int(t2[3]) if len(t2) > 3 else 0
+            t2 = _get_tokens(valid_cards[2])
+            g0 = _safe_float(t2[0]) if len(t2) > 0 and t2[0] else 0.0
+            gi = _safe_float(t2[1]) if len(t2) > 1 and t2[1] else 0.0
+            alpha = _safe_float(t2[2]) if len(t2) > 2 and t2[2] else 0.0
+            if len(t2) == 4:
+                if "." in t2[3] or "e" in t2[3].lower():
+                    g5 = _safe_float(t2[3])
+                else:
+                    isensor = _safe_int(t2[3])
+            elif len(t2) >= 5:
+                g5 = _safe_float(t2[3])
+                isensor = _safe_int(t2[4])
         if len(valid_cards) > 3:
-            t3 = valid_cards[3].tokens()
-            df = _safe_float(t3[0]) if len(t3) > 0 else 0.0
-            ds = _safe_float(t3[1]) if len(t3) > 1 else 0.0
-            gfrot = _safe_float(t3[2]) if len(t3) > 2 else 0.0
-            zero_stress = _safe_float(t3[3]) if len(t3) > 3 else 0.0
+            t3 = _get_tokens(valid_cards[3])
+            df = _safe_float(t3[0]) if len(t3) > 0 and t3[0] else 0.0
+            ds = _safe_float(t3[1]) if len(t3) > 1 and t3[1] else 0.0
+            friction_phi = _safe_float(t3[2]) if len(t3) > 2 and t3[2] else 0.0
+            if len(t3) == 4:
+                m58_zerostress = _safe_float(t3[3])
+            elif len(t3) >= 5:
+                m58_zerostress = _safe_float(t3[4]) if t3[4] else _safe_float(t3[3])
         if len(valid_cards) > 4:
-            t4 = valid_cards[4].tokens()
-            n1 = _safe_int(t4[0]) if len(t4) > 0 else 0
-            n2 = _safe_int(t4[1]) if len(t4) > 1 else 0
-            s1 = _safe_float(t4[2]) if len(t4) > 2 else 0.0
-            s2 = _safe_float(t4[3]) if len(t4) > 3 else 0.0
+            t4 = _get_tokens(valid_cards[4])
+            n1_warp = _safe_int(t4[0]) if len(t4) > 0 and t4[0] else 0
+            n2_weft = _safe_int(t4[1]) if len(t4) > 1 and t4[1] else 0
+            s1 = _safe_float(t4[2]) if len(t4) > 2 and t4[2] else 0.0
+            s2 = _safe_float(t4[3]) if len(t4) > 3 and t4[3] else 0.0
+            c4 = _safe_float(t4[4]) if len(t4) > 4 and t4[4] else 0.0
+            c5 = _safe_float(t4[5]) if len(t4) > 5 and t4[5] else 0.0
+        if len(valid_cards) > 5:
+            t5 = _get_tokens(valid_cards[5])
+            if len(valid_cards) == 6 and len(t5) >= 4:
+                fun_a4 = _safe_int(t5[0]) if len(t5) > 0 and t5[0] else 0
+                fun_a5 = _safe_int(t5[1]) if len(t5) > 1 and t5[1] else 0
+                scale4 = _safe_float(t5[2]) if len(t5) > 2 and t5[2] else 1.0
+                scale5 = _safe_float(t5[3]) if len(t5) > 3 and t5[3] else 1.0
+                fun_a6 = _safe_int(t5[4]) if len(t5) > 4 and t5[4] else 0
+                scale6 = _safe_float(t5[5]) if len(t5) > 5 and t5[5] else 1.0
+            else:
+                fun_a1 = _safe_int(t5[0]) if len(t5) > 0 and t5[0] else 0
+                c1 = _safe_float(t5[1]) if len(t5) > 1 and t5[1] else 1.0
+        if len(valid_cards) > 6:
+            t6 = _get_tokens(valid_cards[6])
+            fun_a2 = _safe_int(t6[0]) if len(t6) > 0 and t6[0] else 0
+            c2 = _safe_float(t6[1]) if len(t6) > 1 and t6[1] else 1.0
+        if len(valid_cards) > 7:
+            t7 = _get_tokens(valid_cards[7])
+            fun_a3 = _safe_int(t7[0]) if len(t7) > 0 and t7[0] else 0
+            c3 = _safe_float(t7[1]) if len(t7) > 1 and t7[1] else 1.0
+        if len(valid_cards) > 8:
+            t8 = _get_tokens(valid_cards[8])
+            fun_a4 = _safe_int(t8[0]) if len(t8) > 0 and t8[0] else 0
+            fun_a5 = _safe_int(t8[1]) if len(t8) > 1 and t8[1] else 0
+            scale4 = _safe_float(t8[2]) if len(t8) > 2 and t8[2] else 1.0
+            scale5 = _safe_float(t8[3]) if len(t8) > 3 and t8[3] else 1.0
+            fun_a6 = _safe_int(t8[4]) if len(t8) > 4 and t8[4] else 0
+            scale6 = _safe_float(t8[5]) if len(t8) > 5 and t8[5] else 1.0
+
+    # Apply exact Fortran defaults from hm_read_mat58.F
+    if c1 == 0.0: c1 = 1.0
+    if c2 == 0.0: c2 = 1.0
+    if c3 == 0.0: c3 = 1.0
+    if scale4 == 0.0: scale4 = 1.0
+    if scale5 == 0.0: scale5 = 1.0
+    if scale6 == 0.0: scale6 = 1.0
+
+    if n1_warp == 0: n1_warp = 1
+    if n2_weft == 0: n2_weft = 1
+    if s1 == 0.0: s1 = 0.1
+    if s2 == 0.0: s2 = 0.1
+    if f == 0.0: f = 0.01
+
+    if c4 == 0.0 and c5 == 0.0:
+        c4 = f
+        c5 = f
+    elif c4 == 0.0 and c5 != 0.0:
+        c4 = c5
+    elif c5 == 0.0 and c4 != 0.0:
+        c5 = c4
+
+    if df == 0.0:
+        df = 0.05
+
+    # Check consistency of tabulated input data (loading and unloading)
+    unloading_active = (fun_a4 != 0 or fun_a5 != 0 or fun_a6 != 0)
+    if unloading_active:
+        if fun_a4 == 0:
+            fun_a4 = fun_a1
+            scale4 = c1
+        if fun_a5 == 0:
+            fun_a5 = fun_a2
+            scale5 = c2
+        if fun_a6 == 0:
+            fun_a6 = fun_a3
+            scale6 = c3
+
+        if fun_a1 == 0:
+            log.error(f"/MAT/LAW58/{mat_id}: loading stress function ID in warp direction (FUN_A1) must be defined when unloading is active (ANCMSG 1578)", block.source)
+        if fun_a2 == 0:
+            log.error(f"/MAT/LAW58/{mat_id}: loading stress function ID in weft direction (FUN_A2) must be defined when unloading is active (ANCMSG 1579)", block.source)
+        if fun_a3 == 0:
+            log.error(f"/MAT/LAW58/{mat_id}: loading stress function ID in shear direction (FUN_A3) must be defined when unloading is active (ANCMSG 1580)", block.source)
+
+    if gi == 0.0 and (e1 != 0.0 or e2 != 0.0):
+        gi = 0.25 * (e1 + e2)
 
     mat = MatLaw58(
-        id=mat_id, rho0=rho0, rhor=rhor,
-        e1=e1, b1=b1, e2=e2, b2=b2, flex=flex,
-        g0=g0, gt=gt, alphat=alphat, sensor_id=sensor_id,
-        df=df, ds=ds, gfrot=gfrot, zero_stress=zero_stress,
-        n1=n1, n2=n2, s1=s1, s2=s2,
-        title=title
+        id=mat_id,
+        title=title,
+        rho=rho,
+        refer_rho=refer_rho,
+        e1=e1,
+        b1=b1,
+        e2=e2,
+        b2=b2,
+        f=f,
+        g0=g0,
+        gi=gi,
+        alpha=alpha,
+        g5=g5,
+        isensor=isensor,
+        df=df,
+        ds=ds,
+        friction_phi=friction_phi,
+        m58_zerostress=m58_zerostress,
+        n1_warp=n1_warp,
+        n2_weft=n2_weft,
+        s1=s1,
+        s2=s2,
+        c4=c4,
+        c5=c5,
+        fun_a1=fun_a1,
+        c1=c1,
+        fun_a2=fun_a2,
+        c2=c2,
+        fun_a3=fun_a3,
+        c3=c3,
+        fun_a4=fun_a4,
+        scale4=scale4,
+        fun_a5=fun_a5,
+        scale5=scale5,
+        fun_a6=fun_a6,
+        scale6=scale6,
     )
     model.mat_law58s[mat_id] = mat
     model.materials[mat_id] = Material(
-        id=mat_id, law=58, rho0=rho0, title=title,
+        id=mat_id,
+        law=58,
+        rho0=rho,
+        title=title,
         params={
-            "rho": rho0, "e1": e1, "b1": b1, "e2": e2, "b2": b2, "flex": flex,
-            "g0": g0, "gt": gt, "alphat": alphat, "sensor_id": sensor_id,
-            "df": df, "ds": ds, "gfrot": gfrot, "zero_stress": zero_stress,
-            "n1": n1, "n2": n2, "s1": s1, "s2": s2,
+            "rho": rho, "refer_rho": refer_rho,
+            "e1": e1, "b1": b1, "e2": e2, "b2": b2, "f": f,
+            "E1": e1, "E2": e2, "B1": b1, "B2": b2, "RHO": rho, "RHO0": rho,
+            "g0": g0, "gi": gi, "alpha": alpha, "g5": g5, "isensor": isensor,
+            "df": df, "ds": ds, "friction_phi": friction_phi, "m58_zerostress": m58_zerostress,
+            "n1_warp": n1_warp, "n2_weft": n2_weft, "s1": s1, "s2": s2, "c4": c4, "c5": c5,
+            "fun_a1": fun_a1, "c1": c1, "fun_a2": fun_a2, "c2": c2, "fun_a3": fun_a3, "c3": c3,
+            "fun_a4": fun_a4, "scale4": scale4, "fun_a5": fun_a5, "scale5": scale5, "fun_a6": fun_a6, "scale6": scale6,
+            "flex": f, "gt": gi, "alphat": alpha, "sensor_id": isensor, "gfrot": friction_phi,
+            "zero_stress": m58_zerostress, "n1": n1_warp, "n2": n2_weft,
         }
     )
 
@@ -84377,11 +84574,13 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_LAW65": read_mat,
     "MAT_ELASTOMER": read_mat,
     "ELASTOMER": read_mat,
-    "MAT_LAW58": read_mat,
-    "MAT_FABR_A": read_mat,
-    "MAT_FABRIC_A": read_mat,
-    "FABR_A": read_mat,
-    "FABRIC_A": read_mat,
+    "MAT_LAW58": read_mat_law58,
+    "MAT_FABR_A": read_mat_law58,
+    "MAT_FABRIC_A": read_mat_law58,
+    "FABR_A": read_mat_law58,
+    "FABRIC_A": read_mat_law58,
+    "LAW58": read_mat_law58,
+    "LAW58_FABR_A": read_mat_law58,
     "MAT_LAW20": read_mat,
     "MAT_BIMAT": read_mat,
     "BIMAT": read_mat,

@@ -904,6 +904,56 @@ MAT_PLAS_ZHAO_CFG_5 = MAT_LAW48_5
 MAT_PLAS_ZHAO_CFG_6 = MAT_LAW48_6
 
 
+# M553: /MAT/LAW58 (/MAT/FABR_A, /MAT/FABRIC_A) card layout constants citing radioss2017/MAT/matl58_fabr_a.cfg and hm_read_mat58.F
+MAT_LAW58_1 = (20, 20)
+MAT_LAW58_2 = (20, 20, 20, 20, 20)
+MAT_LAW58_3 = (20, 20, 20, 20, 10, 10)
+MAT_LAW58_4 = (20, 20, 20, 20, 20)
+MAT_LAW58_5 = (10, 10, 20, 20, 20, 20)
+MAT_LAW58_6 = (10, 10, 20)
+MAT_LAW58_7 = (10, 10, 20, 20, 10, 20)
+
+MAT_LAW58_CFG_1 = MAT_LAW58_1
+MAT_LAW58_CFG_2 = MAT_LAW58_2
+MAT_LAW58_CFG_3 = MAT_LAW58_3
+MAT_LAW58_CFG_4 = MAT_LAW58_4
+MAT_LAW58_CFG_5 = MAT_LAW58_5
+MAT_LAW58_CFG_6 = MAT_LAW58_6
+MAT_LAW58_CFG_7 = MAT_LAW58_7
+
+MAT_FABR_A_1 = MAT_LAW58_1
+MAT_FABR_A_2 = MAT_LAW58_2
+MAT_FABR_A_3 = MAT_LAW58_3
+MAT_FABR_A_4 = MAT_LAW58_4
+MAT_FABR_A_5 = MAT_LAW58_5
+MAT_FABR_A_6 = MAT_LAW58_6
+MAT_FABR_A_7 = MAT_LAW58_7
+
+MAT_FABR_A_CFG_1 = MAT_LAW58_1
+MAT_FABR_A_CFG_2 = MAT_LAW58_2
+MAT_FABR_A_CFG_3 = MAT_LAW58_3
+MAT_FABR_A_CFG_4 = MAT_LAW58_4
+MAT_FABR_A_CFG_5 = MAT_LAW58_5
+MAT_FABR_A_CFG_6 = MAT_LAW58_6
+MAT_FABR_A_CFG_7 = MAT_LAW58_7
+
+MAT_FABRIC_A_1 = MAT_LAW58_1
+MAT_FABRIC_A_2 = MAT_LAW58_2
+MAT_FABRIC_A_3 = MAT_LAW58_3
+MAT_FABRIC_A_4 = MAT_LAW58_4
+MAT_FABRIC_A_5 = MAT_LAW58_5
+MAT_FABRIC_A_6 = MAT_LAW58_6
+MAT_FABRIC_A_7 = MAT_LAW58_7
+
+MAT_FABRIC_A_CFG_1 = MAT_LAW58_1
+MAT_FABRIC_A_CFG_2 = MAT_LAW58_2
+MAT_FABRIC_A_CFG_3 = MAT_LAW58_3
+MAT_FABRIC_A_CFG_4 = MAT_LAW58_4
+MAT_FABRIC_A_CFG_5 = MAT_LAW58_5
+MAT_FABRIC_A_CFG_6 = MAT_LAW58_6
+MAT_FABRIC_A_CFG_7 = MAT_LAW58_7
+
+
 # ============================================================================
 # The per-card column-layout table (reader side of the shared knowledge)
 # ============================================================================
@@ -3733,17 +3783,27 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_ELASTOMER_1": [20, 20],
     "MAT_ELASTOMER_2": [20, 20, 20],
     "MAT_ELASTOMER_3": [10, 10, 20],
-    "MAT_ELASTOMER_RATE": [10, 10, 20, 20],
     "MAT_LAW58_1": [20, 20],
     "MAT_LAW58_2": [20, 20, 20, 20, 20],
-    "MAT_LAW58_3": [20, 20, 20, 30, 10],
+    "MAT_LAW58_3": [20, 20, 20, 20, 10, 10],
     "MAT_LAW58_4": [20, 20, 20, 20, 20],
-    "MAT_LAW58_5": [10, 10, 20, 20],
+    "MAT_LAW58_5": [10, 10, 20, 20, 20, 20],
+    "MAT_LAW58_6": [10, 10, 20],
+    "MAT_LAW58_7": [10, 10, 20, 20, 10, 20],
     "MAT_FABR_A_1": [20, 20],
     "MAT_FABR_A_2": [20, 20, 20, 20, 20],
-    "MAT_FABR_A_3": [20, 20, 20, 30, 10],
+    "MAT_FABR_A_3": [20, 20, 20, 20, 10, 10],
     "MAT_FABR_A_4": [20, 20, 20, 20, 20],
-    "MAT_FABR_A_5": [10, 10, 20, 20],
+    "MAT_FABR_A_5": [10, 10, 20, 20, 20, 20],
+    "MAT_FABR_A_6": [10, 10, 20],
+    "MAT_FABR_A_7": [10, 10, 20, 20, 10, 20],
+    "MAT_FABRIC_A_1": [20, 20],
+    "MAT_FABRIC_A_2": [20, 20, 20, 20, 20],
+    "MAT_FABRIC_A_3": [20, 20, 20, 20, 10, 10],
+    "MAT_FABRIC_A_4": [20, 20, 20, 20, 20],
+    "MAT_FABRIC_A_5": [10, 10, 20, 20, 20, 20],
+    "MAT_FABRIC_A_6": [10, 10, 20],
+    "MAT_FABRIC_A_7": [10, 10, 20, 20, 10, 20],
     "MAT_LAW20_1": [20, 20],
     "MAT_LAW20_2": [10, 10],
     "MAT_LAW20_3": [20, 20],
