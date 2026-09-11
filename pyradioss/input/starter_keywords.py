@@ -1205,13 +1205,13 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_mat_law82(block, model, log)
         return
     if lawname in ("OGDEN", "MAT_OGDEN"):
-        valid_c = [c for c in block.cards if not c.is_blank and not c.raw.strip().startswith("#")]
+        title, data_c = _fixed_data(block) if block.fixed else _title_and_data(block)
+        data_valid = [c for c in data_c if not c.is_blank and not c.raw.strip().startswith("#")]
         is_law82 = False
-        if len(valid_c) >= 5:
-            is_law82 = True
-        elif len(valid_c) >= 2:
-            first_tok = valid_c[1].tokens()[0] if not block.fixed else valid_c[1].raw[:10].strip()
-            if first_tok.isdigit() and 1 <= int(first_tok) <= 10:
+        if len(data_valid) > 1:
+            toks = data_valid[1].tokens() if not block.fixed else [data_valid[1].raw[:10].strip()]
+            first_val = toks[0] if toks else ""
+            if first_val.isdigit() and 1 <= int(first_val) <= 10:
                 is_law82 = True
         if is_law82:
             read_mat_law82(block, model, log)
@@ -28002,7 +28002,12 @@ def read_mat_law69(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             nu = _f(f2[2]) if len(f2) > 2 and f2[2].strip() else 0.495
             fscale = _f(f2[3]) if len(f2) > 3 and f2[3].strip() else 1.0
             nip = _i(f2[4]) if len(f2) > 4 and f2[4].strip() else 2
-            icheck = _i(f2[5]) if len(f2) > 5 and f2[5].strip() else -3
+            if len(f2) > 5 and f2[5].strip():
+                icheck = _i(f2[5])
+            elif len(valid_cards[1].raw) > 70 and valid_cards[1].raw[70:80].strip():
+                icheck = _i(valid_cards[1].raw[70:80].strip())
+            else:
+                icheck = -3
 
         if len(valid_cards) > 2:
             f3 = cut(valid_cards[2].raw, "MAT_LAW69_3")
@@ -84398,13 +84403,13 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_LAW74": read_mat,
     "LAW74": read_mat,
     "MAT_LAW82": read_mat_law82,
-    "MAT_OGDEN": read_mat_law82,
-    "OGDEN": read_mat_law82,
+    "MAT_OGDEN": read_mat,
+    "OGDEN": read_mat,
     "LAW82": read_mat_law82,
     "MAT_LAW82_OGDEN": read_mat_law82,
     "LAW82_OGDEN": read_mat_law82,
     "/MAT/LAW82": read_mat_law82,
-    "/MAT/OGDEN": read_mat_law82,
+    "/MAT/OGDEN": read_mat,
     "/MAT/LAW82_OGDEN": read_mat_law82,
     "PROP_TYPE18": read_prop,
     "PROP_INT_BEAM": read_prop,

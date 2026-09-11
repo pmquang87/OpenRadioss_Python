@@ -6218,6 +6218,8 @@ class MaterialLaw69:
     nip: int = 2
     icheck: int = -3
     fct_id_data: int = 0
+    mu: Any = None
+    alpha: Any = None
 
     def __init__(
         self,
@@ -6232,6 +6234,8 @@ class MaterialLaw69:
         nip: int = 2,
         icheck: int = -3,
         fct_id_data: int = 0,
+        mu: Any = None,
+        alpha: Any = None,
         **kwargs,
     ):
         self.id = id
@@ -6245,6 +6249,8 @@ class MaterialLaw69:
         self.nip = kwargs.get("n_pair", nip)
         self.icheck = kwargs.get("gflag", icheck)
         self.fct_id_data = kwargs.get("fct_id1", fct_id_data)
+        self.mu = kwargs.get("mu", mu)
+        self.alpha = kwargs.get("alpha", alpha)
 
     @property
     def rho(self) -> float:

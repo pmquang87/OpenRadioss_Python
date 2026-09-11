@@ -1060,6 +1060,8 @@ class Model:
         self.mat_law94s: Dict[int, MaterialLaw94] = {}             # /MAT/LAW94, /MAT/YEOH (M173)
         self.mat_law46s: Dict[int, MaterialLaw46] = {}             # /MAT/LAW46, /MAT/HYD_VISC (M173)
         self.mat_law69s: Dict[int, MaterialLaw69] = {}             # /MAT/LAW69, /MAT/HYP_EXT_COMP (M173)
+        self.mat_hyp_elass = self.mat_law69s
+        self.mat_hyperelastics = self.mat_law69s
         self.mat_law124s: Dict[int, MaterialLaw124] = {}           # /MAT/LAW124, /MAT/CDPM2 (M174)
         self.mat_law126s: Dict[int, MaterialLaw126] = {}           # /MAT/LAW126, /MAT/JOHNSON_HOLMQUIST_CONCRETE (M174)
         self.mat_law125s: Dict[int, MaterialLaw125] = {}           # /MAT/LAW125, /MAT/LAMINATED_COMPOSITE (M174)

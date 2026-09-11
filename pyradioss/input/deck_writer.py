@@ -1465,6 +1465,7 @@ class StarterDeck:
         Card 2: LAW_ID, FCT_ID, NU, FSCALE, N_PAIR (%10d%10d%20lg%20lg%10d)
         Card 3: FCT_ID1 (%10d)
         """
+        mat_obj = None
         if hasattr(mid, "iflag") or hasattr(mid, "fct_id_data") or hasattr(mid, "fct_id1") or hasattr(mid, "nip"):
             mat_obj = mid
             mid = getattr(mat_obj, "id", 0)
@@ -1518,6 +1519,9 @@ class StarterDeck:
         nip_val = int(nip)
         fct_data_val = int(fct_id1)
 
+        icheck = getattr(mat_obj, "icheck", getattr(mat_obj, "gflag", kwargs.get("icheck", kwargs.get("gflag", kwargs.get("Gflag", -3)))))
+        icheck_val = int(icheck)
+
         if unit_id is not None:
             self._header("MAT", law_name, mid, unit_id)
         else:
@@ -1530,14 +1534,17 @@ class StarterDeck:
         else:
             self.lines.append(fmt_float(rho_val))
 
-        # Card 2: LAW_ID, FCT_ID, NU, FSCALE, N_PAIR
-        self.lines.append(
+        # Card 2: LAW_ID, FCT_ID, NU, FSCALE, N_PAIR [, ICHECK]
+        card2 = (
             fmt_int(iflag_val, 10)
             + fmt_int(fct_bulk_val, 10)
             + fmt_float(nu_val, 20)
             + fmt_float(fscale_val, 20)
             + fmt_int(nip_val, 10)
         )
+        if icheck_val != -3:
+            card2 += fmt_int(icheck_val, 10)
+        self.lines.append(card2)
 
         # Card 3: FCT_ID1
         self.lines.append(fmt_int(fct_data_val, 10))

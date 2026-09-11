@@ -1261,10 +1261,27 @@ def tangent_law69_solid(
     if not isinstance(params, Law69Params):
         params = build_law69(params)
 
-    eps_arr = np.asarray(eps, dtype=np.float64)
-    is_1d = (eps_arr.ndim == 1)
-    if is_1d:
-        eps_arr = eps_arr.reshape(1, -1)
+    eps_in = np.asarray(eps, dtype=np.float64)
+    if eps_in.ndim == 3 or (eps_in.ndim == 2 and eps_in.shape == (3, 3)):
+        F = eps_in if eps_in.ndim == 3 else eps_in[None, :, :]
+        m = F.shape[0]
+        B = np.einsum("nab,ncb->nac", F, F)
+        w, v = np.linalg.eigh(B)
+        ln_w = 0.5 * np.log(np.maximum(w, _EM20))
+        E_mat = np.einsum("nik,nk,njk->nij", v, ln_w, v)
+        eps_arr = np.zeros((m, 6), dtype=np.float64)
+        eps_arr[:, 0] = E_mat[:, 0, 0]
+        eps_arr[:, 1] = E_mat[:, 1, 1]
+        eps_arr[:, 2] = E_mat[:, 2, 2]
+        eps_arr[:, 3] = 2.0 * E_mat[:, 0, 1]
+        eps_arr[:, 4] = 2.0 * E_mat[:, 1, 2]
+        eps_arr[:, 5] = 2.0 * E_mat[:, 0, 2]
+        is_1d = False
+    else:
+        eps_arr = eps_in
+        is_1d = (eps_arr.ndim == 1)
+        if is_1d:
+            eps_arr = eps_arr.reshape(1, -1)
 
     nel = eps_arr.shape[0]
     C = np.zeros((nel, 6, 6), dtype=np.float64)
@@ -1276,8 +1293,11 @@ def tangent_law69_solid(
         eps_m = eps_arr.copy()
         eps_m[:, j] -= h
 
-        sp, _, _ = sigeps69_solid(params, dummy_sig, eps=eps_p, dt=dt, extra=extra, ismstr=ismstr, return_sound_speed=True)
-        sm, _, _ = sigeps69_solid(params, dummy_sig, eps=eps_m, dt=dt, extra=extra, ismstr=ismstr, return_sound_speed=True)
+        extra_p = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in extra.items()} if extra is not None else None
+        extra_m = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in extra.items()} if extra is not None else None
+
+        sp, _, _ = sigeps69_solid(params, dummy_sig, eps=eps_p, dt=dt, extra=extra_p, ismstr=ismstr, return_sound_speed=True)
+        sm, _, _ = sigeps69_solid(params, dummy_sig, eps=eps_m, dt=dt, extra=extra_m, ismstr=ismstr, return_sound_speed=True)
 
         if is_1d:
             sp = sp.reshape(1, -1)
@@ -1332,8 +1352,11 @@ def tangent_law69_shell(
         eps_m = eps_arr.copy()
         eps_m[:, j] -= h
 
-        sp, _ = sigeps69c_shell(params, dummy_sig, eps=eps_p, dt=dt, extra=extra, ismstr=ismstr, return_sound_speed=False)
-        sm, _ = sigeps69c_shell(params, dummy_sig, eps=eps_m, dt=dt, extra=extra, ismstr=ismstr, return_sound_speed=False)
+        extra_p = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in extra.items()} if extra is not None else None
+        extra_m = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in extra.items()} if extra is not None else None
+
+        sp, _ = sigeps69c_shell(params, dummy_sig, eps=eps_p, dt=dt, extra=extra_p, ismstr=ismstr, return_sound_speed=False)
+        sm, _ = sigeps69c_shell(params, dummy_sig, eps=eps_m, dt=dt, extra=extra_m, ismstr=ismstr, return_sound_speed=False)
 
         if is_1d:
             sp = sp.reshape(1, -1)
@@ -1345,6 +1368,8 @@ def tangent_law69_shell(
 
 
 # Aliases for package dispatch compatibility
+solid_tangent = tangent_law69_solid
+shell_tangent = tangent_law69_shell
 consistent_solid_tangent = tangent_law69_solid
 consistent_shell_tangent = tangent_law69_shell
 sound_speed = solid_sound_speed
