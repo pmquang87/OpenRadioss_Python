@@ -406,7 +406,7 @@ def _principal_strain(eps: np.ndarray) -> np.ndarray:
         yp = 3.0 * x ** 2 + c
         denom = np.where(yp == 0.0, 1.0, yp)
         x = np.where(active & (yp != 0.0), x - y / denom, x)
-    return np.where(active, x + dav, epst)
+    return x + dav
 
 
 def _principal_strain_2d(eps: np.ndarray) -> np.ndarray:
@@ -642,12 +642,25 @@ def solid_update(
     s_trial[:, 4] = sig_arr[:, 4] + g_cur * deps_arr[:, 4]
     s_trial[:, 5] = sig_arr[:, 5] + g_cur * deps_arr[:, 5]
 
+    c_hard = params.fisokin
+    has_sigb = c_hard > 0.0 and extra is not None and ("sigb60" in extra or "sigb" in extra)
+    sigb_key = "sigb60" if (extra is not None and "sigb60" in extra) else "sigb"
+    if has_sigb:
+        sigb = extra[sigb_key]
+        if single_element and sigb.ndim == 2:
+            sigb = sigb[0:1]
+        elif single_element and sigb.ndim == 1:
+            sigb = sigb.reshape(1, 6)
+        s_eff = s_trial - sigb
+    else:
+        s_eff = s_trial
+
     # 3. Equivalent von Mises trial stress
     j2 = (
-        0.5 * (s_trial[:, 0] ** 2 + s_trial[:, 1] ** 2 + s_trial[:, 2] ** 2)
-        + s_trial[:, 3] ** 2
-        + s_trial[:, 4] ** 2
-        + s_trial[:, 5] ** 2
+        0.5 * (s_eff[:, 0] ** 2 + s_eff[:, 1] ** 2 + s_eff[:, 2] ** 2)
+        + s_eff[:, 3] ** 2
+        + s_eff[:, 4] ** 2
+        + s_eff[:, 5] ** 2
     )
     sig_vm = np.sqrt(3.0 * j2)
 
@@ -690,11 +703,16 @@ def solid_update(
     epst = _principal_strain(eps_tot)
     fail = _tensile_failure_factor(params, epst)
 
-    yld = fail * pfac * sy_rate
+    if has_sigb:
+        sy0, _ = _eval_yield_and_hardening(params, np.zeros_like(epsp_arr), rate)
+        yld0 = fail * pfac * sy0
+        yld = (1.0 - c_hard) * (fail * pfac * sy_rate) + c_hard * yld0
+    else:
+        yld = fail * pfac * sy_rate
     h_eff = fail * h_rate
 
     # 8. Yield check & radial return (sigeps60.F:530-546)
-    h_iso = (1.0 - params.fisokin) * h_eff
+    h_iso = (1.0 - c_hard) * h_eff
     denom = np.maximum(3.0 * g_cur + h_iso, _EM20)
     f = sig_vm - yld
     plastic = f > 0.0
@@ -703,7 +721,19 @@ def solid_update(
     epsp_new = epsp_arr + delta_epsp
 
     scale = np.where(plastic & (sig_vm > _EM20), yld / np.maximum(sig_vm, _EM20), 1.0)
-    s_new = s_trial * scale[:, None]
+    s_eff_new = s_eff * scale[:, None]
+
+    if has_sigb:
+        s_new_tot = s_eff_new + sigb
+        h_kin = (2.0 / 3.0) * c_hard * h_eff
+        denom_pz = np.maximum(2.0 * g_cur + h_kin, 0.02 * g_cur)
+        alpha_pz = h_kin / denom_pz
+        for k in range(6):
+            diff_k = s_trial[:, k] - s_new_tot[:, k]
+            sigb[:, k] += np.where(plastic, alpha_pz * diff_k, 0.0)
+        s_new = s_eff_new + sigb
+    else:
+        s_new = s_eff_new
 
     # Pressure update
     if extra is not None and "rho" in extra:
@@ -730,6 +760,16 @@ def solid_update(
                 extra["off"][deleted] = 0.0
             if "off60" in extra:
                 extra["off60"][deleted] = 0.0
+
+    # 9b. History variables tracking
+    if extra is not None and "uvar" in extra and extra["uvar"] is not None:
+        uvar = extra["uvar"]
+        if uvar.ndim == 1:
+            uvar[0] = epsp_new[0]
+            uvar[1] = yld[0]
+        elif uvar.ndim == 2:
+            uvar[:, 0] = epsp_new
+            uvar[:, 1] = yld
 
     # 10. Instantaneous sound speed
     sound_speed = np.sqrt((c1_cur + (4.0 / 3.0) * g_cur) / max(params.rho0, _EM20))
@@ -831,10 +871,23 @@ def shell_update(
     sig_tr[:, 1] = sig_arr[:, 1] + a2_cur * deps_arr[:, 0] + a1_cur * deps_arr[:, 1]
     sig_tr[:, 2] = sig_arr[:, 2] + g_cur * deps_arr[:, 2]
 
+    c_hard = params.fisokin
+    has_sigb = c_hard > 0.0 and extra is not None and ("sigb60" in extra or "sigb" in extra)
+    sigb_key = "sigb60" if (extra is not None and "sigb60" in extra) else "sigb"
+    if has_sigb:
+        sigb = extra[sigb_key]
+        if single_element and sigb.ndim == 2:
+            sigb = sigb[0:1]
+        elif single_element and sigb.ndim == 1:
+            sigb = sigb.reshape(1, 3)
+        sig_eff = sig_tr - sigb
+    else:
+        sig_eff = sig_tr
+
     # 3. Plane-stress von Mises stress (sigeps60c.F:593-596)
-    sxx = sig_tr[:, 0]
-    syy = sig_tr[:, 1]
-    sxy = sig_tr[:, 2]
+    sxx = sig_eff[:, 0]
+    syy = sig_eff[:, 1]
+    sxy = sig_eff[:, 2]
     svm2 = sxx ** 2 + syy ** 2 - sxx * syy + 3.0 * sxy ** 2
     sig_vm = np.sqrt(np.maximum(svm2, 0.0))
 
@@ -871,11 +924,16 @@ def shell_update(
     epst = _principal_strain_2d(eps_tot)
     fail = _tensile_failure_factor(params, epst)
 
-    yld = fail * sy_rate
+    if has_sigb:
+        sy0, _ = _eval_yield_and_hardening(params, np.zeros_like(epsp_arr), rate)
+        yld0 = fail * sy0
+        yld = (1.0 - c_hard) * (fail * sy_rate) + c_hard * yld0
+    else:
+        yld = fail * sy_rate
     h_eff = fail * h_rate
 
     # 7. Yield check and radial projection (sigeps60c.F:597-609)
-    h_iso = (1.0 - params.fisokin) * h_eff
+    h_iso = (1.0 - c_hard) * h_eff
     denom = np.maximum(3.0 * g_cur + h_iso, _EM20)
     f = sig_vm - yld
     plastic = f > 0.0
@@ -884,7 +942,19 @@ def shell_update(
     epsp_new = epsp_arr + delta_epsp
 
     scale = np.where(plastic & (sig_vm > _EM20), yld / np.maximum(sig_vm, _EM20), 1.0)
-    sig_new = sig_tr * scale[:, None]
+    sig_eff_new = sig_eff * scale[:, None]
+
+    if has_sigb:
+        sig_new_tot = sig_eff_new + sigb
+        h_kin = (2.0 / 3.0) * c_hard * h_eff
+        denom_pz = np.maximum(2.0 * g_cur + h_kin, 0.02 * g_cur)
+        alpha_pz = h_kin / denom_pz
+        for k in range(3):
+            diff_k = sig_tr[:, k] - sig_new_tot[:, k]
+            sigb[:, k] += np.where(plastic, alpha_pz * diff_k, 0.0)
+        sig_new = sig_eff_new + sigb
+    else:
+        sig_new = sig_eff_new
 
     # 8. Layer thinning update Delta_eps_zz
     nnu11 = params.nu / (1.0 - params.nu)
@@ -910,6 +980,16 @@ def shell_update(
                 extra["layf"][deleted] = 0.0
             if "layfail" in extra:
                 extra["layfail"][deleted] = 0.0
+
+    # 9b. History variables tracking
+    if extra is not None and "uvar" in extra and extra["uvar"] is not None:
+        uvar = extra["uvar"]
+        if uvar.ndim == 1:
+            uvar[0] = epsp_new[0]
+            uvar[1] = yld[0]
+        elif uvar.ndim == 2:
+            uvar[:, 0] = epsp_new
+            uvar[:, 1] = yld
 
     # 10. Shell sound speed
     sound_speed = np.sqrt(a1_cur / max(params.rho0, _EM20))
@@ -1389,6 +1469,7 @@ def extra_shapes(mat: Any, nip: int | None = None) -> dict[str, tuple[int, ...]]
     return {
         "uvar": (nip, *uvar_dim) if nip else uvar_dim,
         "off60": (nip,) if nip else (),
+        "sigb60": (nip, 3) if nip else (6,),
     }
 
 
