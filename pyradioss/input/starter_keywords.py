@@ -1002,7 +1002,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_mat_law121(block, model, log)
         return
     # M183: LAW50 (VISC_HONEY), LAW57 (BARLAT3), LAW87 (BARLAT_YLD2000), LAW95 (BERGSTROM_BOYCE), LAW163 (CRUSHABLE_FOAM), LAW169 (ARUP_ADHESIVE)
-    if lawname in ("LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "LAW50_VISC_HONEY"):
+    if lawname in ("50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_50", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "LAW50_VISC_HONEY", "LAW50_HYP_FOAM"):
         read_mat_law50(block, model, log)
         return
     if lawname in ("57", "LAW57", "BARLAT3", "MAT_BARLAT3", "LAW57_BARLAT3"):
@@ -33590,8 +33590,8 @@ def read_prop_spr_bdamp(block: KeywordBlock, model: Model, log: MessageLog) -> N
 # ============================================================================
 
 def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW50/id`` or ``/MAT/VISC_HONEY/id`` or ``/MAT/HYP_FOAM/id`` (M183): Rate-dependent honeycomb."""
-    from ..model.entities import MatLaw50
+    """``/MAT/LAW50/id`` or ``/MAT/VISC_HONEY/id`` or ``/MAT/HYP_FOAM/id`` (M183, M559): Rate-dependent honeycomb."""
+    from ..model.entities import MatLaw50, Material
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank]
@@ -33603,6 +33603,7 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     ea, eb, ec = 0.0, 0.0, 0.0
     gab, gbc, gca = 0.0, 0.0, 0.0
     asrate = 0.0
+    irate = 2
     gflag = 0
     eps_max11, eps_max22, eps_max33 = 0.0, 0.0, 0.0
     yfun11, sfac11, eps11 = [], [], []
@@ -33613,6 +33614,7 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     yfun12, sfac12, eps12 = [], [], []
     yfun23, sfac23, eps23 = [], [], []
     yfun31, sfac31, eps31 = [], [], []
+    ecomp, pr, sigy, et, vcomp = 0.0, 0.0, 0.0, 0.0, 0.0
 
     if block.fixed:
         f1 = valid_cards[0].cut("MAT_LAW50_1")
@@ -33634,6 +33636,9 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if len(valid_cards) > 3:
             f4 = valid_cards[3].cut("MAT_LAW50_4")
             asrate = _fval(f4[0]) if len(f4) > 0 else 0.0
+            irate = _ival(f4[1]) if len(f4) > 1 and f4[1].strip() else 2
+            if irate == 0:
+                irate = 2
 
         if len(valid_cards) > 4:
             f5 = valid_cards[4].cut("MAT_LAW50_5")
@@ -33708,6 +33713,22 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if len(valid_cards) > 23:
             f24 = valid_cards[23].cut("MAT_LAW50_24")
             eps31 = [_fval(x) for x in f24 if x.strip()]
+
+        if len(valid_cards) > 24:
+            f25 = valid_cards[24].cut("MAT_LAW50_25")
+            ecomp = _fval(f25[0]) if len(f25) > 0 else 0.0
+            pr = _fval(f25[1]) if len(f25) > 1 else 0.0
+            sigy = _fval(f25[2]) if len(f25) > 2 else 0.0
+            et = _fval(f25[3]) if len(f25) > 3 else 0.0
+            vcomp = _fval(f25[4]) if len(f25) > 4 else 0.0
+        elif len(valid_cards) == 5:
+            f5_comp = valid_cards[4].cut("MAT_LAW50_25")
+            if len(f5_comp) >= 5 and any(_fval(x) != 0.0 for x in f5_comp):
+                ecomp = _fval(f5_comp[0]) if len(f5_comp) > 0 else 0.0
+                pr = _fval(f5_comp[1]) if len(f5_comp) > 1 else 0.0
+                sigy = _fval(f5_comp[2]) if len(f5_comp) > 2 else 0.0
+                et = _fval(f5_comp[3]) if len(f5_comp) > 3 else 0.0
+                vcomp = _fval(f5_comp[4]) if len(f5_comp) > 4 else 0.0
     else:
         toks1 = valid_cards[0].tokens()
         rho = float(toks1[0]) if len(toks1) > 0 else 0.0
@@ -33728,6 +33749,9 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if len(valid_cards) > 3:
             toks4 = valid_cards[3].tokens()
             asrate = float(toks4[0]) if len(toks4) > 0 else 0.0
+            irate = int(float(toks4[1])) if len(toks4) > 1 else 2
+            if irate == 0:
+                irate = 2
 
         if len(valid_cards) > 4:
             toks5 = valid_cards[4].tokens()
@@ -33785,9 +33809,49 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if len(valid_cards) > 23:
             eps31 = [float(x) for x in valid_cards[23].tokens()]
 
+        if len(valid_cards) > 24:
+            toks25 = valid_cards[24].tokens()
+            ecomp = float(toks25[0]) if len(toks25) > 0 else 0.0
+            pr = float(toks25[1]) if len(toks25) > 1 else 0.0
+            sigy = float(toks25[2]) if len(toks25) > 2 else 0.0
+            et = float(toks25[3]) if len(toks25) > 3 else 0.0
+            vcomp = float(toks25[4]) if len(toks25) > 4 else 0.0
+        elif len(valid_cards) == 5:
+            toks5_comp = valid_cards[4].tokens()
+            if len(toks5_comp) >= 5:
+                ecomp = float(toks5_comp[0]) if len(toks5_comp) > 0 else 0.0
+                pr = float(toks5_comp[1]) if len(toks5_comp) > 1 else 0.0
+                sigy = float(toks5_comp[2]) if len(toks5_comp) > 2 else 0.0
+                et = float(toks5_comp[3]) if len(toks5_comp) > 3 else 0.0
+                vcomp = float(toks5_comp[4]) if len(toks5_comp) > 4 else 0.0
+
+    icompact = 1 if (ecomp * sigy * vcomp > 0.0) else 0
+    nu_eff = min(pr, 0.495)
+    gcomp = ecomp / (1.0 + nu_eff) if (icompact == 1 and ecomp > 0.0) else 0.0
+    bulk = ecomp / (3.0 * (1.0 - 2.0 * nu_eff)) if (icompact == 1 and ecomp > 0.0) else max(ea, eb, ec, gab, gbc, gca)
+
+    params = {
+        "rho": rho, "rho0": rho, "refer_rho": refer_rho,
+        "ea": ea, "eb": eb, "ec": ec, "e11": ea, "e22": eb, "e33": ec,
+        "E": max(ea, eb, ec), "E11": ea, "E22": eb, "E33": ec,
+        "gab": gab, "gbc": gbc, "gca": gca, "g12": gab, "g23": gbc, "g31": gca,
+        "G": max(gab, gbc, gca), "G12": gab, "G23": gbc, "G31": gca,
+        "asrate": asrate, "irate": irate, "gflag": gflag, "vflag": vflag,
+        "eps_max11": eps_max11, "eps_max22": eps_max22, "eps_max33": eps_max33,
+        "eps_max12": eps_max12, "eps_max23": eps_max23, "eps_max31": eps_max31,
+        "yfun11": yfun11, "sfac11": sfac11, "eps11": eps11,
+        "yfun22": yfun22, "sfac22": sfac22, "eps22": eps22,
+        "yfun33": yfun33, "sfac33": sfac33, "eps33": eps33,
+        "yfun12": yfun12, "sfac12": sfac12, "eps12": eps12,
+        "yfun23": yfun23, "sfac23": sfac23, "eps23": eps23,
+        "yfun31": yfun31, "sfac31": sfac31, "eps31": eps31,
+        "ecomp": ecomp, "pr": pr, "nu": pr, "sigy": sigy, "et": et, "hcomp": et, "vcomp": vcomp,
+        "icompact": icompact, "icomp": icompact, "gcomp": gcomp, "bulk": bulk,
+    }
+
     m50 = MatLaw50(
         id=mat_id, rho=rho, refer_rho=refer_rho, ea=ea, eb=eb, ec=ec,
-        gab=gab, gbc=gbc, gca=gca, asrate=asrate, gflag=gflag,
+        gab=gab, gbc=gbc, gca=gca, asrate=asrate, irate=irate, gflag=gflag,
         eps_max11=eps_max11, eps_max22=eps_max22, eps_max33=eps_max33,
         yfun11=yfun11, sfac11=sfac11, eps11=eps11,
         yfun22=yfun22, sfac22=sfac22, eps22=eps22,
@@ -33796,25 +33860,14 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         yfun12=yfun12, sfac12=sfac12, eps12=eps12,
         yfun23=yfun23, sfac23=sfac23, eps23=eps23,
         yfun31=yfun31, sfac31=sfac31, eps31=eps31,
-        title=title,
+        ecomp=ecomp, pr=pr, sigy=sigy, et=et, vcomp=vcomp,
+        title=title, params=params,
     )
     model.mat_law50s[mat_id] = m50
     model.materials[mat_id] = Material(
         id=mat_id, law=50, rho0=rho, title=title,
-        params={
-            "rho": rho, "rho0": rho, "refer_rho": refer_rho,
-            "ea": ea, "eb": eb, "ec": ec, "e11": ea, "e22": eb, "e33": ec,
-            "gab": gab, "gbc": gbc, "gca": gca, "g12": gab, "g23": gbc, "g31": gca,
-            "asrate": asrate, "gflag": gflag, "vflag": vflag,
-            "eps_max11": eps_max11, "eps_max22": eps_max22, "eps_max33": eps_max33,
-            "eps_max12": eps_max12, "eps_max23": eps_max23, "eps_max31": eps_max31,
-            "yfun11": yfun11, "sfac11": sfac11, "eps11": eps11,
-            "yfun22": yfun22, "sfac22": sfac22, "eps22": eps22,
-            "yfun33": yfun33, "sfac33": sfac33, "eps33": eps33,
-            "yfun12": yfun12, "sfac12": sfac12, "eps12": eps12,
-            "yfun23": yfun23, "sfac23": sfac23, "eps23": eps23,
-            "yfun31": yfun31, "sfac31": sfac31, "eps31": eps31,
-        }
+        law_name="LAW50",
+        params=params,
     )
 
 
@@ -84883,12 +84936,16 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SPR_TAB": read_prop,
     "PROP_TYPE27": read_prop,
     "SPR_BDAMP": read_prop,
-    # M183: MAT_LAW50, MAT_LAW57, MAT_LAW87, MAT_LAW95, MAT_LAW163, MAT_LAW169
-    "MAT_LAW50": read_mat,
-    "MAT_VISC_HONEY": read_mat,
-    "VISC_HONEY": read_mat,
-    "MAT_HYP_FOAM": read_mat,
-    "HYP_FOAM": read_mat,
+    # M183, M559: MAT_LAW50, MAT_VISC_HONEY, MAT_HYP_FOAM
+    "LAW50": read_mat_law50,
+    "MAT_50": read_mat_law50,
+    "MAT_LAW50": read_mat_law50,
+    "VISC_HONEY": read_mat_law50,
+    "MAT_VISC_HONEY": read_mat_law50,
+    "HYP_FOAM": read_mat_law50,
+    "MAT_HYP_FOAM": read_mat_law50,
+    "LAW50_VISC_HONEY": read_mat_law50,
+    "LAW50_HYP_FOAM": read_mat_law50,
     "LAW57": read_mat_law57,
     "MAT_LAW57": read_mat_law57,
     "BARLAT3": read_mat_law57,

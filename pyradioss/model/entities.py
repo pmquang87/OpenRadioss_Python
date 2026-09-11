@@ -100,6 +100,11 @@ class Material:
     # they drive the sound speed / time step and contact stiffness).
     @property
     def E(self) -> float:
+        if self.law in (50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM") or getattr(self, "law_name", None) in ("50", "LAW50", "VISC_HONEY", "HYP_FOAM"):
+            ea = float(self.params.get("ea", self.params.get("MAT_EA", self.params.get("e11", self.params.get("E11", 0.0)))))
+            eb = float(self.params.get("eb", self.params.get("MAT_EB", self.params.get("e22", self.params.get("E22", 0.0)))))
+            ec = float(self.params.get("ec", self.params.get("MAT_EC", self.params.get("e33", self.params.get("E33", 0.0)))))
+            return max(ea, eb, ec)
         if "E" in self.params:
             return self.params["E"]
         if "Young" in self.params:
@@ -138,6 +143,11 @@ class Material:
     @property
     def G(self) -> float:
         """Shear modulus G = E / 2(1+nu)."""
+        if self.law in (50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM") or getattr(self, "law_name", None) in ("50", "LAW50", "VISC_HONEY", "HYP_FOAM"):
+            gab = float(self.params.get("gab", self.params.get("MAT_GAB", self.params.get("g12", self.params.get("G12", 0.0)))))
+            gbc = float(self.params.get("gbc", self.params.get("MAT_GBC", self.params.get("g23", self.params.get("G23", 0.0)))))
+            gca = float(self.params.get("gca", self.params.get("MAT_GCA", self.params.get("g31", self.params.get("G31", 0.0)))))
+            return max(gab, gbc, gca)
         if "G" in self.params:
             return float(self.params["G"])
         if "mu" in self.params:
@@ -300,6 +310,15 @@ class Material:
                 return float(law79_john_holm.sound_speed(self, rho=self.rho0))
             except Exception:
                 pass
+        if self.law in (50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM") or getattr(self, "law_name", None) in ("50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM"):
+            try:
+                from ..materials import law50_visc_honey
+                return float(law50_visc_honey.sound_speed_solid(self, rho=self.rho0))
+            except Exception:
+                g = self.G
+                e = self.E
+                rho = self.rho0 if self.rho0 > 0 else 1.0
+                return float(np.sqrt(max((4.0 * g / 3.0 + e / 3.0) / rho, 0.0)))
         return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
 
     def sound_speed_shell(self) -> float:
@@ -8302,10 +8321,19 @@ PropSprBdamp = PropType27
 # M183 Materials: LAW50, LAW57, LAW87, LAW95, LAW163, LAW169
 # ============================================================================
 
+try:
+    CallableFloat  # type: ignore[name-defined]
+except NameError:
+    class CallableFloat(float):
+        """Float that is also callable returning itself (compatible with both property and method access)."""
+        def __call__(self) -> float:
+            return float(self)
+
+
 @dataclass
 class MatLaw50:
-    """/MAT/LAW50 or /MAT/VISC_HONEY (M183): Rate-dependent honeycomb material."""
-    id: int
+    """/MAT/LAW50 or /MAT/VISC_HONEY or /MAT/HYP_FOAM (M183, M559): Rate-dependent honeycomb material."""
+    id: int = 0
     rho: float = 0.0
     refer_rho: float = 0.0
     ea: float = 0.0
@@ -8315,6 +8343,7 @@ class MatLaw50:
     gbc: float = 0.0
     gca: float = 0.0
     asrate: float = 0.0
+    irate: int = 2
     gflag: int = 0
     eps_max11: float = 0.0
     eps_max22: float = 0.0
@@ -8341,7 +8370,14 @@ class MatLaw50:
     yfun31: list[int] = field(default_factory=list)
     sfac31: list[float] = field(default_factory=list)
     eps31: list[float] = field(default_factory=list)
+    # Compaction fields (Card 25)
+    ecomp: float = 0.0
+    pr: float = 0.0
+    sigy: float = 0.0
+    et: float = 0.0
+    vcomp: float = 0.0
     title: str = ""
+    params: dict = field(default_factory=dict)
 
     @property
     def rho0(self) -> float:
@@ -8370,6 +8406,92 @@ class MatLaw50:
     @property
     def g31(self) -> float:
         return self.gca
+
+    @property
+    def nu(self) -> float:
+        return self.pr
+
+    @nu.setter
+    def nu(self, value: float) -> None:
+        self.pr = value
+
+    @property
+    def hcomp(self) -> float:
+        return self.et
+
+    @hcomp.setter
+    def hcomp(self, value: float) -> None:
+        self.et = value
+
+    @property
+    def gcomp(self) -> float:
+        if self.ecomp > 0.0:
+            return self.ecomp / (1.0 + min(self.pr, 0.495))
+        return 0.0
+
+    @property
+    def bulk(self) -> float:
+        if self.ecomp > 0.0:
+            return self.ecomp / (3.0 * (1.0 - 2.0 * min(self.pr, 0.495)))
+        return max(self.ea, self.eb, self.ec, self.gab, self.gbc, self.gca)
+
+    @property
+    def K(self) -> float:
+        return self.bulk
+
+    @property
+    def E(self) -> float:
+        return max(self.ea, self.eb, self.ec)
+
+    @property
+    def G(self) -> float:
+        return max(self.gab, self.gbc, self.gca)
+
+    @property
+    def sound_speed(self) -> CallableFloat:
+        import math
+        rho_val = self.rho if self.rho > 0.0 else self.refer_rho
+        if rho_val > 0.0:
+            c = math.sqrt(max(self.ea, self.eb, self.ec) / rho_val)
+            return CallableFloat(c)
+        return CallableFloat(0.0)
+
+    @property
+    def sound_speed_solid(self) -> CallableFloat:
+        import math
+        rho_val = self.rho if self.rho > 0.0 else self.refer_rho
+        if rho_val > 0.0:
+            c = math.sqrt(max((4.0 * max(self.gab, self.gbc, self.gca) / 3.0 + max(self.ea, self.eb, self.ec) / 3.0) / rho_val, 0.0))
+            return CallableFloat(c)
+        return CallableFloat(0.0)
+
+    @property
+    def law(self) -> int:
+        return 50
+
+    @property
+    def law_name(self) -> str:
+        return "LAW50"
+
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        if key in self.params:
+            return self.params[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if hasattr(self, key):
+            setattr(self, key, value)
+        self.params[key] = value
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or (key in self.params)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        return self.params.get(key, default)
 
 
 MatViscHoney = MatLaw50

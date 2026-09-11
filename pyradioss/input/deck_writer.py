@@ -1485,6 +1485,163 @@ class StarterDeck:
 
     mat_honeycomb = mat_law28
 
+    def mat_law50(
+        self,
+        mat_id: int,
+        rho: float = 0.0,
+        ea: float = 0.0,
+        eb: float = 0.0,
+        ec: float = 0.0,
+        gab: float = 0.0,
+        gbc: float = 0.0,
+        gca: float = 0.0,
+        asrate: float = 0.0,
+        irate: int = 2,
+        gflag: int = 0,
+        eps_max11: float = 0.0,
+        eps_max22: float = 0.0,
+        eps_max33: float = 0.0,
+        yfun11: Sequence[int] | None = None,
+        sfac11: Sequence[float] | None = None,
+        eps11: Sequence[float] | None = None,
+        yfun22: Sequence[int] | None = None,
+        sfac22: Sequence[float] | None = None,
+        eps22: Sequence[float] | None = None,
+        yfun33: Sequence[int] | None = None,
+        sfac33: Sequence[float] | None = None,
+        eps33: Sequence[float] | None = None,
+        vflag: int = 0,
+        eps_max12: float = 0.0,
+        eps_max23: float = 0.0,
+        eps_max31: float = 0.0,
+        yfun12: Sequence[int] | None = None,
+        sfac12: Sequence[float] | None = None,
+        eps12: Sequence[float] | None = None,
+        yfun23: Sequence[int] | None = None,
+        sfac23: Sequence[float] | None = None,
+        eps23: Sequence[float] | None = None,
+        yfun31: Sequence[int] | None = None,
+        sfac31: Sequence[float] | None = None,
+        eps31: Sequence[float] | None = None,
+        rho_ref: float | None = None,
+        ecomp: float = 0.0,
+        pr: float = 0.0,
+        sigy: float = 0.0,
+        et: float = 0.0,
+        vcomp: float = 0.0,
+        title: str = "",
+        unit_id: int | None = None,
+        law_name: str = "LAW50",
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW50`` (/MAT/VISC_HONEY, /MAT/HYP_FOAM) — cfg MAT/mat_law50.cfg
+        Rate-dependent viscoelastic honeycomb material model.
+        """
+        if "mid" in kwargs and mat_id == 0:
+            mat_id = kwargs["mid"]
+        if "id" in kwargs and mat_id == 0:
+            mat_id = kwargs["id"]
+        if "rho0" in kwargs and rho == 0.0:
+            rho = kwargs["rho0"]
+        if rho_ref is None and "refer_rho" in kwargs:
+            rho_ref = kwargs["refer_rho"]
+        if rho_ref is None and "rhor" in kwargs:
+            rho_ref = kwargs["rhor"]
+        if "e11" in kwargs and ea == 0.0: ea = kwargs["e11"]
+        if "e22" in kwargs and eb == 0.0: eb = kwargs["e22"]
+        if "e33" in kwargs and ec == 0.0: ec = kwargs["e33"]
+        if "g12" in kwargs and gab == 0.0: gab = kwargs["g12"]
+        if "gbc" in kwargs and gbc == 0.0: gbc = kwargs["g23"]
+        if "gca" in kwargs and gca == 0.0: gca = kwargs["g31"]
+        if "fcut" in kwargs and asrate == 0.0: asrate = kwargs["fcut"]
+        if "irate" in kwargs: irate = kwargs["irate"]
+        if "Irate" in kwargs: irate = kwargs["Irate"]
+        if "IRATE" in kwargs: irate = kwargs["IRATE"]
+        if "nu" in kwargs and pr == 0.0: pr = kwargs["nu"]
+        if "ecomp" in kwargs and ecomp == 0.0: ecomp = kwargs["ecomp"]
+        if "sigy" in kwargs and sigy == 0.0: sigy = kwargs["sigy"]
+        if "et" in kwargs and et == 0.0: et = kwargs["et"]
+        if "hcomp" in kwargs and et == 0.0: et = kwargs["hcomp"]
+        if "vcomp" in kwargs and vcomp == 0.0: vcomp = kwargs["vcomp"]
+        if "law" in kwargs: law_name = kwargs["law"]
+
+        def _pad_5(vals, default):
+            v = list(vals) if vals is not None else []
+            while len(v) < 5:
+                v.append(default)
+            return v[:5]
+
+        yfun11_l = _pad_5(yfun11, 0)
+        sfac11_l = _pad_5(sfac11, 1.0)
+        eps11_l = _pad_5(eps11, 0.0)
+
+        yfun22_l = _pad_5(yfun22, 0)
+        sfac22_l = _pad_5(sfac22, 1.0)
+        eps22_l = _pad_5(eps22, 0.0)
+
+        yfun33_l = _pad_5(yfun33, 0)
+        sfac33_l = _pad_5(sfac33, 1.0)
+        eps33_l = _pad_5(eps33, 0.0)
+
+        yfun12_l = _pad_5(yfun12, 0)
+        sfac12_l = _pad_5(sfac12, 1.0)
+        eps12_l = _pad_5(eps12, 0.0)
+
+        yfun23_l = _pad_5(yfun23, 0)
+        sfac23_l = _pad_5(sfac23, 1.0)
+        eps23_l = _pad_5(eps23, 0.0)
+
+        yfun31_l = _pad_5(yfun31, 0)
+        sfac31_l = _pad_5(sfac31, 1.0)
+        eps31_l = _pad_5(eps31, 0.0)
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mat_id, unit_id)
+        else:
+            self._header("MAT", law_name, mat_id)
+        self._title(title)
+        if rho_ref is not None and rho_ref != 0.0:
+            self.lines.append(fmt_float(rho) + fmt_float(rho_ref))
+        else:
+            self.lines.append(fmt_float(rho))
+        self.lines.append(fmt_float(ea) + fmt_float(eb) + fmt_float(ec))
+        self.lines.append(fmt_float(gab) + fmt_float(gbc) + fmt_float(gca))
+        if irate is not None:
+            self.lines.append(fmt_float(asrate) + fmt_int(irate))
+        else:
+            self.lines.append(fmt_float(asrate))
+        self.lines.append(fmt_int(gflag) + fmt_float(eps_max11) + fmt_float(eps_max22) + fmt_float(eps_max33))
+        self.lines.append("".join(fmt_int(x) for x in yfun11_l))
+        self.lines.append("".join(fmt_float(x) for x in sfac11_l))
+        self.lines.append("".join(fmt_float(x) for x in eps11_l))
+        self.lines.append("".join(fmt_int(x) for x in yfun22_l))
+        self.lines.append("".join(fmt_float(x) for x in sfac22_l))
+        self.lines.append("".join(fmt_float(x) for x in eps22_l))
+        self.lines.append("".join(fmt_int(x) for x in yfun33_l))
+        self.lines.append("".join(fmt_float(x) for x in sfac33_l))
+        self.lines.append("".join(fmt_float(x) for x in eps33_l))
+        self.lines.append(fmt_int(vflag) + fmt_float(eps_max12) + fmt_float(eps_max23) + fmt_float(eps_max31))
+        self.lines.append("".join(fmt_int(x) for x in yfun12_l))
+        self.lines.append("".join(fmt_float(x) for x in sfac12_l))
+        self.lines.append("".join(fmt_float(x) for x in eps12_l))
+        self.lines.append("".join(fmt_int(x) for x in yfun23_l))
+        self.lines.append("".join(fmt_float(x) for x in sfac23_l))
+        self.lines.append("".join(fmt_float(x) for x in eps23_l))
+        self.lines.append("".join(fmt_int(x) for x in yfun31_l))
+        self.lines.append("".join(fmt_float(x) for x in sfac31_l))
+        self.lines.append("".join(fmt_float(x) for x in eps31_l))
+        if ecomp > 0.0 or vcomp > 0.0 or sigy > 0.0 or et > 0.0 or pr > 0.0:
+            self.lines.append(fmt_float(ecomp) + fmt_float(pr) + fmt_float(sigy) + fmt_float(et) + fmt_float(vcomp))
+        return self
+
+    def mat_visc_honey(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "VISC_HONEY")
+        return self.mat_law50(*args, **kwargs)
+
+    def mat_hyp_foam(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "HYP_FOAM")
+        return self.mat_law50(*args, **kwargs)
+
     def mat_law34(
         self,
         id: int,

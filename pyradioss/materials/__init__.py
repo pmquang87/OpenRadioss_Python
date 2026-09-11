@@ -60,7 +60,7 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                law28_honeycomb, law33_foamplas, law34_boltzmann, law35_kelvinmax, law36_tabulated,
                law37_biphas,
                law40_kelvinmax, law42_ogden, law44_cowper,
-               law48_zhao, law49_steinb,
+               law48_zhao, law49_steinb, law50_visc_honey,
                law52_gurson,
                law60_plast3,
                law62_hypervisco, law69_hyperelastic, law70_tabfoam, law79_john_holm, law81_druckerprager,
@@ -69,6 +69,19 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                law58_fabr_a,
                law57_barlat,
                mat_gas, mat_void)
+from .law50_visc_honey import (
+    Law50Params,
+    build_law50,
+    solid_update_law50,
+    shell_update_law50,
+    sound_speed_solid_law50,
+    tangent_law50_solid,
+    solid_update as law50_solid_update,
+    shell_update as law50_shell_update,
+    sound_speed_solid as law50_sound_speed,
+    consistent_solid_tangent as law50_solid_tangent,
+    extra_shapes as law50_extra_shapes,
+)
 from .law79_john_holm import (
     Law79Params,
     build_law79,
@@ -891,6 +904,21 @@ def _register_law79():
 _register_law79()
 
 
+def _register_law50():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law50_visc_honey, "build_law50", None)
+        if builder is not None:
+            for k in (50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM",
+                      "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM"):
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law50()
+
+
 def _register_law12():
     try:
         from ..input.mat_reader import MAT_PHYSICS_REGISTRY
@@ -933,6 +961,7 @@ _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
     "uv32": (2,),
     "uv38": (33,),
     "uv43": (4,),
+    "uv50": (6,),
 }
 
 LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
@@ -1005,6 +1034,14 @@ LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
     "MAT_LAW79": {"plane_stress": False, "solid": True, "shell": False},
     "MAT_JOHN_HOLM": {"plane_stress": False, "solid": True, "shell": False},
     "LAW79_JOHN_HOLM": {"plane_stress": False, "solid": True, "shell": False},
+    50: {"plane_stress": False, "solid": True, "shell": False},
+    "50": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW50": {"plane_stress": False, "solid": True, "shell": False},
+    "VISC_HONEY": {"plane_stress": False, "solid": True, "shell": False},
+    "HYP_FOAM": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_LAW50": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_VISC_HONEY": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_HYP_FOAM": {"plane_stress": False, "solid": True, "shell": False},
 }
 
 MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
@@ -1036,6 +1073,10 @@ MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
     "JOHN_HOLM": solid_update_law79, "JOHNSON_HOLMQUIST": solid_update_law79,
     "JH2": solid_update_law79, "MAT_LAW79": solid_update_law79,
     "MAT_JOHN_HOLM": solid_update_law79, "LAW79_JOHN_HOLM": solid_update_law79,
+    50: solid_update_law50, "50": solid_update_law50, "LAW50": solid_update_law50,
+    "VISC_HONEY": solid_update_law50, "HYP_FOAM": solid_update_law50,
+    "MAT_LAW50": solid_update_law50, "MAT_VISC_HONEY": solid_update_law50,
+    "MAT_HYP_FOAM": solid_update_law50,
 }
 
 MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
@@ -1067,7 +1108,12 @@ MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
     "JOHN_HOLM": shell_update_law79, "JOHNSON_HOLMQUIST": shell_update_law79,
     "JH2": shell_update_law79, "MAT_LAW79": shell_update_law79,
     "MAT_JOHN_HOLM": shell_update_law79, "LAW79_JOHN_HOLM": shell_update_law79,
+    50: shell_update_law50, "50": shell_update_law50, "LAW50": shell_update_law50,
+    "VISC_HONEY": shell_update_law50, "HYP_FOAM": shell_update_law50,
+    "MAT_LAW50": shell_update_law50, "MAT_VISC_HONEY": shell_update_law50,
+    "MAT_HYP_FOAM": shell_update_law50,
 }
+
 
 
 def register_materials():
@@ -1162,6 +1208,7 @@ def register_materials():
     _register_law21()
     _register_law49()
     _register_law79()
+    _register_law50()
 
 
 def extra_shapes(mat, nip=None):
@@ -1315,6 +1362,8 @@ def extra_shapes(mat, nip=None):
         shapes.update(law49_steinb.extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in (79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM") or getattr(mat, "law_name", None) in ("79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM"):
         shapes.update(law79_john_holm.extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in (50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM") or getattr(mat, "law_name", None) in ("50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM"):
+        shapes.update(law50_visc_honey.extra_shapes(mat, nip=nip))
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
         shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
     return shapes
@@ -1342,9 +1391,9 @@ def needs_env(mat) -> bool:
     M548: LAW43 Hill tabulated density and sound speed; M549: LAW82 Ogden;
     M550: LAW69 hyperelastic; M552: LAW48 Zhao dynamic plasticity;
     M555: LAW57 Barlat anisotropic plasticity; M557: LAW49 Steinberg-Guinan;
-    M558: LAW79 Johnson-Holmquist JH-2)."""
-    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 21, "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", 49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", 58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", 60, "60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", 62, 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", 70, 79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", 81, 82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN")
-            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", "LAW22", "DAMA", "PLAS_DAMA", "MAT_LAW22", "MAT_DAMA", "MAT_PLAS_DAMA", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB", "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", "LAW60", "PLAS_T3", "FABRIC", "MAT_LAW60", "MAT_PLAS_T3", "MAT_FABRIC", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC", "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN"))
+    M558: LAW79 Johnson-Holmquist JH-2; M559: LAW50 Viscoelastic Honeycomb)."""
+    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 21, "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", 49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", 52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", 58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", 60, "60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", 62, 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", 70, 79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", 81, 82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN")
+            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", "LAW22", "DAMA", "PLAS_DAMA", "MAT_LAW22", "MAT_DAMA", "MAT_PLAS_DAMA", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB", "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", "LAW60", "PLAS_T3", "FABRIC", "MAT_LAW60", "MAT_PLAS_T3", "MAT_FABRIC", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC", "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN"))
 
 
 def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
@@ -1484,6 +1533,19 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
         return sig, epsp_out, c
     if getattr(mat, "law", None) in (79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM") or getattr(mat, "law_name", None) in ("79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM"):
         sign, epsp_out, c = law79_john_holm.solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra, return_tuple=True)
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = sign
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
+    if getattr(mat, "law", None) in (50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM") or getattr(mat, "law_name", None) in ("50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM"):
+        sign, epsp_out, c = law50_visc_honey.solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra, return_tuple=True)
         if hasattr(sig, "__setitem__"):
             try:
                 sig[:] = sign
@@ -1646,6 +1708,8 @@ def sound_speed(mat, rho=None, extra=None):
         return law49_steinb.sound_speed_solid(mat, rho=rho, extra=extra)
     if law in (79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM") or law_name in ("79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM"):
         return law79_john_holm.sound_speed_solid(mat, rho=rho, extra=extra)
+    if law in (50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM") or law_name in ("50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM"):
+        return law50_visc_honey.sound_speed_solid(mat, rho=rho, extra=extra)
     if law in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or law_name in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         _get_law10()
         if law10_sound_speed is not None:
@@ -1765,6 +1829,8 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         raise NotImplementedError("LAW37 (biphasic fluid/gas) is implemented for 3D solid and SPH elements only.")
     if getattr(mat, "law", None) == 28 or getattr(mat, "law_name", None) in ("LAW28", "HONEYCOMB", "HONEYCOMB_SOL"):
         raise NotImplementedError("LAW28 (HONEYCOMB crushable) is implemented for 3D solid and SPH elements only.")
+    if getattr(mat, "law", None) in (50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM") or getattr(mat, "law_name", None) in ("50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM"):
+        raise NotImplementedError("LAW50 (/MAT/VISC_HONEY) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in (4, "4", "LAW4", "HYD_JCOOK") or getattr(mat, "law_name", None) in ("4", "LAW4", "HYD_JCOOK"):
         return law04_hyd_jcook.shell_update(mat, sig, deps, epsp, dt, extra)
     if getattr(mat, "law", None) in (5, "5", "LAW5", "JWL") or getattr(mat, "law_name", None) in ("LAW5", "JWL"):
@@ -1965,6 +2031,8 @@ def solid_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
         raise NotImplementedError("LAW43 solid_tangent not available")
     if getattr(mat, "law", None) in (52, "52", "LAW52", "GURSON", "PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS"):
         return law52_gurson.tangent_law52_solid(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
+    if getattr(mat, "law", None) in (50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM") or getattr(mat, "law_name", None) in ("50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM"):
+        return law50_visc_honey.consistent_solid_tangent(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
         f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW34, LAW35, LAW36, LAW38, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
@@ -1976,6 +2044,9 @@ consistent_solid_tangent = solid_tangent
 
 def resolve_curves(mat, model, log=None):
     """Wire curve resolution hook for /FUNCT references so model.curves can be accessed by the kernel."""
+    if getattr(mat, "law", None) in (50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM") or getattr(mat, "law_name", None) in ("50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM"):
+        if hasattr(law50_visc_honey, "resolve"):
+            return law50_visc_honey.resolve(mat, model, log)
     if getattr(mat, "law", None) in (38, "38", "LAW38", "VISC_TAB") or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB"):
         _get_law38()
         if law38_visc_tab is not None and hasattr(law38_visc_tab, "resolve"):
