@@ -362,6 +362,10 @@ def _init_material_state(group, dndx0):
             if name not in st["mat_extra"]:
                 if name.startswith("off") or name.startswith("uvar82"):
                     st["mat_extra"][name] = np.ones((n,) + shape)
+                elif name in ("uvar", "uv69", "uvar69") and getattr(mat, "law", 1) in (69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "HYP_EXT_COMP", "HYPER_EXT_COMP"):
+                    arr = np.zeros((n,) + shape)
+                    arr[..., 2] = 1.0
+                    st["mat_extra"][name] = arr
                 else:
                     st["mat_extra"][name] = np.zeros((n,) + shape)
     if any(mat.eos is not None for _, mat, _ in st["slices"]):

@@ -6191,11 +6191,11 @@ class MaterialLaw46:
 
 @dataclass
 class MaterialLaw69:
-    """/MAT/LAW69 or /MAT/HYP_EXT_COMP (M173): Hyperelastic material model extended to compression.
+    """/MAT/LAW69 or /MAT/HYP_EXT_COMP (M173, M550): Hyperelastic material model extended to compression.
 
     Fortran origin: ``starter/source/materials/mat/mat069/hm_read_mat69.F``.
     """
-    id: int
+    id: int = 0
     title: str = ""
     rho0: float = 0.0
     ref_rho: float = 0.0
@@ -6206,6 +6206,86 @@ class MaterialLaw69:
     nip: int = 2
     icheck: int = -3
     fct_id_data: int = 0
+
+    def __init__(
+        self,
+        id: int = 0,
+        title: str = "",
+        rho0: float = 0.0,
+        ref_rho: float = 0.0,
+        iflag: int = 1,
+        fct_id_bulk: int = 0,
+        nu: float = 0.495,
+        fscale: float = 1.0,
+        nip: int = 2,
+        icheck: int = -3,
+        fct_id_data: int = 0,
+        **kwargs,
+    ):
+        self.id = id
+        self.title = kwargs.get("title", title)
+        self.rho0 = kwargs.get("rho", rho0)
+        self.ref_rho = kwargs.get("rhor", kwargs.get("refer_rho", ref_rho))
+        self.iflag = kwargs.get("law_id", iflag)
+        self.fct_id_bulk = kwargs.get("fct_id", fct_id_bulk)
+        self.nu = kwargs.get("nu", nu)
+        self.fscale = kwargs.get("fscale", fscale)
+        self.nip = kwargs.get("n_pair", nip)
+        self.icheck = kwargs.get("gflag", icheck)
+        self.fct_id_data = kwargs.get("fct_id1", fct_id_data)
+
+    @property
+    def rho(self) -> float:
+        return self.rho0
+
+    @rho.setter
+    def rho(self, val: float) -> None:
+        self.rho0 = float(val)
+
+    @property
+    def rhor(self) -> float:
+        return self.ref_rho
+
+    @rhor.setter
+    def rhor(self, val: float) -> None:
+        self.ref_rho = float(val)
+
+    @property
+    def law_id(self) -> int:
+        return self.iflag
+
+    @law_id.setter
+    def law_id(self, val: int) -> None:
+        self.iflag = int(val)
+
+    @property
+    def fct_id(self) -> int:
+        return self.fct_id_bulk
+
+    @fct_id.setter
+    def fct_id(self, val: int) -> None:
+        self.fct_id_bulk = int(val)
+
+    @property
+    def n_pair(self) -> int:
+        return self.nip
+
+    @n_pair.setter
+    def n_pair(self, val: int) -> None:
+        self.nip = int(val)
+
+    @property
+    def fct_id1(self) -> int:
+        return self.fct_id_data
+
+    @fct_id1.setter
+    def fct_id1(self, val: int) -> None:
+        self.fct_id_data = int(val)
+
+
+MatLaw69 = MaterialLaw69
+MatHypElas = MaterialLaw69
+MatHyperelastic = MaterialLaw69
 
 
 @dataclass

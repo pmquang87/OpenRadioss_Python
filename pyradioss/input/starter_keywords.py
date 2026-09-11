@@ -896,7 +896,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW46", "HYD_VISC", "LES_FLUID", "LAW46_HYD_VISC"):
         read_mat_law46(block, model, log)
         return
-    if lawname in ("LAW69", "HYP_EXT_COMP", "HYPER_EXT_COMP", "LAW69_HYP_EXT_COMP"):
+    if lawname in ("LAW69", "HYP_EXT_COMP", "HYPER_EXT_COMP", "LAW69_HYP_EXT_COMP", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYP_ELAS"):
         read_mat_law69(block, model, log)
         return
     # M174: MAT LAW124 (CDPM2), LAW126 (JOHNSON_HOLMQUIST_CONCRETE), LAW125 (LAMINATED_COMPOSITE), LAW127 (ENHANCED_COMPOSITE), LAW130 (MODIFIED_HONEYCOMB)
@@ -27972,7 +27972,7 @@ def read_mat_law46(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law69(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW69/id`` or ``/MAT/HYP_EXT_COMP/id`` (M173): Hyperelastic extended to compression."""
+    """``/MAT/LAW69/id`` or ``/MAT/HYP_EXT_COMP/id`` (M173, M550): Hyperelastic extended to compression."""
     from ..model.entities import MaterialLaw69, Material
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -27987,32 +27987,34 @@ def read_mat_law69(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     icheck = -3
     fct_id_data = 0
 
-    if block.fixed:
-        if len(cards) > 0 and not cards[0].is_blank:
-            f1 = cut(cards[0].raw, "MAT_LAW69_1")
-            rho0 = _f(f1[0])
-            refer_rho = _f(f1[1]) if len(f1) > 1 else 0.0
+    valid_cards = [c for c in cards if not c.is_blank]
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            f2 = cut(cards[1].raw, "MAT_LAW69_2")
-            iflag = _i(f2[0])
-            fct_id_bulk = _i(f2[1]) if len(f2) > 1 else 0
+    if block.fixed:
+        if len(valid_cards) > 0:
+            f1 = cut(valid_cards[0].raw, "MAT_LAW69_1")
+            rho0 = _f(f1[0])
+            refer_rho = _f(f1[1]) if len(f1) > 1 and f1[1].strip() else 0.0
+
+        if len(valid_cards) > 1:
+            f2 = cut(valid_cards[1].raw, "MAT_LAW69_2")
+            iflag = _i(f2[0]) if len(f2) > 0 and f2[0].strip() else 1
+            fct_id_bulk = _i(f2[1]) if len(f2) > 1 and f2[1].strip() else 0
             nu = _f(f2[2]) if len(f2) > 2 and f2[2].strip() else 0.495
             fscale = _f(f2[3]) if len(f2) > 3 and f2[3].strip() else 1.0
             nip = _i(f2[4]) if len(f2) > 4 and f2[4].strip() else 2
             icheck = _i(f2[5]) if len(f2) > 5 and f2[5].strip() else -3
 
-        if len(cards) > 2 and not cards[2].is_blank:
-            f3 = cut(cards[2].raw, "MAT_LAW69_3")
-            fct_id_data = _i(f3[0])
+        if len(valid_cards) > 2:
+            f3 = cut(valid_cards[2].raw, "MAT_LAW69_3")
+            fct_id_data = _i(f3[0]) if len(f3) > 0 and f3[0].strip() else 0
     else:
-        if len(cards) > 0 and not cards[0].is_blank:
-            t1 = cards[0].tokens()
+        if len(valid_cards) > 0:
+            t1 = valid_cards[0].tokens()
             rho0 = float(t1[0]) if len(t1) > 0 else 0.0
             refer_rho = float(t1[1]) if len(t1) > 1 else 0.0
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            t2 = cards[1].tokens()
+        if len(valid_cards) > 1:
+            t2 = valid_cards[1].tokens()
             iflag = int(float(t2[0])) if len(t2) > 0 else 1
             fct_id_bulk = int(float(t2[1])) if len(t2) > 1 else 0
             nu = float(t2[2]) if len(t2) > 2 else 0.495
@@ -28020,8 +28022,8 @@ def read_mat_law69(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             nip = int(float(t2[4])) if len(t2) > 4 else 2
             icheck = int(float(t2[5])) if len(t2) > 5 else -3
 
-        if len(cards) > 2 and not cards[2].is_blank:
-            t3 = cards[2].tokens()
+        if len(valid_cards) > 2:
+            t3 = valid_cards[2].tokens()
             fct_id_data = int(float(t3[0])) if len(t3) > 0 else 0
 
     if iflag == 0:
@@ -28032,7 +28034,7 @@ def read_mat_law69(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         nip = 2
     if fscale == 0.0:
         fscale = 1.0
-    if nu <= 0.0:
+    if nu == 0.0:
         nu = 0.495
 
     m69 = MaterialLaw69(
@@ -28049,9 +28051,15 @@ def read_mat_law69(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "MAT_Iflag": iflag, "FUN_A1": fct_id_bulk, "MAT_NU": nu,
             "MAT_FScale": fscale, "NIP": nip, "Gflag": icheck,
             "FUN_B1": fct_id_data,
-            "iflag": iflag, "fct_id_bulk": fct_id_bulk, "nu": nu,
-            "fscale": fscale, "nip": nip, "gflag": icheck, "icheck": icheck,
-            "fct_id_data": fct_id_data,
+            "iflag": iflag, "law_id": iflag,
+            "fct_id_bulk": fct_id_bulk, "fct_id": fct_id_bulk,
+            "nu": nu,
+            "fscale": fscale,
+            "nip": nip, "n_pair": nip,
+            "gflag": icheck, "icheck": icheck,
+            "fct_id_data": fct_id_data, "fct_id1": fct_id_data,
+            "rho0": rho0, "rho": rho0,
+            "rhor": refer_rho, "ref_rho": refer_rho,
         }
     )
     mat69.record = GenericMaterialRecord(
@@ -83694,6 +83702,13 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_LES_FLUID": read_mat,
     "LES_FLUID": read_mat,
     "MAT_LAW69": read_mat,
+    "LAW69": read_mat,
+    "MAT_HYP_ELAS": read_mat,
+    "HYP_ELAS": read_mat,
+    "MAT_HYPERELASTIC": read_mat,
+    "HYPERELASTIC": read_mat,
+    "MAT_LAW69_HYP_ELAS": read_mat,
+    "LAW69_HYP_ELAS": read_mat,
     "MAT_HYP_EXT_COMP": read_mat,
     "HYP_EXT_COMP": read_mat,
     "HYPER_EXT_COMP": read_mat,

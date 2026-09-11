@@ -647,6 +647,11 @@ class CfgCatalogue:
         "LAW14": "LAW14",
         "COMPSO": "LAW14",
         "COMP_SOL": "LAW14",
+        "LAW69": "LAW69",
+        "HYP_ELAS": "LAW69",
+        "HYPERELASTIC": "LAW69",
+        "LAW69_HYP_ELAS": "LAW69",
+        "MAT_LAW69": "LAW69",
     }
 
 

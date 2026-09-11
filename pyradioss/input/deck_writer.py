@@ -1443,11 +1443,121 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
-    def mat_law69(self, mid: int, title: str, data_cards) -> None:
-        """``/MAT/LAW69``."""
-        self._header("MAT", "LAW69", mid)
+    def mat_law69(
+        self,
+        mid: int = 0,
+        rho0: float | str = 0.0,
+        nu: float = 0.495,
+        iflag: int = 1,
+        fct_id_bulk: int = 0,
+        fscale: float = 1.0,
+        nip: int = 2,
+        fct_id1: int = 0,
+        title: str = "",
+        rhor: float = 0.0,
+        unit_id: int | None = None,
+        law_name: str = "LAW69",
+        mat_id: int | None = None,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW69`` (/MAT/HYP_ELAS, /MAT/HYPERELASTIC) — cfg MAT/matl69_69.cfg & hm_read_mat69.F:
+        Card 1: RHO_I, Refer_Rho (%20lg%20lg)
+        Card 2: LAW_ID, FCT_ID, NU, FSCALE, N_PAIR (%10d%10d%20lg%20lg%10d)
+        Card 3: FCT_ID1 (%10d)
+        """
+        if hasattr(mid, "iflag") or hasattr(mid, "fct_id_data") or hasattr(mid, "fct_id1") or hasattr(mid, "nip"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+            rho0 = getattr(mat_obj, "rho0", getattr(mat_obj, "rho", 0.0))
+            rhor = getattr(mat_obj, "ref_rho", getattr(mat_obj, "rhor", 0.0))
+            iflag = getattr(mat_obj, "iflag", getattr(mat_obj, "law_id", 1))
+            fct_id_bulk = getattr(mat_obj, "fct_id_bulk", getattr(mat_obj, "fct_id", 0))
+            nu = getattr(mat_obj, "nu", 0.495)
+            fscale = getattr(mat_obj, "fscale", 1.0)
+            nip = getattr(mat_obj, "nip", getattr(mat_obj, "n_pair", 2))
+            fct_id1 = getattr(mat_obj, "fct_id_data", getattr(mat_obj, "fct_id1", 0))
+            title = getattr(mat_obj, "title", title)
+
+        if mat_id is not None:
+            mid = mat_id
+
+        if isinstance(rho0, str) and isinstance(nu, (list, tuple)):
+            t = rho0
+            data_cards = nu
+            if unit_id is not None:
+                self._header("MAT", law_name, mid, unit_id)
+            else:
+                self._header("MAT", law_name, mid)
+            self._title(t)
+            self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+            return self
+
+        if "rho" in kwargs and not rho0:
+            rho0 = kwargs["rho"]
+        if "rhor" in kwargs:
+            rhor = kwargs["rhor"]
+        if "ref_rho" in kwargs:
+            rhor = kwargs["ref_rho"]
+        if "refer_rho" in kwargs:
+            rhor = kwargs["refer_rho"]
+        if "law_id" in kwargs:
+            iflag = kwargs["law_id"]
+        if "fct_id" in kwargs:
+            fct_id_bulk = kwargs["fct_id"]
+        if "n_pair" in kwargs:
+            nip = kwargs["n_pair"]
+        if "fct_id_data" in kwargs:
+            fct_id1 = kwargs["fct_id_data"]
+
+        rho_val = float(rho0) if not isinstance(rho0, str) else 0.0
+        rhor_val = float(rhor)
+        nu_val = float(nu)
+        iflag_val = int(iflag)
+        fct_bulk_val = int(fct_id_bulk)
+        fscale_val = float(fscale)
+        nip_val = int(nip)
+        fct_data_val = int(fct_id1)
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
         self._title(title)
-        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+        # Card 1: RHO_I, [Refer_Rho]
+        if rhor_val != 0.0:
+            self.lines.append(fmt_float(rho_val) + fmt_float(rhor_val))
+        else:
+            self.lines.append(fmt_float(rho_val))
+
+        # Card 2: LAW_ID, FCT_ID, NU, FSCALE, N_PAIR
+        self.lines.append(
+            fmt_int(iflag_val, 10)
+            + fmt_int(fct_bulk_val, 10)
+            + fmt_float(nu_val, 20)
+            + fmt_float(fscale_val, 20)
+            + fmt_int(nip_val, 10)
+        )
+
+        # Card 3: FCT_ID1
+        self.lines.append(fmt_int(fct_data_val, 10))
+
+        return self
+
+    def mat_hyp_elas(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/HYP_ELAS`` — synonym for ``/MAT/LAW69``."""
+        kwargs.setdefault("law_name", "HYP_ELAS")
+        return self.mat_law69(*args, **kwargs)
+
+    def mat_hyperelastic(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/HYPERELASTIC`` — synonym for ``/MAT/LAW69``."""
+        kwargs.setdefault("law_name", "HYPERELASTIC")
+        return self.mat_law69(*args, **kwargs)
+
+    def mat_law69_hyp_elas(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/LAW69_HYP_ELAS`` — synonym for ``/MAT/LAW69``."""
+        kwargs.setdefault("law_name", "LAW69_HYP_ELAS")
+        return self.mat_law69(*args, **kwargs)
 
     def mat_law94(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/LAW94``."""
@@ -4381,7 +4491,7 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
             d.mat_hyd_jcook(mid, title, [c.raw if hasattr(c, "raw") else c for c in cards])
     elif law == "PLAS_PREDEF":
         d.mat_plas_predef(mid, title, cards)
-    elif law == "LAW69":
+    elif law in ("LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYP_ELAS"):
         d.mat_law69(mid, title, cards)
     elif law == "LAW94":
         d.mat_law94(mid, title, cards)

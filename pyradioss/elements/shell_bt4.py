@@ -533,15 +533,21 @@ def _init_material_state(group, nip_max):
             if name not in st["mat_extra"]:
                 if name.startswith("off") or name.startswith("damt") or name.startswith("alpe") or name.startswith("uvar82"):
                     st["mat_extra"][name] = np.ones((n,) + shape)
+                elif name in ("uvar", "uv69", "uvar69") and getattr(mat, "law", 1) in (69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "HYP_EXT_COMP", "HYPER_EXT_COMP"):
+                    arr = np.zeros((n,) + shape)
+                    arr[..., 2] = 1.0
+                    st["mat_extra"][name] = arr
                 else:
                     st["mat_extra"][name] = np.zeros((n,) + shape)
     if any(mat.fail is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros((n, nip_max))
     st["chk_fail"] = any(
-        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43)
+        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43, 69)
         or mat.params.get("eps_p_max", EP30) < 1e30
         or mat.params.get("eps_max", EP30) < 1e30
         or mat.params.get("EPSMAX", EP30) < 1e30
+        or mat.params.get("tenscut", 1e30) < 1e30
+        or mat.params.get("TENSCUT", 1e30) < 1e30
         for _, mat, _ in st["slices"])
 
 
@@ -552,6 +558,13 @@ def _layer_extra(st, sl, k):
     extra["layfail"] = st["layfail"][sl, k]
     if "time" in st:
         extra["time"] = st["time"]
+    if "thick" in st:
+        extra["thkn"] = st["thick"][sl]
+        extra["thk"] = st["thick"][sl]
+    if "thick0" in st:
+        extra["thklyl"] = st["thick0"][sl]
+    elif "thick" in st:
+        extra["thklyl"] = st["thick"][sl]
     return extra
 
 
@@ -573,6 +586,12 @@ def _layer_failure(st, sl, mat, k, sig_k, epsp_old, deps_k, dt):
         broken = failure.shell_step(mat.fail, sig_k, d_ep, deps_k, dt,
                                     st["dama"][sl, k], tstar, eps_tot=eps_tot)
         layf[broken] = 0.0
+    if getattr(mat, "law", 1) in (69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "HYP_EXT_COMP", "HYPER_EXT_COMP"):
+        tenscut = float(getattr(mat, "tenscut", 1e30) or (mat.params.get("tenscut", 1e30) if hasattr(mat, "params") else 1e30) or 1e30)
+        if tenscut < 1e30:
+            broken = (sig_k[:, 0] > tenscut) | (sig_k[:, 1] > tenscut)
+            if np.any(broken):
+                layf[broken] = 0.0
     if getattr(mat, "law", 1) != 43:
         eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
         if eps_max < 1e30:
@@ -593,10 +612,12 @@ def _element_deletion(st, nip_of):
     layfail = st["layfail"]
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         law = getattr(mat, "law", 1)
-        if not (mat.fail is not None or law in (15, 22, 25, 27, 43)
+        if not (mat.fail is not None or law in (15, 22, 25, 27, 43, 69)
                 or mat.params.get("eps_p_max", EP30) < 1e30
                 or mat.params.get("eps_max", EP30) < 1e30
-                or mat.params.get("EPSMAX", EP30) < 1e30):
+                or mat.params.get("EPSMAX", EP30) < 1e30
+                or mat.params.get("tenscut", 1e30) < 1e30
+                or mat.params.get("TENSCUT", 1e30) < 1e30):
             continue
         nip = nip_of[isl]
         nbroken = (layfail[sl, :nip] == 0.0).sum(axis=1)

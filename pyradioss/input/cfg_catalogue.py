@@ -89,6 +89,11 @@ LAW_MAP: Dict[str, int] = {
     "LAW82": 82,
     "OGDEN": 82,
     "LAW82_OGDEN": 82,
+    "LAW69": 69,
+    "HYP_ELAS": 69,
+    "HYPERELASTIC": 69,
+    "LAW69_HYP_ELAS": 69,
+    "MAT_LAW69": 69,
     "HYPER_ELAS": 88,
     "LAW88": 88,
     "ARRUDA_BOYCE": 92,
@@ -140,6 +145,11 @@ LAW_SYNONYMS: Dict[str, str] = {
     "LAW82": "LAW82",
     "OGDEN": "LAW82",
     "LAW82_OGDEN": "LAW82",
+    "LAW69": "MAT_LAW69",
+    "HYP_ELAS": "MAT_LAW69",
+    "HYPERELASTIC": "MAT_LAW69",
+    "LAW69_HYP_ELAS": "MAT_LAW69",
+    "MAT_LAW69": "MAT_LAW69",
 }
 
 KEYWORD_NAME_MAP = LAW_MAP
