@@ -548,13 +548,20 @@ def _eval_curve(curve: Any, x: float) -> Tuple[float, float]:
             except Exception:
                 pass
 
-    # Object with x, y arrays
+    # Object with x, y arrays or list/tuple of (x, y) points
     xs = getattr(curve, "x", None)
     ys = getattr(curve, "y", None)
     if xs is None and hasattr(curve, "data"):
         data = np.asarray(curve.data)
         if data.ndim == 2 and data.shape[1] >= 2:
             xs, ys = data[:, 0], data[:, 1]
+    if xs is None and isinstance(curve, (list, tuple, np.ndarray)):
+        try:
+            data = np.asarray(curve, dtype=float)
+            if data.ndim == 2 and data.shape[1] >= 2:
+                xs, ys = data[:, 0], data[:, 1]
+        except Exception:
+            pass
 
     if xs is not None and ys is not None:
         xs = np.asarray(xs, dtype=float)
