@@ -332,6 +332,12 @@ class Material:
                 return float(law58_fabr_a.sound_speed_shell_law58(self, rho0=self.rho0))
             except Exception:
                 pass
+        if self.law in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(self, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
+            try:
+                from ..materials import law57_barlat
+                return float(law57_barlat.sound_speed_shell_law57(self, rho0=self.rho0))
+            except Exception:
+                pass
             rho0 = self.rho0 or (self.params.get("rho", 0.0) if hasattr(self, "params") and isinstance(self.params, dict) else 0.0)
             if rho0 > 0.0:
                 p = getattr(self, "params", {}) or {}

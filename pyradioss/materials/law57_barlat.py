@@ -353,8 +353,10 @@ def sound_speed_shell_law57(params: Any, rho0: Optional[float] = None,
 
     Upstream Fortran reference: sigeps57c.F90 line 603.
     """
+    rho_val = float(rho0) if rho0 is not None else getattr(params, "rho0", getattr(params, "rho", getattr(params, "density", None)))
     p = _get_params(params)
-    rho_val = float(rho0) if rho0 is not None else p.rho0
+    if rho_val is None:
+        rho_val = p.rho0
     if extra is not None and "rho" in extra and extra["rho"] is not None:
         try:
             r_ex = float(np.asarray(extra["rho"]).flatten()[0])
@@ -1134,6 +1136,12 @@ def build_law57(rec: Any = None, **kwargs: Any) -> Law57Params:
     elif hasattr(rec, "params"):
         base = rec.params if isinstance(rec.params, dict) else rec.params.__dict__
         p = {**base, **kwargs}
+        if hasattr(rec, "rho0") and "rho0" not in p and "rho" not in p:
+            p["rho0"] = getattr(rec, "rho0")
+        elif hasattr(rec, "density") and "density" not in p and "rho0" not in p:
+            p["density"] = getattr(rec, "density")
+        elif hasattr(rec, "rho") and "rho" not in p and "rho0" not in p:
+            p["rho"] = getattr(rec, "rho")
         _id = int(getattr(rec, "id", kwargs.get("id", 1)))
         _title = str(getattr(rec, "title", kwargs.get("title", "LAW57_BARLAT")))
     elif hasattr(rec, "__dict__"):
