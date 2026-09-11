@@ -953,7 +953,7 @@ class StarterDeck:
                 h = p_dict.get("h", h)
                 f = p_dict.get("f", f)
 
-        explicit_rhor = False
+        explicit_rhor = (refer_rho is not None)
         if "refer_rho" in kw_low and refer_rho is None:
             refer_rho = float(kw_low["refer_rho"])
             explicit_rhor = True

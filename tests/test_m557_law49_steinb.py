@@ -394,9 +394,14 @@ def test_melt_temperature_cutoff():
     assert math.isclose(sig_new[0], sig_new[1], rel_tol=1e-10)
     assert math.isclose(sig_new[1], sig_new[2], rel_tol=1e-10)
 
-    # Sound speed should be purely bulk: c = sqrt(K / rho0)
+    # Shear modulus in extra["g"] is zeroed upon melting (m49law.F line 147)
+    assert extra["g"] == 0.0
+
+    # Acoustic wave speed in m49law.F lines 132-135 is computed before line 147 reset:
+    # CXX = sqrt(|bulk + 4/3*G| / rho0)
     K = mat.params["bulk"]
-    expected_c = math.sqrt(K / 7.8)
+    G0 = mat.params["g0"]
+    expected_c = math.sqrt(abs(K + (4.0 / 3.0) * G0) / 7.8)
     assert math.isclose(c_val, expected_c, rel_tol=1e-10)
 
 

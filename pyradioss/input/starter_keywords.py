@@ -34622,15 +34622,24 @@ def read_mat_law49(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             pmin = -1.0e20
 
         unit_id = block.unit_id if hasattr(block, "unit_id") else None
+        law_name = block.parts[1].upper() if len(block.parts) > 1 else "LAW49"
+        if law_name in ("49", "LAW49"):
+            law_name = "LAW49"
 
         m49 = MatLaw49(
             id=mat_id, rho=rho, refer_rho=refer_rho, e0=e0, nu=nu,
             sigy=sigy, beta=beta, n=n, eps_max=eps_max, sigma_max=sigma_max,
             t0=t0, tmelt=tmelt, rhoc_p=rhoc_p, pmin=pmin,
             b1=b1, b2=b2, h=h, f=f, title=title,
-            law=49, law_name="LAW49", unit_id=unit_id,
+            law=49, law_name=law_name, unit_id=unit_id,
         )
         model.mat_law49s[mat_id] = m49
+        if hasattr(model, "mat_steinbs"):
+            model.mat_steinbs[mat_id] = m49
+        if hasattr(model, "mat_steinbergs"):
+            model.mat_steinbergs[mat_id] = m49
+        if hasattr(model, "mat_steinberg_guinans"):
+            model.mat_steinberg_guinans[mat_id] = m49
 
         params: Dict[str, Any] = {
             "rho": rho, "rho0": rho, "refer_rho": refer_rho, "rhor": refer_rho,
@@ -34640,12 +34649,12 @@ def read_mat_law49(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "eps_max": eps_max, "sigma_max": sigma_max,
             "t0": t0, "tmelt": tmelt, "rhoc_p": rhoc_p, "pmin": pmin,
             "b1": b1, "b2": b2, "h": h, "f": f,
-            "G": m49.G, "G0": m49.G0, "bulk": m49.bulk, "C1": m49.C1,
+            "G": m49.G, "G0": m49.G0, "g0": m49.G0, "bulk": m49.bulk, "K": m49.bulk, "C1": m49.C1,
         }
 
         model.materials[mat_id] = Material(
             id=mat_id, law=49, rho0=rho, title=title,
-            law_name="LAW49",
+            law_name=law_name,
             params=params,
         )
     except ValueError as err:
@@ -92806,3 +92815,49 @@ def parse_starter_deck(blocks: Union[List[KeywordBlock], str, Any],
             model.raw_unit_refs.append(
                 (block.key0, block.user_id, block.unit_id, block.source))
     return model
+
+
+class ParsedStarterModel(Model):
+    """Subclass of Model returned by read_starter_deck supporting (model, log) unpacking."""
+
+    def __iter__(self):
+        return iter((self, getattr(self, "log", MessageLog())))
+
+
+def read_starter_deck(
+    source: Union[str, Path, List[KeywordBlock], Any],
+    model: Optional[Model] = None,
+    log: Optional[MessageLog] = None,
+) -> Any:
+    """Read a starter deck into a Model, callable as either `model = read_starter_deck(deck)`
+    or `model, log = read_starter_deck(deck)`.
+    """
+    import tempfile
+    import os
+    from pathlib import Path
+
+    if log is None:
+        log = MessageLog()
+    target_model = model if model is not None else ParsedStarterModel()
+    setattr(target_model, "log", log)
+
+    if isinstance(source, Path):
+        source = str(source)
+
+    if isinstance(source, str):
+        if "\n" in source or (not os.path.exists(source) and ("/BEGIN" in source or "/MAT" in source)):
+            with tempfile.NamedTemporaryFile("w", suffix="_0000.rad", delete=False, encoding="utf-8") as tf:
+                tf.write(source)
+                tmp_path = tf.name
+            try:
+                parse_starter_deck(tmp_path, target_model, log)
+            finally:
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+            return target_model
+
+    parse_starter_deck(source, target_model, log)
+    return target_model
+

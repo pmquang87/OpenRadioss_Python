@@ -200,6 +200,18 @@ def _get_params(mat: Any) -> Law49Params:
     else:
         bulk = 0.0
 
+    if e0 == 0.0 and g0 > 0.0:
+        if bulk > 0.0 and (3.0 * bulk + g0) > 0.0:
+            e0 = 9.0 * bulk * g0 / (3.0 * bulk + g0)
+            if nu == 0.0:
+                nu = (3.0 * bulk - 2.0 * g0) / (2.0 * (3.0 * bulk + g0))
+        elif nu > 0.0:
+            e0 = 2.0 * g0 * (1.0 + nu)
+    elif g0 == 0.0 and e0 > 0.0 and (1.0 + nu) != 0.0:
+        g0 = e0 / (2.0 * (1.0 + nu))
+    elif bulk == 0.0 and e0 > 0.0 and (1.0 - 2.0 * nu) != 0.0:
+        bulk = e0 / (3.0 * (1.0 - 2.0 * nu))
+
     # Yield and hardening parameters
     sig0_val = p.get("sig0", p.get("sigy", p.get("MAT_SIGY", p.get("sigma_0", p.get("sigma_y0", p.get("A", p.get("a")))))))
     sig0 = float(sig0_val) if sig0_val is not None else 0.0
@@ -344,6 +356,7 @@ def build_law49(mat_def: Any) -> Material:
 
     setattr(mat, "law49_params", params_obj)
     mat.params["law49_params"] = params_obj
+    mat.sound_speed_solid = lambda rho=None, extra=None: sound_speed_solid(mat, rho=rho, extra=extra)
     return mat
 
 
@@ -487,27 +500,40 @@ def solid_update(
     # Current temperature theta (m49law.F line 99)
     if "theta" in extra and extra["theta"] is not None:
         theta = np.asarray(extra["theta"], dtype=float).copy()
+        if np.all(theta == 0.0) and t0 > 0.0:
+            theta = np.full(nel, t0, dtype=float)
     elif "temp" in extra and extra["temp"] is not None:
         theta = np.asarray(extra["temp"], dtype=float).copy()
+        if np.all(theta == 0.0) and t0 > 0.0:
+            theta = np.full(nel, t0, dtype=float)
     elif "temperature" in extra and extra["temperature"] is not None:
         theta = np.asarray(extra["temperature"], dtype=float).copy()
+        if np.all(theta == 0.0) and t0 > 0.0:
+            theta = np.full(nel, t0, dtype=float)
     else:
         theta = np.full(nel, t0, dtype=float)
     if theta.shape != (nel,):
         theta = np.full(nel, float(theta.flat[0]) if theta.size > 0 else t0, dtype=float)
 
     # Specific internal energy espe (m49law.F lines 100-106)
-    if "espe" in extra and extra["espe"] is not None:
+    if "espe" in extra and extra["espe"] is not None and np.any(extra["espe"] != 0.0):
         espe = np.asarray(extra["espe"], dtype=float)
     elif "eint" in extra and extra["eint"] is not None:
-        espe = np.asarray(extra["eint"], dtype=float)
+        espe_raw = np.asarray(extra["eint"], dtype=float)
+        if "vol0" in extra and extra["vol0"] is not None:
+            v0 = np.asarray(extra["vol0"], dtype=float)
+            espe = np.where(v0 > _EM20, espe_raw / np.maximum(v0, _EM20), espe_raw)
+        else:
+            espe = espe_raw
+    elif "espe" in extra and extra["espe"] is not None:
+        espe = np.asarray(extra["espe"], dtype=float)
     else:
         espe = np.zeros(nel, dtype=float)
     if espe.shape != (nel,):
         espe = np.full(nel, float(espe.flat[0]) if espe.size > 0 else 0.0, dtype=float)
 
     # 2. Scaling variables QA, QB, QC (m49law.F lines 98-106)
-    qa = P_old * (np.maximum(df, _EM20) ** (1.0 / 3.0))
+    qa = P_old * np.cbrt(df)
     qb = 1.0 - h * (theta - t0)
 
     qc = np.ones(nel, dtype=float)
@@ -522,10 +548,6 @@ def solid_update(
     # 3. Current shear modulus G and yield scaling factor QD (m49law.F lines 107-108)
     G = g0 * (b1 * qa + qb) * qc
     qd = (b2 * qa + qb) * qc
-
-    # Clamp physically to non-negative values
-    G = np.maximum(G, 0.0)
-    qd = np.maximum(qd, 0.0)
 
     # 4. Cold work hardening QE (m49law.F lines 109-115)
     qe = np.empty(nel, dtype=float)
@@ -552,7 +574,12 @@ def solid_update(
     s_tr[:, 4] = sig_arr[:, 4] + g1 * deps_arr[:, 4]
     s_tr[:, 5] = sig_arr[:, 5] + g1 * deps_arr[:, 5]
 
-    # 6. von Mises equivalent trial stress AJ2 (m49law.F lines 139-140)
+    # 6. Acoustic sound speed (m49law.F lines 132-135, before melting reset G=0 at line 147)
+    c_solid = sound_speed_solid(p, rho=rho0, extra={"g": G})
+    if np.isscalar(c_solid):
+        c_solid = np.full(nel, float(c_solid), dtype=float)
+
+    # von Mises equivalent trial stress AJ2 (m49law.F lines 139-140)
     j2 = (
         0.5 * (s_tr[:, 0] ** 2 + s_tr[:, 1] ** 2 + s_tr[:, 2] ** 2)
         + s_tr[:, 3] ** 2
@@ -562,7 +589,7 @@ def solid_update(
     aj2 = np.sqrt(3.0 * np.maximum(j2, 0.0))
 
     # 7. Check melting and radial return (m49law.F lines 145-168)
-    melted = (theta >= tmelt) | (qc <= 0.0)
+    melted = (theta >= tmelt)
     unmelted = ~melted
 
     qh = np.zeros(nel, dtype=float)
@@ -575,10 +602,6 @@ def solid_update(
         else:
             pos = u_idx & (epsp_arr > 0.0)
             qh[pos] = qd[pos] * sig0 * beta * n / ((1.0 + beta * epsp_arr[pos]) ** (1.0 - n))
-
-        # Capped yield slope is 0 once saturated at sigma_max or eps_max
-        sat = u_idx & ((epsp_arr >= eps_max) | (qe >= sigma_max))
-        qh[sat] = 0.0
 
         elastic = u_idx & (aj2 <= yld)
         scale[elastic] = 1.0
@@ -604,7 +627,7 @@ def solid_update(
     # Return deviatoric stress (m49law.F lines 176-181)
     s_new = scale[:, None] * s_tr * off[:, None]
 
-    # Accumulate equivalent plastic strain (m49law.F lines 182-183)
+    # Accumulate equivalent plastic strain (m49law.F lines 182-183: EPXE = (EPXE + DPLA) * OFF)
     epsp_new = (epsp_arr + dpla) * off
 
     # 9. Temperature rise due to plastic work (m49law.F lines 198-207)
@@ -633,13 +656,9 @@ def solid_update(
     sig_new[:, 2] -= P_new
     sig_new *= off[:, None]
 
-    # 11. Acoustic sound speed
-    c_solid = sound_speed_solid(p, rho=df * rho0, extra={"g": G})
-    if np.isscalar(c_solid):
-        c_solid = np.full(nel, float(c_solid), dtype=float)
-
     # Store state variables in extra
     if extra is not None:
+        extra["espe"] = espe
         extra["sigy"] = yld_actual
         extra["yld"] = yld_actual
         extra["defp"] = epsp_new
@@ -652,7 +671,10 @@ def solid_update(
         extra["g"] = G
         extra["qd"] = qd
         extra["qc"] = qc
+        extra["qh"] = qh
+        extra["scale"] = scale
         extra["p"] = P_new
+        extra["s"] = s_new
         extra["c_solid"] = c_solid
         extra["sound_speed"] = c_solid
 

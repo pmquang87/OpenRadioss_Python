@@ -8540,6 +8540,7 @@ class MatLaw49:
             "Nu": self.Nu,
             "sigy": self.sigy,
             "sigma_0": self.sigma_0,
+            "sig0": self.sigma_0,
             "beta": self.beta,
             "n": self.n,
             "hard": self.hard,
@@ -8555,7 +8556,9 @@ class MatLaw49:
             "f": self.f,
             "G": self.G,
             "G0": self.G0,
+            "g0": self.G0,
             "bulk": self.bulk,
+            "K": self.bulk,
             "C1": self.C1,
         }
         for k, v in core.items():
@@ -8628,10 +8631,18 @@ class MatLaw49:
         return self.G
 
     @property
+    def g0(self) -> float:
+        return self.G
+
+    @property
     def bulk(self) -> float:
         """Elastic bulk modulus: K = E / (3 * (1 - 2 * nu))."""
         denom = 3.0 * (1.0 - 2.0 * self.nu)
         return self.e0 / denom if denom != 0.0 else 0.0
+
+    @property
+    def K(self) -> float:
+        return self.bulk
 
     @property
     def C1(self) -> float:
