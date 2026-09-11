@@ -29,7 +29,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   (`requirements-lock.txt`).
 - Suite: 9125 collected = 9106 fast + 19 `slow`-marked.
 - Fast tier (2026-09-11, this venv): **9103 passed / 3 skipped / 0 failed**, 19 slow deselected.
-- Full suite (2026-09-10, this venv, Python 3.14.2): **7613 passed / 5 skipped / 0 failed**. Skips that remain are environmental (optional backends like CHOLMOD/MUMPS, LS-PrePost/Vortex extras, meshio, numpy.trapz in NumPy 2.0+, one 15 MB corpus deck not vendored) and each carries a reason string.
+- Full suite (2026-09-11, this venv, Python 3.14.2): **9121 passed / 4 skipped / 0 failed** (in 42 min 59 s). Skips that remain are environmental (optional backends like CHOLMOD/MUMPS, LS-PrePost/Vortex extras, meshio, numpy.trapz in NumPy 2.0+, one 15 MB corpus deck not vendored) and each carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
 ## What is implemented (M1 → M551)
