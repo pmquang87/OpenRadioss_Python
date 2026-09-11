@@ -258,6 +258,12 @@ class Material:
                 return float(law69_hyperelastic.sound_speed(self, rho=self.rho0))
             except Exception:
                 pass
+        if self.law in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "LAW48_ZHAO") or getattr(self, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "LAW48_ZHAO"):
+            try:
+                from ..materials import law48_zhao
+                return float(law48_zhao.sound_speed_solid_law48(self, rho0=self.rho0))
+            except Exception:
+                pass
         return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
 
     def sound_speed_shell(self) -> float:
@@ -288,6 +294,12 @@ class Material:
             try:
                 from ..materials import law69_hyperelastic
                 return float(law69_hyperelastic.sound_speed_shell(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "LAW48_ZHAO") or getattr(self, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "LAW48_ZHAO"):
+            try:
+                from ..materials import law48_zhao
+                return float(law48_zhao.sound_speed_shell_law48(self, rho0=self.rho0))
             except Exception:
                 pass
         return float(np.sqrt(self.E / (self.rho0 * (1.0 - self.nu ** 2))))
@@ -8791,12 +8803,117 @@ class MatLaw48:
         return self.refer_rho if self.refer_rho != 0.0 else self.rho
 
     @property
+    def ref_rho(self) -> float:
+        return self.refer_rho
+
+    @ref_rho.setter
+    def ref_rho(self, val: float) -> None:
+        self.refer_rho = val
+
+    @property
     def sigy(self) -> float:
         return self.a
+
+    @sigy.setter
+    def sigy(self, val: float) -> None:
+        self.a = val
 
     @property
     def hard(self) -> float:
         return self.n
+
+    @hard.setter
+    def hard(self, val: float) -> None:
+        self.n = val
+
+    @property
+    def mat_hard(self) -> float:
+        return self.chard
+
+    @mat_hard.setter
+    def mat_hard(self, val: float) -> None:
+        self.chard = val
+
+    @property
+    def fisokin(self) -> float:
+        return self.chard
+
+    @fisokin.setter
+    def fisokin(self, val: float) -> None:
+        self.chard = val
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @E.setter
+    def E(self, val: float) -> None:
+        self.e = val
+
+    @property
+    def eps0(self) -> float:
+        return self.eps_rate_0
+
+    @eps0.setter
+    def eps0(self, val: float) -> None:
+        self.eps_rate_0 = val
+
+    @property
+    def scale(self) -> float:
+        return self.fcut
+
+    @scale.setter
+    def scale(self, val: float) -> None:
+        self.fcut = val
+
+    @property
+    def sigma_max(self) -> float:
+        return self.sig_max
+
+    @sigma_max.setter
+    def sigma_max(self, val: float) -> None:
+        self.sig_max = val
+
+    @property
+    def eta1(self) -> float:
+        return self.eps_t1
+
+    @eta1.setter
+    def eta1(self, val: float) -> None:
+        self.eps_t1 = val
+
+    @property
+    def eta2(self) -> float:
+        return self.eps_t2
+
+    @eta2.setter
+    def eta2(self, val: float) -> None:
+        self.eps_t2 = val
+
+    @property
+    def G(self) -> float:
+        return self.e / (2.0 * (1.0 + self.nu)) if (1.0 + self.nu) != 0.0 else 0.0
+
+    @property
+    def K(self) -> float:
+        denom = 3.0 * (1.0 - 2.0 * self.nu)
+        return self.e / denom if denom != 0.0 else 0.0
+
+    @property
+    def sound_speed(self) -> float:
+        return (self.e / self.rho0)**0.5 if self.rho0 > 0.0 and self.e > 0.0 else 0.0
+
+    def sound_speed_solid(self) -> float:
+        if self.rho0 > 0.0 and self.e > 0.0:
+            c1 = self.K
+            g = self.G
+            return ((c1 + 4.0 * g / 3.0) / self.rho0)**0.5
+        return 0.0
+
+    def sound_speed_shell(self) -> float:
+        if self.rho0 > 0.0 and self.e > 0.0 and (1.0 - self.nu**2) > 0.0:
+            return (self.e / (self.rho0 * (1.0 - self.nu**2)))**0.5
+        return 0.0
 
 
 MatZhao = MatLaw48

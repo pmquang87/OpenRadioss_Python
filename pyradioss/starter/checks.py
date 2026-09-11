@@ -59,19 +59,19 @@ _NULL_RHO0_OK_LAWS = frozenset({0} | _MULTIMAT_ALE_LAWS)
 # and their density divisions are guarded exactly as hm_read_mat00.F
 # guards its own — see elements/truss.py and elements/beam_type3.py.
 _ALLOWED_LAWS = {
-    "bricks": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 12, "12", "LAW12", "3D_COMP", "COMP_3D", "3PARBI", "RAGAB", 14, "14", "LAW14", "COMPSO", "COMP_SOL", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 62, 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 70, 81, 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN", 83, 999},
-    "tetras": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 12, "12", "LAW12", "3D_COMP", "COMP_3D", "3PARBI", "RAGAB", 14, "14", "LAW14", "COMPSO", "COMP_SOL", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 62, 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 70, 81, 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN", 999},
-    "penta6": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 12, "12", "LAW12", "3D_COMP", "COMP_3D", "3PARBI", "RAGAB", 14, "14", "LAW14", "COMPSO", "COMP_SOL", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 62, 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 70, 81, 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN", 83, 999},
-    "pyra5": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 12, "12", "LAW12", "3D_COMP", "COMP_3D", "3PARBI", "RAGAB", 14, "14", "LAW14", "COMPSO", "COMP_SOL", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 62, 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 70, 81, 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN", 83, 999},
-    "shells": {0, 1, 2, 3, 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 19, 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN"},
+    "bricks": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 12, "12", "LAW12", "3D_COMP", "COMP_3D", "3PARBI", "RAGAB", 14, "14", "LAW14", "COMPSO", "COMP_SOL", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO", "MAT_LAW48", "LAW48_ZHAO", 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 62, 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 70, 81, 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN", 83, 999},
+    "tetras": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 12, "12", "LAW12", "3D_COMP", "COMP_3D", "3PARBI", "RAGAB", 14, "14", "LAW14", "COMPSO", "COMP_SOL", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO", "MAT_LAW48", "LAW48_ZHAO", 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 62, 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 70, 81, 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN", 999},
+    "penta6": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 12, "12", "LAW12", "3D_COMP", "COMP_3D", "3PARBI", "RAGAB", 14, "14", "LAW14", "COMPSO", "COMP_SOL", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO", "MAT_LAW48", "LAW48_ZHAO", 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 62, 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 70, 81, 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN", 83, 999},
+    "pyra5": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 12, "12", "LAW12", "3D_COMP", "COMP_3D", "3PARBI", "RAGAB", 14, "14", "LAW14", "COMPSO", "COMP_SOL", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO", "MAT_LAW48", "LAW48_ZHAO", 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 62, 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 70, 81, 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN", 83, 999},
+    "shells": {0, 1, 2, 3, 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 19, 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO", "MAT_LAW48", "LAW48_ZHAO", 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN"},
     # QBAT (Ishell=12, M41): the laws the layered kernel reuses from the
     # BT plumbing; no orthotropic (LAW19) shell_ortho wiring yet
-    "shells_qbat": {0, 1, 2, 3, 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN"},
+    "shells_qbat": {0, 1, 2, 3, 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO", "MAT_LAW48", "LAW48_ZHAO", 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN"},
     # QEPH (Ishell=24, M41): shares the BT layer plumbing INCLUDING the
     # shell_ortho fiber rotation (LAW19); the czfintn.F stabilization
     # runs isotropic moduli (czfintn_or orthotropic HM/HF deferred)
-    "shells_qeph": {0, 1, 2, 3, 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 19, 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN"},
-    "sh3n": {0, 1, 2, 3, 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 19, 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN"},
+    "shells_qeph": {0, 1, 2, 3, 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 19, 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO", "MAT_LAW48", "LAW48_ZHAO", 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN"},
+    "sh3n": {0, 1, 2, 3, 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 19, 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO", "MAT_LAW48", "LAW48_ZHAO", 60, "60", "LAW60", "PLAS_T3", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", "MAT_LAW60", 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW69_HYP_ELAS", 82, "82", "LAW82", "OGDEN", "LAW82_OGDEN"},
     "trusses": {0, 1, 2, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW"},
     "springs": None,          # springs ignore their material entirely
     "beams": {0, 1, 2, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW"},
@@ -1488,6 +1488,312 @@ def check_mat_law60(
 _check_mat_law60 = check_mat_law60
 
 
+def check_mat_law48(
+    mat: Any = None,
+    arg1: Any = None,
+    arg2: Any = None,
+    model: Any = None,
+    log: Any = None,
+    **kwargs,
+) -> None:
+    """Validate /MAT/LAW48 (/MAT/ZHAO, /MAT/PLAS_ZHAO) parameter bounds (M552).
+
+    Required checks (citing hm_read_mat48.F and matl48_zhao.cfg):
+      - rho0 > 0
+      - E > 0
+      - 0.0 <= nu < 0.5 (ANCMSG 49)
+      - sigy > 0 (or a > 0)
+      - 0.0 <= n <= 1.0
+      - b >= 0
+      - sig_max >= 0
+      - eps_t1 >= 0, eps_t2 >= 0, eps_max >= 0
+      - If eps_t1 < 1.0e20: eps_t2 > eps_t1 (ANCMSG 420)
+      - Warning: if c > 0 and eps_rate_0 > 0 and fcut == 0 (ANCMSG 1220)
+      - Compatible elements: Solids and Shells supported; reject trusses, beams, springs.
+    """
+    actual_log = log
+    actual_model = model
+    actual_mat = mat
+
+    candidates = [c for c in (mat, arg1, arg2) if c is not None]
+    for c in candidates:
+        if isinstance(c, MessageLog):
+            actual_log = c
+        elif isinstance(c, Model):
+            actual_model = c
+        elif actual_mat is None or actual_mat is c:
+            if not isinstance(c, (MessageLog, Model)):
+                actual_mat = c
+
+    if actual_mat is None:
+        if "mat" in kwargs:
+            actual_mat = kwargs["mat"]
+        elif "m" in kwargs:
+            actual_mat = kwargs["m"]
+        elif "mat_law48" in kwargs:
+            actual_mat = kwargs["mat_law48"]
+
+    mid_kw = kwargs.get("mat_id", kwargs.get("mid", None))
+    if actual_mat is None and actual_model is not None and mid_kw is not None:
+        actual_mat = actual_model.materials.get(mid_kw) or getattr(actual_model, "mat_law48s", {}).get(mid_kw)
+
+    if actual_log is None:
+        actual_log = MessageLog()
+    log = actual_log
+    model = actual_model
+    mat = actual_mat
+
+    if mat is None:
+        return
+
+    mid = getattr(mat, "id", kwargs.get("mat_id", kwargs.get("mid", 0)))
+    params = getattr(mat, "params", {}) or {}
+
+    def _extract(keys: list[str], default: float = 0.0) -> float:
+        for k in keys:
+            if hasattr(mat, k):
+                val = getattr(mat, k)
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (TypeError, ValueError):
+                        pass
+            if isinstance(params, dict) and k in params:
+                val = params[k]
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (TypeError, ValueError):
+                        pass
+            if k in kwargs:
+                val = kwargs[k]
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (TypeError, ValueError):
+                        pass
+        return default
+
+    # 1. Density rho0 > 0
+    rho0 = getattr(mat, "rho0", None)
+    if rho0 is None:
+        rho0 = getattr(mat, "rho", None)
+    if rho0 is None:
+        rho0 = _extract(["rho0", "rho", "MAT_RHO", "RHO", "RHO0"], default=0.0)
+    else:
+        try:
+            rho0 = float(rho0)
+        except (TypeError, ValueError):
+            rho0 = 0.0
+
+    if rho0 <= 0.0:
+        log.error(f"/MAT/LAW48/{mid}: initial density RHO must be > 0 (got {rho0:g})", "MAT CHECK")
+
+    # 2. Young's modulus E > 0
+    e = getattr(mat, "e", None)
+    if e is None:
+        e = getattr(mat, "E", None)
+    if e is None:
+        e = _extract(["e", "E", "MAT_E", "young"], default=0.0)
+    else:
+        try:
+            e = float(e)
+        except (TypeError, ValueError):
+            e = 0.0
+
+    if e <= 0.0:
+        log.error(f"/MAT/LAW48/{mid}: Young's modulus E must be > 0 (got {e:g})", "MAT CHECK")
+
+    # 3. Poisson's ratio: 0.0 <= nu < 0.5 (ANCMSG 49)
+    nu = getattr(mat, "nu", None)
+    if nu is None:
+        nu = _extract(["nu", "MAT_NU", "NU", "poisson"], default=0.0)
+    else:
+        try:
+            nu = float(nu)
+        except (TypeError, ValueError):
+            nu = 0.0
+
+    if nu < 0.0 or nu >= 0.5:
+        log.error(f"/MAT/LAW48/{mid}: Poisson's ratio nu must satisfy 0.0 <= nu < 0.5 (got {nu:g}) (ANCMSG 49)", "MAT CHECK")
+
+    # 4. Yield stress sigy / a > 0
+    sigy = getattr(mat, "sigy", None)
+    if sigy is None:
+        sigy = getattr(mat, "a", None)
+    if sigy is None:
+        sigy = _extract(["sigy", "a", "MAT_SIGY", "sigy0"], default=0.0)
+    else:
+        try:
+            sigy = float(sigy)
+        except (TypeError, ValueError):
+            sigy = 0.0
+
+    if sigy <= 0.0:
+        log.error(f"/MAT/LAW48/{mid}: initial yield stress SIGY/A must be > 0 (got {sigy:g})", "MAT CHECK")
+
+    # 5. Hardening exponent: 0.0 <= n <= 1.0
+    n = getattr(mat, "n", None)
+    if n is None:
+        n = _extract(["n", "cn", "MAT_N"], default=1.0)
+    else:
+        try:
+            n = float(n)
+        except (TypeError, ValueError):
+            n = 1.0
+
+    if n < 0.0 or n > 1.0:
+        log.error(f"/MAT/LAW48/{mid}: hardening exponent n must satisfy 0.0 <= n <= 1.0 (got {n:g})", "MAT CHECK")
+
+    # 6. Hardening parameter b >= 0
+    b = getattr(mat, "b", None)
+    if b is None:
+        b = _extract(["b", "cb", "MAT_B"], default=0.0)
+    else:
+        try:
+            b = float(b)
+        except (TypeError, ValueError):
+            b = 0.0
+
+    if b < 0.0:
+        log.error(f"/MAT/LAW48/{mid}: hardening parameter B must be >= 0 (got {b:g})", "MAT CHECK")
+
+    # 7. Maximum stress sig_max >= 0
+    sig_max = getattr(mat, "sig_max", None)
+    if sig_max is None:
+        sig_max = getattr(mat, "sigm", None)
+    if sig_max is None:
+        sig_max = _extract(["sig_max", "sigm", "sigma_max", "MAT_SIG"], default=1.0e30)
+    else:
+        try:
+            sig_max = float(sig_max)
+        except (TypeError, ValueError):
+            sig_max = 1.0e30
+
+    if sig_max < 0.0:
+        log.error(f"/MAT/LAW48/{mid}: maximum stress SIG_MAX must be >= 0 (got {sig_max:g})", "MAT CHECK")
+
+    # 8. Failure strains: eps_t1 >= 0, eps_t2 >= 0, eps_max >= 0
+    eps_t1 = getattr(mat, "eps_t1", None)
+    if eps_t1 is None:
+        eps_t1 = getattr(mat, "eta1", None)
+    if eps_t1 is None:
+        eps_t1 = _extract(["eps_t1", "eta1", "MAT_ETA1", "epsr1"], default=1.0e30)
+    else:
+        try:
+            eps_t1 = float(eps_t1)
+        except (TypeError, ValueError):
+            eps_t1 = 1.0e30
+
+    eps_t2 = getattr(mat, "eps_t2", None)
+    if eps_t2 is None:
+        eps_t2 = getattr(mat, "eta2", None)
+    if eps_t2 is None:
+        eps_t2 = _extract(["eps_t2", "eta2", "MAT_ETA2", "epsr2"], default=2.0e30)
+    else:
+        try:
+            eps_t2 = float(eps_t2)
+        except (TypeError, ValueError):
+            eps_t2 = 2.0e30
+
+    eps_max = getattr(mat, "eps_max", None)
+    if eps_max is None:
+        eps_max = getattr(mat, "epsm", None)
+    if eps_max is None:
+        eps_max = _extract(["eps_max", "epsm", "MAT_EPS"], default=1.0e30)
+    else:
+        try:
+            eps_max = float(eps_max)
+        except (TypeError, ValueError):
+            eps_max = 1.0e30
+
+    if eps_t1 < 0.0:
+        log.error(f"/MAT/LAW48/{mid}: tensile failure strain 1 (eps_t1) must be >= 0 (got {eps_t1:g})", "MAT CHECK")
+    if eps_t2 < 0.0:
+        log.error(f"/MAT/LAW48/{mid}: tensile failure strain 2 (eps_t2) must be >= 0 (got {eps_t2:g})", "MAT CHECK")
+    if eps_max < 0.0:
+        log.error(f"/MAT/LAW48/{mid}: failure plastic strain (eps_max) must be >= 0 (got {eps_max:g})", "MAT CHECK")
+
+    if 0.0 < eps_t1 < 1.0e20 and eps_t2 <= eps_t1:
+        log.error(
+            f"/MAT/LAW48/{mid}: tensile failure strains must satisfy eps_t2 > eps_t1 when eps_t1 < 1e20 (got eps_t1={eps_t1:g}, eps_t2={eps_t2:g}) (ANCMSG 420)",
+            "MAT CHECK",
+        )
+
+    # 9. Strain rate filtering warning (ANCMSG 1220)
+    c_val = getattr(mat, "c", None)
+    if c_val is None:
+        c_val = _extract(["c", "cc", "MAT_C"], default=0.0)
+    else:
+        try:
+            c_val = float(c_val)
+        except (TypeError, ValueError):
+            c_val = 0.0
+
+    eps0 = getattr(mat, "eps_rate_0", None)
+    if eps0 is None:
+        eps0 = getattr(mat, "eps0", None)
+    if eps0 is None:
+        eps0 = _extract(["eps_rate_0", "eps0", "MAT_E0"], default=0.0)
+    else:
+        try:
+            eps0 = float(eps0)
+        except (TypeError, ValueError):
+            eps0 = 0.0
+
+    fcut = getattr(mat, "fcut", None)
+    if fcut is None:
+        fcut = getattr(mat, "scale", None)
+    if fcut is None:
+        fcut = _extract(["fcut", "scale", "SCALE"], default=1.0e30)
+    else:
+        try:
+            fcut = float(fcut)
+        except (TypeError, ValueError):
+            fcut = 1.0e30
+
+    if c_val > 0.0 and eps0 > 0.0 and fcut == 0.0:
+        log.warning(
+            f"/MAT/LAW48/{mid}: cutoff frequency for strain rate filtering is zero while strain rate dependency is active (ANCMSG 1220)",
+            "MAT CHECK",
+        )
+
+    # 10. Reject trusses, beams, springs if attached to element groups
+    if model is not None and hasattr(model, "element_groups"):
+        try:
+            grps = model.element_groups()
+            if callable(grps):
+                grps = grps()
+        except TypeError:
+            grps = []
+        for item in grps:
+            if isinstance(item, tuple) and len(item) == 2:
+                name, el_group = item
+            else:
+                continue
+            if name in ("trusses", "beams", "springs"):
+                mids_in_group = set()
+                if hasattr(el_group, "values") and callable(el_group.values):
+                    for el in el_group.values():
+                        el_mid = getattr(el, "mat_id", getattr(el, "mid", None))
+                        if el_mid is not None:
+                            mids_in_group.add(el_mid)
+                if hasattr(el_group, "state") and isinstance(el_group.state, dict) and "slices" in el_group.state:
+                    for _, m, _ in el_group.state["slices"]:
+                        m_id = getattr(m, "id", None)
+                        if m_id is not None:
+                            mids_in_group.add(m_id)
+                if mid in mids_in_group:
+                    log.error(
+                        f"/MAT/LAW48/{mid} (/MAT/ZHAO) is not supported for {name} elements "
+                        f"(solids and shells only: bricks, tetras, penta6, pyra5, shells, shells_qbat, shells_qeph, sh3n, quads)",
+                        "MAT CHECK",
+                    )
+
+
+_check_mat_law48 = check_mat_law48
+
+
 def check_materials(model: Model, log: MessageLog) -> None:
     """Validate all material parameters across model."""
     # M539: Material LAW34 parameter validation
@@ -1605,6 +1911,14 @@ def check_materials(model: Model, log: MessageLog) -> None:
     for mid, mat60 in getattr(model, "mat_law60s", {}).items():
         if mid not in getattr(model, "materials", {}):
             check_mat_law60(mat60, log=log, model=model, functions=funcs)
+
+    # M552: Material LAW48 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO") or getattr(mat, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO", "MAT_LAW48", "LAW48_ZHAO"):
+            check_mat_law48(mat, log=log, model=model)
+    for mid, mat48 in getattr(model, "mat_law48s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law48(mat48, log=log, model=model)
 
 
 def check_model(model: Model, log: MessageLog) -> None:
@@ -1763,6 +2077,15 @@ def check_model(model: Model, log: MessageLog) -> None:
                 if name in ("trusses", "beams", "springs"):
                     log.error(
                         f"/MAT/LAW60/{mat.id} (/MAT/PLAS_T3) is not supported for {name} elements "
+                        f"(solids and shells only: bricks, tetras, penta6, pyra5, shells, shells_qbat, shells_qeph, sh3n, quads)",
+                        "MAT CHECK",
+                    )
+                    continue
+            if (mat.law in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO")
+                    or getattr(mat, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO", "MAT_LAW48", "LAW48_ZHAO")):
+                if name in ("trusses", "beams", "springs"):
+                    log.error(
+                        f"/MAT/LAW48/{mat.id} (/MAT/ZHAO) is not supported for {name} elements "
                         f"(solids and shells only: bricks, tetras, penta6, pyra5, shells, shells_qbat, shells_qeph, sh3n, quads)",
                         "MAT CHECK",
                     )

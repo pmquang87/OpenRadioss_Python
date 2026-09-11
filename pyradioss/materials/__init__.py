@@ -1053,8 +1053,23 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         return sig, epsp, c
     if mat.law == 44:
         return law44_cowper.solid_update(mat, sig, deps, epsp, dt, extra)
-    if getattr(mat, "law", None) in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO") or getattr(mat, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO"):
-        return law48_zhao.solid_update_law48(mat, sig, deps, epsp, dt, extra)
+    if getattr(mat, "law", None) in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_LAW48", "LAW48_ZHAO") or getattr(mat, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_LAW48", "LAW48_ZHAO"):
+        res = law48_zhao.solid_update_law48(mat, sig, deps, epsp, dt, extra)
+        if isinstance(res, tuple):
+            sign = res[0]
+            epsp_out = res[1] if len(res) > 1 else epsp
+            c = res[2] if len(res) > 2 else None
+        else:
+            sign = res
+            epsp_out = epsp
+            c = None
+        sig[:] = sign
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
     if mat.law == 33:
         return law33_foamplas.solid_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 28 or getattr(mat, "law_name", None) in ("LAW28", "HONEYCOMB", "HONEYCOMB_SOL"):

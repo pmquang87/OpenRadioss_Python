@@ -1772,6 +1772,191 @@ class StarterDeck:
         kwargs.setdefault("law_name", "FABRIC")
         return self.mat_law60(*args, **kwargs)
 
+    def mat_law48(
+        self,
+        mid: int = 0,
+        title: str = "",
+        rho: float = 0.0,
+        ref_rho: Optional[float] = None,
+        e: float = 0.0,
+        nu: float = 0.0,
+        a: float = 0.0,
+        b: float = 0.0,
+        n: float = 1.0,
+        chard: float = 0.0,
+        sig_max: float = 1.0e30,
+        c: float = 1.0,
+        d: float = 0.0,
+        m: float = 1.0,
+        e1: float = 0.0,
+        k: float = 1.0,
+        eps_rate_0: float = 1.0,
+        fcut: float = 1.0e30,
+        eps_max: float = 1.0e30,
+        eps_t1: float = 1.0e30,
+        eps_t2: float = 2.0e30,
+        fixed_format: bool = True,
+        law_name: str = "LAW48",
+        unit_id: Optional[int] = None,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW48`` (/MAT/ZHAO, /MAT/PLAS_ZHAO) — cfg MAT/matl48_zhao.cfg & hm_read_mat48.F:
+        Card 1: RHO, Refer_Rho (%20lg%20lg)
+        Card 2: E, nu (%20lg%20lg)
+        Card 3: a, b, n, chard, sig_max (%20lg%20lg%20lg%20lg%20lg)
+        Card 4: c, d, m, e1, k (%20lg%20lg%20lg%20lg%20lg)
+        Card 5: eps_rate_0, fcut (%20lg%20lg)
+        Card 6: eps_max, eps_t1, eps_t2 (%20lg%20lg%20lg)
+        """
+        mat_obj = None
+        if hasattr(mid, "chard") or hasattr(mid, "sigy") or hasattr(mid, "fisokin") or (hasattr(mid, "a") and hasattr(mid, "b")):
+            mat_obj = mid
+        elif "mat" in kwargs and (hasattr(kwargs["mat"], "chard") or hasattr(kwargs["mat"], "sigy") or hasattr(kwargs["mat"], "fisokin")):
+            mat_obj = kwargs["mat"]
+        elif "mat_law48" in kwargs and (hasattr(kwargs["mat_law48"], "chard") or hasattr(kwargs["mat_law48"], "sigy") or hasattr(kwargs["mat_law48"], "fisokin")):
+            mat_obj = kwargs["mat_law48"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", 0)
+            if not title:
+                title = getattr(mat_obj, "title", "")
+            if rho == 0.0:
+                rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", 0.0))
+            if ref_rho is None:
+                ref_rho = getattr(mat_obj, "ref_rho", getattr(mat_obj, "refer_rho", None))
+            if e == 0.0:
+                e = getattr(mat_obj, "e", getattr(mat_obj, "E", 0.0))
+            if nu == 0.0:
+                nu = getattr(mat_obj, "nu", 0.0)
+            if a == 0.0:
+                a = getattr(mat_obj, "a", getattr(mat_obj, "sigy", 0.0))
+            if b == 0.0:
+                b = getattr(mat_obj, "b", 0.0)
+            if n == 1.0:
+                n = getattr(mat_obj, "n", 1.0)
+            if chard == 0.0:
+                chard = getattr(mat_obj, "chard", getattr(mat_obj, "mat_hard", getattr(mat_obj, "fisokin", 0.0)))
+            if sig_max == 1.0e30:
+                sig_max = getattr(mat_obj, "sig_max", getattr(mat_obj, "sigm", getattr(mat_obj, "sigma_max", 1.0e30)))
+            if c == 1.0:
+                c = getattr(mat_obj, "c", 1.0)
+            if d == 0.0:
+                d = getattr(mat_obj, "d", 0.0)
+            if m == 1.0:
+                m = getattr(mat_obj, "m", 1.0)
+            if e1 == 0.0:
+                e1 = getattr(mat_obj, "e1", 0.0)
+            if k == 1.0:
+                k = getattr(mat_obj, "k", 1.0)
+            if eps_rate_0 == 1.0:
+                eps_rate_0 = getattr(mat_obj, "eps_rate_0", getattr(mat_obj, "eps0", 1.0))
+            if fcut == 1.0e30:
+                fcut = getattr(mat_obj, "fcut", getattr(mat_obj, "scale", 1.0e30))
+            if eps_max == 1.0e30:
+                eps_max = getattr(mat_obj, "eps_max", getattr(mat_obj, "epsm", 1.0e30))
+            if eps_t1 == 1.0e30:
+                eps_t1 = getattr(mat_obj, "eps_t1", getattr(mat_obj, "eta1", 1.0e30))
+            if eps_t2 == 2.0e30:
+                eps_t2 = getattr(mat_obj, "eps_t2", getattr(mat_obj, "eta2", 2.0e30))
+
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+        if "mat_id" in kw_low and mid == 0:
+            mid = kw_low["mat_id"]
+        if "id" in kw_low and mid == 0:
+            mid = kw_low["id"]
+        if "rho0" in kw_low and rho == 0.0:
+            rho = kw_low["rho0"]
+        if "refer_rho" in kw_low and ref_rho is None:
+            ref_rho = kw_low["refer_rho"]
+        if "rho_ref" in kw_low and ref_rho is None:
+            ref_rho = kw_low["rho_ref"]
+        if "rhor" in kw_low and ref_rho is None:
+            ref_rho = kw_low["rhor"]
+        if "sigy" in kw_low and a == 0.0:
+            a = kw_low["sigy"]
+        if "sigy0" in kw_low and a == 0.0:
+            a = kw_low["sigy0"]
+        if "mat_hard" in kw_low and chard == 0.0:
+            chard = kw_low["mat_hard"]
+        if "fisokin" in kw_low and chard == 0.0:
+            chard = kw_low["fisokin"]
+        if "hard" in kw_low and chard == 0.0:
+            chard = kw_low["hard"]
+        if "sigm" in kw_low and sig_max == 1.0e30:
+            sig_max = kw_low["sigm"]
+        if "sigma_max" in kw_low and sig_max == 1.0e30:
+            sig_max = kw_low["sigma_max"]
+        if "eps0" in kw_low and eps_rate_0 == 1.0:
+            eps_rate_0 = kw_low["eps0"]
+        if "scale" in kw_low and fcut == 1.0e30:
+            fcut = kw_low["scale"]
+        if "epsm" in kw_low and eps_max == 1.0e30:
+            eps_max = kw_low["epsm"]
+        if "eta1" in kw_low and eps_t1 == 1.0e30:
+            eps_t1 = kw_low["eta1"]
+        if "eta2" in kw_low and eps_t2 == 2.0e30:
+            eps_t2 = kw_low["eta2"]
+        if "fixed_format" in kw_low:
+            fixed_format = bool(kw_low["fixed_format"])
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        if fixed_format:
+            # Card 1: RHO, Refer_Rho (MAT_LAW48_1: [20, 20])
+            if ref_rho is not None and float(ref_rho) != 0.0:
+                self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(ref_rho, 20)}")
+            else:
+                self.lines.append(fmt_float(rho, 20))
+
+            # Card 2: E, nu (MAT_LAW48_2: [20, 20])
+            self.lines.append(f"{fmt_float(e, 20)}{fmt_float(nu, 20)}")
+
+            # Card 3: a, b, n, chard, sig_max (MAT_LAW48_3: [20, 20, 20, 20, 20])
+            self.lines.append(
+                f"{fmt_float(a, 20)}{fmt_float(b, 20)}{fmt_float(n, 20)}{fmt_float(chard, 20)}{fmt_float(sig_max, 20)}"
+            )
+
+            # Card 4: c, d, m, e1, k (MAT_LAW48_4: [20, 20, 20, 20, 20])
+            self.lines.append(
+                f"{fmt_float(c, 20)}{fmt_float(d, 20)}{fmt_float(m, 20)}{fmt_float(e1, 20)}{fmt_float(k, 20)}"
+            )
+
+            # Card 5: eps_rate_0, fcut (MAT_LAW48_5: [20, 20])
+            self.lines.append(f"{fmt_float(eps_rate_0, 20)}{fmt_float(fcut, 20)}")
+
+            # Card 6: eps_max, eps_t1, eps_t2 (MAT_LAW48_6: [20, 20, 20])
+            self.lines.append(
+                f"{fmt_float(eps_max, 20)}{fmt_float(eps_t1, 20)}{fmt_float(eps_t2, 20)}"
+            )
+        else:
+            # Free format (space-separated)
+            if ref_rho is not None and float(ref_rho) != 0.0:
+                self.lines.append(f"{rho} {ref_rho}")
+            else:
+                self.lines.append(f"{rho}")
+
+            self.lines.append(f"{e} {nu}")
+            self.lines.append(f"{a} {b} {n} {chard} {sig_max}")
+            self.lines.append(f"{c} {d} {m} {e1} {k}")
+            self.lines.append(f"{eps_rate_0} {fcut}")
+            self.lines.append(f"{eps_max} {eps_t1} {eps_t2}")
+
+        return self
+
+    def mat_zhao(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/ZHAO`` — synonym for ``/MAT/LAW48``."""
+        kwargs.setdefault("law_name", "ZHAO")
+        return self.mat_law48(*args, **kwargs)
+
+    def mat_plas_zhao(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/PLAS_ZHAO`` — synonym for ``/MAT/LAW48``."""
+        kwargs.setdefault("law_name", "PLAS_ZHAO")
+        return self.mat_law48(*args, **kwargs)
+
     def mat_law94(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/LAW94``."""
         self._header("MAT", "LAW94", mid)
@@ -4747,6 +4932,53 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
             kw["rates"] = rates
 
         d.mat_law60(mid, ref_rho=rho_ref, title=title, unit_id=b.unit_id, law_name=law, fixed_format=is_fixed, **kw)
+    elif law in ("LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO", "MAT_LAW48", "LAW48_ZHAO"):
+        kw: Dict = {}
+        rho_ref = None
+        is_fixed = getattr(b, "fixed", False)
+        vcards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
+
+        def _get_toks(c, layout_name):
+            if is_fixed and hasattr(c, "cut"):
+                return c.cut(layout_name)
+            raw = c.raw if hasattr(c, "raw") else str(c)
+            if "," in raw:
+                return [t.strip() for t in raw.split(",")]
+            return c.tokens()
+
+        if len(vcards) >= 1:
+            toks = _get_toks(vcards[0], "MAT_LAW48_1")
+            if len(toks) >= 1 and toks[0]: kw["rho"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: rho_ref = float(toks[1])
+        if len(vcards) >= 2:
+            toks = _get_toks(vcards[1], "MAT_LAW48_2")
+            if len(toks) >= 1 and toks[0]: kw["e"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["nu"] = float(toks[1])
+        if len(vcards) >= 3:
+            toks = _get_toks(vcards[2], "MAT_LAW48_3")
+            if len(toks) >= 1 and toks[0]: kw["a"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["b"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["n"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["chard"] = float(toks[3])
+            if len(toks) >= 5 and toks[4]: kw["sig_max"] = float(toks[4])
+        if len(vcards) >= 4:
+            toks = _get_toks(vcards[3], "MAT_LAW48_4")
+            if len(toks) >= 1 and toks[0]: kw["c"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["d"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["m"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["e1"] = float(toks[3])
+            if len(toks) >= 5 and toks[4]: kw["k"] = float(toks[4])
+        if len(vcards) >= 5:
+            toks = _get_toks(vcards[4], "MAT_LAW48_5")
+            if len(toks) >= 1 and toks[0]: kw["eps_rate_0"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["fcut"] = float(toks[1])
+        if len(vcards) >= 6:
+            toks = _get_toks(vcards[5], "MAT_LAW48_6")
+            if len(toks) >= 1 and toks[0]: kw["eps_max"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["eps_t1"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["eps_t2"] = float(toks[2])
+
+        d.mat_law48(mid, ref_rho=rho_ref, title=title, unit_id=b.unit_id, law_name=law, fixed_format=is_fixed, **kw)
     elif law in ("GAS",):
         d.mat_gas(mid, title, cards)
     elif law in ("LAW0", "VOID"):

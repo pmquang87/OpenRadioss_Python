@@ -1033,7 +1033,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW63", "HANSEL", "PLAS_HANSEL", "TRANSFO_PLAS", "MAT_HANSEL", "LAW63_HANSEL"):
         read_mat_law63(block, model, log)
         return
-    if lawname in ("LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO"):
+    if lawname in ("LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO"):
         read_mat_law48(block, model, log)
         return
     if lawname in ("LAW26", "SESAM", "SESAME", "MAT_SESAM", "LAW26_SESAM"):
@@ -1246,7 +1246,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW95", "SEW", "SEWING", "MAT_SEW", "MAT_SEWING", "LAW95_SEW"):
         read_mat_law95(block, model, log)
         return
-    if lawname in ("LAW48", "ZHAO", "MAT_ZHAO", "LAW48_ZHAO"):
+    if lawname in ("LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO"):
         read_mat_law48(block, model, log)
         return
     if lawname in ("LAW49", "STEINB", "STEINBERG", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
@@ -35632,70 +35632,107 @@ def read_mat_law48(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
 
-    if block.fixed:
+    def _card_tokens(card) -> list[str]:
+        raw = card.raw.strip()
+        if "," in raw:
+            return [t.strip() for t in raw.split(",") if t.strip()]
+        return card.tokens()
+
+    is_fixed = getattr(block, "fixed", False)
+    if is_fixed and valid_cards:
+        raw0 = valid_cards[0].raw.rstrip()
+        raw1 = valid_cards[1].raw.rstrip() if len(valid_cards) > 1 else ""
+        raw2 = valid_cards[2].raw.rstrip() if len(valid_cards) > 2 else ""
+        if "," in raw0 or "," in raw1 or "," in raw2:
+            is_fixed = False
+        elif len(valid_cards) > 1 and len(valid_cards[1].tokens()) >= 2 and len(raw1) < 35:
+            is_fixed = False
+        elif len(valid_cards) > 2 and len(valid_cards[2].tokens()) >= 3 and len(raw2) < 55:
+            is_fixed = False
+
+    if is_fixed:
         if len(valid_cards) > 0:
             c0 = valid_cards[0].cut("MAT_LAW48_1")
-            rho = _safe_float(c0[0])
-            refer_rho = _safe_float(c0[1]) if len(c0) > 1 else 0.0
+            rho = _safe_float(c0[0]) if len(c0) > 0 and c0[0].strip() else 0.0
+            refer_rho = _safe_float(c0[1]) if len(c0) > 1 and c0[1].strip() else 0.0
         if len(valid_cards) > 1:
             c1 = valid_cards[1].cut("MAT_LAW48_2")
-            e = _safe_float(c1[0]) if len(c1) > 0 else 0.0
-            nu = _safe_float(c1[1]) if len(c1) > 1 else 0.0
+            e = _safe_float(c1[0]) if len(c1) > 0 and c1[0].strip() else 0.0
+            nu = _safe_float(c1[1]) if len(c1) > 1 and c1[1].strip() else 0.0
         if len(valid_cards) > 2:
             c2 = valid_cards[2].cut("MAT_LAW48_3")
-            a = _safe_float(c2[0]) if len(c2) > 0 else 0.0
-            b = _safe_float(c2[1]) if len(c2) > 1 else 0.0
-            n = _safe_float(c2[2]) if len(c2) > 2 else 0.0
-            chard = _safe_float(c2[3]) if len(c2) > 3 else 0.0
-            sig_max = _safe_float(c2[4]) if len(c2) > 4 else 0.0
+            a = _safe_float(c2[0]) if len(c2) > 0 and c2[0].strip() else 0.0
+            b = _safe_float(c2[1]) if len(c2) > 1 and c2[1].strip() else 0.0
+            n = _safe_float(c2[2]) if len(c2) > 2 and c2[2].strip() else 0.0
+            chard = _safe_float(c2[3]) if len(c2) > 3 and c2[3].strip() else 0.0
+            sig_max = _safe_float(c2[4]) if len(c2) > 4 and c2[4].strip() else 0.0
         if len(valid_cards) > 3:
             c3 = valid_cards[3].cut("MAT_LAW48_4")
-            c = _safe_float(c3[0]) if len(c3) > 0 else 0.0
-            d = _safe_float(c3[1]) if len(c3) > 1 else 0.0
-            m = _safe_float(c3[2]) if len(c3) > 2 else 0.0
-            e1 = _safe_float(c3[3]) if len(c3) > 3 else 0.0
-            k = _safe_float(c3[4]) if len(c3) > 4 else 0.0
+            c = _safe_float(c3[0]) if len(c3) > 0 and c3[0].strip() else 0.0
+            d = _safe_float(c3[1]) if len(c3) > 1 and c3[1].strip() else 0.0
+            m = _safe_float(c3[2]) if len(c3) > 2 and c3[2].strip() else 0.0
+            e1 = _safe_float(c3[3]) if len(c3) > 3 and c3[3].strip() else 0.0
+            k = _safe_float(c3[4]) if len(c3) > 4 and c3[4].strip() else 0.0
         if len(valid_cards) > 4:
             c4 = valid_cards[4].cut("MAT_LAW48_5")
-            eps_rate_0 = _safe_float(c4[0]) if len(c4) > 0 else 0.0
-            fcut = _safe_float(c4[1]) if len(c4) > 1 else 0.0
+            eps_rate_0 = _safe_float(c4[0]) if len(c4) > 0 and c4[0].strip() else 0.0
+            fcut = _safe_float(c4[1]) if len(c4) > 1 and c4[1].strip() else 0.0
         if len(valid_cards) > 5:
             c5 = valid_cards[5].cut("MAT_LAW48_6")
-            eps_max = _safe_float(c5[0]) if len(c5) > 0 else 0.0
-            eps_t1 = _safe_float(c5[1]) if len(c5) > 1 else 0.0
-            eps_t2 = _safe_float(c5[2]) if len(c5) > 2 else 0.0
+            eps_max = _safe_float(c5[0]) if len(c5) > 0 and c5[0].strip() else 0.0
+            eps_t1 = _safe_float(c5[1]) if len(c5) > 1 and c5[1].strip() else 0.0
+            eps_t2 = _safe_float(c5[2]) if len(c5) > 2 and c5[2].strip() else 0.0
     else:
         if len(valid_cards) > 0:
-            toks = valid_cards[0].tokens()
+            toks = _card_tokens(valid_cards[0])
             rho = _safe_float(toks[0]) if len(toks) > 0 else 0.0
             refer_rho = _safe_float(toks[1]) if len(toks) > 1 else 0.0
         if len(valid_cards) > 1:
-            toks = valid_cards[1].tokens()
+            toks = _card_tokens(valid_cards[1])
             e = _safe_float(toks[0]) if len(toks) > 0 else 0.0
             nu = _safe_float(toks[1]) if len(toks) > 1 else 0.0
         if len(valid_cards) > 2:
-            toks = valid_cards[2].tokens()
+            toks = _card_tokens(valid_cards[2])
             a = _safe_float(toks[0]) if len(toks) > 0 else 0.0
             b = _safe_float(toks[1]) if len(toks) > 1 else 0.0
             n = _safe_float(toks[2]) if len(toks) > 2 else 0.0
             chard = _safe_float(toks[3]) if len(toks) > 3 else 0.0
             sig_max = _safe_float(toks[4]) if len(toks) > 4 else 0.0
         if len(valid_cards) > 3:
-            toks = valid_cards[3].tokens()
+            toks = _card_tokens(valid_cards[3])
             c = _safe_float(toks[0]) if len(toks) > 0 else 0.0
             d = _safe_float(toks[1]) if len(toks) > 1 else 0.0
             m = _safe_float(toks[2]) if len(toks) > 2 else 0.0
             e1 = _safe_float(toks[3]) if len(toks) > 3 else 0.0
             k = _safe_float(toks[4]) if len(toks) > 4 else 0.0
         if len(valid_cards) > 4:
-            toks = valid_cards[4].tokens()
+            toks = _card_tokens(valid_cards[4])
             eps_rate_0 = _safe_float(toks[0]) if len(toks) > 0 else 0.0
             fcut = _safe_float(toks[1]) if len(toks) > 1 else 0.0
         if len(valid_cards) > 5:
-            toks = valid_cards[5].tokens()
+            toks = _card_tokens(valid_cards[5])
             eps_max = _safe_float(toks[0]) if len(toks) > 0 else 0.0
             eps_t1 = _safe_float(toks[1]) if len(toks) > 1 else 0.0
             eps_t2 = _safe_float(toks[2]) if len(toks) > 2 else 0.0
+    # Default values matching hm_read_mat48.F:
+    if n == 0.0 or n == 1.0:
+        n = 1.0001
+    if m == 0.0 or m == 1.0:
+        m = 1.0001
+    if k == 0.0:
+        k = 1.0
+    if eps_t1 == 0.0:
+        eps_t1 = 1.0e30
+    if eps_t2 == 0.0:
+        eps_t2 = 2.0e30
+    if eps_max == 0.0:
+        eps_max = 1.0e30
+    if sig_max == 0.0:
+        sig_max = 1.0e30
+    if c == 0.0:
+        eps_rate_0 = 1.0
+    if fcut <= 0.0:
+        fcut = 1.0e30
 
     m48 = MatLaw48(
         id=mat_id, rho=rho, refer_rho=refer_rho, e=e, nu=nu,
@@ -35706,10 +35743,11 @@ def read_mat_law48(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         title=title,
     )
     model.mat_law48s[mat_id] = m48
+    ref_rho = refer_rho if refer_rho != 0.0 else rho
     model.materials[mat_id] = Material(
         id=mat_id, law=48, rho0=rho, title=title,
         params={
-            "refer_rho": refer_rho, "E": e, "nu": nu, "sigy": a, "a": a, "b": b, "n": n,
+            "refer_rho": ref_rho, "rho": rho, "rho0": rho, "E": e, "nu": nu, "sigy": a, "a": a, "b": b, "n": n,
             "chard": chard, "sig_max": sig_max,
             "c": c, "d": d, "m": m, "e1": e1, "k": k,
             "eps_rate_0": eps_rate_0, "fcut": fcut,
@@ -84061,10 +84099,12 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "HANSEL": read_mat,
     "PLAS_HANSEL": read_mat,
     "TRANSFO_PLAS": read_mat,
-    "MAT_LAW48": read_mat,
-    "MAT_ZHAO": read_mat,
-    "ZHAO": read_mat,
-    "PLAS_ZHAO": read_mat,
+    "MAT_LAW48": read_mat_law48,
+    "MAT_ZHAO": read_mat_law48,
+    "ZHAO": read_mat_law48,
+    "PLAS_ZHAO": read_mat_law48,
+    "MAT_PLAS_ZHAO": read_mat_law48,
+    "LAW48": read_mat_law48,
     "MAT_LAW26": read_mat,
     "MAT_SESAM": read_mat,
     "SESAM": read_mat,
@@ -84524,7 +84564,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_SEWING": read_mat,
     "SEWING": read_mat,
     "LAW95": read_mat,
-    "LAW48": read_mat,
+    "LAW48": read_mat_law48,
     "LAW49": read_mat,
     "MAT_P_FOAM": read_mat,
     "MAT_POLY_FOAM": read_mat,

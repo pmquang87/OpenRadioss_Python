@@ -106,9 +106,23 @@ LAW_MAP: Dict[str, int] = {
     "FABRIC": 60,
     "MAT_FABRIC": 60,
     "MAT_LAW60": 60,
+    "LAW48": 48,
+    "ZHAO": 48,
+    "PLAS_ZHAO": 48,
+    "MAT_ZHAO": 48,
+    "MAT_PLAS_ZHAO": 48,
+    "MAT_LAW48": 48,
+    "LAW48_ZHAO": 48,
 }
 
 LAW_SYNONYMS: Dict[str, str] = {
+    "LAW48": "LAW48",
+    "ZHAO": "LAW48",
+    "PLAS_ZHAO": "LAW48",
+    "MAT_ZHAO": "LAW48",
+    "MAT_PLAS_ZHAO": "LAW48",
+    "MAT_LAW48": "LAW48",
+    "LAW48_ZHAO": "LAW48",
     "COMP_PLAS": "LAW25",
     "COMPSH": "LAW25",
     "TSAI_WU": "LAW25",
