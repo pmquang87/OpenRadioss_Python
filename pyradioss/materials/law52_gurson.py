@@ -137,39 +137,41 @@ def _extract_params(mat: Any) -> Law52Params:
         p = getattr(mat, "__dict__", {})
         rho0 = getattr(mat, "rho0", 0.0)
 
+    p_low = {str(k).lower(): v for k, v in p.items()}
+
     # Elastic constants
-    E = float(p.get("E", p.get("Young", p.get("MAT_E", 210000.0))))
-    nu = float(p.get("nu", p.get("NU", p.get("MAT_NU", 0.3))))
+    E = float(p_low.get("e", p_low.get("young", p_low.get("mat_e", 210000.0))))
+    nu = float(p_low.get("nu", p_low.get("mat_nu", 0.3)))
     if rho0 <= 0.0:
-        rho0 = float(p.get("rho0", p.get("rho", p.get("MAT_RHO", 7.8e-9))))
+        rho0 = float(p_low.get("rho0", p_low.get("rho", p_low.get("mat_rho", 7.8e-9))))
 
     # Matrix plasticity constants
-    yield_a = float(p.get("A", p.get("a", p.get("yeild", p.get("YEILD", p.get("yield", p.get("MAT_A", 400.0)))))))
-    hard_b = float(p.get("B", p.get("b", p.get("ET", p.get("et", p.get("MAT_B", 500.0))))))
-    hard_n = float(p.get("n", p.get("N", p.get("MAT_N", 0.2))))
+    yield_a = float(p_low.get("a", p_low.get("yield_a", p_low.get("yield", p_low.get("yeild", p_low.get("mat_a", 400.0))))))
+    hard_b = float(p_low.get("b", p_low.get("hard_b", p_low.get("et", p_low.get("mat_b", 500.0)))))
+    hard_n = float(p_low.get("n", p_low.get("hard_n", p_low.get("mat_n", 0.2))))
 
     # Rate sensitivity
-    csd = float(p.get("C", p.get("c", p.get("CSD", p.get("csd", p.get("MAT_C", 0.0))))))
-    visp = float(p.get("P", p.get("p", p.get("VISP", p.get("visp", p.get("MAT_PC", 1.0))))))
+    csd = float(p_low.get("c", p_low.get("csd", p_low.get("mat_c", 0.0))))
+    visp = float(p_low.get("p", p_low.get("pc", p_low.get("visp", p_low.get("mat_pc", 1.0)))))
 
     # Gurson parameters
-    q1 = float(p.get("q1", p.get("Q1", p.get("MAT_q1", 1.5))))
-    q2 = float(p.get("q2", p.get("Q2", p.get("MAT_q2", 1.0))))
-    q3 = float(p.get("q3", p.get("Q3", p.get("MAT_q3", q1 * q1))))
+    q1 = float(p_low.get("q1", p_low.get("mat_q1", 1.5)))
+    q2 = float(p_low.get("q2", p_low.get("mat_q2", 1.0)))
+    q3 = float(p_low.get("q3", p_low.get("mat_q3", q1 * q1)))
 
     # Nucleation parameters
-    sn = float(p.get("s_N", p.get("sn", p.get("SN", p.get("MAT_S_N", 0.1)))))
-    epsn = float(p.get("eps_N", p.get("epsn", p.get("EPSN", p.get("MAT_EPS_N", 0.3)))))
+    sn = float(p_low.get("s_n", p_low.get("sn", p_low.get("mat_s_n", 0.1))))
+    epsn = float(p_low.get("eps_n", p_low.get("epsn", p_low.get("mat_eps_n", 0.3))))
 
     # Void fractions
-    fi = float(p.get("f_I", p.get("fi", p.get("FI", p.get("MAT_f_I", 0.0)))))
-    fn = float(p.get("f_N", p.get("fn", p.get("FN", p.get("MAT_f_N", 0.04)))))
-    fc = float(p.get("f_C", p.get("fc", p.get("FC", p.get("MAT_f_C", 0.15)))))
-    ff = float(p.get("f_F", p.get("ff", p.get("FF", p.get("MAT_f_F", 0.25)))))
-    fu = float(p.get("f_u", p.get("fu", p.get("FU", 1.0 / max(q1, _EM20)))))
+    fi = float(p_low.get("f_i", p_low.get("fi", p_low.get("mat_f_i", 0.0))))
+    fn = float(p_low.get("f_n", p_low.get("fn", p_low.get("mat_f_n", 0.04))))
+    fc = float(p_low.get("f_c", p_low.get("fc", p_low.get("mat_f_c", 0.15))))
+    ff = float(p_low.get("f_f", p_low.get("ff", p_low.get("mat_f_f", 0.25))))
+    fu = float(p_low.get("f_u", p_low.get("fu", 1.0 / max(q1, _EM20))))
 
-    iflag = int(p.get("iflag", p.get("IFLAG", p.get("MAT_Iflag", 0))))
-    table = p.get("table", None)
+    iflag = int(p_low.get("iflag", p_low.get("mat_iflag", 0)))
+    table = p.get("table", p_low.get("table", None))
 
     return Law52Params(
         E=E, nu=nu, rho0=rho0,
@@ -634,8 +636,8 @@ def solid_update_law52(
         # Void evolution
         delta_fg = (1.0 - f_curr) * (dp11 + dp22 + dp33)
         delta_fn = a1_i * deps_m
-        if params.iflag == 3 and pn < 0.0:
-            delta_fn = 0.0  # Nucleation only under tension if IFLAG=3
+        if params.iflag in (2, 3) and pn < 0.0:
+            delta_fn = 0.0  # Nucleation only under tension if IFLAG=2 or 3
 
         dmg[i, 1] += delta_fg           # fg
         dmg[i, 2] += delta_fn           # fn
@@ -980,7 +982,7 @@ def shell_update_law52(
 
         delta_fg = (1.0 - f_curr) * (dp11 + dp22 + dp33)
         delta_fn = a1_i * deps_m
-        if params.iflag == 3 and pn < 0.0:
+        if params.iflag in (2, 3) and pn < 0.0:
             delta_fn = 0.0
 
         dmg[i, 1] += delta_fg
