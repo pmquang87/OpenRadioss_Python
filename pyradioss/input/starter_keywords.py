@@ -40562,56 +40562,102 @@ def read_mat_compso(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             eps0 = _safe_float(c8[3]) if len(c8) > 3 else 0.0
             strflag = _safe_int(c8[4]) if len(c8) > 4 else 1
     else:
-        if len(valid_cards) > 0:
-            t0 = valid_cards[0].tokens()
-            rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
-            rhor = _safe_float(t0[1]) if len(t0) > 1 else 0.0
-        if len(valid_cards) > 1:
-            t1 = valid_cards[1].tokens()
-            ea = _safe_float(t1[0]) if len(t1) > 0 else 0.0
-            eb = _safe_float(t1[1]) if len(t1) > 1 else 0.0
-            ec = _safe_float(t1[2]) if len(t1) > 2 else 0.0
-        if len(valid_cards) > 2:
-            t2 = valid_cards[2].tokens()
-            prab = _safe_float(t2[0]) if len(t2) > 0 else 0.0
-            prbc = _safe_float(t2[1]) if len(t2) > 1 else 0.0
-            prca = _safe_float(t2[2]) if len(t2) > 2 else 0.0
-        if len(valid_cards) > 3:
-            t3 = valid_cards[3].tokens()
-            gab = _safe_float(t3[0]) if len(t3) > 0 else 0.0
-            gbc = _safe_float(t3[1]) if len(t3) > 1 else 0.0
-            gca = _safe_float(t3[2]) if len(t3) > 2 else 0.0
-        if len(valid_cards) > 4:
-            t4 = valid_cards[4].tokens()
-            sigt1 = _safe_float(t4[0]) if len(t4) > 0 else 0.0
-            sigt2 = _safe_float(t4[1]) if len(t4) > 1 else 0.0
-            sigt3 = _safe_float(t4[2]) if len(t4) > 2 else 0.0
-            delta = _safe_float(t4[3]) if len(t4) > 3 else 0.0
-        if len(valid_cards) > 5:
-            t5 = valid_cards[5].tokens()
-            cb = _safe_float(t5[0]) if len(t5) > 0 else 0.0
-            cn = _safe_float(t5[1]) if len(t5) > 1 else 0.0
-            fmax = _safe_float(t5[2]) if len(t5) > 2 else 0.0
-            wplaref = _safe_float(t5[3]) if len(t5) > 3 and t5[3].strip() else 1.0
-        if len(valid_cards) > 6:
-            t6 = valid_cards[6].tokens()
-            sigyt1 = _safe_float(t6[0]) if len(t6) > 0 else 0.0
-            sigyt2 = _safe_float(t6[1]) if len(t6) > 1 else 0.0
-            sigyc1 = _safe_float(t6[2]) if len(t6) > 2 else 0.0
-            sigyc2 = _safe_float(t6[3]) if len(t6) > 3 else 0.0
-        if len(valid_cards) > 7:
-            t7 = valid_cards[7].tokens()
-            sigt12 = _safe_float(t7[0]) if len(t7) > 0 else 0.0
-            sigc12 = _safe_float(t7[1]) if len(t7) > 1 else 0.0
-            sigt23 = _safe_float(t7[2]) if len(t7) > 2 else 0.0
-            sigc23 = _safe_float(t7[3]) if len(t7) > 3 else 0.0
-        if len(valid_cards) > 8:
-            t8 = valid_cards[8].tokens()
-            alpha = _safe_float(t8[0]) if len(t8) > 0 else 0.0
-            efib = _safe_float(t8[1]) if len(t8) > 1 else 0.0
-            cc = _safe_float(t8[2]) if len(t8) > 2 else 0.0
-            eps0 = _safe_float(t8[3]) if len(t8) > 3 else 0.0
-            strflag = _safe_int(t8[4]) if len(t8) > 4 else 1
+        # Check if legacy 6-card free format (Card 1 has >= 5 tokens) or standard 9-card
+        is_legacy_6card = (len(valid_cards) <= 6 and len(valid_cards) > 1 and len(valid_cards[1].tokens()) >= 5)
+        if is_legacy_6card:
+            if len(valid_cards) > 0:
+                t0 = valid_cards[0].tokens()
+                rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
+                rhor = _safe_float(t0[1]) if len(t0) > 1 else 0.0
+            if len(valid_cards) > 1:
+                t1 = valid_cards[1].tokens()
+                ea = _safe_float(t1[0]) if len(t1) > 0 else 0.0
+                eb = _safe_float(t1[1]) if len(t1) > 1 else 0.0
+                ec = _safe_float(t1[2]) if len(t1) > 2 else 0.0
+                prab = _safe_float(t1[3]) if len(t1) > 3 else 0.0
+                prbc = _safe_float(t1[4]) if len(t1) > 4 else 0.0
+            if len(valid_cards) > 2:
+                t2 = valid_cards[2].tokens()
+                prca = _safe_float(t2[0]) if len(t2) > 0 else 0.0
+                gab = _safe_float(t2[1]) if len(t2) > 1 else 0.0
+                gbc = _safe_float(t2[2]) if len(t2) > 2 else 0.0
+                gca = _safe_float(t2[3]) if len(t2) > 3 else 0.0
+            if len(valid_cards) > 3:
+                t3 = valid_cards[3].tokens()
+                sigt1 = _safe_float(t3[0]) if len(t3) > 0 else 0.0
+                sigt2 = _safe_float(t3[1]) if len(t3) > 1 else 0.0
+                sigt3 = _safe_float(t3[2]) if len(t3) > 2 else 0.0
+                delta = _safe_float(t3[3]) if len(t3) > 3 else 0.0
+                cb = _safe_float(t3[4]) if len(t3) > 4 else 0.0
+            if len(valid_cards) > 4:
+                t4 = valid_cards[4].tokens()
+                cn = _safe_float(t4[0]) if len(t4) > 0 else 0.0
+                fmax = _safe_float(t4[1]) if len(t4) > 1 else 0.0
+                sigyt1 = _safe_float(t4[2]) if len(t4) > 2 else 0.0
+                sigyt2 = _safe_float(t4[3]) if len(t4) > 3 else 0.0
+                sigyc1 = _safe_float(t4[4]) if len(t4) > 4 else 0.0
+            if len(valid_cards) > 5:
+                t5 = valid_cards[5].tokens()
+                sigyc2 = _safe_float(t5[0]) if len(t5) > 0 else 0.0
+                sigt12 = _safe_float(t5[1]) if len(t5) > 1 else 0.0
+                sigt23 = _safe_float(t5[2]) if len(t5) > 2 else 0.0
+                sigc12 = _safe_float(t5[3]) if len(t5) > 3 else 0.0
+                sigc23 = _safe_float(t5[4]) if len(t5) > 4 else 0.0
+                alpha = _safe_float(t5[5]) if len(t5) > 5 else 0.0
+                efib = _safe_float(t5[6]) if len(t5) > 6 else 0.0
+                cc = _safe_float(t5[7]) if len(t5) > 7 else 0.0
+                strflag = _safe_int(t5[8]) if len(t5) > 8 else 1
+        else:
+            if len(valid_cards) > 0:
+                t0 = valid_cards[0].tokens()
+                rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
+                rhor = _safe_float(t0[1]) if len(t0) > 1 else 0.0
+            if len(valid_cards) > 1:
+                t1 = valid_cards[1].tokens()
+                ea = _safe_float(t1[0]) if len(t1) > 0 else 0.0
+                eb = _safe_float(t1[1]) if len(t1) > 1 else 0.0
+                ec = _safe_float(t1[2]) if len(t1) > 2 else 0.0
+            if len(valid_cards) > 2:
+                t2 = valid_cards[2].tokens()
+                prab = _safe_float(t2[0]) if len(t2) > 0 else 0.0
+                prbc = _safe_float(t2[1]) if len(t2) > 1 else 0.0
+                prca = _safe_float(t2[2]) if len(t2) > 2 else 0.0
+            if len(valid_cards) > 3:
+                t3 = valid_cards[3].tokens()
+                gab = _safe_float(t3[0]) if len(t3) > 0 else 0.0
+                gbc = _safe_float(t3[1]) if len(t3) > 1 else 0.0
+                gca = _safe_float(t3[2]) if len(t3) > 2 else 0.0
+            if len(valid_cards) > 4:
+                t4 = valid_cards[4].tokens()
+                sigt1 = _safe_float(t4[0]) if len(t4) > 0 else 0.0
+                sigt2 = _safe_float(t4[1]) if len(t4) > 1 else 0.0
+                sigt3 = _safe_float(t4[2]) if len(t4) > 2 else 0.0
+                delta = _safe_float(t4[3]) if len(t4) > 3 else 0.0
+            if len(valid_cards) > 5:
+                t5 = valid_cards[5].tokens()
+                cb = _safe_float(t5[0]) if len(t5) > 0 else 0.0
+                cn = _safe_float(t5[1]) if len(t5) > 1 else 0.0
+                fmax = _safe_float(t5[2]) if len(t5) > 2 else 0.0
+                wplaref = _safe_float(t5[3]) if len(t5) > 3 and t5[3].strip() else 1.0
+            if len(valid_cards) > 6:
+                t6 = valid_cards[6].tokens()
+                sigyt1 = _safe_float(t6[0]) if len(t6) > 0 else 0.0
+                sigyt2 = _safe_float(t6[1]) if len(t6) > 1 else 0.0
+                sigyc1 = _safe_float(t6[2]) if len(t6) > 2 else 0.0
+                sigyc2 = _safe_float(t6[3]) if len(t6) > 3 else 0.0
+            if len(valid_cards) > 7:
+                t7 = valid_cards[7].tokens()
+                sigt12 = _safe_float(t7[0]) if len(t7) > 0 else 0.0
+                sigc12 = _safe_float(t7[1]) if len(t7) > 1 else 0.0
+                sigt23 = _safe_float(t7[2]) if len(t7) > 2 else 0.0
+                sigc23 = _safe_float(t7[3]) if len(t7) > 3 else 0.0
+            if len(valid_cards) > 8:
+                t8 = valid_cards[8].tokens()
+                alpha = _safe_float(t8[0]) if len(t8) > 0 else 0.0
+                efib = _safe_float(t8[1]) if len(t8) > 1 else 0.0
+                cc = _safe_float(t8[2]) if len(t8) > 2 else 0.0
+                eps0 = _safe_float(t8[3]) if len(t8) > 3 else 0.0
+                strflag = _safe_int(t8[4]) if len(t8) > 4 else 1
 
     # Fortran defaults (hm_read_mat14.F:161-174)
     if rhor == 0.0:
