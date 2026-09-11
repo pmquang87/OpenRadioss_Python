@@ -470,7 +470,7 @@ def build_law50(rec: Any) -> Material:
     }
 
     # Preserve any pre-existing resolved curves or user objects
-    for k in ("curves50", "curves", "functions", "curve_fct"):
+    for k in ("curves50", "curves", "functions", "curve_fct", "tables"):
         if k in p:
             params_dict[k] = p[k]
 
@@ -766,7 +766,11 @@ def solid_update(
 
         if extra is not None:
             if "compacted" in extra:
-                compacted = np.asarray(extra["compacted"], dtype=bool).copy()
+                comp_arr = np.atleast_1d(np.asarray(extra["compacted"], dtype=bool))
+                if comp_arr.shape[0] == n:
+                    compacted = comp_arr.copy()
+                elif comp_arr.size == 1:
+                    compacted = np.full(n, bool(comp_arr[0]))
             elif "vartmp" in extra:
                 vartmp = extra["vartmp"]
                 if vartmp.ndim == 2 and vartmp.shape[1] >= 13:
@@ -776,7 +780,15 @@ def solid_update(
         compacted = compacted | (rvol <= vcomp)
 
         if extra is not None:
-            extra["compacted"] = compacted
+            if "compacted" in extra:
+                if np.ndim(extra["compacted"]) == 0:
+                    extra["compacted"] = bool(compacted[0])
+                elif extra["compacted"].ndim == 1 and extra["compacted"].size == 1 and n == 1:
+                    extra["compacted"][0] = bool(compacted[0])
+                else:
+                    extra["compacted"] = compacted
+            else:
+                extra["compacted"] = compacted
             if "vartmp" in extra:
                 vartmp = extra["vartmp"]
                 if vartmp.ndim == 2 and vartmp.shape[1] >= 13:
@@ -812,12 +824,14 @@ def solid_update(
     c = np.sqrt(np.maximum(max_mod, 0.0) / np.maximum(rho_curr, 1.0e-20))
 
     # Total strain tracking (sigeps50s.F90 lines 174-179)
-    if extra is not None and "eps50" in extra:
-        extra["eps50"] += deps
-        eps = extra["eps50"]
+    if extra is not None and "eps_total" in extra:
+        eps = np.atleast_2d(np.asarray(extra["eps_total"], dtype=sig.dtype)).copy()
+    elif extra is not None and "eps50" in extra:
+        extra["eps50"] += deps if extra["eps50"].shape == deps.shape else deps[0]
+        eps = np.atleast_2d(extra["eps50"])
     elif extra is not None and "eps" in extra:
-        extra["eps"] += deps
-        eps = extra["eps"]
+        extra["eps"] += deps if extra["eps"].shape == deps.shape else deps[0]
+        eps = np.atleast_2d(extra["eps"])
     else:
         eps = deps.copy()
         if extra is not None:
@@ -846,16 +860,23 @@ def solid_update(
     off = None
     if extra is not None:
         if "off50" in extra:
-            off = extra["off50"]
+            off = np.atleast_1d(np.asarray(extra["off50"], dtype=sig.dtype)).copy()
         elif "off" in extra:
-            off = extra["off"]
+            off = np.atleast_1d(np.asarray(extra["off"], dtype=sig.dtype)).copy()
         else:
             off = np.ones(n, dtype=sig.dtype)
             extra["off50"] = off
 
     if off is not None:
+        if off.shape[0] == 1 and n > 1:
+            off = np.broadcast_to(off, (n,)).copy()
         off[rupture] = 0.0
         dead = (off == 0.0)
+        if extra is not None:
+            if "off50" in extra:
+                extra["off50"] = off
+            if "off" in extra:
+                extra["off"] = off
     else:
         dead = rupture
 
@@ -875,14 +896,19 @@ def solid_update(
         ep4, ep5, ep6 = mu, mu, mu
 
     # Strain rate definition & filtering (sigeps50s.F90 lines 212-259)
-    if fcut <= 0.0 or fcut >= 1.0e19:
-        asrate = 1.0
-    elif dt > 0.0:
-        asrate = min(1.0, fcut * dt)
-    else:
-        asrate = 1.0
-
+    fcut_eff = 1.0e20 if (fcut <= 0.0 or fcut >= 1.0e19) else fcut
     if dt > 0.0:
+        asrate = min(1.0, fcut_eff * dt)
+    else:
+        asrate = 0.0
+
+    if extra is not None and "rate" in extra:
+        epsp_rate = np.atleast_2d(np.asarray(extra["rate"], dtype=sig.dtype))
+    elif extra is not None and "epsp_rate" in extra:
+        epsp_rate = np.atleast_2d(np.asarray(extra["epsp_rate"], dtype=sig.dtype))
+    elif extra is not None and "epsp" in extra:
+        epsp_rate = np.atleast_2d(np.asarray(extra["epsp"], dtype=sig.dtype))
+    elif dt > 0.0:
         epsp_rate = deps / dt
     else:
         epsp_rate = np.zeros_like(deps)
@@ -912,7 +938,7 @@ def solid_update(
         )
         uvar[:, 0] = asrate * eq_rate + (1.0 - asrate) * uvar[:, 0]
         dep1 = dep2 = dep3 = dep4 = dep5 = dep6 = uvar[:, 0]
-        epsd = uvar[:, 0]**2
+        epsd = uvar[:, 0].copy()
 
     if extra is not None:
         extra["epsd50"] = epsd
@@ -935,8 +961,9 @@ def solid_update(
     not_comp = ~compacted
 
     for k_comp in range(6):
-        sign_stress[not_comp, k_comp] = np.sign(st[not_comp, k_comp]) * np.minimum(
-            np.abs(st[not_comp, k_comp]), yld_all[k_comp][not_comp]
+        sign_stress[not_comp, k_comp] = np.copysign(
+            np.minimum(np.abs(st[not_comp, k_comp]), yld_all[k_comp][not_comp]),
+            st[not_comp, k_comp],
         )
 
     # Plasticity treatment for fully compacted elements (sigeps50s.F90 lines 376-401)
@@ -1013,20 +1040,37 @@ def sound_speed_solid(
         pr = float(p.get("pr", p.get("MAT_PR", p.get("nu", 0.0))) if isinstance(p, dict) else getattr(p, "pr", 0.0))
         gcomp = ecomp / (1.0 + min(pr, 0.495))
 
-    is_compact = compacted or bool(kwargs.get("compacted", False))
-    if not is_compact and extra is not None:
-        comp_val = extra.get("compacted", False)
-        if isinstance(comp_val, np.ndarray):
-            is_compact = bool(np.any(comp_val))
-        else:
-            is_compact = bool(comp_val)
+    vcomp = float(p.get("vcomp", p.get("MAT_VCOMP", 0.0)) if isinstance(p, dict) else getattr(p, "vcomp", 0.0))
+    sigy = float(p.get("sigy", p.get("MAT_SIGY", 0.0)) if isinstance(p, dict) else getattr(p, "sigy", 0.0))
+    icomp = int(p.get("icompact", p.get("icomp", 1 if (ecomp * sigy * vcomp > 0.0) else 0)) if isinstance(p, dict) else getattr(p, "icompact", 0))
 
-    if is_compact and ecomp > 0.0:
-        mod_max = max(ecomp, gcomp)
+    if extra is not None and ("amu" in extra or "mu" in extra) and icomp == 1:
+        mu_val = extra.get("amu", extra.get("mu"))
+        rvol = 1.0 / (1.0 + np.asarray(mu_val, dtype=float))
+        denom_v = 1.0 - vcomp
+        beta = np.clip((1.0 - rvol) / denom_v, 0.0, 1.0) if abs(denom_v) > 1e-15 else 0.0
+        e11_val = beta * ecomp + (1.0 - beta) * ea
+        e22_val = beta * ecomp + (1.0 - beta) * eb
+        e33_val = beta * ecomp + (1.0 - beta) * ec
+        g12_val = beta * gcomp + (1.0 - beta) * gab
+        g23_val = beta * gcomp + (1.0 - beta) * gbc
+        g31_val = beta * gcomp + (1.0 - beta) * gca
+        mod_max = np.maximum.reduce([e11_val, e22_val, e33_val, g12_val, g23_val, g31_val])
     else:
-        mod_max = max(ea, eb, ec, gab, gbc, gca)
-        if mod_max <= 0.0 and ecomp > 0.0:
+        is_compact = compacted or bool(kwargs.get("compacted", False))
+        if not is_compact and extra is not None:
+            comp_val = extra.get("compacted", False)
+            if isinstance(comp_val, np.ndarray):
+                is_compact = bool(np.any(comp_val))
+            else:
+                is_compact = bool(comp_val)
+
+        if is_compact and ecomp > 0.0:
             mod_max = max(ecomp, gcomp)
+        else:
+            mod_max = max(ea, eb, ec, gab, gbc, gca)
+            if mod_max <= 0.0 and ecomp > 0.0:
+                mod_max = max(ecomp, gcomp)
 
     r = rho_val
     if isinstance(r, np.ndarray):
