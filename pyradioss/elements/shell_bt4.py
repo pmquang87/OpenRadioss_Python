@@ -354,6 +354,9 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
         if getattr(mat, "law", 1) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
             from ..materials import law57_barlat
             c = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
+        elif getattr(mat, "law", 1) in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
+            from ..materials import law73_hill_therm
+            c = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
         else:
             c = mat.sound_speed_shell()
         if c <= EM20:
@@ -864,6 +867,9 @@ def forces(group, x, v, vr, dt, fint, mint):
             elif getattr(mat, "law", 1) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
                 from ..materials import law57_barlat
                 c[sl] = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
+            elif getattr(mat, "law", 1) in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
+                from ..materials import law73_hill_therm
+                c[sl] = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
             else:
                 c[sl] = mat.sound_speed_shell()
         alive = st["off"] > 0.0

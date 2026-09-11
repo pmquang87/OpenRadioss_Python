@@ -13576,6 +13576,30 @@ class MatLaw73:
     def epsp_max(self) -> float:
         return self.eps_max
 
+    @property
+    def r0(self) -> float:
+        return self.r00
+
+    @r0.setter
+    def r0(self, val: float) -> None:
+        self.r00 = val
+
+    @property
+    def fisokin(self) -> float:
+        return self.chard
+
+    @fisokin.setter
+    def fisokin(self, val: float) -> None:
+        self.chard = val
+
+    @property
+    def c_hard(self) -> float:
+        return self.chard
+
+    @c_hard.setter
+    def c_hard(self, val: float) -> None:
+        self.chard = val
+
     @epsp_max.setter
     def epsp_max(self, val: float) -> None:
         self.eps_max = val
@@ -13598,9 +13622,12 @@ class MatLaw73:
             "ce": self.ce,
             "c": self.ce,
             "r00": self.r00,
+            "r0": self.r00,
             "r45": self.r45,
             "r90": self.r90,
             "chard": self.chard,
+            "fisokin": self.chard,
+            "c_hard": self.chard,
             "iyield": self.iyield,
             "eps_max": self.eps_max,
             "epsp_max": self.eps_max,
@@ -13648,7 +13675,7 @@ class MatLaw73:
     def keys(self) -> list[str]:
         import dataclasses
         k = [f.name for f in dataclasses.fields(self)]
-        k.extend(["rho0", "rhor", "E", "nu", "Nu", "G", "A01", "A02", "A03", "A12", "sound_speed", "sound_speed_shell", "fun_a1", "yr_fun", "efib", "c", "t_initial", "spheat", "epst1", "epst2", "epsp_max"])
+        k.extend(["rho0", "rhor", "E", "nu", "Nu", "G", "A01", "A02", "A03", "A12", "sound_speed", "sound_speed_shell", "fun_a1", "yr_fun", "efib", "c", "t_initial", "spheat", "epst1", "epst2", "epsp_max", "r0", "fisokin", "c_hard"])
         return list(dict.fromkeys(k))
 
     def values(self) -> list[Any]:

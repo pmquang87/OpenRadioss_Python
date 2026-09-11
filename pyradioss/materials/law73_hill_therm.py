@@ -240,9 +240,24 @@ def _eval_curve_1d(curve: Any, x: Union[float, np.ndarray]) -> Tuple[np.ndarray,
     if hasattr(curve, "x") and hasattr(curve, "y"):
         cx = np.asarray(curve.x, dtype=float)
         cy = np.asarray(curve.y, dtype=float)
-    elif isinstance(curve, (list, tuple)) and len(curve) >= 2:
+    elif hasattr(curve, "data"):
+        data = np.asarray(curve.data, dtype=float)
+        if data.ndim == 2 and data.shape[1] >= 2:
+            cx, cy = data[:, 0], data[:, 1]
+        else:
+            cx, cy = np.array([]), np.array([])
+    elif isinstance(curve, (list, tuple)) and len(curve) == 2 and isinstance(curve[0], (list, tuple, np.ndarray)) and isinstance(curve[1], (list, tuple, np.ndarray)):
         cx = np.asarray(curve[0], dtype=float)
         cy = np.asarray(curve[1], dtype=float)
+    elif isinstance(curve, (list, tuple, np.ndarray)):
+        try:
+            data = np.asarray(curve, dtype=float)
+            if data.ndim == 2 and data.shape[1] >= 2:
+                cx, cy = data[:, 0], data[:, 1]
+            else:
+                cx, cy = np.array([]), np.array([])
+        except Exception:
+            cx, cy = np.array([]), np.array([])
     elif isinstance(curve, dict) and "x" in curve and "y" in curve:
         cx = np.asarray(curve["x"], dtype=float)
         cy = np.asarray(curve["y"], dtype=float)
@@ -302,8 +317,17 @@ def _eval_yield_table(p: Law73Params, pla: np.ndarray, rate: np.ndarray,
 
     if hasattr(table, "x") and hasattr(table, "y") and not hasattr(table, "ndim"):
         return _eval_curve_1d(table, pla_arr)
-    if isinstance(table, (list, tuple)) and len(table) == 2 and isinstance(table[0], (np.ndarray, list)):
+    if hasattr(table, "data"):
         return _eval_curve_1d(table, pla_arr)
+    if isinstance(table, (list, tuple, np.ndarray)):
+        try:
+            arr = np.asarray(table, dtype=float)
+            if arr.ndim == 2 and arr.shape[1] >= 2:
+                return _eval_curve_1d(table, pla_arr)
+        except Exception:
+            pass
+        if len(table) == 2 and isinstance(table[0], (np.ndarray, list)):
+            return _eval_curve_1d(table, pla_arr)
 
     if isinstance(table, dict):
         x1 = np.asarray(table.get("x1", table.get("x", [0.0, 1.0])), dtype=float)
@@ -419,6 +443,10 @@ def _extract_param(p: Dict[str, Any], keys: Sequence[str], default: Any) -> Any:
     for k in keys:
         if k in p and p[k] is not None:
             return p[k]
+    if "params" in p and isinstance(p["params"], dict):
+        for k in keys:
+            if k in p["params"] and p["params"][k] is not None:
+                return p["params"][k]
     return default
 
 
@@ -434,6 +462,8 @@ def build_law73(rec: Any = None, **kwargs: Any) -> Material:
         title = rec.title
     elif rec is None:
         p_dict = dict(kwargs)
+        if "params" in p_dict and isinstance(p_dict["params"], dict):
+            p_dict = {**p_dict["params"], **p_dict}
         mid = int(p_dict.get("id", 1))
         rho0 = float(p_dict.get("rho0", p_dict.get("MAT_RHO", p_dict.get("density", 1.0))))
         title = str(p_dict.get("title", "LAW73_HILL_THERM"))

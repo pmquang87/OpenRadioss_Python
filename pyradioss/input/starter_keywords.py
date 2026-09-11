@@ -44337,9 +44337,9 @@ def read_mat_law73(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 ce = _safe_float(c4[2]) if len(c4) > 2 else 0.0
         else:
             if len(valid_cards) > 0:
-                t0 = valid_cards[0].tokens()
-                rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
-                rhor = _safe_float(t0[1]) if len(t0) > 1 else 0.0
+                tok0 = valid_cards[0].tokens()
+                rho0 = _safe_float(tok0[0]) if len(tok0) > 0 else 0.0
+                rhor = _safe_float(tok0[1]) if len(tok0) > 1 else 0.0
             if len(valid_cards) > 1:
                 t1 = valid_cards[1].tokens()
                 e = _safe_float(t1[0]) if len(t1) > 0 else 0.0
@@ -44422,9 +44422,9 @@ def read_mat_law73(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         else:
             # Free format 7 cards
             if len(valid_cards) > 0:
-                t0 = valid_cards[0].tokens()
-                rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
-                rhor = _safe_float(t0[1]) if len(t0) > 1 else 0.0
+                tok0 = valid_cards[0].tokens()
+                rho0 = _safe_float(tok0[0]) if len(tok0) > 0 else 0.0
+                rhor = _safe_float(tok0[1]) if len(tok0) > 1 else 0.0
             if len(valid_cards) > 1:
                 t1 = valid_cards[1].tokens()
                 e = _safe_float(t1[0]) if len(t1) > 0 else 0.0
