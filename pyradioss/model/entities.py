@@ -8830,24 +8830,127 @@ MatFoamTab = MatLaw95
 
 @dataclass
 class MatLaw163:
-    """/MAT/LAW163 or /MAT/CRUSHABLE_FOAM (M183): Crushable foam material model."""
-    id: int
+    """/MAT/LAW163 or /MAT/CRUSHABLE_FOAM (M183, M560): Crushable foam material model."""
+    id: int = 0
     rho: float = 0.0
     e: float = 0.0
     nu: float = 0.0
     tsc: float = 0.0
-    damp: float = 0.0
-    ncycle: int = 0
+    damp: float = 0.10
+    ncycle: int = 12
     tab_id: int = 0
     epsd_ref: float = 0.0
     fscale: float = 1.0
-    srclmt: float = 0.0
+    srclmt: float = 1.0e20
     nrs: int = 0
     title: str = ""
+    law: int = 163
+    law_name: str = "LAW163"
+    params: dict = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.params, dict):
+            self.params = {}
+        if self.damp == 0.0:
+            self.damp = 0.10
+        if self.ncycle == 0:
+            self.ncycle = 12
+        if self.srclmt == 0.0:
+            self.srclmt = 1.0e20
+        if self.fscale == 0.0:
+            self.fscale = 1.0
+        self.nrs = max(min(int(self.nrs), 1), 0)
 
     @property
     def rho0(self) -> float:
         return self.rho
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @property
+    def G(self) -> float:
+        nu_clamped = min(max(self.nu, 0.0), 0.499)
+        denom = 2.0 * (1.0 + nu_clamped)
+        return self.e / denom if abs(denom) > 1e-15 else 0.0
+
+    @property
+    def bulk(self) -> float:
+        nu_clamped = min(max(self.nu, 0.0), 0.499)
+        denom = 3.0 * (1.0 - 2.0 * nu_clamped)
+        return self.e / denom if abs(denom) > 1e-15 else 0.0
+
+    @property
+    def K(self) -> float:
+        return self.bulk
+
+    @property
+    def cii(self) -> float:
+        nu_clamped = min(max(self.nu, 0.0), 0.499)
+        denom = (1.0 + nu_clamped) * (1.0 - 2.0 * nu_clamped)
+        lam = self.e * nu_clamped / denom if abs(denom) > 1e-15 else 0.0
+        return lam + 2.0 * self.G
+
+    @property
+    def cij(self) -> float:
+        nu_clamped = min(max(self.nu, 0.0), 0.499)
+        denom = (1.0 + nu_clamped) * (1.0 - 2.0 * nu_clamped)
+        return self.e * nu_clamped / denom if abs(denom) > 1e-15 else 0.0
+
+    @property
+    def sound_speed(self) -> CallableFloat:
+        import math
+        nu_clamped = min(max(self.nu, 0.0), 0.499)
+        denom = self.rho * (1.0 - nu_clamped * nu_clamped)
+        if denom > 0.0 and self.e > 0.0:
+            return CallableFloat(math.sqrt(self.e / denom))
+        return CallableFloat(0.0)
+
+    @property
+    def sound_speed_solid(self) -> CallableFloat:
+        import math
+        if self.rho > 0.0 and self.cii > 0.0:
+            return CallableFloat(math.sqrt(self.cii / self.rho))
+        return CallableFloat(0.0)
+
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        if key in self.params:
+            return self.params[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if hasattr(self, key):
+            setattr(self, key, value)
+        self.params[key] = value
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or (key in self.params)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        return self.params.get(key, default)
+
+    def keys(self) -> list[str]:
+        base_keys = [
+            "id", "rho", "e", "nu", "tsc", "damp", "ncycle",
+            "tab_id", "epsd_ref", "fscale", "srclmt", "nrs", "title",
+            "law", "law_name", "rho0", "E", "G", "bulk", "K", "cii", "cij",
+            "sound_speed", "sound_speed_solid",
+        ]
+        for k in self.params.keys():
+            if k not in base_keys:
+                base_keys.append(k)
+        return base_keys
+
+    def values(self) -> list[Any]:
+        return [self.get(k) for k in self.keys()]
+
+    def items(self) -> list[tuple[str, Any]]:
+        return [(k, self.get(k)) for k in self.keys()]
 
 
 MatCrushableFoam = MatLaw163

@@ -152,6 +152,7 @@ def _extract_params(mat: Any) -> Law163Params:
         return mat
 
     if isinstance(mat, MatLaw163):
+        tbl = getattr(mat, "table", mat.params.get("table", None) if hasattr(mat, "params") else None)
         return Law163Params(
             rho0=mat.rho if mat.rho > 0 else 1.0,
             refer_rho=mat.rho if mat.rho > 0 else 1.0,
@@ -165,6 +166,7 @@ def _extract_params(mat: Any) -> Law163Params:
             epsd_ref=mat.epsd_ref,
             fscale=mat.fscale if mat.fscale != 0.0 else 1.0,
             nrs=mat.nrs,
+            table=tbl,
             title=getattr(mat, "title", ""),
         )
 
@@ -690,7 +692,7 @@ def solid_update(
         sigv_yz = np.zeros(n, dtype=sig.dtype)
         sigv_zx = np.zeros(n, dtype=sig.dtype)
 
-    if extra is not None and "sigv" in extra:
+    if extra is not None:
         extra["sigv"] = np.column_stack([sigv_xx, sigv_yy, sigv_zz, sigv_xy, sigv_yz, sigv_zx])
 
     # Total stress tensor = reconstructed inviscid stress + viscous stress

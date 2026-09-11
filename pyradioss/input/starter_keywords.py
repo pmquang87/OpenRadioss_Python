@@ -1014,7 +1014,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW95", "BERGSTROM_BOYCE", "HYP_VISC_PLAS", "FOAM_TAB", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE"):
         read_mat_law95(block, model, log)
         return
-    if lawname in ("LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM", "LAW163_CRUSHABLE_FOAM"):
+    if lawname in ("163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM", "LAW163_CRUSHABLE_FOAM", "LAW163_CRUSH_FOAM"):
         read_mat_law163(block, model, log)
         return
     if lawname in ("LAW169", "ARUP_ADHESIVE", "COH_TAB_3D", "COH_3D", "MAT_ARUP_ADHESIVE", "MAT_COH_TAB_3D", "MAT_COH_3D", "LAW169_ARUP_ADHESIVE"):
@@ -34572,7 +34572,7 @@ def read_mat_law95(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law163(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW163/id`` or ``/MAT/CRUSHABLE_FOAM/id`` (M183): Crushable foam."""
+    """``/MAT/LAW163/id`` or ``/MAT/CRUSHABLE_FOAM/id`` (M183, M560): Crushable foam."""
     from ..model.entities import MatLaw163
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -34582,12 +34582,12 @@ def read_mat_law163(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
 
     rho = 0.0
-    e, nu, tsc, damp = 0.0, 0.0, 0.0, 0.0
-    ncycle = 0
+    e, nu, tsc, damp = 0.0, 0.0, 0.0, 0.10
+    ncycle = 12
     tab_id = 0
     epsd_ref = 0.0
     fscale = 1.0
-    srclmt = 0.0
+    srclmt = 1.0e20
     nrs = 0
 
     if block.fixed:
@@ -34599,15 +34599,19 @@ def read_mat_law163(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             e = _fval(f2[0]) if len(f2) > 0 else 0.0
             nu = _fval(f2[1]) if len(f2) > 1 else 0.0
             tsc = _fval(f2[2]) if len(f2) > 2 else 0.0
-            damp = _fval(f2[3]) if len(f2) > 3 else 0.0
-            ncycle = _ival(f2[5]) if len(f2) > 5 else 0
+            damp_val = _fval(f2[3]) if len(f2) > 3 and f2[3].strip() else 0.0
+            damp = damp_val if damp_val > 0.0 else 0.10
+            ncycle_val = _ival(f2[5]) if len(f2) > 5 and f2[5].strip() else 0
+            ncycle = ncycle_val if ncycle_val > 0 else 12
 
         if len(valid_cards) > 2:
             f3 = valid_cards[2].cut("MAT_LAW163_3")
             tab_id = _ival(f3[1]) if len(f3) > 1 else 0
             epsd_ref = _fval(f3[2]) if len(f3) > 2 else 0.0
-            fscale = _fval(f3[3], 1.0) if len(f3) > 3 and f3[3].strip() else 1.0
-            srclmt = _fval(f3[4]) if len(f3) > 4 else 0.0
+            fscale_val = _fval(f3[3], 1.0) if len(f3) > 3 and f3[3].strip() else 1.0
+            fscale = fscale_val if fscale_val != 0.0 else 1.0
+            srclmt_val = _fval(f3[4]) if len(f3) > 4 and f3[4].strip() else 0.0
+            srclmt = srclmt_val if srclmt_val > 0.0 else 1.0e20
             nrs = _ival(f3[6]) if len(f3) > 6 else 0
     else:
         toks1 = valid_cards[0].tokens()
@@ -34618,31 +34622,50 @@ def read_mat_law163(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             e = float(toks2[0]) if len(toks2) > 0 else 0.0
             nu = float(toks2[1]) if len(toks2) > 1 else 0.0
             tsc = float(toks2[2]) if len(toks2) > 2 else 0.0
-            damp = float(toks2[3]) if len(toks2) > 3 else 0.0
-            ncycle = int(float(toks2[4])) if len(toks2) > 4 else 0
+            damp_val = float(toks2[3]) if len(toks2) > 3 else 0.0
+            damp = damp_val if damp_val > 0.0 else 0.10
+            if len(toks2) >= 6:
+                ncycle_val = int(float(toks2[5]))
+            elif len(toks2) >= 5:
+                ncycle_val = int(float(toks2[4]))
+            else:
+                ncycle_val = 0
+            ncycle = ncycle_val if ncycle_val > 0 else 12
 
         if len(valid_cards) > 2:
             toks3 = valid_cards[2].tokens()
-            tab_id = int(float(toks3[0])) if len(toks3) > 0 else 0
-            epsd_ref = float(toks3[1]) if len(toks3) > 1 else 0.0
-            fscale = float(toks3[2]) if len(toks3) > 2 else 1.0
-            srclmt = float(toks3[3]) if len(toks3) > 3 else 0.0
-            nrs = int(float(toks3[4])) if len(toks3) > 4 else 0
+            if len(toks3) >= 7:
+                tab_id = int(float(toks3[1]))
+                epsd_ref = float(toks3[2])
+                fscale_val = float(toks3[3]) if len(toks3) > 3 else 1.0
+                srclmt_val = float(toks3[4]) if len(toks3) > 4 else 0.0
+                nrs = int(float(toks3[6])) if len(toks3) > 6 else 0
+            else:
+                tab_id = int(float(toks3[0])) if len(toks3) > 0 else 0
+                epsd_ref = float(toks3[1]) if len(toks3) > 1 else 0.0
+                fscale_val = float(toks3[2]) if len(toks3) > 2 else 1.0
+                srclmt_val = float(toks3[3]) if len(toks3) > 3 else 0.0
+                nrs = int(float(toks3[4])) if len(toks3) > 4 else 0
+            fscale = fscale_val if fscale_val != 0.0 else 1.0
+            srclmt = srclmt_val if srclmt_val > 0.0 else 1.0e20
 
+    nrs = max(min(int(nrs), 1), 0)
+
+    params = {
+        "rho": rho, "rho0": rho, "e": e, "nu": nu, "E": e, "Nu": nu,
+        "tsc": tsc, "damp": damp, "ncycle": ncycle,
+        "tab_id": tab_id, "epsd_ref": epsd_ref, "fscale": fscale,
+        "srclmt": srclmt, "nrs": nrs,
+    }
     m163 = MatLaw163(
         id=mat_id, rho=rho, e=e, nu=nu, tsc=tsc, damp=damp, ncycle=ncycle,
         tab_id=tab_id, epsd_ref=epsd_ref, fscale=fscale, srclmt=srclmt,
-        nrs=nrs, title=title,
+        nrs=nrs, title=title, params=params,
     )
     model.mat_law163s[mat_id] = m163
     model.materials[mat_id] = Material(
         id=mat_id, law=163, rho0=rho, title=title,
-        params={
-            "rho": rho, "rho0": rho, "e": e, "nu": nu, "E": e, "Nu": nu,
-            "tsc": tsc, "damp": damp, "ncycle": ncycle,
-            "tab_id": tab_id, "epsd_ref": epsd_ref, "fscale": fscale,
-            "srclmt": srclmt, "nrs": nrs,
-        }
+        params=params,
     )
 
 
@@ -85060,11 +85083,17 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "BERGSTROM_BOYCE": read_mat,
     "MAT_HYP_VISC_PLAS": read_mat,
     "HYP_VISC_PLAS": read_mat,
-    "MAT_LAW163": read_mat,
-    "MAT_CRUSHABLE_FOAM": read_mat,
-    "CRUSHABLE_FOAM": read_mat,
-    "MAT_CRUSH_FOAM": read_mat,
-    "CRUSH_FOAM": read_mat,
+    "LAW163": read_mat_law163,
+    "MAT_LAW163": read_mat_law163,
+    "/MAT/LAW163": read_mat_law163,
+    "CRUSHABLE_FOAM": read_mat_law163,
+    "MAT_CRUSHABLE_FOAM": read_mat_law163,
+    "/MAT/CRUSHABLE_FOAM": read_mat_law163,
+    "CRUSH_FOAM": read_mat_law163,
+    "MAT_CRUSH_FOAM": read_mat_law163,
+    "/MAT/CRUSH_FOAM": read_mat_law163,
+    "LAW163_CRUSHABLE_FOAM": read_mat_law163,
+    "LAW163_CRUSH_FOAM": read_mat_law163,
     "MAT_LAW169": read_mat,
     "MAT_ARUP_ADHESIVE": read_mat,
     "ARUP_ADHESIVE": read_mat,
@@ -93037,6 +93066,17 @@ MATERIAL_DISPATCH: Dict[str, Any] = {
     "MAT_JOHNSON_HOLMQUIST": read_mat_law79,
     "MAT_JH2": read_mat_law79,
     "LAW79_JOHN_HOLM": read_mat_law79,
+    "/MAT/LAW163": read_mat_law163,
+    "/MAT/CRUSHABLE_FOAM": read_mat_law163,
+    "/MAT/CRUSH_FOAM": read_mat_law163,
+    "LAW163": read_mat_law163,
+    "CRUSHABLE_FOAM": read_mat_law163,
+    "CRUSH_FOAM": read_mat_law163,
+    "MAT_LAW163": read_mat_law163,
+    "MAT_CRUSHABLE_FOAM": read_mat_law163,
+    "MAT_CRUSH_FOAM": read_mat_law163,
+    "LAW163_CRUSHABLE_FOAM": read_mat_law163,
+    "LAW163_CRUSH_FOAM": read_mat_law163,
 }
 
 

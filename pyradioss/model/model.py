@@ -1116,8 +1116,9 @@ class Model:
         self.mat_hyp_foams = self.mat_law50s
         self.mat_law57s: Dict[int, MatLaw57] = {}                   # /MAT/LAW57, /MAT/BARLAT3 (M183)
         self.mat_barlat3s = self.mat_law57s
-        self.mat_law87s: Dict[int, MatLaw87] = {}                   # /MAT/LAW87, /MAT/BARLAT_YLD2000 (M183)
         self.mat_law163s: Dict[int, MatLaw163] = {}                 # /MAT/LAW163, /MAT/CRUSHABLE_FOAM (M183)
+        self.mat_crushable_foams = self.mat_law163s
+        self.mat_crush_foams = self.mat_law163s
         self.mat_law169s: Dict[int, MatLaw169] = {}                 # /MAT/LAW169, /MAT/ARUP_ADHESIVE (M183)
         self.mat_law49s: Dict[int, MatLaw49] = {}                   # /MAT/LAW49, /MAT/STEINB (M184/M557)
         self.mat_steinbs = self.mat_law49s

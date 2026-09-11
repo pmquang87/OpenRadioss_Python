@@ -1864,6 +1864,163 @@ class StarterDeck:
         return self.mat_law50(*args, **kwargs)
 
 
+    def mat_law163(
+        self,
+        mat_id: int | Any = 0,
+        *args,
+        rho: float | str = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        tsc: float = 0.0,
+        damp: float = 0.10,
+        ncycle: int = 12,
+        tab_id: int = 0,
+        epsd_ref: float = 0.0,
+        fscale: float = 1.0,
+        srclmt: float = 1.0e20,
+        nrs: int = 0,
+        title: str = "",
+        unit_id: int | None = None,
+        law_name: str = "LAW163",
+        fixed_format: bool = True,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW163`` (/MAT/CRUSHABLE_FOAM, /MAT/CRUSH_FOAM) — cfg MAT/matl163_crushable_foam.cfg.
+        Crushable foam material model for solid elements (M560).
+
+        Cards:
+          Card 1: MAT_RHO (%20lg)
+          Card 2: MAT_E, MAT_NU, LSDYNA_TSC, LSD_MAT_DAMP, blank(10), LSD_NCYCLE
+                  (%20lg%20lg%20lg%20lg%10s%10d)
+          Card 3: blank(10), LSD_TID, EPSD_REF, FSCALE, LSD_SRCLMT, blank(10), NRSFlag
+                  (%10s%10d%20lg%20lg%20lg%10s%10d)
+        """
+        pos_names = [
+            "rho", "e", "nu", "tsc", "damp", "ncycle", "tab_id", "epsd_ref", "fscale", "srclmt", "nrs"
+        ]
+        curr_args = list(args)
+        if curr_args and isinstance(curr_args[0], str):
+            title = curr_args.pop(0)
+        for i, val in enumerate(curr_args):
+            if i < len(pos_names):
+                name = pos_names[i]
+                if name == "rho": rho = val
+                elif name == "e": e = val
+                elif name == "nu": nu = val
+                elif name == "tsc": tsc = val
+                elif name == "damp": damp = val
+                elif name == "ncycle": ncycle = val
+                elif name == "tab_id": tab_id = val
+                elif name == "epsd_ref": epsd_ref = val
+                elif name == "fscale": fscale = val
+                elif name == "srclmt": srclmt = val
+                elif name == "nrs": nrs = val
+
+        if isinstance(rho, str):
+            title = rho
+            rho = 0.0
+
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+
+        mat_obj = None
+        if hasattr(mat_id, "tab_id") or hasattr(mat_id, "tsc") or hasattr(mat_id, "srclmt"):
+            mat_obj = mat_id
+        elif hasattr(mat_id, "params") and ("tab_id" in getattr(mat_id, "params", {}) or "LSD_TID" in getattr(mat_id, "params", {})):
+            mat_obj = mat_id
+        elif "mat" in kw_low:
+            mat_obj = kw_low["mat"]
+        elif "mat163" in kw_low:
+            mat_obj = kw_low["mat163"]
+        elif "mat_law163" in kw_low:
+            mat_obj = kw_low["mat_law163"]
+        elif "mat_crushable_foam" in kw_low:
+            mat_obj = kw_low["mat_crushable_foam"]
+        elif "mat_crush_foam" in kw_low:
+            mat_obj = kw_low["mat_crush_foam"]
+
+        if mat_obj is not None:
+            mat_id = getattr(mat_obj, "id", mat_id)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", rho))
+            e = getattr(mat_obj, "e", e)
+            nu = getattr(mat_obj, "nu", nu)
+            tsc = getattr(mat_obj, "tsc", tsc)
+            damp = getattr(mat_obj, "damp", damp)
+            ncycle = getattr(mat_obj, "ncycle", ncycle)
+            tab_id = getattr(mat_obj, "tab_id", tab_id)
+            epsd_ref = getattr(mat_obj, "epsd_ref", epsd_ref)
+            fscale = getattr(mat_obj, "fscale", fscale)
+            srclmt = getattr(mat_obj, "srclmt", srclmt)
+            nrs = getattr(mat_obj, "nrs", nrs)
+            p_dict = getattr(mat_obj, "params", {}) or {}
+            if isinstance(p_dict, dict):
+                rho = p_dict.get("rho0", p_dict.get("rho", p_dict.get("MAT_RHO", rho)))
+                e = p_dict.get("e", p_dict.get("MAT_E", p_dict.get("E", e)))
+                nu = p_dict.get("nu", p_dict.get("MAT_NU", p_dict.get("Nu", nu)))
+                tsc = p_dict.get("tsc", p_dict.get("LSDYNA_TSC", tsc))
+                damp = p_dict.get("damp", p_dict.get("LSD_MAT_DAMP", damp))
+                ncycle = p_dict.get("ncycle", p_dict.get("LSD_NCYCLE", ncycle))
+                tab_id = p_dict.get("tab_id", p_dict.get("LSD_TID", tab_id))
+                epsd_ref = p_dict.get("epsd_ref", p_dict.get("EPSD_REF", epsd_ref))
+                fscale = p_dict.get("fscale", p_dict.get("FSCALE", fscale))
+                srclmt = p_dict.get("srclmt", p_dict.get("LSD_SRCLMT", srclmt))
+                nrs = p_dict.get("nrs", p_dict.get("NRSFlag", nrs))
+
+        rho_val = float(rho)
+        e_val = float(e)
+        nu_val = float(nu)
+        tsc_val = float(tsc)
+        damp_val = float(damp) if damp is not None else 0.10
+        ncycle_val = int(ncycle) if ncycle is not None else 12
+        tab_id_val = int(tab_id) if tab_id is not None else 0
+        epsd_ref_val = float(epsd_ref) if epsd_ref is not None else 0.0
+        fscale_val = float(fscale) if fscale is not None else 1.0
+        srclmt_val = float(srclmt) if srclmt is not None else 1.0e20
+        nrs_val = int(nrs) if nrs is not None else 0
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mat_id, unit_id)
+        else:
+            self._header("MAT", law_name, mat_id)
+        self._title(title)
+
+        if fixed_format:
+            self.lines.append(fmt_float(rho_val, 20))
+            self.lines.append(
+                fmt_float(e_val, 20)
+                + fmt_float(nu_val, 20)
+                + fmt_float(tsc_val, 20)
+                + fmt_float(damp_val, 20)
+                + blank(10)
+                + fmt_int(ncycle_val, 10)
+            )
+            self.lines.append(
+                blank(10)
+                + fmt_int(tab_id_val, 10)
+                + fmt_float(epsd_ref_val, 20)
+                + fmt_float(fscale_val, 20)
+                + fmt_float(srclmt_val, 20)
+                + blank(10)
+                + fmt_int(nrs_val, 10)
+            )
+        else:
+            self.lines.append(f"{rho_val}")
+            self.lines.append(f"{e_val} {nu_val} {tsc_val} {damp_val} {ncycle_val}")
+            self.lines.append(f"{tab_id_val} {epsd_ref_val} {fscale_val} {srclmt_val} {nrs_val}")
+
+        return self
+
+    def mat_crushable_foam(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "CRUSHABLE_FOAM")
+        return self.mat_law163(*args, **kwargs)
+
+    def mat_crush_foam(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "CRUSH_FOAM")
+        return self.mat_law163(*args, **kwargs)
+
+
+
+
     def mat_law34(
         self,
         id: int,
