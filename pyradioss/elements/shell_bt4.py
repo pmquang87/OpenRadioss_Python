@@ -578,9 +578,9 @@ def _init_material_state(group, nip_max=None, n=None):
         if (getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB")
                 or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB")):
             if "uvar66" not in st:
-                st["uvar66"] = np.zeros((n, 20))
+                st["uvar66"] = np.zeros((n, 8))
             if "uvar66" not in st["mat_extra"]:
-                st["mat_extra"]["uvar66"] = np.zeros((n, nip_max, 20))
+                st["mat_extra"]["uvar66"] = np.zeros((n, nip_max, 8))
     if any(getattr(mat, "fail", None) is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros((n, nip_max))
     st["chk_fail"] = any(
@@ -677,8 +677,8 @@ def _element_deletion(st, nip_of):
     layfail = st["layfail"]
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         law = getattr(mat, "law", 1)
-        if not (mat.fail is not None or law in (15, 22, 25, 27, 43, 48, 52, 57, 60, 69, 73)
-                or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL")
+        if not (mat.fail is not None or law in (15, 22, 25, 27, 43, 48, 52, 57, 60, 66, 69, 73)
+                or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL")
                 or mat.params.get("eps_p_max", EP30) < 1e30
                 or mat.params.get("eps_max", EP30) < 1e30
                 or mat.params.get("EPSMAX", EP30) < 1e30
@@ -1123,6 +1123,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             c[sl] = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
         elif getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
             c[sl] = mat.sound_speed_shell()
+            if "uvar66" in st and "uvar66" in st.get("mat_extra", {}):
+                st["uvar66"][sl] = st["mat_extra"]["uvar66"][sl, 0]
         else:
             c[sl] = mat.sound_speed_shell()
         # elastic transverse shear resultant stress (with 5/6 factor)

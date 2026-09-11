@@ -317,8 +317,12 @@ class Material:
             except Exception:
                 g = self.G
                 e = self.E
-                rho = self.rho0 if self.rho0 > 0 else 1.0
-                return float(np.sqrt(max((4.0 * g / 3.0 + e / 3.0) / rho, 0.0)))
+        if self.law in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB") or getattr(self, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
+            try:
+                from ..materials import law66_plas_tab
+                return float(law66_plas_tab.sound_speed_solid(self, rho=self.rho0))
+            except Exception:
+                pass
         return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
 
     def sound_speed_shell(self) -> float:
@@ -379,6 +383,12 @@ class Material:
             try:
                 from ..materials import law73_hill_therm
                 return float(law73_hill_therm.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB") or getattr(self, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
+            try:
+                from ..materials import law66_plas_tab
+                return float(law66_plas_tab.sound_speed_shell(self, rho=self.rho0))
             except Exception:
                 pass
             rho0 = self.rho0 or (self.params.get("rho", 0.0) if hasattr(self, "params") and isinstance(self.params, dict) else 0.0)
@@ -15312,6 +15322,70 @@ class MatLaw66:
     @eps_t_list.setter
     def eps_t_list(self, val: list) -> None:
         self.k_b1 = val
+
+    @property
+    def fscale_t_list(self) -> list:
+        return self.fp2
+
+    @fscale_t_list.setter
+    def fscale_t_list(self, val: list) -> None:
+        self.fp2 = val
+
+    @property
+    def EC(self) -> float:
+        return self.ec
+
+    @EC.setter
+    def EC(self, val: float) -> None:
+        self.ec = val
+
+    @property
+    def PC(self) -> float:
+        return self.pc
+
+    @PC.setter
+    def PC(self, val: float) -> None:
+        self.pc = val
+
+    @property
+    def PT(self) -> float:
+        return self.pt
+
+    @PT.setter
+    def PT(self, val: float) -> None:
+        self.pt = val
+
+    @property
+    def RPCT(self) -> float:
+        return self.rpct
+
+    @RPCT.setter
+    def RPCT(self, val: float) -> None:
+        self.rpct = val
+
+    @property
+    def Fsmooth(self) -> int:
+        return self.fsmooth
+
+    @Fsmooth.setter
+    def Fsmooth(self, val: int) -> None:
+        self.fsmooth = val
+
+    @property
+    def ISRATE(self) -> int:
+        return self.israte
+
+    @ISRATE.setter
+    def ISRATE(self, val: int) -> None:
+        self.israte = val
+
+    @property
+    def VP(self) -> int:
+        return self.vp
+
+    @VP.setter
+    def VP(self, val: int) -> None:
+        self.vp = val
 
     @property
     def iyld_rate(self) -> int:

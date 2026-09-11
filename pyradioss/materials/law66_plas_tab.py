@@ -276,14 +276,18 @@ def _eval_curve(curve: Any, x: Union[float, np.ndarray]) -> Tuple[np.ndarray, np
     if hasattr(curve, "x") and hasattr(curve, "y"):
         cx = np.asarray(curve.x, dtype=float)
         cy = np.asarray(curve.y, dtype=float)
+    elif isinstance(curve, tuple) and len(curve) == 2 and isinstance(curve[0], (list, tuple, np.ndarray)):
+        cx = np.asarray(curve[0], dtype=float)
+        cy = np.asarray(curve[1], dtype=float)
     elif isinstance(curve, (tuple, list)):
-        if len(curve) >= 2 and isinstance(curve[0], (list, tuple, np.ndarray)) and isinstance(curve[1], (list, tuple, np.ndarray)):
-            cx = np.asarray(curve[0], dtype=float)
-            cy = np.asarray(curve[1], dtype=float)
-        elif len(curve) > 0 and isinstance(curve[0], (tuple, list)):
+        try:
             pts = np.asarray(curve, dtype=float)
-            if pts.ndim == 2 and pts.shape[1] >= 2:
+            if pts.ndim == 2 and pts.shape[0] == 2 and pts.shape[1] != 2:
+                cx, cy = pts[0, :], pts[1, :]
+            elif pts.ndim == 2 and pts.shape[1] >= 2:
                 cx, cy = pts[:, 0], pts[:, 1]
+        except Exception:
+            pass
     elif isinstance(curve, dict) and "x" in curve and "y" in curve:
         cx = np.asarray(curve["x"], dtype=float)
         cy = np.asarray(curve["y"], dtype=float)
@@ -440,8 +444,8 @@ def _compute_yield_and_hardening(p: Law66Params, P: np.ndarray, epsp: np.ndarray
         rate_t_obj = p.curve_rate_t if p.curve_rate_t is not None else p.fun_b2
         yrate_c, _ = _eval_curve(rate_c_obj, rate)
         yrate_t, _ = _eval_curve(rate_t_obj, rate)
-        yrate_c = np.maximum(yrate_c * p.fscale33, 1.0)
-        yrate_t = np.maximum(yrate_t * p.fscale12, 1.0)
+        yrate_c = yrate_c * p.fscale33
+        yrate_t = yrate_t * p.fscale12
         yc = yc * yrate_c
         hc = hc * yrate_c
         yt = yt * yrate_t
@@ -482,7 +486,8 @@ def _compute_yield_and_hardening(p: Law66Params, P: np.ndarray, epsp: np.ndarray
             yld = yld * yrate
             h = h * yrate
         elif p.israte == 2 and np.any(has_rate):
-            yrate = np.where(rate_val > p.epsp0, 1.0 + p.cp * np.log(np.maximum(rate_val / p.epsp0, 1.0)), 1.0)
+            epd = np.maximum(rate_val / p.epsp0, _EM20)
+            yrate = np.where(has_rate, 1.0 + p.cp * np.log(epd), 1.0)
             yld = yld * yrate
             h = h * yrate
 
@@ -592,7 +597,7 @@ def build_law66(rec: Any = None, **kwargs: Any) -> Material:
         pc_val = _get_f(["MAT_PC", "P_c", "PC", "pc"], 0.0)
         pt_val = _get_f(["MAT_PT", "P_t", "PT", "pt"], 0.0)
         rpct_val = _get_f(["MAT_RPCT", "RPCT", "rpct"], 1.0)
-        chard_val = _get_f(["MAT_HARD", "C_hard", "chard", "CHARD", "FISOKIN", "fisokin"], 0.0)
+        chard_val = _get_f(["MAT_HARD", "C_hard", "c_hard", "chard", "CHARD", "FISOKIN", "fisokin"], 0.0)
         asrate_val = _get_f(["MAT_asrate", "F_cut", "asrate", "fcut", "f_cut"], 0.0)
         fsmooth_val = _get_i(["Fsmooth", "fsmooth"], 0)
         israte_val = _get_i(["ISRATE", "israte", "irate"], 1)
@@ -799,35 +804,45 @@ def solid_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
 
     if extra is not None:
         if "uvar66" in extra:
-            uvar = extra["uvar66"]
+            uvar = np.atleast_2d(extra["uvar66"])
             if uvar.shape[-1] >= 7:
                 alpha[:, :] = uvar[:, 1:7]
             if uvar.shape[-1] >= 8:
                 rate_filtered[:] = uvar[:, 7]
         elif "sigb66" in extra:
-            alpha[:, :] = extra["sigb66"]
+            sigb = np.atleast_2d(extra["sigb66"])
+            alpha[:, :] = sigb[:, :6]
 
     # 2. Hydrostatic pressure P = C1T * mu (with mu = rho/rho0 - 1)
     tr_deps = deps[:, 0] + deps[:, 1] + deps[:, 2]
     dav = tr_deps / 3.0
 
+    has_mu = False
     if extra is not None and "rho" in extra:
-        mu = extra["rho"] / p.rho0 - 1.0
-        P = p.c1t * mu
+        mu = np.asarray(extra["rho"], dtype=float) / p.rho0 - 1.0
+        P_est = p.c1t * mu
+        has_mu = True
     elif extra is not None and "mu" in extra:
-        mu = extra["mu"]
-        P = p.c1t * mu
+        mu = np.asarray(extra["mu"], dtype=float)
+        P_est = p.c1t * mu
+        has_mu = True
     else:
         # Fallback to incremental trace tracking: P_new = P_old - C1T * tr_deps
         p_old = -(sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0
-        P = p_old - p.c1t * tr_deps
+        P_est = p_old - p.c1t * tr_deps
 
-    # Effective moduli based on pressure P
-    E, G, C1 = _compute_pressure_moduli(p, P)
+    # Effective moduli based on pressure P_est (sigeps66.F:211-234)
+    E, G, C1 = _compute_pressure_moduli(p, P_est)
     G2 = 2.0 * G
     G3 = 3.0 * G
 
-    # Dilatational sound speed
+    # Recompute hydrostatic pressure P = C1 * mu (sigeps66.F:493)
+    if has_mu:
+        P = C1 * mu
+    else:
+        P = p_old - C1 * tr_deps
+
+    # Dilatational sound speed (sigeps66.F:261)
     c1_sound = max(p.c1t, p.c1c)
     soundsp = np.sqrt((c1_sound + (4.0 / 3.0) * G) / max(p.rho0, _EM20))
 
@@ -844,28 +859,37 @@ def solid_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
     s_trial[:, 5] = sig_eff[:, 5] + G * deps[:, 5]
 
     # 4. Deviatoric strain rate & filtering
-    ee = ((deps[:, 0] - dav) ** 2 + (deps[:, 1] - dav) ** 2 + (deps[:, 2] - dav) ** 2
-          + 0.5 * (deps[:, 3] ** 2 + deps[:, 4] ** 2 + deps[:, 5] ** 2))
-    inst_rate = np.sqrt((2.0 / 3.0) * ee) / dt if dt > 0.0 else np.zeros(n, dtype=float)
-
-    if p.asrate > 0.0:
-        omega = 2.0 * math.pi * p.asrate
-        alpha_filt = min(1.0, omega * dt) if dt > 0.0 else 0.0
-        rate = alpha_filt * inst_rate + (1.0 - alpha_filt) * rate_filtered
-        rate_filtered[:] = rate
+    if extra is not None and "rate" in extra:
+        rate = np.asarray(extra["rate"], dtype=float)
+        if rate.ndim == 0:
+            rate = np.full(n, float(rate))
+    elif extra is not None and "epsp_rate" in extra:
+        rate = np.asarray(extra["epsp_rate"], dtype=float)
+        if rate.ndim == 0:
+            rate = np.full(n, float(rate))
     else:
-        rate = inst_rate
+        ee = ((deps[:, 0] - dav) ** 2 + (deps[:, 1] - dav) ** 2 + (deps[:, 2] - dav) ** 2
+              + 0.5 * (deps[:, 3] ** 2 + deps[:, 4] ** 2 + deps[:, 5] ** 2))
+        inst_rate = np.sqrt((2.0 / 3.0) * ee) / dt if dt > 0.0 else np.zeros(n, dtype=float)
 
-    # 5. Yield stress and hardening modulus evaluation
+        if p.asrate > 0.0:
+            omega = 2.0 * math.pi * p.asrate
+            alpha_filt = min(1.0, omega * dt) if dt > 0.0 else 0.0
+            rate = alpha_filt * inst_rate + (1.0 - alpha_filt) * rate_filtered
+            rate_filtered[:] = rate
+        else:
+            rate = inst_rate
+
+    # 5. Yield stress and hardening modulus evaluation (sigeps66.F:491-534)
     yld, H = _compute_yield_and_hardening(p, P, epsp, rate)
 
     # 6. J2 von Mises norm
     j2 = 0.5 * (s_trial[:, 0] ** 2 + s_trial[:, 1] ** 2 + s_trial[:, 2] ** 2) \
         + s_trial[:, 3] ** 2 + s_trial[:, 4] ** 2 + s_trial[:, 5] ** 2
-    vm = np.sqrt(3.0 * j2) + 1.0e-30
+    vm = np.sqrt(3.0 * j2)
 
-    # 7. Radial return
-    R = np.minimum(1.0, yld / vm)
+    # 7. Radial return (sigeps66.F:560-574)
+    R = np.minimum(1.0, yld / np.maximum(vm, _EM20))
     plastic = vm > yld
     s_new = s_trial.copy()
     dpla = np.zeros(n, dtype=float)
@@ -876,16 +900,16 @@ def solid_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
         denom = np.maximum(denom, _EM20)
         dpla[idx] = (vm[idx] - yld[idx]) / denom
 
-        # Viscoplastic overstress iteration (VP == 1)
+        # Viscoplastic overstress iteration (VP == 1) (sigeps66.F:540-558)
         if p.vp > 0 and dt > 0.0:
             epd = np.maximum(_EM20, (dpla[idx] / dt) / p.epsp0)
-            power = 1.0 / p.cp if p.cp != 0.0 else 1.0
+            power = p.cp if p.cp != 0.0 else 1.0
             yrate = 1.0 + epd ** power
             if p.sigy == 0.0:
                 yld[idx] = yld[idx] * yrate
             else:
                 yld[idx] = yld[idx] + p.sigy * (yrate - 1.0)
-            R[idx] = np.minimum(1.0, yld[idx] / vm[idx])
+            R[idx] = np.minimum(1.0, yld[idx] / np.maximum(vm[idx], _EM20))
             dpla[idx] = (1.0 - R[idx]) * vm[idx] / denom
 
         epsp[idx] += dpla[idx]
@@ -896,7 +920,7 @@ def solid_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
         if p.chard > 0.0:
             fisokin = p.chard
             hkin = (2.0 / 3.0) * fisokin * H[idx]
-            alpha_fac = hkin / np.maximum(G2[idx] + hkin, 0.02 * G2[idx])
+            alpha_fac = hkin / np.maximum(G2[idx] + hkin, _EM20)
             ds = s_trial[idx] - s_new[idx]
             delta_alpha = alpha_fac[:, None] * ds
             alpha[idx] += delta_alpha
@@ -948,29 +972,30 @@ def shell_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
 
     if extra is not None:
         if "uvar66" in extra:
-            uvar = extra["uvar66"]
+            uvar = np.atleast_2d(extra["uvar66"])
             if uvar.shape[-1] >= 4:
                 alpha[:, :] = uvar[:, 1:4]
             if uvar.shape[-1] >= 5:
                 rate_filtered[:] = uvar[:, 4]
         elif "sigb66" in extra:
-            alpha[:, :] = extra["sigb66"][:, :3]
+            sigb = np.atleast_2d(extra["sigb66"])
+            alpha[:, :] = sigb[:, :3]
 
-    # 1. First estimate of plane-stress normal stresses to evaluate P
+    # 1. First estimate of plane-stress normal stresses to evaluate P (sigeps66c.F:243-247)
     sig_eff = sig - alpha
     s_est_xx = sig_eff[:, 0] + p.a11t * deps[:, 0] + p.a21t * deps[:, 1]
     s_est_yy = sig_eff[:, 1] + p.a21t * deps[:, 0] + p.a11t * deps[:, 1]
     P = -(1.0 / 3.0) * (s_est_xx + s_est_yy)
 
-    # 2. Effective moduli based on pressure P
+    # 2. Effective moduli based on pressure P (sigeps66c.F:250-270)
     E, G, _ = _compute_pressure_moduli(p, P)
     nu_sq = max(1.0 - p.nu ** 2, 1.0e-15)
     A11 = E / nu_sq
     A21 = p.nu * A11
     G3 = 3.0 * G
-    soundsp = np.sqrt(A11 / max(p.rho0, _EM20))
+    soundsp = np.full(n, math.sqrt(p.a11t / max(p.rho0, _EM20)), dtype=float)
 
-    # 3. Trial stress with effective A11, A21, G
+    # 3. Trial stress with effective A11, A21, G (sigeps66c.F:281-291)
     s_trial = np.empty_like(sig)
     s_trial[:, 0] = sig_eff[:, 0] + A11 * deps[:, 0] + A21 * deps[:, 1]
     s_trial[:, 1] = sig_eff[:, 1] + A21 * deps[:, 0] + A11 * deps[:, 1]
@@ -982,28 +1007,38 @@ def shell_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
     nu31 = 1.0 - nnu11
     dezz_est = -(deps[:, 0] + deps[:, 1]) * nnu11
     dav = (deps[:, 0] + deps[:, 1] + dezz_est) / 3.0
-    ee = ((deps[:, 0] - dav) ** 2 + (deps[:, 1] - dav) ** 2 + (dezz_est - dav) ** 2
-          + 0.5 * deps[:, 2] ** 2)
-    inst_rate = np.sqrt((2.0 / 3.0) * ee) / dt if dt > 0.0 else np.zeros(n, dtype=float)
 
-    if p.asrate > 0.0:
-        omega = 2.0 * math.pi * p.asrate
-        alpha_filt = min(1.0, omega * dt) if dt > 0.0 else 0.0
-        rate = alpha_filt * inst_rate + (1.0 - alpha_filt) * rate_filtered
-        rate_filtered[:] = rate
+    if extra is not None and "rate" in extra:
+        rate = np.asarray(extra["rate"], dtype=float)
+        if rate.ndim == 0:
+            rate = np.full(n, float(rate))
+    elif extra is not None and "epsp_rate" in extra:
+        rate = np.asarray(extra["epsp_rate"], dtype=float)
+        if rate.ndim == 0:
+            rate = np.full(n, float(rate))
     else:
-        rate = inst_rate
+        ee = ((deps[:, 0] - dav) ** 2 + (deps[:, 1] - dav) ** 2 + (dezz_est - dav) ** 2
+              + 0.5 * deps[:, 2] ** 2)
+        inst_rate = np.sqrt((2.0 / 3.0) * ee) / dt if dt > 0.0 else np.zeros(n, dtype=float)
 
-    # 5. Yield stress and hardening modulus evaluation
+        if p.asrate > 0.0:
+            omega = 2.0 * math.pi * p.asrate
+            alpha_filt = min(1.0, omega * dt) if dt > 0.0 else 0.0
+            rate = alpha_filt * inst_rate + (1.0 - alpha_filt) * rate_filtered
+            rate_filtered[:] = rate
+        else:
+            rate = inst_rate
+
+    # 5. Yield stress and hardening modulus evaluation (sigeps66c.F:530-569)
     yld, H = _compute_yield_and_hardening(p, P, epsp, rate)
 
     # 6. Plane-stress von Mises stress
     svm = np.sqrt(s_trial[:, 0] ** 2 + s_trial[:, 1] ** 2
                   - s_trial[:, 0] * s_trial[:, 1]
-                  + 3.0 * s_trial[:, 2] ** 2) + 1.0e-30
+                  + 3.0 * s_trial[:, 2] ** 2)
 
-    # 7. Radial projection
-    R = np.minimum(1.0, yld / svm)
+    # 7. Radial projection (sigeps66c.F:576-595)
+    R = np.minimum(1.0, yld / np.maximum(svm, _EM20))
     plastic = svm > yld
     s_new = s_trial.copy()
     dpla = np.zeros(n, dtype=float)
@@ -1017,13 +1052,13 @@ def shell_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
         # Viscoplastic overstress iteration (VP == 1)
         if p.vp > 0 and dt > 0.0:
             epd = np.maximum(_EM20, (dpla[idx] / dt) / p.epsp0)
-            power = 1.0 / p.cp if p.cp != 0.0 else 1.0
+            power = p.cp if p.cp != 0.0 else 1.0
             yrate = 1.0 + epd ** power
             if p.sigy == 0.0:
                 yld[idx] = yld[idx] * yrate
             else:
                 yld[idx] = yld[idx] + p.sigy * (yrate - 1.0)
-            R[idx] = np.minimum(1.0, yld[idx] / svm[idx])
+            R[idx] = np.minimum(1.0, yld[idx] / np.maximum(svm[idx], _EM20))
             dpla[idx] = (1.0 - R[idx]) * svm[idx] / denom
 
         epsp[idx] += dpla[idx]
@@ -1035,7 +1070,7 @@ def shell_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
         if p.chard > 0.0:
             fisokin = p.chard
             hkin = (2.0 / 3.0) * fisokin * H[idx]
-            alpha_fac = hkin / np.maximum(E[idx] + hkin, 0.02 * E[idx])
+            alpha_fac = hkin / np.maximum(E[idx] + hkin, _EM20)
             dsxx = s_trial[idx, 0] - s_new[idx, 0]
             dsyy = s_trial[idx, 1] - s_new[idx, 1]
             dsxy = s_trial[idx, 2] - s_new[idx, 2]
@@ -1049,15 +1084,19 @@ def shell_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
             alpha[idx, 1] += sigpyy
             alpha[idx, 2] += sigpxy
 
-    # 9. Through-thickness strain dezz & thickness update
+    # 9. Through-thickness strain dezz & thickness update (sigeps66c.F:588-593)
     s_mean_new = 0.5 * (s_new[:, 0] + s_new[:, 1])
     dezz_plas = np.where(plastic, dpla * s_mean_new / np.maximum(yld, _EM20), 0.0)
     dezz = -(deps[:, 0] + deps[:, 1]) * nnu11 - nu31 * dezz_plas
+    if extra is not None:
+        thkly = np.asarray(extra.get("thkly", extra.get("thklyl", extra.get("thk", 1.0))), dtype=float)
+        off = np.asarray(extra.get("off", 1.0), dtype=float)
+        if "thk" in extra:
+            extra["thk"] += dezz * thkly * off
+        if "thk66" in extra:
+            extra["thk66"] += dezz * thkly * off
 
-    if extra is not None and "thk" in extra:
-        extra["thk"] += dezz * extra["thk"]
-
-    # 10. Cauchy stress: sig_new = s_new + alpha
+    # 10. Cauchy stress: sig_new = s_new + alpha (sigeps66c.F:794-796)
     sig[:, :] = s_new + alpha
 
     if extra is not None:
@@ -1081,22 +1120,28 @@ shell_update_law66 = shell_update
 # Sound Speed Functions
 # ============================================================================
 
-def sound_speed_solid(mat: Any, rho: Optional[float] = None, extra: Optional[dict] = None) -> float:
+def sound_speed_solid(mat: Any, rho: Optional[Any] = None, extra: Optional[dict] = None) -> Any:
     """Dilatational sound speed for solid elements."""
     p = _get_params(mat)
     r = rho if rho is not None else (extra.get("rho") if extra and "rho" in extra else p.rho0)
     c1 = max(p.c1t, p.c1c)
-    return math.sqrt((c1 + (4.0 / 3.0) * p.gt) / max(r, _EM20))
+    num = c1 + (4.0 / 3.0) * p.gt
+    if isinstance(r, np.ndarray):
+        return np.sqrt(num / np.maximum(r, _EM20))
+    return math.sqrt(num / max(float(r), _EM20))
 
 
-def sound_speed_shell(mat: Any, rho: Optional[float] = None, extra: Optional[dict] = None) -> float:
+def sound_speed_shell(mat: Any, rho: Optional[Any] = None, extra: Optional[dict] = None) -> Any:
     """Dilatational sound speed for shell elements."""
     p = _get_params(mat)
     r = rho if rho is not None else (extra.get("rho") if extra and "rho" in extra else p.rho0)
-    return math.sqrt(p.a11t / max(r, _EM20))
+    num = p.a11t
+    if isinstance(r, np.ndarray):
+        return np.sqrt(num / np.maximum(r, _EM20))
+    return math.sqrt(num / max(float(r), _EM20))
 
 
-def sound_speed(mat: Any, rho: Optional[float] = None, extra: Optional[dict] = None) -> float:
+def sound_speed(mat: Any, rho: Optional[Any] = None, extra: Optional[dict] = None) -> Any:
     return sound_speed_solid(mat, rho=rho, extra=extra)
 
 
@@ -1273,6 +1318,7 @@ def extra_shapes(mat: Any, nip: Optional[int] = None) -> Dict[str, Tuple[int, ..
     if nip is not None and nip > 0:
         return {
             "uvar66": (nip, 8),
+            "thk66": (nip,),
             "thk": (nip,),
         }
     return {

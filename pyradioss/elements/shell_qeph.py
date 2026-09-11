@@ -1138,6 +1138,8 @@ def forces(group, x, v, vr, dt, fint, mint):
         st["qshear"][sl] += st["gs"][sl][:, None] * gsr2[sl] * dt
         de_layers[sl] += t_sl * np.einsum(
             "nk,nk->n", 0.5 * (qold + st["qshear"][sl]), gsr2[sl] * dt)
+        if "uvar66" in st and "uvar66" in st.get("mat_extra", {}):
+            st["uvar66"][sl] = st["mat_extra"]["uvar66"][sl, 0]
 
     if st["chk_fail"]:
         alive = _element_deletion(st, nip_of)

@@ -1052,6 +1052,8 @@ _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
     "uv38": (33,),
     "uv43": (4,),
     "uv50": (6,),
+    "uvar66": (8,),
+    "uv66": (8,),
     "uvar73": (7,),
 }
 

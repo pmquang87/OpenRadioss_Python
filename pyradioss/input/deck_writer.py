@@ -2951,12 +2951,72 @@ class StarterDeck:
             nu = kwargs["Nu"]
         if "israte" in kwargs:
             iyld_rate = kwargs["israte"]
+        if "chard" in kwargs:
+            c_hard = kwargs["chard"]
+        elif "fisokin" in kwargs:
+            c_hard = kwargs["fisokin"]
+        if "asrate" in kwargs:
+            f_cut = kwargs["asrate"]
+        elif "fcut" in kwargs:
+            f_cut = kwargs["fcut"]
+        if "p_c" in kwargs:
+            pc = kwargs["p_c"]
+        elif "PC" in kwargs:
+            pc = kwargs["PC"]
+        if "p_t" in kwargs:
+            pt = kwargs["p_t"]
+        elif "PT" in kwargs:
+            pt = kwargs["PT"]
+        if "EC" in kwargs:
+            ec = kwargs["EC"]
+        if "RPCT" in kwargs:
+            rpct = kwargs["RPCT"]
+        if "funct_idc" in kwargs:
+            fun_a1 = kwargs["funct_idc"]
+        elif "funct_IDc" in kwargs:
+            fun_a1 = kwargs["funct_IDc"]
+        if "funct_idt" in kwargs:
+            fun_a2 = kwargs["funct_idt"]
+        elif "funct_IDt" in kwargs:
+            fun_a2 = kwargs["funct_IDt"]
+        if "fscalec" in kwargs:
+            fscale11 = kwargs["fscalec"]
+        elif "Fscalec" in kwargs:
+            fscale11 = kwargs["Fscalec"]
+        if "fscalet" in kwargs:
+            fscale22 = kwargs["fscalet"]
+        elif "Fscalet" in kwargs:
+            fscale22 = kwargs["Fscalet"]
         if "cp" in kwargs:
             c = kwargs["cp"]
         if "epsp0" in kwargs:
             eps_0 = kwargs["epsp0"]
+        elif "epsilon_0" in kwargs:
+            eps_0 = kwargs["epsilon_0"]
+        elif "Epsilon_0" in kwargs:
+            eps_0 = kwargs["Epsilon_0"]
         if "sigmay0" in kwargs:
             sigma_y0 = kwargs["sigmay0"]
+        elif "sigy" in kwargs:
+            sigma_y0 = kwargs["sigy"]
+        elif "sig_y" in kwargs:
+            sigma_y0 = kwargs["sig_y"]
+        if "fnyrt_idc" in kwargs:
+            fun_b1 = kwargs["fnyrt_idc"]
+        elif "fnYrt_IDc" in kwargs:
+            fun_b1 = kwargs["fnYrt_IDc"]
+        if "fnyrt_idt" in kwargs:
+            fun_b2 = kwargs["fnyrt_idt"]
+        elif "fnYrt_IDt" in kwargs:
+            fun_b2 = kwargs["fnYrt_IDt"]
+        if "yrate_fscalec" in kwargs:
+            fscale33 = kwargs["yrate_fscalec"]
+        elif "Yrate_Fscalec" in kwargs:
+            fscale33 = kwargs["Yrate_Fscalec"]
+        if "yrate_fscalet" in kwargs:
+            fscale12 = kwargs["yrate_fscalet"]
+        elif "Yrate_Fscalet" in kwargs:
+            fscale12 = kwargs["Yrate_Fscalet"]
 
         rho_val = float(rho)
         rhor_val = float(rhor)
@@ -2991,8 +3051,62 @@ class StarterDeck:
         fids = list(func_ids) if func_ids is not None else []
         rts = list(rates) if rates is not None else []
         scs = list(fscales) if fscales is not None else []
-        if iyld_rate_val == 4 and nfunc_val == 0 and fids:
-            nfunc_val = len(fids)
+
+        # Extract compression and tension curve lists
+        c_fids = kwargs.get("func_c_list", kwargs.get("abg_ipt", None))
+        if c_fids is None and mat_obj is not None:
+            c_fids = getattr(mat_obj, "abg_ipt", None) or getattr(mat_obj, "func_c_list", None)
+        c_rts = kwargs.get("eps_c_list", kwargs.get("k_a1", None))
+        if c_rts is None and mat_obj is not None:
+            c_rts = getattr(mat_obj, "k_a1", None) or getattr(mat_obj, "eps_c_list", None)
+        c_scs = kwargs.get("fscale_c_list", kwargs.get("fp1", None))
+        if c_scs is None and mat_obj is not None:
+            c_scs = getattr(mat_obj, "fp1", None) or getattr(mat_obj, "fscale_c_list", None)
+
+        t_fids = kwargs.get("func_t_list", kwargs.get("abg_ipdel", None))
+        if t_fids is None and mat_obj is not None:
+            t_fids = getattr(mat_obj, "abg_ipdel", None) or getattr(mat_obj, "func_t_list", None)
+        t_rts = kwargs.get("eps_t_list", kwargs.get("k_b1", None))
+        if t_rts is None and mat_obj is not None:
+            t_rts = getattr(mat_obj, "k_b1", None) or getattr(mat_obj, "eps_t_list", None)
+        t_scs = kwargs.get("fscale_t_list", kwargs.get("fp2", None))
+        if t_scs is None and mat_obj is not None:
+            t_scs = getattr(mat_obj, "fp2", None) or getattr(mat_obj, "fscale_t_list", None)
+
+        # Fallback to fids, rts, scs split
+        if c_fids is None and fids:
+            if nfunc_val > 0:
+                c_fids = fids[:nfunc_val]
+                t_fids = fids[nfunc_val:nfunc_val + tfunc_val] if tfunc_val > 0 else fids[nfunc_val:]
+            else:
+                c_fids = fids
+                t_fids = []
+        if c_rts is None and rts:
+            if nfunc_val > 0:
+                c_rts = rts[:nfunc_val]
+                t_rts = rts[nfunc_val:nfunc_val + tfunc_val] if tfunc_val > 0 else rts[nfunc_val:]
+            else:
+                c_rts = rts
+                t_rts = []
+        if c_scs is None and scs:
+            if nfunc_val > 0:
+                c_scs = scs[:nfunc_val]
+                t_scs = scs[nfunc_val:nfunc_val + tfunc_val] if tfunc_val > 0 else scs[nfunc_val:]
+            else:
+                c_scs = scs
+                t_scs = []
+
+        c_fids = list(c_fids) if c_fids is not None else []
+        c_rts = list(c_rts) if c_rts is not None else []
+        c_scs = list(c_scs) if c_scs is not None else []
+        t_fids = list(t_fids) if t_fids is not None else []
+        t_rts = list(t_rts) if t_rts is not None else []
+        t_scs = list(t_scs) if t_scs is not None else []
+
+        if nfunc_val == 0 and c_fids:
+            nfunc_val = len(c_fids)
+        if tfunc_val == 0 and t_fids:
+            tfunc_val = len(t_fids)
 
         if unit_id is not None:
             self._header("MAT", law_name, mid, unit_id)
@@ -3055,11 +3169,22 @@ class StarterDeck:
                     fmt_int(nfunc_val, 10)
                     + fmt_int(tfunc_val, 10)
                 )
-                # Curve Cards: ID, blank(10), Rate, Fscale
+                # Compression Curve Cards (NFUNC): ID, blank(10), Rate, Fscale
                 for i in range(nfunc_val):
-                    fid = fids[i] if i < len(fids) else 0
-                    r = rts[i] if i < len(rts) else 0.0
-                    s = scs[i] if i < len(scs) else 1.0
+                    fid = c_fids[i] if i < len(c_fids) else 0
+                    r = c_rts[i] if i < len(c_rts) else 0.0
+                    s = c_scs[i] if i < len(c_scs) else 1.0
+                    self.lines.append(
+                        fmt_int(fid, 10)
+                        + blank(10)
+                        + fmt_float(r)
+                        + fmt_float(s)
+                    )
+                # Tension Curve Cards (TFUNC): ID, blank(10), Rate, Fscale
+                for i in range(tfunc_val if t_fids else 0):
+                    fid = t_fids[i] if i < len(t_fids) else 0
+                    r = t_rts[i] if i < len(t_rts) else 0.0
+                    s = t_scs[i] if i < len(t_scs) else 1.0
                     self.lines.append(
                         fmt_int(fid, 10)
                         + blank(10)
@@ -3085,9 +3210,14 @@ class StarterDeck:
             elif iyld_rate_val == 4:
                 self.lines.append(f"{nfunc_val} {tfunc_val}")
                 for i in range(nfunc_val):
-                    fid = fids[i] if i < len(fids) else 0
-                    r = rts[i] if i < len(rts) else 0.0
-                    s = scs[i] if i < len(scs) else 1.0
+                    fid = c_fids[i] if i < len(c_fids) else 0
+                    r = c_rts[i] if i < len(c_rts) else 0.0
+                    s = c_scs[i] if i < len(c_scs) else 1.0
+                    self.lines.append(f"{fid} 0.0 {r} {s}")
+                for i in range(tfunc_val if t_fids else 0):
+                    fid = t_fids[i] if i < len(t_fids) else 0
+                    r = t_rts[i] if i < len(t_rts) else 0.0
+                    s = t_scs[i] if i < len(t_scs) else 1.0
                     self.lines.append(f"{fid} 0.0 {r} {s}")
 
         return self

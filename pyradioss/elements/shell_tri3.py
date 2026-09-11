@@ -423,6 +423,8 @@ def forces(group, x, v, vr, dt, fint, mint):
                     c[sl] = mat.sound_speed_shell()
             elif is_law66:
                 c[sl] = mat.sound_speed_shell()
+                if "uvar66" in st and "uvar66" in st.get("mat_extra", {}):
+                    st["uvar66"][sl] = st["mat_extra"]["uvar66"][sl, 0]
             else:
                 c[sl] = mat.sound_speed_shell()
         # elastic transverse shear resultant stress (with 5/6 factor)

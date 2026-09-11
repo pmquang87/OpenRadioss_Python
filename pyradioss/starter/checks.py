@@ -3790,6 +3790,10 @@ def check_mat_law66(
                 if hasattr(el_group, "values") and callable(el_group.values):
                     for el in el_group.values():
                         el_mid = getattr(el, "mat_id", getattr(el, "mid", None))
+                        if el_mid is None and hasattr(model, "parts") and isinstance(model.parts, dict):
+                            pid = getattr(el, "part_id", getattr(el, "pid", None))
+                            if pid in model.parts:
+                                el_mid = getattr(model.parts[pid], "mat_id", getattr(model.parts[pid], "mid", None))
                         if el_mid is not None:
                             mids_in_group.add(el_mid)
                 if hasattr(el_group, "state") and isinstance(el_group.state, dict) and "slices" in el_group.state:

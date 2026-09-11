@@ -26743,14 +26743,14 @@ def read_mat_law66(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     card_idx += 1
 
     # Fortran defaults alignment:
-    if israte == 0:
-        israte = 1
     if epsilon_0 == 0.0:
         epsilon_0 = 1.0
-    if c == 0.0 and israte == 1:
+    if c == 0.0:
         c = 1.0
     if rpct == 0.0:
         rpct = 1.0
+
+    actual_refer_rho = refer_rho if refer_rho != 0.0 else rho0
 
     m66 = MatLaw66(
         id=mat_id,
@@ -26788,7 +26788,7 @@ def read_mat_law66(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         title=title,
         law=66,
         law_name="LAW66",
-        refer_rho=refer_rho,
+        refer_rho=actual_refer_rho,
     )
     model.mat_law66s[mat_id] = m66
     model.materials[mat_id] = Material(
@@ -26797,13 +26797,20 @@ def read_mat_law66(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         rho0=rho0,
         title=title,
         params={
+            "rho": rho0,
+            "rho0": rho0,
+            "rhor": actual_refer_rho,
+            "refer_rho": actual_refer_rho,
+            "e": e,
             "E": e,
             "nu": nu,
             "Nu": nu,
             "C_hard": c_hard,
+            "c_hard": c_hard,
             "chard": c_hard,
             "fisokin": c_hard,
             "F_cut": f_cut,
+            "f_cut": f_cut,
             "asrate": f_cut,
             "Fsmooth": fsmooth,
             "fsmooth": fsmooth,
@@ -26811,35 +26818,48 @@ def read_mat_law66(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "israte": israte,
             "P_c": p_c,
             "pc": p_c,
+            "PC": p_c,
             "P_t": p_t,
             "pt": p_t,
+            "PT": p_t,
             "EC": ec,
             "ec": ec,
             "RPCT": rpct,
             "rpct": rpct,
             "funct_IDc": funct_idc,
+            "funct_idc": funct_idc,
             "fun_a1": funct_idc,
             "funct_IDt": funct_idt,
+            "funct_idt": funct_idt,
             "fun_a2": funct_idt,
             "Fscalec": fscalec,
+            "fscalec": fscalec,
             "fscale11": fscalec,
             "Fscalet": fscalet,
+            "fscalet": fscalet,
             "fscale22": fscalet,
             "Epsilon_0": epsilon_0,
+            "epsilon_0": epsilon_0,
+            "eps_0": epsilon_0,
             "epsp0": epsilon_0,
             "c": c,
             "cp": c,
             "Sigma_Y0": sigma_y0,
+            "sigma_y0": sigma_y0,
             "sigy": sigma_y0,
             "VP": vp,
             "vp": vp,
             "fnYrt_IDc": fnyrt_idc,
+            "fnyrt_idc": fnyrt_idc,
             "fun_b1": fnyrt_idc,
             "fnYrt_IDt": fnyrt_idt,
+            "fnyrt_idt": fnyrt_idt,
             "fun_b2": fnyrt_idt,
             "Yrate_Fscalec": yrate_fscalec,
+            "yrate_fscalec": yrate_fscalec,
             "fscale33": yrate_fscalec,
             "Yrate_Fscalet": yrate_fscalet,
+            "yrate_fscalet": yrate_fscalet,
             "fscale12": yrate_fscalet,
             "NFUNCC": nfunc,
             "NFUNCT": tfunc,
@@ -26871,7 +26891,6 @@ def read_mat_law66(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "sound_speed": m66.sound_speed,
             "sound_speed_solid": m66.sound_speed_solid,
             "sound_speed_shell": m66.sound_speed_shell,
-            "refer_rho": refer_rho,
         },
     )
 
