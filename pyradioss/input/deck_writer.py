@@ -2057,9 +2057,9 @@ class StarterDeck:
             if gi == 0.0:
                 gi = getattr(mat_obj, "gi", getattr(mat_obj, "gt", 0.0))
             if alpha == 0.0:
-                alpha = getattr(mat_obj, "alpha", getattr(mat_obj, "alphat", 0.0))
+                alpha = getattr(mat_obj, "alpha", getattr(mat_obj, "alphat", getattr(mat_obj, "phi_lock", 0.0)))
             if g5 == 0.0:
-                g5 = getattr(mat_obj, "g5", 0.0)
+                g5 = getattr(mat_obj, "g5", getattr(mat_obj, "gsh", 0.0))
             if isensor == 0:
                 isensor = getattr(mat_obj, "isensor", getattr(mat_obj, "sensor_id", 0))
             if df == 0.05:
@@ -2067,9 +2067,9 @@ class StarterDeck:
             if ds == 0.0:
                 ds = getattr(mat_obj, "ds", 0.0)
             if friction_phi == 0.0:
-                friction_phi = getattr(mat_obj, "friction_phi", getattr(mat_obj, "gfrot", 0.0))
+                friction_phi = getattr(mat_obj, "friction_phi", getattr(mat_obj, "gfrot", getattr(mat_obj, "mu_frot", 0.0)))
             if m58_zerostress == 0.0:
-                m58_zerostress = getattr(mat_obj, "m58_zerostress", getattr(mat_obj, "zero_stress", 0.0))
+                m58_zerostress = getattr(mat_obj, "m58_zerostress", getattr(mat_obj, "zero_stress", getattr(mat_obj, "arel", getattr(mat_obj, "a_rel", 0.0))))
             if n1_warp == 1:
                 n1_warp = getattr(mat_obj, "n1_warp", getattr(mat_obj, "n1", 1))
             if n2_weft == 1:
@@ -2079,9 +2079,9 @@ class StarterDeck:
             if s2 == 0.1:
                 s2 = getattr(mat_obj, "s2", 0.1)
             if c4 == 0.0:
-                c4 = getattr(mat_obj, "c4", 0.0)
+                c4 = getattr(mat_obj, "c4", getattr(mat_obj, "flex1", 0.0))
             if c5 == 0.0:
-                c5 = getattr(mat_obj, "c5", 0.0)
+                c5 = getattr(mat_obj, "c5", getattr(mat_obj, "flex2", 0.0))
             if fun_a1 == 0:
                 fun_a1 = getattr(mat_obj, "fun_a1", getattr(mat_obj, "fun_id1", 0))
             if c1 == 1.0:
@@ -2105,7 +2105,7 @@ class StarterDeck:
             if fun_a6 == 0:
                 fun_a6 = getattr(mat_obj, "fun_a6", getattr(mat_obj, "fun_id6", 0))
             if scale6 == 1.0:
-                scale6 = getattr(mat_obj, "scale6", getattr(mat_obj, "fscale6", 1.0))
+                scale6 = getattr(mat_obj, "scale6", getattr(mat_obj, "fscale6", getattr(mat_obj, "c6", 1.0)))
 
         kw_low = {k.lower(): v for k, v in kwargs.items()}
         if "mat_id" in kw_low and mid == 0:
@@ -2126,16 +2126,32 @@ class StarterDeck:
             gi = kw_low["gt"]
         if "alphat" in kw_low and alpha == 0.0:
             alpha = kw_low["alphat"]
+        if "phi_lock" in kw_low and alpha == 0.0:
+            alpha = kw_low["phi_lock"]
+        if "lock_angle" in kw_low and alpha == 0.0:
+            alpha = kw_low["lock_angle"]
+        if "gsh" in kw_low and g5 == 0.0:
+            g5 = kw_low["gsh"]
         if "sensor_id" in kw_low and isensor == 0:
             isensor = kw_low["sensor_id"]
         if "gfrot" in kw_low and friction_phi == 0.0:
             friction_phi = kw_low["gfrot"]
+        if "mu_frot" in kw_low and friction_phi == 0.0:
+            friction_phi = kw_low["mu_frot"]
         if "zero_stress" in kw_low and m58_zerostress == 0.0:
             m58_zerostress = kw_low["zero_stress"]
+        if "arel" in kw_low and m58_zerostress == 0.0:
+            m58_zerostress = kw_low["arel"]
+        if "a_rel" in kw_low and m58_zerostress == 0.0:
+            m58_zerostress = kw_low["a_rel"]
         if "n1" in kw_low and n1_warp == 1:
             n1_warp = kw_low["n1"]
         if "n2" in kw_low and n2_weft == 1:
             n2_weft = kw_low["n2"]
+        if "flex1" in kw_low and c4 == 0.0:
+            c4 = kw_low["flex1"]
+        if "flex2" in kw_low and c5 == 0.0:
+            c5 = kw_low["flex2"]
         if "fun_id1" in kw_low and fun_a1 == 0:
             fun_a1 = kw_low["fun_id1"]
         if "fscale1" in kw_low and c1 == 1.0:
@@ -2160,6 +2176,8 @@ class StarterDeck:
             fun_a6 = kw_low["fun_id6"]
         if "fscale6" in kw_low and scale6 == 1.0:
             scale6 = kw_low["fscale6"]
+        if "c6" in kw_low and scale6 == 1.0:
+            scale6 = kw_low["c6"]
         if "fixed_format" in kw_low:
             fixed_format = bool(kw_low["fixed_format"])
 

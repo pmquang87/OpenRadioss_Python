@@ -89,6 +89,142 @@ _EM20 = 1e-20
 _INF = 1e30
 
 
+def _get_curve_points(curve: Any) -> list[tuple[float, float]]:
+    """Extract (x, y) point sequence from a Curve entity, array, or callable."""
+    if curve is None:
+        return []
+    xs = getattr(curve, "x", None)
+    ys = getattr(curve, "y", None)
+    if xs is not None and ys is not None:
+        return [(float(x), float(y)) for x, y in zip(xs, ys)]
+    if hasattr(curve, "data"):
+        data = np.asarray(curve.data)
+        if data.ndim == 2 and data.shape[1] >= 2:
+            return [(float(r[0]), float(r[1])) for r in data]
+    if isinstance(curve, (list, tuple)):
+        pts = []
+        for p in curve:
+            if isinstance(p, (list, tuple)) and len(p) >= 2:
+                pts.append((float(p[0]), float(p[1])))
+        if pts:
+            return pts
+    if callable(curve):
+        pts = []
+        for x in np.linspace(0.0, 1.0, 51):
+            val = curve(x)
+            y = float(val[0]) if isinstance(val, (list, tuple)) else float(val)
+            pts.append((float(x), y))
+        return pts
+    return []
+
+
+def find_curve_intersection(
+    curve1: Any,
+    fac1: float = 1.0,
+    curve2: Any = None,
+    fac2: float = 1.0,
+) -> Tuple[float, float]:
+    """Find intersection point (x_int, y_int) between curve1 (scaled by fac1)
+    and curve2 (scaled by fac2), matching OpenRadioss func_inters.F / law58_upd.F.
+    """
+    if curve1 is None:
+        return 1e30, 1e30
+    pts1 = _get_curve_points(curve1)
+    if not pts1:
+        return 1.0, 1.0 * fac1
+    if curve2 is None or curve1 is curve2:
+        return float(pts1[-1][0]), float(pts1[-1][1] * fac1)
+
+    pts2 = _get_curve_points(curve2)
+    if not pts2:
+        return float(pts1[-1][0]), float(pts1[-1][1] * fac1)
+
+    # 1. Check common points with x > 0 (func_inters.F:66-82)
+    for s1, t1 in pts1:
+        if s1 <= 0.0:
+            continue
+        y1 = t1 * fac1
+        for x2, y2_raw in pts2:
+            y2 = y2_raw * fac2
+            if abs(x2 - s1) < 1e-9 and abs(y2 - y1) < 1e-6:
+                return float(s1), float(y1)
+
+    # 2. Check segment intersections (func_inters.F:84-119)
+    for j in range(len(pts1) - 1):
+        s1, t1 = pts1[j][0], pts1[j][1] * fac1
+        s2, t2 = pts1[j + 1][0], pts1[j + 1][1] * fac1
+        bx = s1 - s2
+        by = t1 - t2
+        for k in range(len(pts2) - 1):
+            x1, y1 = pts2[k][0], pts2[k][1] * fac2
+            x2, y2 = pts2[k + 1][0], pts2[k + 1][1] * fac2
+            if max(x1, x2) < min(s1, s2) or min(x1, x2) > max(s1, s2):
+                continue
+            ax = x2 - x1
+            ay = y2 - y1
+            dm = ay * bx - ax * by
+            if abs(dm) > 1e-20:
+                cx = s1 - x1
+                cy = t1 - y1
+                alpha = (bx * cy - by * cx) / dm
+                beta = (ax * cy - ay * cx) / dm
+                if 0.0 <= alpha <= 1.0 and -1.0 <= beta <= 0.0:
+                    x_int = x1 + alpha * ax
+                    y_int = y1 + alpha * ay
+                    if x_int > 0.0:
+                        return float(x_int), float(y_int)
+
+    # Fallback to last point of curve1 (law58_upd.F:245-247)
+    return float(pts1[-1][0]), float(pts1[-1][1] * fac1)
+
+
+def init_material_axes_cm58(
+    p: Law58Params,
+    dir1: Union[np.ndarray, Tuple[float, float]],
+    dir2: Union[np.ndarray, Tuple[float, float]],
+    e1: Optional[np.ndarray] = None,
+    e2: Optional[np.ndarray] = None,
+    aldt: float = 1.0,
+) -> Dict[str, Any]:
+    """Initialize fabric material axes, initial pre-shear, and clearance matching cm58in3.F.
+
+    Parameters
+    ----------
+    p : Law58Params
+    dir1, dir2 : (2,) vectors in local coordinates (e.g. [1, 0], [0, 1])
+    e1, e2 : optional (3,) shell tangent vectors
+    aldt : initial characteristic length
+    """
+    d1 = np.asarray(dir1, dtype=float).flatten()
+    d2 = np.asarray(dir2, dtype=float).flatten()
+
+    # Projected unit vectors (R1, S1) and (R2, S2)
+    norm1 = max(float(np.linalg.norm(d1)), 1e-20)
+    norm2 = max(float(np.linalg.norm(d2)), 1e-20)
+    r1, s1 = d1[0] / norm1, d1[1] / norm1
+    r2, s2 = d2[0] / norm2, d2[1] / norm2
+
+    # Trellis shear angle tangent (cm58in3.F:106)
+    # tan(alpha) = (R1*R2 + S1*S2) / (R1*S2 - R2*S1)
+    denom = r1 * s2 - r2 * s1
+    numer = r1 * r2 + s1 * s2
+    tana = numer / denom if abs(denom) > 1e-20 else 0.0
+    sig0 = tana * p.g0
+
+    # Total yarn bundle thickness contribution from crimp wave heights
+    crimp_thickness = p.hc0 + p.ht0
+
+    return {
+        "tana": tana,
+        "sig0": sig0,
+        "aldt": aldt,
+        "active": 1.0,
+        "crimp_thickness": crimp_thickness,
+        "r1": r1, "s1": s1,
+        "r2": r2, "s2": s2,
+    }
+
+
 @dataclass
 class Law58Params:
     """Strongly-typed parameters for /MAT/LAW58 (/MAT/FABR_A)."""
@@ -156,6 +292,15 @@ class Law58Params:
     gb: float = field(init=False)
     ccl: float = field(init=False)
     ttl: float = field(init=False)
+
+    # Hysteresis / Unloading parameters (sigeps58c.F:584-1686 / law58_upd.F:179-300)
+    unload: int = field(init=False, default=0)
+    epsi1: float = field(init=False, default=0.0)
+    sigi1: float = field(init=False, default=0.0)
+    epsi2: float = field(init=False, default=0.0)
+    sigi2: float = field(init=False, default=0.0)
+    phii: float = field(init=False, default=0.0)
+    sxyi: float = field(init=False, default=0.0)
 
     def __post_init__(self) -> None:
         self.nc = max(int(self.n1), 1)
@@ -231,6 +376,31 @@ class Law58Params:
         if self.g5 == 0.0:
             self.g5 = self.g0
 
+        # Check if unloading is active (sigeps58c.F:584-1686 / law58_upd.F:179-300)
+        if self.fun_a4 is not None or self.fun_a5 is not None or self.fun_a6 is not None:
+            self.unload = 1
+            if self.fun_a4 is None:
+                self.fun_a4 = self.fun_a1
+                self.scale4 = self.c1
+            if self.fun_a5 is None:
+                self.fun_a5 = self.fun_a2
+                self.scale5 = self.c2
+            if self.fun_a6 is None:
+                self.fun_a6 = self.fun_a3
+                self.scale6 = self.c3
+
+            self.epsi1, self.sigi1 = find_curve_intersection(self.fun_a1, self.c1, self.fun_a4, self.scale4)
+            self.epsi2, self.sigi2 = find_curve_intersection(self.fun_a2, self.c2, self.fun_a5, self.scale5)
+            self.phii, self.sxyi = find_curve_intersection(self.fun_a3, self.c3, self.fun_a6, self.scale6)
+        else:
+            self.unload = 0
+            self.epsi1 = 0.0
+            self.sigi1 = 0.0
+            self.epsi2 = 0.0
+            self.sigi2 = 0.0
+            self.phii = 0.0
+            self.sxyi = 0.0
+
 
 @dataclass
 class FabricAMaterial(Material):
@@ -242,7 +412,7 @@ class FabricAMaterial(Material):
     @property
     def G(self) -> float:
         p = self.params
-        return float(max(p.get("g0", 0.0), p.get("g5", 0.0), p.get("gt", 0.0)))
+        return float(p.get("G", p.get("g0", 0.0)))
 
     @property
     def E(self) -> float:
@@ -314,9 +484,9 @@ def _get_params(mat: Any) -> Law58Params:
     sensor_id = _i(("sensor_id", "isens", "ISENSOR"), 0)
     df = _f(("df", "MAT_Df", "DF"), 0.05)
     ds = _f(("ds", "MAT_dS", "DS"), 0.0)
-    gfrot = _f(("gfrot", "Friction_phi"), 0.0)
+    gfrot = _f(("gfrot", "Friction_phi", "mu_frot"), 0.0)
     zero_stress = _f(("zero_stress", "M58_Zerostress", "ZEROSTRESS", "ZEROSTR"), 0.0)
-    arel = _f(("arel", "a_r", "AREL", "areamin"), 0.0)
+    arel = _f(("arel", "a_r", "AREL", "areamin", "a_rel"), 0.0)
     n1 = _i(("n1", "n1_warp", "N1_warp", "N_1"), 1)
     n2 = _i(("n2", "n2_weft", "N2_weft", "N_2"), 1)
     s1 = _f(("s1", "S1", "S_1"), 0.1)
@@ -330,6 +500,12 @@ def _get_params(mat: Any) -> Law58Params:
     c2 = _f(("c2", "MAT_C2"), 1.0)
     fun_a3 = _get(("fun_a3", "FUN_A3"), None)
     c3 = _f(("c3", "MAT_C3"), 1.0)
+    fun_a4 = _get(("fun_a4", "FUN_A4"), None)
+    scale4 = _f(("scale4", "scale_4", "C4_unload", "c4_unload"), 1.0)
+    fun_a5 = _get(("fun_a5", "FUN_A5"), None)
+    scale5 = _f(("scale5", "scale_5", "C5_unload", "c5_unload"), 1.0)
+    fun_a6 = _get(("fun_a6", "FUN_A6"), None)
+    scale6 = _f(("scale6", "scale_6", "C6_unload", "c6_unload"), 1.0)
 
     return Law58Params(
         rho0=rho0, rhor=rhor, e1=e1, b1=b1, e2=e2, b2=b2,
@@ -338,6 +514,7 @@ def _get_params(mat: Any) -> Law58Params:
         zero_stress=zero_stress, arel=arel, n1=n1, n2=n2,
         s1=s1, s2=s2, c4=c4, c5=c5,
         fun_a1=fun_a1, c1=c1, fun_a2=fun_a2, c2=c2, fun_a3=fun_a3, c3=c3,
+        fun_a4=fun_a4, scale4=scale4, fun_a5=fun_a5, scale5=scale5, fun_a6=fun_a6, scale6=scale6,
     )
 
 
@@ -601,14 +778,22 @@ def shell_update_law58(
     sig_arr = np.asarray(sig, dtype=float)
     deps_arr = np.asarray(deps, dtype=float)
 
-    single = sig_arr.ndim == 1
-    if single:
+    single_sig = (np.ndim(sig) <= 1)
+    single_deps = (np.ndim(deps) <= 1)
+    single = single_sig and single_deps
+
+    if sig_arr.ndim == 1:
         sig_arr = sig_arr.reshape(1, -1)
     if deps_arr.ndim == 1:
         deps_arr = deps_arr.reshape(1, -1)
 
-    nel = sig_arr.shape[0]
-    ncomp = sig_arr.shape[1]
+    nel = max(sig_arr.shape[0], deps_arr.shape[0])
+    if sig_arr.shape[0] == 1 and nel > 1:
+        sig_arr = np.repeat(sig_arr, nel, axis=0)
+    if deps_arr.shape[0] == 1 and nel > 1:
+        deps_arr = np.repeat(deps_arr, nel, axis=0)
+
+    ncomp = max(sig_arr.shape[1], deps_arr.shape[1], 3)
     if epsp is None:
         epsp_arr = np.zeros(nel, dtype=float)
     else:
@@ -659,6 +844,94 @@ def shell_update_law58(
         extra["t58"] = np.zeros(nel, dtype=float)
     t_arr = extra["t58"]
 
+    if "epsmax_c" not in extra:
+        extra["epsmax_c"] = np.zeros(nel, dtype=float)
+    epsmax_c = extra["epsmax_c"]
+
+    if "emin_rl_c" not in extra:
+        extra["emin_rl_c"] = np.zeros(nel, dtype=float)
+    emin_rl_c = extra["emin_rl_c"]
+
+    if "emax_rl_c" not in extra:
+        extra["emax_rl_c"] = np.zeros(nel, dtype=float)
+    emax_rl_c = extra["emax_rl_c"]
+
+    if "sigmax_c" not in extra:
+        extra["sigmax_c"] = np.zeros(nel, dtype=float)
+    sigmax_c = extra["sigmax_c"]
+
+    if "smin_rl_c" not in extra:
+        extra["smin_rl_c"] = np.zeros(nel, dtype=float)
+    smin_rl_c = extra["smin_rl_c"]
+
+    if "smax_rl_c" not in extra:
+        extra["smax_rl_c"] = np.zeros(nel, dtype=float)
+    smax_rl_c = extra["smax_rl_c"]
+
+    if "dc_old" not in extra:
+        extra["dc_old"] = np.full(nel, p.dc0, dtype=float)
+    dc_old = extra["dc_old"]
+
+    if "epsmax_t" not in extra:
+        extra["epsmax_t"] = np.zeros(nel, dtype=float)
+    epsmax_t = extra["epsmax_t"]
+
+    if "emin_rl_t" not in extra:
+        extra["emin_rl_t"] = np.zeros(nel, dtype=float)
+    emin_rl_t = extra["emin_rl_t"]
+
+    if "emax_rl_t" not in extra:
+        extra["emax_rl_t"] = np.zeros(nel, dtype=float)
+    emax_rl_t = extra["emax_rl_t"]
+
+    if "sigmax_t" not in extra:
+        extra["sigmax_t"] = np.zeros(nel, dtype=float)
+    sigmax_t = extra["sigmax_t"]
+
+    if "smin_rl_t" not in extra:
+        extra["smin_rl_t"] = np.zeros(nel, dtype=float)
+    smin_rl_t = extra["smin_rl_t"]
+
+    if "smax_rl_t" not in extra:
+        extra["smax_rl_t"] = np.zeros(nel, dtype=float)
+    smax_rl_t = extra["smax_rl_t"]
+
+    if "dt_old" not in extra:
+        extra["dt_old"] = np.full(nel, p.dt0, dtype=float)
+    dt_old = extra["dt_old"]
+
+    if "phimax" not in extra:
+        extra["phimax"] = np.zeros(nel, dtype=float)
+    phimax_arr = extra["phimax"]
+
+    if "phimin" not in extra:
+        extra["phimin"] = np.zeros(nel, dtype=float)
+    phimin_arr = extra["phimin"]
+
+    if "phirlmax" not in extra:
+        extra["phirlmax"] = np.zeros(nel, dtype=float)
+    phirlmax_arr = extra["phirlmax"]
+
+    if "sxymax" not in extra:
+        extra["sxymax"] = np.zeros(nel, dtype=float)
+    sxymax_arr = extra["sxymax"]
+
+    if "sxymin" not in extra:
+        extra["sxymin"] = np.zeros(nel, dtype=float)
+    sxymin_arr = extra["sxymin"]
+
+    if "sxymaxrl" not in extra:
+        extra["sxymaxrl"] = np.zeros(nel, dtype=float)
+    sxymaxrl_arr = extra["sxymaxrl"]
+
+    if "phi_old" not in extra:
+        extra["phi_old"] = np.zeros(nel, dtype=float)
+    phi_old = extra["phi_old"]
+
+    sig0_arr = extra.get("sig0", np.zeros(nel, dtype=float))
+    if np.isscalar(sig0_arr):
+        sig0_arr = np.full(nel, float(sig0_arr), dtype=float)
+
     # Element geometric properties for damping
     areas = extra.get("area", np.ones(nel, dtype=float))
     thks = extra.get("thk", extra.get("thkly", np.ones(nel, dtype=float)))
@@ -667,7 +940,8 @@ def shell_update_law58(
     if np.isscalar(thks):
         thks = np.full(nel, float(thks), dtype=float)
 
-    s_out = sig_arr.copy()
+    s_out = np.zeros((nel, ncomp), dtype=float)
+    s_out[:, :sig_arr.shape[1]] = sig_arr
 
     # In-plane stress integration
     for i in range(nel):
@@ -709,6 +983,112 @@ def shell_update_law58(
         rfat = p.nt / et2
 
         # Membrane normal stresses
+        dcc = dc - p.dc0
+        dtt = dt_len - p.dt0
+
+        if p.unload == 1:
+            # Warp hysteresis (sigeps58c.F:662-782)
+            ddec = dc - dc_old[i]
+            if dcc > 0.0:
+                if ddec >= 0.0 and (dcc >= epsmax_c[i] or epsmax_c[i] == emin_rl_c[i]):
+                    if p.fun_a1 is not None:
+                        val_fc, _ = _eval_curve(p.fun_a1, dcc)
+                        fc = p.c1 * val_fc
+                    else:
+                        fc = (p.kc - 0.5 * p.kbc * dcc) * dcc
+                    epsmax_c[i] = dcc
+                    sigmax_c[i] = fc
+                    smax_rl_c[i] = fc
+                    emax_rl_c[i] = dcc
+                    emin_rl_c[i] = dcc
+                    smin_rl_c[i] = fc
+                elif ddec >= 0.0:
+                    denom = epsmax_c[i] - emin_rl_c[i]
+                    eps_nrl = epsmax_c[i] * (dcc - emin_rl_c[i]) / denom if abs(denom) > 1e-20 else dcc
+                    if p.fun_a1 is not None:
+                        val_fc, _ = _eval_curve(p.fun_a1, eps_nrl)
+                        fc_rel = p.c1 * val_fc
+                    else:
+                        fc_rel = (p.kc - 0.5 * p.kbc * eps_nrl) * eps_nrl
+                    coef_rl = (sigmax_c[i] - smin_rl_c[i]) / sigmax_c[i] if abs(sigmax_c[i]) > 1e-20 else 1.0
+                    fc = smin_rl_c[i] + coef_rl * fc_rel
+                    emax_rl_c[i] = dcc
+                    smax_rl_c[i] = fc
+                    if dcc > epsmax_c[i]:
+                        epsmax_c[i] = dcc
+                        sigmax_c[i] = fc
+                else:
+                    if emax_rl_c[i] > 0.0 and p.fun_a4 is not None:
+                        eps_nc = dcc * p.epsi1 / emax_rl_c[i]
+                        val_fc, _ = _eval_curve(p.fun_a4, eps_nc)
+                        fc_un = p.scale4 * val_fc
+                        coef_ul = fc_un / p.sigi1 if abs(p.sigi1) > 1e-20 else 1.0
+                        fc = coef_ul * smax_rl_c[i]
+                        emin_rl_c[i] = dcc
+                        smin_rl_c[i] = fc
+                    else:
+                        fc = p.kc * dcc
+            else:
+                fc = p.kc * dcc
+                epsmax_c[i] = 0.0
+                emin_rl_c[i] = 0.0
+                emax_rl_c[i] = 0.0
+                sigmax_c[i] = 0.0
+                smin_rl_c[i] = 0.0
+                smax_rl_c[i] = 0.0
+            dc_old[i] = dc
+
+            # Weft hysteresis (sigeps58c.F:809-934)
+            ddet = dt_len - dt_old[i]
+            if dtt > 0.0:
+                if ddet >= 0.0 and (dtt >= epsmax_t[i] or epsmax_t[i] == emin_rl_t[i]):
+                    if p.fun_a2 is not None:
+                        val_ft, _ = _eval_curve(p.fun_a2, dtt)
+                        ft = p.c2 * val_ft
+                    else:
+                        ft = (p.kt - 0.5 * p.kbt * dtt) * dtt
+                    epsmax_t[i] = dtt
+                    sigmax_t[i] = ft
+                    smax_rl_t[i] = ft
+                    emax_rl_t[i] = dtt
+                    emin_rl_t[i] = dtt
+                    smin_rl_t[i] = ft
+                elif ddet >= 0.0:
+                    denom = epsmax_t[i] - emin_rl_t[i]
+                    eps_nrl = epsmax_t[i] * (dtt - emin_rl_t[i]) / denom if abs(denom) > 1e-20 else dtt
+                    if p.fun_a2 is not None:
+                        val_ft, _ = _eval_curve(p.fun_a2, eps_nrl)
+                        ft_rel = p.c2 * val_ft
+                    else:
+                        ft_rel = (p.kt - 0.5 * p.kbt * eps_nrl) * eps_nrl
+                    coef_rl = (sigmax_t[i] - smin_rl_t[i]) / sigmax_t[i] if abs(sigmax_t[i]) > 1e-20 else 1.0
+                    ft = smin_rl_t[i] + coef_rl * ft_rel
+                    emax_rl_t[i] = dtt
+                    smax_rl_t[i] = ft
+                    if dtt > epsmax_t[i]:
+                        epsmax_t[i] = dtt
+                        sigmax_t[i] = ft
+                else:
+                    if emax_rl_t[i] > 0.0 and p.fun_a5 is not None:
+                        eps_nt = dtt * p.epsi2 / emax_rl_t[i]
+                        val_ft, _ = _eval_curve(p.fun_a5, eps_nt)
+                        ft_un = p.scale5 * val_ft
+                        coef_ul = ft_un / p.sigi2 if abs(p.sigi2) > 1e-20 else 1.0
+                        ft = coef_ul * smax_rl_t[i]
+                        emin_rl_t[i] = dtt
+                        smin_rl_t[i] = ft
+                    else:
+                        ft = p.kt * dtt
+            else:
+                ft = p.kt * dtt
+                epsmax_t[i] = 0.0
+                emin_rl_t[i] = 0.0
+                emax_rl_t[i] = 0.0
+                sigmax_t[i] = 0.0
+                smin_rl_t[i] = 0.0
+                smax_rl_t[i] = 0.0
+            dt_old[i] = dt_len
+
         sigc = fc * lc / max(dc, _EM20)
         sigt = ft * lt / max(dt_len, _EM20)
         sxx = sigc * rfac
@@ -718,24 +1098,92 @@ def shell_update_law58(
         tan_phi_old = tan_phi_arr[i]
         tan_phi = tan_phi_old + dep_xy
         tan_phi_arr[i] = tan_phi
+        sig0_val = float(sig0_arr[i]) if sig0_arr is not None else 0.0
 
-        if p.fun_a3 is not None:
+        if p.unload == 1 and p.fun_a6 is not None and p.fun_a3 is not None:
+            phi_deg = math.atan(tan_phi) * 180.0 / math.pi
+            phi_prev = phi_old[i]
+            dphi = phi_deg - phi_prev
+            phi_old[i] = phi_deg
+
+            if phi_deg >= 0.0:
+                if (dphi >= 0.0 and (phimin_arr[i] == 0.0 or phi_deg >= phimax_arr[i] or phimax_arr[i] == phimin_arr[i] or sxymax_arr[i] == 0.0)):
+                    val_sxy, _ = _eval_curve(p.fun_a3, phi_deg)
+                    sxy = p.c3 * val_sxy
+                    phimax_arr[i] = phi_deg
+                    phirlmax_arr[i] = phi_deg
+                    sxymax_arr[i] = sxy
+                    sxymaxrl_arr[i] = sxy
+                elif dphi >= 0.0:
+                    denom = phimax_arr[i] - phimin_arr[i]
+                    phin = phimax_arr[i] * (phi_deg - phimin_arr[i]) / denom if abs(denom) > 1e-20 else phi_deg
+                    val_sxy, _ = _eval_curve(p.fun_a3, phin)
+                    sxy_rel = p.c3 * val_sxy
+                    coef = (sxymax_arr[i] - sxymin_arr[i]) / sxymax_arr[i] if abs(sxymax_arr[i]) > 1e-20 else 1.0
+                    sxy = sxymin_arr[i] + sxy_rel * coef
+                    phirlmax_arr[i] = phi_deg
+                    sxymaxrl_arr[i] = sxy
+                    if phi_deg > phimax_arr[i]:
+                        phimax_arr[i] = phi_deg
+                        sxymax_arr[i] = sxy
+                else:
+                    denom = phirlmax_arr[i]
+                    phin = phi_deg * p.phii / denom if abs(denom) > 1e-20 else phi_deg
+                    val_sxy, _ = _eval_curve(p.fun_a6, phin)
+                    sxy_un = p.scale6 * val_sxy
+                    coef = sxymaxrl_arr[i] / p.sxyi if abs(p.sxyi) > 1e-20 else 1.0
+                    sxy = sxy_un * coef
+                    phimin_arr[i] = phi_deg
+                    sxymin_arr[i] = sxy
+            else:
+                if (dphi <= 0.0 and (phimin_arr[i] == 0.0 or phi_deg <= phimax_arr[i] or phimax_arr[i] == phimin_arr[i])):
+                    val_sxy, _ = _eval_curve(p.fun_a3, phi_deg)
+                    sxy = p.c3 * val_sxy
+                    phimax_arr[i] = phi_deg
+                    phirlmax_arr[i] = phi_deg
+                    sxymax_arr[i] = sxy
+                    sxymaxrl_arr[i] = sxy
+                elif dphi <= 0.0:
+                    denom = phimax_arr[i] - phimin_arr[i]
+                    phin = phimax_arr[i] * (phi_deg - phimin_arr[i]) / denom if abs(denom) > 1e-20 else phi_deg
+                    val_sxy, _ = _eval_curve(p.fun_a3, phin)
+                    sxy_rel = p.c3 * val_sxy
+                    coef = (sxymax_arr[i] - sxymin_arr[i]) / sxymax_arr[i] if abs(sxymax_arr[i]) > 1e-20 else 1.0
+                    sxy = sxymin_arr[i] + sxy_rel * coef
+                    phirlmax_arr[i] = phi_deg
+                    sxymaxrl_arr[i] = sxy
+                    if phi_deg < phimax_arr[i]:
+                        phimax_arr[i] = phi_deg
+                        sxymax_arr[i] = sxy
+                else:
+                    denom = phirlmax_arr[i]
+                    phin = phi_deg * p.phii / denom if abs(denom) > 1e-20 else phi_deg
+                    val_sxy, _ = _eval_curve(p.fun_a6, phin)
+                    sxy_un = p.scale6 * val_sxy
+                    coef = sxymaxrl_arr[i] / p.sxyi if abs(p.sxyi) > 1e-20 else 1.0
+                    sxy = sxy_un * coef
+                    phimin_arr[i] = phi_deg
+                    sxymin_arr[i] = sxy
+        elif p.fun_a3 is not None:
             phi_deg = math.atan(tan_phi) * 180.0 / math.pi
             val_sxy, _ = _eval_curve(p.fun_a3, phi_deg)
-            sxy = p.c3 * val_sxy
+            sxy = p.c3 * val_sxy - sig0_val
         elif tan_phi > p.tan_lock:
-            sxy = p.g_post * tan_phi + p.gb
+            sxy = p.g_post * tan_phi + p.gb - sig0_val
         elif tan_phi < -p.tan_lock:
-            sxy = p.g_post * tan_phi - p.gb
+            sxy = p.g_post * tan_phi - p.gb - sig0_val
         else:
-            sxy = p.g0 * tan_phi
+            sxy = p.g0 * tan_phi - sig0_val
 
         # Yarn sliding friction (tau_frot)
         sigv_xy = 0.0
+        old_sigv_xy = sigv_xy_arr[i]
+        sigg = 0.0
+        tfrot = 0.0
         if fn > 0.0 and p.ds > 0.0:
             tfrot = (2.0 / 3.0) * p.ds * fn * (p.hc0 + p.ht0) / max(lc + lt, _EM20)
             dtang = dep_xy
-            sigg = sigv_xy_arr[i] + p.gfrot * dtang
+            sigg = old_sigv_xy + p.gfrot * dtang
             if abs(sigg) > tfrot:
                 sigv_xy = math.copysign(tfrot, sigg)
             else:
@@ -752,9 +1200,15 @@ def shell_update_law58(
             sigv_xx = dt_inv * dep_xx * v1
             sigv_yy = dt_inv * dep_yy * v2
 
+        # Dissipated energy tracking (fiber damping + sliding friction)
+        if "ediss" in extra:
+            d_slip = dep_xy - (sigv_xy - old_sigv_xy) / max(p.gfrot, _EM20) if abs(sigg) > tfrot and tfrot > 0.0 else 0.0
+            d_diss = (sigv_xx * dep_xx + sigv_yy * dep_yy + sigv_xy * d_slip) * float(areas[i]) * float(thks[i])
+            extra["ediss"][i] += max(d_diss, 0.0)
+
         # Transverse shear stresses
-        syz = sig_arr[i, 3] + p.g5 * deps_arr[i, 3] if ncomp >= 4 else 0.0
-        szx = sig_arr[i, 4] + p.g5 * deps_arr[i, 4] if ncomp >= 5 else 0.0
+        syz = (sig_arr[i, 3] if sig_arr.shape[1] > 3 else 0.0) + (p.g5 * deps_arr[i, 3] if deps_arr.shape[1] > 3 else 0.0)
+        szx = (sig_arr[i, 4] if sig_arr.shape[1] > 4 else 0.0) + (p.g5 * deps_arr[i, 4] if deps_arr.shape[1] > 4 else 0.0)
 
         # Total stress
         tot_sxx = sxx + sigv_xx
@@ -766,8 +1220,8 @@ def shell_update_law58(
         if areamin > 0.0:
             areamin2 = 1.0 + 0.5 * (areamin - 1.0)
             dareamin = 1.0 / (areamin2 - areamin) if areamin2 > areamin else 0.0
-            # relative area ratio A / A_0 = (1 + ec)*(1 + et) ~ 1 + ec + et
-            rel_area = 1.0 + ec + et
+            # relative area ratio A / A_0 = (1 + ec)*(1 + et)
+            rel_area = (1.0 + ec) * (1.0 + et)
             aa = (rel_area - areamin) * dareamin if dareamin > 0.0 else (0.0 if rel_area <= areamin else 1.0)
             aa = min(max(aa, 0.0), 1.0)
             tot_sxx *= aa
@@ -822,6 +1276,8 @@ def sound_speed_shell_law58(mat: Any, rho0: Optional[float] = None) -> float:
     if dens <= 0.0:
         dens = 1.0
     kmax = max(p.kc, p.kt, p.g0)
+    if kmax <= 0.0:
+        kmax = max(p.e1, p.e2, 1e-12)
     return float(math.sqrt(kmax / dens))
 
 
@@ -844,6 +1300,11 @@ def _copy_extra(extra: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
             res[k] = v.copy()
         elif isinstance(v, dict):
             res[k] = _copy_extra(v)
+        elif hasattr(v, "copy"):
+            try:
+                res[k] = v.copy()
+            except Exception:
+                res[k] = v
         else:
             res[k] = v
     return res
@@ -856,42 +1317,60 @@ def tangent_law58_shell(
     epsp: Optional[np.ndarray] = None,
     dt: float = 0.0,
     extra: Optional[Dict[str, Any]] = None,
+    *args: Any,
     h: float = 1e-7,
+    symmetric: bool = False,
     **kwargs: Any,
 ) -> np.ndarray:
-    """Algorithmic consistent plane-stress membrane tangent (n, 3, 3).
+    """Algorithmic consistent plane-stress membrane tangent (nel, 3, 3) or (3, 3).
     Verified against central finite differences.
     """
     p = _get_params(mat)
 
+    if "h" in kwargs:
+        h = float(kwargs.pop("h"))
+    if "symmetric" in kwargs:
+        symmetric = bool(kwargs.pop("symmetric"))
+    if len(args) >= 1:
+        if isinstance(args[0], (int, float)):
+            dt = float(args[0])
+        elif isinstance(args[0], dict):
+            extra = args[0]
+    if len(args) >= 2:
+        if isinstance(args[1], dict):
+            extra = args[1]
+
+    n_sig = 1 if (sig is None or np.ndim(sig) <= 1) else np.asarray(sig).shape[0]
+    n_deps = 1 if (deps is None or np.ndim(deps) <= 1) else np.asarray(deps).shape[0]
+    nel = max(n_sig, n_deps)
+    single = (sig is None or np.ndim(sig) <= 1) and (deps is None or np.ndim(deps) <= 1)
+
     if sig is not None:
         sig_arr = np.asarray(sig, dtype=float)
-        single = sig_arr.ndim == 1
-        if single:
+        if sig_arr.ndim == 1:
             sig_arr = sig_arr.reshape(1, -1)
-        nel = sig_arr.shape[0]
-    elif deps is not None:
-        deps_tmp = np.asarray(deps, dtype=float)
-        single = deps_tmp.ndim == 1
-        if single:
-            deps_tmp = deps_tmp.reshape(1, -1)
-        nel = deps_tmp.shape[0]
+        if sig_arr.shape[0] == 1 and nel > 1:
+            sig_arr = np.repeat(sig_arr, nel, axis=0)
+    else:
         sig_arr = np.zeros((nel, 3), dtype=float)
-    else:
-        single = True
-        nel = 1
-        sig_arr = np.zeros((1, 3), dtype=float)
 
-    if deps is None:
-        deps_arr = np.zeros((nel, 3), dtype=float)
-    else:
+    if deps is not None:
         deps_arr = np.asarray(deps, dtype=float).copy()
         if deps_arr.ndim == 1:
             deps_arr = deps_arr.reshape(1, -1)
-        if deps_arr.shape[1] < 3:
-            pad = np.zeros((nel, 3), dtype=float)
-            pad[:, :deps_arr.shape[1]] = deps_arr
-            deps_arr = pad
+        if deps_arr.shape[0] == 1 and nel > 1:
+            deps_arr = np.repeat(deps_arr, nel, axis=0)
+    else:
+        deps_arr = np.zeros((nel, 3), dtype=float)
+
+    if deps_arr.shape[1] < 3:
+        pad = np.zeros((nel, 3), dtype=float)
+        pad[:, :deps_arr.shape[1]] = deps_arr
+        deps_arr = pad
+    if sig_arr.shape[1] < 3:
+        pad = np.zeros((nel, 3), dtype=float)
+        pad[:, :sig_arr.shape[1]] = sig_arr
+        sig_arr = pad
 
     D = np.zeros((nel, 3, 3), dtype=float)
 
@@ -910,6 +1389,9 @@ def tangent_law58_shell(
 
         D[:, :, j] = (sp[:, :3] - sm[:, :3]) / (2.0 * h)
 
+    if symmetric:
+        D = 0.5 * (D + np.swapaxes(D, -1, -2))
+
     return D[0] if single else D
 
 
@@ -921,9 +1403,18 @@ def solid_update(mat: Any, sig: np.ndarray, deps: np.ndarray, *args: Any, **kwar
 solid_update_law58 = solid_update
 
 
-class FabricAMaterial(Material):
-    """LAW58 fabric material representation."""
-    pass
+def extra_shapes(mat: Any = None, nip: Optional[int] = None) -> Dict[str, Tuple[int, ...]]:
+    """Extra history shapes allocated for LAW58 shell elements."""
+    return {
+        "eps58": (nip, 3) if nip else (3,),
+        "yc": (nip,) if nip else (),
+        "yt": (nip,) if nip else (),
+        "fn": (nip,) if nip else (),
+        "sigv_xy": (nip,) if nip else (),
+        "tan_phi": (nip,) if nip else (),
+        "sigi58": (nip, 3) if nip else (3,),
+        "t58": (nip,) if nip else (),
+    }
 
 
 def build_law58(rec: Any) -> FabricAMaterial:
@@ -951,6 +1442,19 @@ def build_law58(rec: Any) -> FabricAMaterial:
     c4 = float(p.get("MAT_C4") or 0.0)
     c5 = float(p.get("MAT_C5") or 0.0)
 
+    fun_a1 = p.get("FUN_A1") or p.get("fun_a1")
+    c1 = float(p.get("MAT_C1") or p.get("c1") or 1.0)
+    fun_a2 = p.get("FUN_A2") or p.get("fun_a2")
+    c2 = float(p.get("MAT_C2") or p.get("c2") or 1.0)
+    fun_a3 = p.get("FUN_A3") or p.get("fun_a3")
+    c3 = float(p.get("MAT_C3") or p.get("c3") or 1.0)
+    fun_a4 = p.get("FUN_A4") or p.get("fun_a4")
+    scale4 = float(p.get("scale4") or p.get("scale_4") or 1.0)
+    fun_a5 = p.get("FUN_A5") or p.get("fun_a5")
+    scale5 = float(p.get("scale5") or p.get("scale_5") or 1.0)
+    fun_a6 = p.get("FUN_A6") or p.get("fun_a6")
+    scale6 = float(p.get("scale6") or p.get("scale_6") or 1.0)
+
     params_obj = Law58Params(
         rho0=rec.density, rhor=rec.density,
         e1=e1, b1=b1, e2=e2, b2=b2, flex=flex,
@@ -958,6 +1462,8 @@ def build_law58(rec: Any) -> FabricAMaterial:
         sensor_id=sensor_id, df=df, ds=ds, gfrot=gfrot,
         zero_stress=zero_stress, arel=arel, n1=n1, n2=n2,
         s1=s1, s2=s2, c4=c4, c5=c5,
+        fun_a1=fun_a1, c1=c1, fun_a2=fun_a2, c2=c2, fun_a3=fun_a3, c3=c3,
+        fun_a4=fun_a4, scale4=scale4, fun_a5=fun_a5, scale5=scale5, fun_a6=fun_a6, scale6=scale6,
     )
 
     p_dict = {

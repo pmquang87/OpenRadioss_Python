@@ -1929,7 +1929,15 @@ def check_mat_law58(
     if e2 <= 0.0:
         log.error(f"/MAT/LAW58/{actual_mid}: Young's modulus E2 must be > 0 (got {e2:g})", "MAT CHECK")
 
-    # 3. Unloading curves consistency (ANCMSG 1578, 1579, 1580)
+    # 3. Yarn counts N1 > 0, N2 > 0
+    n1 = _extract_int(["n1_warp", "n1", "N1", "N1_warp", "fiber_density_1"], 1)
+    n2 = _extract_int(["n2_weft", "n2", "N2", "N2_weft", "fiber_density_2"], 1)
+    if n1 <= 0:
+        log.error(f"/MAT/LAW58/{actual_mid}: yarn count N1 must be > 0 (got {n1})", "MAT CHECK")
+    if n2 <= 0:
+        log.error(f"/MAT/LAW58/{actual_mid}: yarn count N2 must be > 0 (got {n2})", "MAT CHECK")
+
+    # 4. Unloading curves consistency (ANCMSG 1578, 1579, 1580)
     fun_a1 = _extract_int(["fun_a1", "fun_id1", "fct_id1", "FUN_A1", "funct_id1"], 0)
     fun_a2 = _extract_int(["fun_a2", "fun_id2", "fct_id2", "FUN_A2", "funct_id2"], 0)
     fun_a3 = _extract_int(["fun_a3", "fun_id3", "fct_id3", "FUN_A3", "funct_id3"], 0)
@@ -1954,7 +1962,7 @@ def check_mat_law58(
                 "MAT CHECK",
             )
 
-    # 4. Incompatible element check (ANCMSG 305 for solids, ANCMSG 306 for 1D elements)
+    # 5. Incompatible element check (ANCMSG 305 for solids, ANCMSG 306 for 1D elements)
     if model is not None and hasattr(model, "element_groups"):
         try:
             grps = model.element_groups()
@@ -1979,7 +1987,7 @@ def check_mat_law58(
                     if m_id is not None:
                         mids_in_group.add(m_id)
             if actual_mid in mids_in_group:
-                if name in ("bricks", "tetras", "penta6", "pyra5"):
+                if name in ("bricks", "bricks_heph", "bric20s", "tetras", "tetra10s", "penta6", "pyra5"):
                     log.error(
                         f"/MAT/LAW58/{actual_mid} (/MAT/FABR_A) is not supported for solid elements ({name}) (ANCMSG 305)",
                         "MAT CHECK",

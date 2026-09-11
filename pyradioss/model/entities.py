@@ -11487,6 +11487,70 @@ class MatLaw58:
     def fscale6(self, val: float) -> None:
         self.scale6 = val
 
+    @property
+    def phi_lock(self) -> float:
+        return self.alpha
+
+    @phi_lock.setter
+    def phi_lock(self, val: float) -> None:
+        self.alpha = val
+
+    @property
+    def mu_frot(self) -> float:
+        return self.friction_phi
+
+    @mu_frot.setter
+    def mu_frot(self, val: float) -> None:
+        self.friction_phi = val
+
+    @property
+    def arel(self) -> float:
+        return self.m58_zerostress
+
+    @arel.setter
+    def arel(self, val: float) -> None:
+        self.m58_zerostress = val
+
+    @property
+    def a_rel(self) -> float:
+        return self.m58_zerostress
+
+    @a_rel.setter
+    def a_rel(self, val: float) -> None:
+        self.m58_zerostress = val
+
+    @property
+    def c6(self) -> float:
+        return self.scale6
+
+    @c6.setter
+    def c6(self, val: float) -> None:
+        self.scale6 = val
+
+    @property
+    def flex1(self) -> float:
+        return self.c4
+
+    @flex1.setter
+    def flex1(self, val: float) -> None:
+        self.c4 = val
+
+    @property
+    def flex2(self) -> float:
+        return self.c5
+
+    @flex2.setter
+    def flex2(self, val: float) -> None:
+        self.c5 = val
+
+    @property
+    def gsh(self) -> float:
+        return self.g5
+
+    @gsh.setter
+    def gsh(self, val: float) -> None:
+        self.g5 = val
+
 
 MatFabrA = MatLaw58
 MatFabricA = MatLaw58

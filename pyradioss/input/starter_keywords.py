@@ -42163,6 +42163,8 @@ def read_mat_law58(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "fun_a4": fun_a4, "scale4": scale4, "fun_a5": fun_a5, "scale5": scale5, "fun_a6": fun_a6, "scale6": scale6,
             "flex": f, "gt": gi, "alphat": alpha, "sensor_id": isensor, "gfrot": friction_phi,
             "zero_stress": m58_zerostress, "n1": n1_warp, "n2": n2_weft,
+            "phi_lock": alpha, "mu_frot": friction_phi, "arel": m58_zerostress, "a_rel": m58_zerostress,
+            "c6": scale6, "flex1": c4, "flex2": c5, "gsh": g5,
         }
     )
 
