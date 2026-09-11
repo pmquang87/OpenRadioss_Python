@@ -10066,6 +10066,9 @@ class MatLaw21:
     pext: float = 0.0
     bunl: float = 0.0
     mumax: float = 1.0e20
+    w: float = 0.0
+    d: float = 0.0
+    x0: float = 0.0
     title: str = ""
     law: int = 21
     law_name: str = "LAW21"
@@ -10098,6 +10101,9 @@ class MatLaw21:
             "pext": self.pext,
             "bunl": self.bunl,
             "mumax": self.mumax,
+            "w": self.w,
+            "d": self.d,
+            "x0": self.x0,
             "G": self.G,
         }
         for k, v in core.items():

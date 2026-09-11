@@ -878,7 +878,8 @@ class TestLaw21CompactionAndDruckerPragerCone:
         p_arr = np.array(p_records)
 
         # Work during loading vs work recovered during unloading
-        w_diss = np.trapezoid(p_arr, mu_arr)
+        from pyradioss.common.npcompat import trapezoid
+        w_diss = trapezoid(p_arr, mu_arr)
         # Clockwise loop in (mu, P) space represents positive dissipated energy
         assert w_diss > 0.0, f"Compaction hysteresis loop must dissipate energy (got {w_diss})"
 
