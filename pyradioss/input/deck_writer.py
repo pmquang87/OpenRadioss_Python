@@ -570,16 +570,17 @@ class StarterDeck:
         unit_id: int | None = None,
         law_name: str = "LAW21",
         fixed_format: bool = True,
+        pext: float = 0.0,
         **kwargs,
     ) -> StarterDeck:
         """``/MAT/LAW21`` (/MAT/DPRAG) — Drucker-Prager geological / soil / concrete model.
 
-        Upstream reference: hm_read_mat21.F and matl21_dprag.cfg (radioss110):
+        Upstream reference: hm_read_mat21.F and matl21_dprag.cfg (radioss110, radioss130):
           Card 1: MAT_RHO, [Refer_Rho] (%20lg[%20lg]) — MAT_LAW21_1: [20, 20]
           Card 2: MAT_E, MAT_NU (%20lg%20lg) — MAT_LAW21_2: [20, 20]
           Card 3: MAT_A0, MAT_A1, MAT_A2, MAT_AMAX (%20lg*4) — MAT_LAW21_3: [20, 20, 20, 20]
           Card 4: FUN_A1, blank, MAT_BULK, PFscale (%10d          %20lg%20lg) — MAT_LAW21_4: [10, 10, 20, 20]
-          Card 5: MAT_PC (%20lg) — MAT_LAW21_5: [20]
+          Card 5: MAT_PC, [PEXT] (%20lg[%20lg]) — MAT_LAW21_5: [20] (or [20, 20] radioss130)
           Card 6: MAT_K_UNLOAD, MAT_SIG (%20lg%20lg) — MAT_LAW21_6: [20, 20]
         """
         # Allow title as 2nd positional argument if passed as string: mat_law21(1, "title", rho, e, nu...)
@@ -616,16 +617,71 @@ class StarterDeck:
             refer_rho = actual_refer_rho
 
         kw_low = {k.lower(): v for k, v in kwargs.items()}
+
+        # Entity unpacking if a MatLaw21 / Material instance is passed
+        mat_obj = None
+        if hasattr(mat_id, "a0") and (hasattr(mat_id, "rho") or hasattr(mat_id, "rho0")):
+            mat_obj = mat_id
+        elif hasattr(mat_id, "params") and ("a0" in getattr(mat_id, "params", {}) or "A0" in getattr(mat_id, "params", {})):
+            mat_obj = mat_id
+        elif "mat" in kw_low:
+            mat_obj = kw_low["mat"]
+        elif "mat21" in kw_low:
+            mat_obj = kw_low["mat21"]
+        elif "mat_law21" in kw_low:
+            mat_obj = kw_low["mat_law21"]
+
+        if mat_obj is not None:
+            mat_id = getattr(mat_obj, "id", mat_id)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", rho))
+            refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", refer_rho))
+            e = getattr(mat_obj, "e", getattr(mat_obj, "E", e))
+            nu = getattr(mat_obj, "nu", getattr(mat_obj, "Nu", nu))
+            a0 = getattr(mat_obj, "a0", getattr(mat_obj, "A0", a0))
+            a1 = getattr(mat_obj, "a1", getattr(mat_obj, "A1", a1))
+            a2 = getattr(mat_obj, "a2", getattr(mat_obj, "A2", a2))
+            amax = getattr(mat_obj, "amax", getattr(mat_obj, "Amax", amax))
+            ifunc = getattr(mat_obj, "ifunc", ifunc)
+            c1 = getattr(mat_obj, "c1", getattr(mat_obj, "C1", c1))
+            pfscale = getattr(mat_obj, "pfscale", getattr(mat_obj, "PFscale", pfscale))
+            pmin = getattr(mat_obj, "pmin", getattr(mat_obj, "Pmin", pmin))
+            pext = getattr(mat_obj, "pext", getattr(mat_obj, "Pext", pext))
+            bunl = getattr(mat_obj, "bunl", getattr(mat_obj, "Bunl", bunl))
+            mumax = getattr(mat_obj, "mumax", getattr(mat_obj, "Mumax", mumax))
+            unit_id = getattr(mat_obj, "unit_id", unit_id)
+            if hasattr(mat_obj, "params") and isinstance(mat_obj.params, dict):
+                p_dict = mat_obj.params
+                rho = p_dict.get("rho", p_dict.get("rho0", rho))
+                refer_rho = p_dict.get("refer_rho", p_dict.get("rhor", refer_rho))
+                e = p_dict.get("e", p_dict.get("E", e))
+                nu = p_dict.get("nu", p_dict.get("Nu", nu))
+                a0 = p_dict.get("a0", p_dict.get("A0", a0))
+                a1 = p_dict.get("a1", p_dict.get("A1", a1))
+                a2 = p_dict.get("a2", p_dict.get("A2", a2))
+                amax = p_dict.get("amax", p_dict.get("Amax", amax))
+                ifunc = p_dict.get("ifunc", ifunc)
+                c1 = p_dict.get("c1", p_dict.get("C1", c1))
+                pfscale = p_dict.get("pfscale", p_dict.get("PFscale", pfscale))
+                pmin = p_dict.get("pmin", p_dict.get("Pmin", pmin))
+                pext = p_dict.get("pext", p_dict.get("Pext", pext))
+                bunl = p_dict.get("bunl", p_dict.get("Bunl", bunl))
+                mumax = p_dict.get("mumax", p_dict.get("Mumax", mumax))
+
         if "mid" in kw_low and mat_id == 0:
             mat_id = int(kw_low["mid"])
         if "id" in kw_low and mat_id == 0:
             mat_id = int(kw_low["id"])
+        explicit_rhor = (refer_rho is not None)
         if "rhor" in kw_low and refer_rho is None:
             refer_rho = float(kw_low["rhor"])
+            explicit_rhor = True
         if "ref_rho" in kw_low and refer_rho is None:
             refer_rho = float(kw_low["ref_rho"])
+            explicit_rhor = True
         if "refer_rho" in kw_low and refer_rho is None:
             refer_rho = float(kw_low["refer_rho"])
+            explicit_rhor = True
         if "mat_rho" in kw_low and rho == 0.0:
             rho = float(kw_low["mat_rho"])
         if "mat_e" in kw_low and e == 0.0:
@@ -658,6 +714,14 @@ class StarterDeck:
             pmin = float(kw_low["mat_pc"])
         if "pc" in kw_low and pmin == -1.0e30:
             pmin = float(kw_low["pc"])
+        if "pext" in kw_low and pext == 0.0:
+            pext = float(kw_low["pext"])
+        if "p_ext" in kw_low and pext == 0.0:
+            pext = float(kw_low["p_ext"])
+        if "psh" in kw_low and pext == 0.0:
+            pext = float(kw_low["psh"])
+        if "mat_psh" in kw_low and pext == 0.0:
+            pext = float(kw_low["mat_psh"])
         if "mat_k_unload" in kw_low and bunl == 0.0:
             bunl = float(kw_low["mat_k_unload"])
         if "k_unload" in kw_low and bunl == 0.0:
@@ -702,7 +766,10 @@ class StarterDeck:
 
         if fixed_format:
             # Card 1: rho, refer_rho (MAT_LAW21_1: [20, 20])
-            if refer_rho is not None and float(refer_rho) != 0.0 and float(refer_rho) != float(rho):
+            if explicit_rhor and float(refer_rho) != 0.0:
+                self.lines.append("#        Init. dens.          Ref. dens.")
+                self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(refer_rho, 20)}")
+            elif refer_rho is not None and float(refer_rho) != 0.0 and float(refer_rho) != float(rho):
                 self.lines.append("#        Init. dens.          Ref. dens.")
                 self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(refer_rho, 20)}")
             else:
@@ -721,23 +788,32 @@ class StarterDeck:
             self.lines.append("# func_IDf                            Kt             FscaleP")
             self.lines.append(f"{ifunc:>10d}          {fmt_float(c1, 20)}{fmt_float(pfscale, 20)}")
 
-            # Card 5: pmin (MAT_LAW21_5: [20])
-            self.lines.append("#              P_min")
-            self.lines.append(fmt_float(pmin, 20))
+            # Card 5: pmin (MAT_LAW21_5: [20]), optionally followed by pext (radioss130)
+            if pext != 0.0:
+                self.lines.append("#              P_min               P_ext")
+                self.lines.append(f"{fmt_float(pmin, 20)}{fmt_float(pext, 20)}")
+            else:
+                self.lines.append("#              P_min")
+                self.lines.append(fmt_float(pmin, 20))
 
             # Card 6: bunl, mumax (MAT_LAW21_6: [20, 20])
             self.lines.append("#                  B              Mu_max")
             self.lines.append(f"{fmt_float(bunl, 20)}{fmt_float(mumax, 20)}")
         else:
             delim = kw_low.get("delimiter", ", " if (kw_low.get("comma") or kw_low.get("comma_delimited")) else " ")
-            if refer_rho is not None and float(refer_rho) != 0.0 and float(refer_rho) != float(rho):
+            if explicit_rhor and float(refer_rho) != 0.0:
+                self.lines.append(f"{rho}{delim}{refer_rho}")
+            elif refer_rho is not None and float(refer_rho) != 0.0 and float(refer_rho) != float(rho):
                 self.lines.append(f"{rho}{delim}{refer_rho}")
             else:
                 self.lines.append(f"{rho}")
             self.lines.append(f"{e}{delim}{nu}")
             self.lines.append(f"{a0}{delim}{a1}{delim}{a2}{delim}{amax}")
             self.lines.append(f"{ifunc}{delim}{c1}{delim}{pfscale}")
-            self.lines.append(f"{pmin}")
+            if pext != 0.0:
+                self.lines.append(f"{pmin}{delim}{pext}")
+            else:
+                self.lines.append(f"{pmin}")
             self.lines.append(f"{bunl}{delim}{mumax}")
 
         return self

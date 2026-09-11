@@ -37714,10 +37714,15 @@ def read_mat_law21(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 c1 = _safe_float(f3[2]) if len(f3) > 2 and f3[2].strip() else 0.0
                 pfscale = _safe_float(f3[3]) if len(f3) > 3 and f3[3].strip() else 0.0
 
-            # Card 5: pmin (MAT_LAW21_5: [20])
+            # Card 5: pmin (MAT_LAW21_5: [20]), optional pext in cols 20-40 (radioss130)
             if len(valid_cards) > 4:
                 f4 = valid_cards[4].cut("MAT_LAW21_5")
                 pmin = _safe_float(f4[0]) if len(f4) > 0 and f4[0].strip() else 0.0
+                raw4 = valid_cards[4].raw
+                if len(raw4) > 20:
+                    pext_str = raw4[20:40].strip()
+                    if pext_str:
+                        pext = _safe_float(pext_str)
 
             # Card 6: bunl, mumax (MAT_LAW21_6: [20, 20])
             if len(valid_cards) > 5:
@@ -37767,10 +37772,12 @@ def read_mat_law21(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     except ValueError:
                         ifunc = _safe_int(t3[0])
 
-            # Card 5: pmin
+            # Card 5: pmin, pext
             if len(valid_cards) > 4:
                 t4 = _card_tokens(valid_cards[4])
                 pmin = _safe_float(t4[0]) if len(t4) > 0 and t4[0] else 0.0
+                if len(t4) > 1 and t4[1]:
+                    pext = _safe_float(t4[1])
 
             # Card 6: bunl, mumax
             if len(valid_cards) > 5:

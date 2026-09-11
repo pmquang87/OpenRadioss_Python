@@ -1161,13 +1161,13 @@ def extra_shapes(mat, nip=None):
         shapes["temp"] = ()
     if getattr(mat, "law", None) in (5, "5", "LAW5", "JWL") or getattr(mat, "law_name", None) in ("LAW5", "JWL"):
         shapes.update(bfrac=(), aburn=(), eint=(), tb=())
-    if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
+    if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG1") or (getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG1") and getattr(mat, "law", None) not in (21, "21", "LAW21", "DPRAG")):
         shapes.update(mu_bak=(), epxe=(), p_old=())
-    if getattr(mat, "law", None) in (21, "21", "LAW21", "MAT_LAW21", "MAT_DPRAG") or (getattr(mat, "law_name", None) in ("21", "LAW21", "DPRAG", "MAT_DPRAG") and getattr(mat, "law", None) != 10):
+    if getattr(mat, "law", None) in (21, "21", "LAW21", "DPRAG", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", "DUCKHUB", "MAT_DUCKHUB") or (getattr(mat, "law_name", None) in ("21", "LAW21", "DPRAG", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", "DUCKHUB", "MAT_DUCKHUB") and getattr(mat, "law", None) != 10):
         if nip is not None:
-            shapes.update(mu_bak=(nip,), epxe=(nip,), p=(nip,), defp=(nip,), p_old=(nip,))
+            shapes.update(mu_bak=(nip,), epxe=(nip,), p=(nip,), defp=(nip,), p_old=(nip,), mu=(nip,), c_solid=(nip,), g0=(nip,))
         else:
-            shapes.update(mu_bak=(), epxe=(), p=(), defp=(), p_old=())
+            shapes.update(mu_bak=(), epxe=(), p=(), defp=(), p_old=(), mu=(), c_solid=(), g0=())
     if getattr(mat, "law", None) in (12, "12", "LAW12", "3D_COMP", "COMP_3D") or getattr(mat, "law_name", None) in ("12", "LAW12", "3D_COMP", "COMP_3D"):
         shapes.update(law12_comp3d.extra_shapes(mat, nip))
     if getattr(mat, "law", None) in (14, "14", "LAW14", "COMPSO", "COMP_SOL") or getattr(mat, "law_name", None) in ("14", "LAW14", "COMPSO", "COMP_SOL"):

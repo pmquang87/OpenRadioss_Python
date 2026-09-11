@@ -282,6 +282,12 @@ class Material:
                 return float(law52_gurson.sound_speed_solid_law52(self, rho=self.rho0))
             except Exception:
                 pass
+        if self.law in (21, "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "DPRAG") or getattr(self, "law_name", None) in ("21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "DPRAG"):
+            try:
+                from ..materials import law21_dprag
+                return float(law21_dprag.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
         return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
 
     def sound_speed_shell(self) -> float:
