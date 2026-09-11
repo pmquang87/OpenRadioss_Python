@@ -2093,10 +2093,42 @@ class StarterDeck:
             refer_rho = kw_low["rhor"]
         if "yield_stress" in kw_low and a == 0.0:
             a = kw_low["yield_stress"]
+        if "a" in kw_low and a == 0.0:
+            a = kw_low["a"]
         if "hardening_b" in kw_low and b == 0.0:
             b = kw_low["hardening_b"]
+        if "b" in kw_low and b == 0.0:
+            b = kw_low["b"]
         if "hardening_n" in kw_low and n == 0.0:
             n = kw_low["hardening_n"]
+        if "n" in kw_low and n == 0.0:
+            n = kw_low["n"]
+        if "c" in kw_low and c == 1.0e30:
+            c = kw_low["c"]
+        if "p" in kw_low and pc == 1.0:
+            pc = kw_low["p"]
+        if "pc" in kw_low and pc == 1.0:
+            pc = kw_low["pc"]
+        if "fcut" in kw_low and fcut == 1.0e30:
+            fcut = kw_low["fcut"]
+        if "f_cut" in kw_low and fcut == 1.0e30:
+            fcut = kw_low["f_cut"]
+        if "f0" in kw_low and f_i == 0.0:
+            f_i = kw_low["f0"]
+        if "f_0" in kw_low and f_i == 0.0:
+            f_i = kw_low["f_0"]
+        if "fi" in kw_low and f_i == 0.0:
+            f_i = kw_low["fi"]
+        if "fn" in kw_low and f_n == 0.0:
+            f_n = kw_low["fn"]
+        if "fc" in kw_low and f_c == 0.0:
+            f_c = kw_low["fc"]
+        if "ff" in kw_low and f_f == 0.0:
+            f_f = kw_low["ff"]
+        if "sn" in kw_low and s_n == 0.0:
+            s_n = kw_low["sn"]
+        if "epsn" in kw_low and eps_n == 0.0:
+            eps_n = kw_low["epsn"]
         if "fixed_format" in kw_low:
             fixed_format = bool(kw_low["fixed_format"])
 

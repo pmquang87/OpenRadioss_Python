@@ -1193,6 +1193,11 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
     if getattr(mat, "law", None) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON"):
         sign, epsp_out, c = law52_gurson.solid_update_law52(mat, sig, deps, epsp, dt, extra, return_sound_speed=True)
         sig[:] = sign
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
         return sig, epsp_out, c
     if mat.law == 33:
         return law33_foamplas.solid_update(mat, sig, deps, epsp, dt, extra)
@@ -1652,6 +1657,8 @@ def solid_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
         if law43_solid_tangent is not None:
             return law43_solid_tangent(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
         raise NotImplementedError("LAW43 solid_tangent not available")
+    if getattr(mat, "law", None) in (52, "52", "LAW52", "GURSON", "PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS"):
+        return law52_gurson.tangent_law52_solid(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
         f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW34, LAW35, LAW36, LAW38, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "

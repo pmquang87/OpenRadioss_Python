@@ -11121,7 +11121,116 @@ class MatLaw52:
             "hard_n": self.n,
             "rho": self.rho,
             "rho0": self.rho0,
+            "f0": self.f_i,
+            "f_0": self.f_i,
+            "fi": self.f_i,
+            "fn": self.f_n,
+            "fc": self.f_c,
+            "ff": self.f_f,
+            "sn": self.s_n,
+            "epsn": self.eps_n,
+            "A": self.a,
+            "B": self.b,
+            "C": self.c,
+            "P": self.pc,
+            "fu": self.fu,
         }
+
+    @property
+    def f_0(self) -> float:
+        return self.f_i
+
+    @f_0.setter
+    def f_0(self, value: float) -> None:
+        self.f_i = value
+
+    @property
+    def f0(self) -> float:
+        return self.f_i
+
+    @f0.setter
+    def f0(self, value: float) -> None:
+        self.f_i = value
+
+    @property
+    def fi(self) -> float:
+        return self.f_i
+
+    @fi.setter
+    def fi(self, value: float) -> None:
+        self.f_i = value
+
+    @property
+    def fn(self) -> float:
+        return self.f_n
+
+    @fn.setter
+    def fn(self, value: float) -> None:
+        self.f_n = value
+
+    @property
+    def fc(self) -> float:
+        return self.f_c
+
+    @fc.setter
+    def fc(self, value: float) -> None:
+        self.f_c = value
+
+    @property
+    def ff(self) -> float:
+        return self.f_f
+
+    @ff.setter
+    def ff(self, value: float) -> None:
+        self.f_f = value
+
+    @property
+    def sn(self) -> float:
+        return self.s_n
+
+    @sn.setter
+    def sn(self, value: float) -> None:
+        self.s_n = value
+
+    @property
+    def epsn(self) -> float:
+        return self.eps_n
+
+    @epsn.setter
+    def epsn(self, value: float) -> None:
+        self.eps_n = value
+
+    @property
+    def A(self) -> float:
+        return self.a
+
+    @A.setter
+    def A(self, value: float) -> None:
+        self.a = value
+
+    @property
+    def B(self) -> float:
+        return self.b
+
+    @B.setter
+    def B(self, value: float) -> None:
+        self.b = value
+
+    @property
+    def C(self) -> float:
+        return self.c
+
+    @C.setter
+    def C(self, value: float) -> None:
+        self.c = value
+
+    @property
+    def P(self) -> float:
+        return self.pc
+
+    @P.setter
+    def P(self, value: float) -> None:
+        self.pc = value
 
     def __getitem__(self, key: str) -> Any:
         if hasattr(self, key):

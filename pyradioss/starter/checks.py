@@ -2136,7 +2136,7 @@ def check_mat_law52(
         log.error(f"/MAT/LAW52/{mid}: Poisson's ratio NU must satisfy 0 <= NU < 0.5 (got {nu:g})", "MAT CHECK")
 
     # 4. Void volume fractions compatibility: f_I <= f_C <= f_F (ANCMSG 1745)
-    f_i = _extract(["f_i", "MAT_f_I", "fi", "F1", "f_I"], default=0.0)
+    f_i = _extract(["f_i", "MAT_f_I", "fi", "F1", "f_I", "f0", "f_0"], default=0.0)
     f_c = _extract(["f_c", "MAT_f_C", "fc", "fMAT_C", "f_C"], default=0.0)
     f_f = _extract(["f_f", "MAT_f_F", "ff", "fF", "f_F"], default=0.0)
 
@@ -2151,7 +2151,7 @@ def check_mat_law52(
     if c_val is None:
         c_val = getattr(mat, "c", None)
     if c_val is None:
-        c_val = _extract(["raw_c", "c", "MAT_C"], default=0.0)
+        c_val = _extract(["raw_c", "c", "MAT_C", "C"], default=0.0)
     else:
         try:
             c_val = float(c_val)
@@ -2162,7 +2162,7 @@ def check_mat_law52(
     if pc_val is None:
         pc_val = getattr(mat, "pc", None)
     if pc_val is None:
-        pc_val = _extract(["raw_pc", "pc", "MAT_PC", "p"], default=0.0)
+        pc_val = _extract(["raw_pc", "pc", "MAT_PC", "p", "P"], default=0.0)
     else:
         try:
             pc_val = float(pc_val)
@@ -2173,7 +2173,7 @@ def check_mat_law52(
     if fcut_val is None:
         fcut_val = getattr(mat, "fcut", None)
     if fcut_val is None:
-        fcut_val = _extract(["raw_fcut", "fcut", "Fcut"], default=0.0)
+        fcut_val = _extract(["raw_fcut", "fcut", "Fcut", "f_cut"], default=0.0)
     else:
         try:
             fcut_val = float(fcut_val)

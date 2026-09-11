@@ -678,6 +678,8 @@ def solid_update_law52(
         extra["fstar"][:] = dmg[:, 0]
     if "off52" in extra:
         extra["off52"][:] = off[:]
+    else:
+        extra["off52"] = off.copy()
 
     if orig_shape == (6,):
         sig = sig.reshape(6)
@@ -1019,6 +1021,8 @@ def shell_update_law52(
         extra["fstar"][:] = dmg[:, 0]
     if "off52" in extra:
         extra["off52"][:] = off[:]
+    else:
+        extra["off52"] = off.copy()
     if "layfail" in extra:
         extra["layfail"][off == 0.0] = 0.0
 
