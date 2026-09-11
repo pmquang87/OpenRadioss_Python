@@ -3462,6 +3462,22 @@ def check_mat_law163(
                             "MAT CHECK",
                         )
 
+        if hasattr(model, "parts") and isinstance(model.parts, dict):
+            for pid, part in model.parts.items():
+                p_mid = getattr(part, "mat_id", getattr(part, "mid", None))
+                if p_mid == actual_mid:
+                    etype = str(getattr(part, "elem_type", getattr(part, "type", ""))).upper()
+                    if "SHELL" in etype or "QUAD" in etype or "TRIA" in etype:
+                        log.error(
+                            f"/MAT/LAW163/{actual_mid} (/MAT/CRUSHABLE_FOAM) is not supported for shell elements ({etype.lower()}) (ANCMSG 305)",
+                            "MAT CHECK",
+                        )
+                    elif "BEAM" in etype or "TRUSS" in etype or "SPRING" in etype or "1D" in etype:
+                        log.error(
+                            f"/MAT/LAW163/{actual_mid} (/MAT/CRUSHABLE_FOAM) is not supported for 1D elements ({etype.lower()}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
 
 _check_mat_law163 = check_mat_law163
 
