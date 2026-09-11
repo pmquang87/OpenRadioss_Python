@@ -76,6 +76,10 @@ _ALLOWED_LAWS = {
     "springs": None,          # springs ignore their material entirely
     "beams": {0, 1, 2, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW"},
 }
+_LAW66_KEYS = {66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "FOAM_TAB"}
+for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells", "shells_qbat", "shells_qeph", "sh3n"):
+    _ALLOWED_LAWS[_fam].update(_LAW66_KEYS)
+
 _ALLOWED_LAWS["quads"] = _ALLOWED_LAWS["shells"]
 _ALLOWED_LAWS["solids"] = _ALLOWED_LAWS["bricks"]
 _ALLOWED_LAWS["solids_heph"] = _ALLOWED_LAWS["bricks"]
@@ -3693,6 +3697,137 @@ def check_mat_law73(
 _check_mat_law73 = check_mat_law73
 
 
+def check_mat_law66(
+    mat: Any = None,
+    log: MessageLog | None = None,
+    model: Model | None = None,
+    mat_id: Any = None,
+    **kwargs,
+) -> None:
+    """Validate /MAT/LAW66 (/MAT/PLAS_TAB_COSSER, /MAT/PLAS_COSSER) parameter bounds (M562).
+
+    Required checks:
+      - rho > 0
+      - e > 0
+      - 0 <= nu < 0.5 (ANCMSG 1514)
+      - pc >= 0
+      - pt >= 0
+      - Compatible elements:
+        - accepts solids and shells
+        - rejects 1D elements (trusses, beams, springs) with ANCMSG 306
+    """
+    if mat is None and "material" in kwargs:
+        mat = kwargs["material"]
+    if log is None and "log" in kwargs:
+        log = kwargs["log"]
+    if model is None and "model" in kwargs:
+        model = kwargs["model"]
+    if mat_id is None and "mat_id" in kwargs:
+        mat_id = kwargs["mat_id"]
+    if log is None:
+        return
+
+    mid = mat_id if mat_id is not None else getattr(mat, "id", getattr(mat, "mat_id", 0))
+
+    def _extract(keys: list[str], default: float = 0.0) -> float:
+        params = getattr(mat, "params", None)
+        for k in keys:
+            if hasattr(mat, k):
+                val = getattr(mat, k)
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (TypeError, ValueError):
+                        pass
+            if isinstance(params, dict) and k in params:
+                val = params[k]
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (TypeError, ValueError):
+                        pass
+        return default
+
+    # 1. Density rho0 > 0
+    rho0 = _extract(["rho", "rho0", "MAT_RHO", "RHO", "RHO0"], default=0.0)
+    if rho0 <= 0.0:
+        log.error(f"/MAT/LAW66/{mid}: initial density RHO must be > 0 (got {rho0:g})", "MAT CHECK")
+
+    # 2. Young's modulus E > 0
+    e = _extract(["e", "E", "MAT_E", "young"], default=0.0)
+    if e <= 0.0:
+        log.error(f"/MAT/LAW66/{mid}: Young's modulus E must be > 0 (got {e:g})", "MAT CHECK")
+
+    # 3. Poisson's ratio: 0.0 <= nu < 0.5 (ANCMSG 1514)
+    nu = _extract(["nu", "Nu", "NU", "MAT_NU"], default=0.0)
+    if nu < 0.0 or nu >= 0.5:
+        log.error(f"/MAT/LAW66/{mid}: Poisson's ratio nu must satisfy 0 <= nu < 0.5 (got {nu:g}) (ANCMSG 1514)", "MAT CHECK")
+
+    # 4. PC >= 0
+    pc = _extract(["pc", "Pc", "P_C", "PC", "MAT_PC"], default=0.0)
+    if pc < 0.0:
+        log.error(f"/MAT/LAW66/{mid}: P_c must be >= 0 (got {pc:g})", "MAT CHECK")
+
+    # 5. PT >= 0
+    pt = _extract(["pt", "Pt", "P_T", "PT", "MAT_PT"], default=0.0)
+    if pt < 0.0:
+        log.error(f"/MAT/LAW66/{mid}: P_t must be >= 0 (got {pt:g})", "MAT CHECK")
+
+    # 6. Compatible elements check (if model is provided)
+    if model is not None:
+        actual_mid = mid
+        if hasattr(model, "element_groups") and callable(model.element_groups):
+            try:
+                grps = list(model.element_groups())
+            except TypeError:
+                grps = []
+            for item in grps:
+                if isinstance(item, tuple) and len(item) == 2:
+                    name, el_group = item
+                else:
+                    continue
+                mids_in_group = set()
+                if hasattr(el_group, "values") and callable(el_group.values):
+                    for el in el_group.values():
+                        el_mid = getattr(el, "mat_id", getattr(el, "mid", None))
+                        if el_mid is not None:
+                            mids_in_group.add(el_mid)
+                if hasattr(el_group, "state") and isinstance(el_group.state, dict) and "slices" in el_group.state:
+                    for _, m_part, _ in el_group.state["slices"]:
+                        m_id = getattr(m_part, "id", None)
+                        if m_id is not None:
+                            mids_in_group.add(m_id)
+                if actual_mid in mids_in_group:
+                    if name in ("trusses", "beams", "springs"):
+                        log.error(
+                            f"/MAT/LAW66/{actual_mid} (/MAT/PLAS_TAB_COSSER) is not supported for 1D elements ({name}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
+        if hasattr(model, "parts") and isinstance(model.parts, dict):
+            for pid, part in model.parts.items():
+                p_mid = getattr(part, "mat_id", getattr(part, "mid", None))
+                if p_mid == actual_mid:
+                    etype = str(getattr(part, "elem_type", getattr(part, "type", ""))).upper()
+                    prop_id = getattr(part, "prop_id", None)
+                    if not etype or etype in ("NONE", ""):
+                        if prop_id is not None:
+                            props = getattr(model, "properties", {}) or getattr(model, "props", {})
+                            prop = props.get(prop_id) if isinstance(props, dict) else None
+                            if prop is not None:
+                                ptype = str(getattr(prop, "type", getattr(prop, "card_name", ""))).upper()
+                                if any(s in ptype for s in ("BEAM", "TRUSS", "SPRING", "TYPE3", "TYPE4", "TYPE12")):
+                                    etype = "BEAM"
+                    if any(s in etype for s in ("BEAM", "TRUSS", "SPRING", "1D")):
+                        log.error(
+                            f"/MAT/LAW66/{actual_mid} (/MAT/PLAS_TAB_COSSER) is not supported for 1D elements ({etype.lower()}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
+
+_check_mat_law66 = check_mat_law66
+
+
 
 def check_materials(model: Model, log: MessageLog) -> None:
     """Validate all material parameters across model."""
@@ -3895,9 +4030,26 @@ def check_materials(model: Model, log: MessageLog) -> None:
         if mid not in getattr(model, "materials", {}):
             check_mat_law73(model=model, mat_id=mid, mat=mat73, log=log)
 
+    # M562: Material LAW66 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "FOAM_TAB"):
+            check_mat_law66(model=model, mat_id=mid, mat=mat, log=log)
+    for mid, mat66 in getattr(model, "mat_law66s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law66(model=model, mat_id=mid, mat=mat66, log=log)
+
 
 
 _MAT_CHECKS: dict[Any, Any] = {
+    66: check_mat_law66,
+    "66": check_mat_law66,
+    "LAW66": check_mat_law66,
+    "PLAS_TAB_COSSER": check_mat_law66,
+    "PLAS_COSSER": check_mat_law66,
+    "MAT_LAW66": check_mat_law66,
+    "MAT_PLAS_TAB_COSSER": check_mat_law66,
+    "MAT_PLAS_COSSER": check_mat_law66,
+    "FOAM_TAB": check_mat_law66,
     73: check_mat_law73,
     "73": check_mat_law73,
     "LAW73": check_mat_law73,

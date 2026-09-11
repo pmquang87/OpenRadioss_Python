@@ -6003,46 +6003,7 @@ class MatNonlocalModifier:
 # Advanced Tabular Foam, Viscoelastic Foam, Visco-Hyperelastic, Honeycomb & Cowper-Symonds Material Models (M172)
 # ----------------------------------------------------------------------------
 
-@dataclass
-class MaterialLaw66:
-    """/MAT/LAW66 or /MAT/FOAM_TAB (M172): Tabular foam material model.
-
-    Fortran origin: ``starter/source/materials/mat/mat066/hm_read_mat66.F``.
-    """
-    id: int
-    title: str = ""
-    rho0: float = 0.0
-    ref_rho: float = 0.0
-    e: float = 0.0
-    nu: float = 0.0
-    c_hard: float = 0.0
-    f_cut: float = 0.0
-    fsmooth: int = 0
-    israte: int = 0
-    p_c: float = 0.0
-    p_t: float = 0.0
-    ec: float = 0.0
-    rpct: float = 0.0
-    funct_idc: int = 0
-    funct_idt: int = 0
-    fscalec: float = 1.0
-    fscalet: float = 1.0
-    epsilon_0: float = 0.0
-    c: float = 0.0
-    sigma_y0: float = 0.0
-    vp: int = 0
-    fnyrt_idc: int = 0
-    fnyrt_idt: int = 0
-    yrate_fscalec: float = 1.0
-    yrate_fscalet: float = 1.0
-    nfunc: int = 0
-    tfunc: int = 0
-    func_c_list: List[int] = field(default_factory=list)
-    eps_c_list: List[float] = field(default_factory=list)
-    fscale_c_list: List[float] = field(default_factory=list)
-    func_t_list: List[int] = field(default_factory=list)
-    eps_t_list: List[float] = field(default_factory=list)
-    fscale_t_list: List[float] = field(default_factory=list)
+# MaterialLaw66 is defined as MatLaw66 (M562) below.
 
 
 @dataclass
@@ -14921,6 +14882,551 @@ class MatLaw88:
     e: float = 0.0
     nu: float = 0.0
     params: dict = field(default_factory=dict)
+
+
+@dataclass(init=False)
+class MatLaw66:
+    """``/MAT/LAW66`` (``/MAT/PLAS_TAB_COSSER``, ``/MAT/PLAS_COSSER``) (M562): Tabulated tension-compression plastic law.
+
+    Upstream Fortran origin:
+      - starter/source/materials/mat/mat066/hm_read_mat66.F
+      - CFG: radioss2022/MAT/mat_law66.cfg
+    """
+    id: int = 0
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    ec: float = 0.0
+    pc: float = 0.0
+    pt: float = 0.0
+    rpct: float = 1.0
+    chard: float = 0.0
+    asrate: float = 0.0
+    fsmooth: int = 0
+    israte: int = 1
+    fun_a1: int = 0
+    fun_a2: int = 0
+    fscale11: float = 1.0
+    fscale22: float = 1.0
+    epsp0: float = 1.0
+    cp: float = 1.0
+    sigy: float = 0.0
+    vp: int = 0
+    fun_b1: int = 0
+    fun_b2: int = 0
+    fscale33: float = 1.0
+    fscale12: float = 1.0
+    nfunc: int = 0
+    tfunc: int = 0
+    abg_ipt: list = None
+    k_a1: list = None
+    fp1: list = None
+    abg_ipdel: list = None
+    k_b1: list = None
+    fp2: list = None
+    title: str = ""
+    law: int = 66
+    law_name: str = "LAW66"
+    refer_rho: float = 0.0
+    fail: Optional[Any] = None
+    eos: Optional[Any] = None
+    params: dict = field(default_factory=dict)
+
+    def __init__(
+        self,
+        id: int = 0,
+        rho: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        ec: float = 0.0,
+        pc: float = 0.0,
+        pt: float = 0.0,
+        rpct: float = 1.0,
+        chard: float = 0.0,
+        asrate: float = 0.0,
+        fsmooth: int = 0,
+        israte: int = 1,
+        fun_a1: int = 0,
+        fun_a2: int = 0,
+        fscale11: float = 1.0,
+        fscale22: float = 1.0,
+        epsp0: float = 1.0,
+        cp: float = 1.0,
+        sigy: float = 0.0,
+        vp: int = 0,
+        fun_b1: int = 0,
+        fun_b2: int = 0,
+        fscale33: float = 1.0,
+        fscale12: float = 1.0,
+        nfunc: int = 0,
+        tfunc: int = 0,
+        abg_ipt: Optional[list] = None,
+        k_a1: Optional[list] = None,
+        fp1: Optional[list] = None,
+        abg_ipdel: Optional[list] = None,
+        k_b1: Optional[list] = None,
+        fp2: Optional[list] = None,
+        title: str = "",
+        law: int = 66,
+        law_name: str = "LAW66",
+        refer_rho: float = 0.0,
+        fail: Optional[Any] = None,
+        eos: Optional[Any] = None,
+        params: Optional[dict] = None,
+        **kwargs: Any,
+    ):
+        self.id = id
+        self.rho = kwargs.get("rho0", rho)
+        self.refer_rho = kwargs.get("rhor", refer_rho if refer_rho != 0.0 else self.rho)
+        self.e = kwargs.get("E", e)
+        self.nu = kwargs.get("Nu", nu)
+        self.ec = kwargs.get("Ec", ec)
+        self.pc = kwargs.get("p_c", pc)
+        self.pt = kwargs.get("p_t", pt)
+        self.rpct = kwargs.get("Rpct", rpct)
+        self.chard = kwargs.get("c_hard", kwargs.get("fisokin", chard))
+        self.asrate = kwargs.get("f_cut", kwargs.get("fcut", asrate))
+        self.fsmooth = kwargs.get("Fsmooth", fsmooth)
+        self.israte = kwargs.get("iyld_rate", kwargs.get("iyield_rate", kwargs.get("irate", israte)))
+        self.fun_a1 = kwargs.get("funct_idc", fun_a1)
+        self.fun_a2 = kwargs.get("funct_idt", fun_a2)
+        self.fscale11 = kwargs.get("fscalec", fscale11)
+        self.fscale22 = kwargs.get("fscalet", fscale22)
+        self.epsp0 = kwargs.get("eps_0", kwargs.get("epsilon_0", epsp0))
+        self.cp = kwargs.get("c", kwargs.get("C", cp))
+        self.sigy = kwargs.get("sigma_y0", kwargs.get("sig_y", sigy))
+        self.vp = kwargs.get("VP", vp)
+        self.fun_b1 = kwargs.get("fnyrt_idc", fun_b1)
+        self.fun_b2 = kwargs.get("fnyrt_idt", fun_b2)
+        self.fscale33 = kwargs.get("yrate_fscalec", fscale33)
+        self.fscale12 = kwargs.get("yrate_fscalet", fscale12)
+        self.nfunc = nfunc
+        self.tfunc = tfunc
+
+        func_ids = kwargs.get("func_ids")
+        rates = kwargs.get("rates")
+        fscales = kwargs.get("fscales")
+
+        if abg_ipt is not None:
+            self.abg_ipt = list(abg_ipt)
+        elif func_ids is not None:
+            self.abg_ipt = list(func_ids[:nfunc]) if nfunc > 0 else list(func_ids)
+        else:
+            self.abg_ipt = []
+
+        if k_a1 is not None:
+            self.k_a1 = list(k_a1)
+        elif rates is not None:
+            self.k_a1 = list(rates[:nfunc]) if nfunc > 0 else list(rates)
+        else:
+            self.k_a1 = []
+
+        if fp1 is not None:
+            self.fp1 = list(fp1)
+        elif fscales is not None:
+            self.fp1 = list(fscales[:nfunc]) if nfunc > 0 else list(fscales)
+        else:
+            self.fp1 = []
+
+        if abg_ipdel is not None:
+            self.abg_ipdel = list(abg_ipdel)
+        elif func_ids is not None and nfunc > 0 and len(func_ids) > nfunc:
+            self.abg_ipdel = list(func_ids[nfunc:])
+        else:
+            self.abg_ipdel = []
+
+        if k_b1 is not None:
+            self.k_b1 = list(k_b1)
+        elif rates is not None and nfunc > 0 and len(rates) > nfunc:
+            self.k_b1 = list(rates[nfunc:])
+        else:
+            self.k_b1 = []
+
+        if fp2 is not None:
+            self.fp2 = list(fp2)
+        elif fscales is not None and nfunc > 0 and len(fscales) > nfunc:
+            self.fp2 = list(fscales[nfunc:])
+        else:
+            self.fp2 = []
+
+        if self.nfunc == 0 and self.abg_ipt:
+            self.nfunc = len(self.abg_ipt)
+        if self.tfunc == 0 and self.abg_ipdel:
+            self.tfunc = len(self.abg_ipdel)
+
+        self.title = title
+        self.law = law
+        self.law_name = law_name
+        self.fail = fail
+        self.eos = eos
+        self.params = dict(params) if params is not None else {}
+
+    # Property helpers
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @rho0.setter
+    def rho0(self, val: float) -> None:
+        self.rho = val
+
+    @property
+    def rhor(self) -> float:
+        return self.refer_rho
+
+    @rhor.setter
+    def rhor(self, val: float) -> None:
+        self.refer_rho = val
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @E.setter
+    def E(self, val: float) -> None:
+        self.e = val
+
+    @property
+    def nu0(self) -> float:
+        return self.nu
+
+    @property
+    def Nu(self) -> float:
+        return self.nu
+
+    @Nu.setter
+    def Nu(self, val: float) -> None:
+        self.nu = val
+
+    @property
+    def G(self) -> float:
+        denom = 2.0 * (1.0 + self.nu)
+        return self.e / denom if abs(denom) > 1e-12 else 0.0
+
+    @property
+    def bulk(self) -> float:
+        denom = 3.0 * (1.0 - 2.0 * self.nu)
+        return self.e / denom if abs(denom) > 1e-12 else 0.0
+
+    @property
+    def K(self) -> float:
+        return self.bulk
+
+    @property
+    def sound_speed(self) -> CallableFloat:
+        import math
+        return CallableFloat(math.sqrt(max(self.e / max(self.rho, 1e-20), 0.0)))
+
+    @property
+    def sound_speed_solid(self) -> CallableFloat:
+        import math
+        return CallableFloat(math.sqrt(max((self.K + 4.0 * self.G / 3.0) / max(self.rho, 1e-20), 0.0)))
+
+    @property
+    def sound_speed_shell(self) -> CallableFloat:
+        import math
+        denom = max(self.rho * (1.0 - self.nu ** 2), 1e-20)
+        return CallableFloat(math.sqrt(max(self.e / denom, 0.0)))
+
+    # Lowercase & Radioss aliases
+    @property
+    def c_hard(self) -> float:
+        return self.chard
+
+    @c_hard.setter
+    def c_hard(self, val: float) -> None:
+        self.chard = val
+
+    @property
+    def fisokin(self) -> float:
+        return self.chard
+
+    @fisokin.setter
+    def fisokin(self, val: float) -> None:
+        self.chard = val
+
+    @property
+    def f_cut(self) -> float:
+        return self.asrate
+
+    @f_cut.setter
+    def f_cut(self, val: float) -> None:
+        self.asrate = val
+
+    @property
+    def p_c(self) -> float:
+        return self.pc
+
+    @p_c.setter
+    def p_c(self, val: float) -> None:
+        self.pc = val
+
+    @property
+    def p_t(self) -> float:
+        return self.pt
+
+    @p_t.setter
+    def p_t(self, val: float) -> None:
+        self.pt = val
+
+    @property
+    def funct_idc(self) -> int:
+        return self.fun_a1
+
+    @funct_idc.setter
+    def funct_idc(self, val: int) -> None:
+        self.fun_a1 = val
+
+    @property
+    def funct_idt(self) -> int:
+        return self.fun_a2
+
+    @funct_idt.setter
+    def funct_idt(self, val: int) -> None:
+        self.fun_a2 = val
+
+    @property
+    def fscalec(self) -> float:
+        return self.fscale11
+
+    @fscalec.setter
+    def fscalec(self, val: float) -> None:
+        self.fscale11 = val
+
+    @property
+    def fscalet(self) -> float:
+        return self.fscale22
+
+    @fscalet.setter
+    def fscalet(self, val: float) -> None:
+        self.fscale22 = val
+
+    @property
+    def epsilon_0(self) -> float:
+        return self.epsp0
+
+    @epsilon_0.setter
+    def epsilon_0(self, val: float) -> None:
+        self.epsp0 = val
+
+    @property
+    def eps_0(self) -> float:
+        return self.epsp0
+
+    @eps_0.setter
+    def eps_0(self, val: float) -> None:
+        self.epsp0 = val
+
+    @property
+    def eps_0(self) -> float:
+        return self.epsp0
+
+    @eps_0.setter
+    def eps_0(self, val: float) -> None:
+        self.epsp0 = val
+
+    @property
+    def c(self) -> float:
+        return self.cp
+
+    @c.setter
+    def c(self, val: float) -> None:
+        self.cp = val
+
+    @property
+    def sigma_y0(self) -> float:
+        return self.sigy
+
+    @sigma_y0.setter
+    def sigma_y0(self, val: float) -> None:
+        self.sigy = val
+
+    @property
+    def fnyrt_idc(self) -> int:
+        return self.fun_b1
+
+    @fnyrt_idc.setter
+    def fnyrt_idc(self, val: int) -> None:
+        self.fun_b1 = val
+
+    @property
+    def fnyrt_idt(self) -> int:
+        return self.fun_b2
+
+    @fnyrt_idt.setter
+    def fnyrt_idt(self, val: int) -> None:
+        self.fun_b2 = val
+
+    @property
+    def yrate_fscalec(self) -> float:
+        return self.fscale33
+
+    @yrate_fscalec.setter
+    def yrate_fscalec(self, val: float) -> None:
+        self.fscale33 = val
+
+    @property
+    def yrate_fscalet(self) -> float:
+        return self.fscale12
+
+    @yrate_fscalet.setter
+    def yrate_fscalet(self, val: float) -> None:
+        self.fscale12 = val
+
+    @property
+    def func_c_list(self) -> list:
+        return self.abg_ipt
+
+    @func_c_list.setter
+    def func_c_list(self, val: list) -> None:
+        self.abg_ipt = val
+
+    @property
+    def eps_c_list(self) -> list:
+        return self.k_a1
+
+    @eps_c_list.setter
+    def eps_c_list(self, val: list) -> None:
+        self.k_a1 = val
+
+    @property
+    def fscale_c_list(self) -> list:
+        return self.fp1
+
+    @fscale_c_list.setter
+    def fscale_c_list(self, val: list) -> None:
+        self.fp1 = val
+
+    @property
+    def func_t_list(self) -> list:
+        return self.abg_ipdel
+
+    @func_t_list.setter
+    def func_t_list(self, val: list) -> None:
+        self.abg_ipdel = val
+
+    @property
+    def eps_t_list(self) -> list:
+        return self.k_b1
+
+    @eps_t_list.setter
+    def eps_t_list(self, val: list) -> None:
+        self.k_b1 = val
+
+    @property
+    def iyld_rate(self) -> int:
+        return self.israte
+
+    @iyld_rate.setter
+    def iyld_rate(self, val: int) -> None:
+        self.israte = val
+
+    @property
+    def iyield_rate(self) -> int:
+        return self.israte
+
+    @iyield_rate.setter
+    def iyield_rate(self, val: int) -> None:
+        self.israte = val
+
+    @property
+    def func_ids(self) -> list:
+        return list(self.abg_ipt) + list(self.abg_ipdel)
+
+    @func_ids.setter
+    def func_ids(self, val: list) -> None:
+        val_list = list(val)
+        if self.nfunc > 0 and len(val_list) > self.nfunc:
+            self.abg_ipt = val_list[:self.nfunc]
+            self.abg_ipdel = val_list[self.nfunc:]
+        else:
+            self.abg_ipt = val_list
+            if self.nfunc == 0:
+                self.nfunc = len(val_list)
+
+    @property
+    def rates(self) -> list:
+        return list(self.k_a1) + list(self.k_b1)
+
+    @rates.setter
+    def rates(self, val: list) -> None:
+        val_list = list(val)
+        if self.nfunc > 0 and len(val_list) > self.nfunc:
+            self.k_a1 = val_list[:self.nfunc]
+            self.k_b1 = val_list[self.nfunc:]
+        else:
+            self.k_a1 = val_list
+
+    @property
+    def fscales(self) -> list:
+        return list(self.fp1) + list(self.fp2)
+
+    @fscales.setter
+    def fscales(self, val: list) -> None:
+        val_list = list(val)
+        if self.nfunc > 0 and len(val_list) > self.nfunc:
+            self.fp1 = val_list[:self.nfunc]
+            self.fp2 = val_list[self.nfunc:]
+        else:
+            self.fp1 = val_list
+
+    # Mapping protocol
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        k_low = key.lower()
+        if hasattr(self, k_low):
+            return getattr(self, k_low)
+        if isinstance(self.params, dict) and key in self.params:
+            return self.params[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if hasattr(self, key):
+            setattr(self, key, value)
+        elif hasattr(self, key.lower()):
+            setattr(self, key.lower(), value)
+        else:
+            raise KeyError(f"Cannot set unknown attribute {key!r} on MatLaw66")
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or hasattr(self, key.lower()) or (isinstance(self.params, dict) and key in self.params)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self) -> list[str]:
+        import dataclasses
+        k = [f.name for f in dataclasses.fields(self)]
+        k.extend([
+            "rho0", "rhor", "E", "Nu", "nu", "G", "bulk", "K",
+            "sound_speed", "sound_speed_solid", "sound_speed_shell",
+            "c_hard", "fisokin", "f_cut", "p_c", "p_t",
+            "funct_idc", "funct_idt", "fscalec", "fscalet",
+            "epsilon_0", "c", "sigma_y0", "fnyrt_idc", "fnyrt_idt",
+            "yrate_fscalec", "yrate_fscalet",
+            "func_c_list", "eps_c_list", "fscale_c_list",
+            "func_t_list", "eps_t_list", "fscale_t_list",
+        ])
+        if isinstance(self.params, dict):
+            for pk in self.params:
+                if pk not in k:
+                    k.append(pk)
+        return list(dict.fromkeys(k))
+
+    def values(self) -> list[Any]:
+        return [self[k] for k in self.keys()]
+
+    def items(self) -> list[tuple[str, Any]]:
+        return [(k, self[k]) for k in self.keys()]
+
+
+MatPlasTabCosser = MatLaw66
+MatPlasCosser = MatLaw66
+MaterialLaw66 = MatLaw66
 
 @dataclass
 class CNode:

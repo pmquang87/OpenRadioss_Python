@@ -80,7 +80,7 @@ from .entities import (
     MaterialPlasZeril, MaterialPlasBodne, MaterialViscProny, MaterialThermStress, DampStiff,
     MaterialConc, MaterialBarlat, MaterialLaw83, MaterialLaw80,
     MaterialLaw117, MaterialLaw90, MaterialLaw33, MatHeatModifier, MatNonlocalModifier,
-    MaterialLaw66, MaterialLaw35, MaterialLaw62, MaterialLaw28, MaterialLaw44,
+    MaterialLaw66, MatLaw66, MatPlasTabCosser, MatPlasCosser, MaterialLaw35, MaterialLaw62, MaterialLaw28, MaterialLaw44,
     MaterialLaw88, MaterialLaw92, MaterialLaw94, MaterialLaw46, MaterialLaw69,
     MaterialLaw124, MaterialLaw126, MaterialLaw125, MaterialLaw127, MaterialLaw130,
     MaterialLaw128, MaterialLaw129, MaterialLaw123, MaterialLaw132, MaterialLaw134,
@@ -1052,7 +1052,9 @@ class Model:
         self.mat_law33s: Dict[int, MaterialLaw33] = {}             # /MAT/LAW33, /MAT/FOAM_PLAS (M171)
         self.mat_heat_modifiers: Dict[int, MatHeatModifier] = {}   # /MAT/HEAT, /HEAT/MAT (M171)
         self.mat_nonlocal_modifiers: Dict[int, MatNonlocalModifier] = {}  # /MAT/NONLOCAL, /NONLOCAL/MAT (M171)
-        self.mat_law66s: Dict[int, MaterialLaw66] = {}             # /MAT/LAW66, /MAT/FOAM_TAB (M172)
+        self.mat_law66s: Dict[int, MatLaw66] = {}                  # /MAT/LAW66, /MAT/PLAS_TAB_COSSER (M172, M562)
+        self.mat_plas_tab_cossers = self.mat_law66s
+        self.mat_plas_cossers = self.mat_law66s
         self.mat_law35s: Dict[int, MaterialLaw35] = {}             # /MAT/LAW35, /MAT/FOAM_VISC (M172)
         self.mat_law62s: Dict[int, MaterialLaw62] = {}             # /MAT/LAW62, /MAT/VISC_HYP (M172)
         self.mat_law44s: Dict[int, MaterialLaw44] = {}             # /MAT/LAW44, /MAT/COWPER_SYMONDS (M172)

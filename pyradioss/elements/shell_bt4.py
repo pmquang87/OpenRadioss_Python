@@ -518,7 +518,7 @@ def init_group(group, model, log):
 # M3 material/failure plumbing shared by both shell kernels
 # ----------------------------------------------------------------------------
 
-def _init_material_state(group, nip_max):
+def _init_material_state(group, nip_max=None, n=None):
     """Allocate the per-layer material/failure state (see the materials
     and failure package docstrings):
 
@@ -530,11 +530,25 @@ def _init_material_state(group, nip_max):
     * ``mat_extra``{name: array} law-specific state (LAW27 crack memory)
     * ``chk_fail``               precomputed 'anything can delete here'
     """
-    st = group.state
-    n = group.n
-    st["off"] = np.ones(n)
-    st["layfail"] = np.ones((n, nip_max))
-    st["mat_extra"] = {}
+    if hasattr(group, "state"):
+        st = group.state
+        if n is None:
+            n = group.n
+    else:
+        st = group
+        if n is None:
+            n = len(st["layfail"]) if "layfail" in st else (len(st["off"]) if "off" in st else 1)
+    if nip_max is None:
+        if "layfail" in st and hasattr(st["layfail"], "shape") and len(st["layfail"].shape) > 1:
+            nip_max = st["layfail"].shape[1]
+        else:
+            nip_max = 1
+    if "off" not in st:
+        st["off"] = np.ones(n)
+    if "layfail" not in st:
+        st["layfail"] = np.ones((n, nip_max))
+    if "mat_extra" not in st or st["mat_extra"] is None:
+        st["mat_extra"] = {}
     for sl, mat, prop in st["slices"]:
         for name, shape in materials.extra_shapes(mat, nip_max).items():
             if name not in st["mat_extra"]:
@@ -561,11 +575,17 @@ def _init_material_state(group, nip_max):
                 st["uvar73"] = np.zeros((n, 7))
             if "uvar73" not in st["mat_extra"]:
                 st["mat_extra"]["uvar73"] = np.zeros((n, nip_max, 7))
-    if any(mat.fail is not None for _, mat, _ in st["slices"]):
+        if (getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB")
+                or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB")):
+            if "uvar66" not in st:
+                st["uvar66"] = np.zeros((n, 20))
+            if "uvar66" not in st["mat_extra"]:
+                st["mat_extra"]["uvar66"] = np.zeros((n, nip_max, 20))
+    if any(getattr(mat, "fail", None) is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros((n, nip_max))
     st["chk_fail"] = any(
-        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43, 48, 52, 57, 60, 69, 73)
-        or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL")
+        getattr(mat, "fail", None) is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43, 48, 52, 57, 60, 66, 69, 73)
+        or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL")
         or mat.params.get("eps_p_max", EP30) < 1e30
         or mat.params.get("eps_max", EP30) < 1e30
         or mat.params.get("EPSMAX", EP30) < 1e30
@@ -583,6 +603,10 @@ def _layer_extra(st, sl, k, area=None):
         extra["uvar73"] = st["uvar73"][sl]
     if "uvar73" in extra and "uvar" not in extra:
         extra["uvar"] = extra["uvar73"]
+    if "uvar66" in st and "uvar66" not in extra:
+        extra["uvar66"] = st["uvar66"][sl]
+    if "uvar66" in extra and "uvar" not in extra:
+        extra["uvar"] = extra["uvar66"]
     if "time" in st:
         extra["time"] = st["time"]
     if "thick" in st:
@@ -870,6 +894,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             elif getattr(mat, "law", 1) in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
                 from ..materials import law73_hill_therm
                 c[sl] = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
+            elif getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
+                c[sl] = mat.sound_speed_shell()
             else:
                 c[sl] = mat.sound_speed_shell()
         alive = st["off"] > 0.0
@@ -1095,6 +1121,8 @@ def forces(group, x, v, vr, dt, fint, mint):
         elif getattr(mat, "law", 1) in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
             from ..materials import law73_hill_therm
             c[sl] = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
+        elif getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
+            c[sl] = mat.sound_speed_shell()
         else:
             c[sl] = mat.sound_speed_shell()
         # elastic transverse shear resultant stress (with 5/6 factor)

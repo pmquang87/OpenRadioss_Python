@@ -475,6 +475,10 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
             from ..materials import law73_hill_therm
             if hasattr(law73_hill_therm, "resolve"):
                 law73_hill_therm.resolve(mat, model, log)
+        elif mat.law in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
+            from ..materials import law66_plas_tab
+            if hasattr(law66_plas_tab, "resolve"):
+                law66_plas_tab.resolve(mat, model, log)
 
     for mat_id, fm, source in model.raw_fails:
         mat = model.materials.get(mat_id)

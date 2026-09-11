@@ -2832,11 +2832,273 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
-    def mat_law66(self, mid: int, title: str, data_cards) -> None:
-        """``/MAT/LAW66``."""
-        self._header("MAT", "LAW66", mid)
+    def mat_law66(
+        self,
+        mid: int | Any = 0,
+        title: str = "",
+        data_cards: Sequence | None = None,
+        rho: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        ec: float = 0.0,
+        pc: float = 0.0,
+        pt: float = 0.0,
+        rpct: float = 1.0,
+        c_hard: float = 0.0,
+        f_cut: float = 0.0,
+        fsmooth: int = 0,
+        iyld_rate: int = 1,
+        # ISRATE <= 3
+        fun_a1: int = 0,
+        fun_a2: int = 0,
+        fscale11: float = 1.0,
+        fscale22: float = 1.0,
+        # ISRATE <= 2
+        eps_0: float = 1.0,
+        c: float = 1.0,
+        sigma_y0: float = 0.0,
+        vp: int = 0,
+        # ISRATE == 3
+        fun_b1: int = 0,
+        fun_b2: int = 0,
+        fscale33: float = 1.0,
+        fscale12: float = 1.0,
+        # ISRATE == 4
+        nfunc: int = 0,
+        tfunc: int = 0,
+        func_ids: list[int] | None = None,
+        rates: list[float] | None = None,
+        fscales: list[float] | None = None,
+        # metadata & options
+        rhor: float = 0.0,
+        unit_id: int | None = None,
+        law_name: str = "LAW66",
+        fixed_format: bool = True,
+        mat_id: int | None = None,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW66`` (/MAT/PLAS_TAB_COSSER, /MAT/PLAS_COSSER) — cfg MAT/mat_law66.cfg & hm_read_mat66.F:
+        Card 1: RHO_I, Refer_Rho (%20lg%20lg)
+        Card 2: E, Nu, C_hard, F_cut, Fsmooth, Iyld_rate (%20lg%20lg%20lg%20lg%10d%10d)
+        Card 3: P_c, P_t, EC, RPCT (%20lg%20lg%20lg%20lg)
+        If ISRATE <= 3:
+          Card 4: FUN_A1, FUN_A2, FScale11, FScale22 (%10d%10d%20lg%20lg)
+          If ISRATE <= 2:
+            Card 5: Epsilon_0, c, Sigma_Y0, VP (%20lg%20lg%20lg%10d)
+          Elif ISRATE == 3:
+            Card 5: FUN_B1, FUN_B2, FScale33, FScale12 (%10d%10d%20lg%20lg)
+        Elif ISRATE == 4:
+          Card 4: NFUNC, TFUNC (%10d%10d)
+          Curves: ID, blank(10), Rate, Fscale (%10d%10s%20lg%20lg)
+        """
+        mat_obj = None
+        if hasattr(mid, "rho") or hasattr(mid, "iyld_rate") or hasattr(mid, "ec") or hasattr(mid, "c_hard") or hasattr(mid, "rpct"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", rho))
+            rhor = getattr(mat_obj, "rhor", getattr(mat_obj, "ref_rho", rhor))
+            e = getattr(mat_obj, "e", getattr(mat_obj, "E", e))
+            nu = getattr(mat_obj, "nu", getattr(mat_obj, "Nu", nu))
+            ec = getattr(mat_obj, "ec", ec)
+            pc = getattr(mat_obj, "pc", pc)
+            pt = getattr(mat_obj, "pt", pt)
+            rpct = getattr(mat_obj, "rpct", rpct)
+            c_hard = getattr(mat_obj, "c_hard", c_hard)
+            f_cut = getattr(mat_obj, "f_cut", f_cut)
+            fsmooth = getattr(mat_obj, "fsmooth", fsmooth)
+            iyld_rate = getattr(mat_obj, "iyld_rate", getattr(mat_obj, "israte", iyld_rate))
+            fun_a1 = getattr(mat_obj, "fun_a1", fun_a1)
+            fun_a2 = getattr(mat_obj, "fun_a2", fun_a2)
+            fscale11 = getattr(mat_obj, "fscale11", fscale11)
+            fscale22 = getattr(mat_obj, "fscale22", fscale22)
+            eps_0 = getattr(mat_obj, "eps_0", getattr(mat_obj, "epsp0", eps_0))
+            c = getattr(mat_obj, "c", getattr(mat_obj, "cp", c))
+            sigma_y0 = getattr(mat_obj, "sigma_y0", getattr(mat_obj, "sigmay0", sigma_y0))
+            vp = getattr(mat_obj, "vp", vp)
+            fun_b1 = getattr(mat_obj, "fun_b1", fun_b1)
+            fun_b2 = getattr(mat_obj, "fun_b2", fun_b2)
+            fscale33 = getattr(mat_obj, "fscale33", fscale33)
+            fscale12 = getattr(mat_obj, "fscale12", fscale12)
+            nfunc = getattr(mat_obj, "nfunc", nfunc)
+            tfunc = getattr(mat_obj, "tfunc", tfunc)
+            func_ids = getattr(mat_obj, "func_ids", func_ids)
+            rates = getattr(mat_obj, "rates", rates)
+            fscales = getattr(mat_obj, "fscales", fscales)
+
+        if mat_id is not None:
+            mid = mat_id
+
+        # Support backward-compatible positional raw data_cards: mat_law66(mid, title, data_cards)
+        if isinstance(title, str) and isinstance(data_cards, (list, tuple)):
+            if unit_id is not None:
+                self._header("MAT", law_name, mid, unit_id)
+            else:
+                self._header("MAT", law_name, mid)
+            self._title(title)
+            self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+            return self
+
+        if "rho0" in kwargs and not rho:
+            rho = kwargs["rho0"]
+        if "ref_rho" in kwargs:
+            rhor = kwargs["ref_rho"]
+        if "refer_rho" in kwargs:
+            rhor = kwargs["refer_rho"]
+        if "E" in kwargs:
+            e = kwargs["E"]
+        if "Nu" in kwargs:
+            nu = kwargs["Nu"]
+        if "israte" in kwargs:
+            iyld_rate = kwargs["israte"]
+        if "cp" in kwargs:
+            c = kwargs["cp"]
+        if "epsp0" in kwargs:
+            eps_0 = kwargs["epsp0"]
+        if "sigmay0" in kwargs:
+            sigma_y0 = kwargs["sigmay0"]
+
+        rho_val = float(rho)
+        rhor_val = float(rhor)
+        e_val = float(e)
+        nu_val = float(nu)
+        ec_val = float(ec)
+        pc_val = float(pc)
+        pt_val = float(pt)
+        rpct_val = float(rpct)
+        c_hard_val = float(c_hard)
+        f_cut_val = float(f_cut)
+        fsmooth_val = int(fsmooth)
+        iyld_rate_val = int(iyld_rate)
+
+        fun_a1_val = int(fun_a1)
+        fun_a2_val = int(fun_a2)
+        fscale11_val = float(fscale11)
+        fscale22_val = float(fscale22)
+
+        eps_0_val = float(eps_0)
+        c_val = float(c)
+        sigma_y0_val = float(sigma_y0)
+        vp_val = int(vp)
+
+        fun_b1_val = int(fun_b1)
+        fun_b2_val = int(fun_b2)
+        fscale33_val = float(fscale33)
+        fscale12_val = float(fscale12)
+
+        nfunc_val = int(nfunc) if nfunc is not None else 0
+        tfunc_val = int(tfunc) if tfunc is not None else 0
+        fids = list(func_ids) if func_ids is not None else []
+        rts = list(rates) if rates is not None else []
+        scs = list(fscales) if fscales is not None else []
+        if iyld_rate_val == 4 and nfunc_val == 0 and fids:
+            nfunc_val = len(fids)
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
         self._title(title)
-        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+        if fixed_format:
+            # Card 1: RHO_I, [Refer_Rho]
+            if rhor_val != 0.0:
+                self.lines.append(fmt_float(rho_val) + fmt_float(rhor_val))
+            else:
+                self.lines.append(fmt_float(rho_val))
+
+            # Card 2: E, Nu, C_hard, F_cut, Fsmooth, Iyld_rate
+            self.lines.append(
+                fmt_float(e_val)
+                + fmt_float(nu_val)
+                + fmt_float(c_hard_val)
+                + fmt_float(f_cut_val)
+                + fmt_int(fsmooth_val, 10)
+                + fmt_int(iyld_rate_val, 10)
+            )
+
+            # Card 3: P_c, P_t, EC, RPCT
+            self.lines.append(
+                fmt_float(pc_val)
+                + fmt_float(pt_val)
+                + fmt_float(ec_val)
+                + fmt_float(rpct_val)
+            )
+
+            if iyld_rate_val <= 3:
+                # Card 4: FUN_A1, FUN_A2, FScale11, FScale22
+                self.lines.append(
+                    fmt_int(fun_a1_val, 10)
+                    + fmt_int(fun_a2_val, 10)
+                    + fmt_float(fscale11_val)
+                    + fmt_float(fscale22_val)
+                )
+                if iyld_rate_val <= 2:
+                    # Card 5: Epsilon_0, c, Sigma_Y0, VP
+                    self.lines.append(
+                        fmt_float(eps_0_val)
+                        + fmt_float(c_val)
+                        + fmt_float(sigma_y0_val)
+                        + fmt_int(vp_val, 10)
+                    )
+                elif iyld_rate_val == 3:
+                    # Card 5: FUN_B1, FUN_B2, FScale33, FScale12
+                    self.lines.append(
+                        fmt_int(fun_b1_val, 10)
+                        + fmt_int(fun_b2_val, 10)
+                        + fmt_float(fscale33_val)
+                        + fmt_float(fscale12_val)
+                    )
+            elif iyld_rate_val == 4:
+                # Card 4: NFUNC, TFUNC
+                self.lines.append(
+                    fmt_int(nfunc_val, 10)
+                    + fmt_int(tfunc_val, 10)
+                )
+                # Curve Cards: ID, blank(10), Rate, Fscale
+                for i in range(nfunc_val):
+                    fid = fids[i] if i < len(fids) else 0
+                    r = rts[i] if i < len(rts) else 0.0
+                    s = scs[i] if i < len(scs) else 1.0
+                    self.lines.append(
+                        fmt_int(fid, 10)
+                        + blank(10)
+                        + fmt_float(r)
+                        + fmt_float(s)
+                    )
+        else:
+            # Free format
+            if rhor_val != 0.0:
+                self.lines.append(f"{rho_val} {rhor_val}")
+            else:
+                self.lines.append(f"{rho_val}")
+
+            self.lines.append(f"{e_val} {nu_val} {c_hard_val} {f_cut_val} {fsmooth_val} {iyld_rate_val}")
+            self.lines.append(f"{pc_val} {pt_val} {ec_val} {rpct_val}")
+
+            if iyld_rate_val <= 3:
+                self.lines.append(f"{fun_a1_val} {fun_a2_val} {fscale11_val} {fscale22_val}")
+                if iyld_rate_val <= 2:
+                    self.lines.append(f"{eps_0_val} {c_val} {sigma_y0_val} {vp_val}")
+                elif iyld_rate_val == 3:
+                    self.lines.append(f"{fun_b1_val} {fun_b2_val} {fscale33_val} {fscale12_val}")
+            elif iyld_rate_val == 4:
+                self.lines.append(f"{nfunc_val} {tfunc_val}")
+                for i in range(nfunc_val):
+                    fid = fids[i] if i < len(fids) else 0
+                    r = rts[i] if i < len(rts) else 0.0
+                    s = scs[i] if i < len(scs) else 1.0
+                    self.lines.append(f"{fid} 0.0 {r} {s}")
+
+        return self
+
+    def mat_plas_tab_cosser(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "PLAS_TAB_COSSER")
+        return self.mat_law66(*args, **kwargs)
+
+    def mat_plas_cosser(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "PLAS_COSSER")
+        return self.mat_law66(*args, **kwargs)
 
     def mat_hyd_jcook(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/HYD_JCOOK``."""

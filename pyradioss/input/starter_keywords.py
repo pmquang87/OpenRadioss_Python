@@ -868,7 +868,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW33", "FOAM_PLAS", "LAW33_FOAM_PLAS"):
         read_mat_law33(block, model, log)
         return
-    if lawname in ("LAW66", "FOAM_TAB", "LAW66_FOAM_TAB"):
+    if lawname in ("LAW66", "66", "FOAM_TAB", "LAW66_FOAM_TAB", "PLAS_TAB_COSSER", "PLAS_COSSER", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "LAW66_PLAS_TAB_COSSER", "LAW66_PLAS_COSSER"):
         read_mat_law66(block, model, log)
         return
     if lawname in ("LAW35", "FOAM_VISC", "LAW35_FOAM_VISC"):
@@ -26560,194 +26560,319 @@ def read_mat_nonlocal(block: KeywordBlock, model: Model, log: MessageLog) -> Non
 
 
 def read_mat_law66(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW66`` or ``/MAT/FOAM_TAB`` (M172): Tabular foam material model.
+    """``/MAT/LAW66`` (``/MAT/PLAS_TAB_COSSER``, ``/MAT/PLAS_COSSER``, ``/MAT/FOAM_TAB``) (M172, M562):
+    Tabulated tension-compression plastic material model.
 
     Fortran origin: ``starter/source/materials/mat/mat066/hm_read_mat66.F``.
+    CFG reference: ``radioss2022/MAT/mat_law66.cfg``.
     """
-    from ..model.entities import MaterialLaw66, Material
+    from ..model.entities import MatLaw66, Material
     mat_id = block.user_id or 1
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    if not cards or cards[0].is_blank:
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    if not valid_cards:
         log.error(f"/MAT/LAW66/{mat_id}: missing data card", block.source)
         return
 
     rho0, refer_rho = 0.0, 0.0
     e, nu, c_hard, f_cut = 0.0, 0.0, 0.0, 0.0
-    fsmooth, israte = 0, 0
-    p_c, p_t, ec, rpct = 0.0, 0.0, 0.0, 0.0
+    fsmooth, israte = 0, 1
+    p_c, p_t, ec, rpct = 0.0, 0.0, 0.0, 1.0
     funct_idc, funct_idt = 0, 0
     fscalec, fscalet = 1.0, 1.0
-    epsilon_0, c, sigma_y0 = 0.0, 0.0, 0.0
+    epsilon_0, c, sigma_y0 = 1.0, 1.0, 0.0
     vp = 0
     fnyrt_idc, fnyrt_idt = 0, 0
     yrate_fscalec, yrate_fscalet = 1.0, 1.0
     nfunc, tfunc = 0, 0
-    func_c_list: List[int] = []
-    eps_c_list: List[float] = []
-    fscale_c_list: List[float] = []
-    func_t_list: List[int] = []
-    eps_t_list: List[float] = []
-    fscale_t_list: List[float] = []
+    abg_ipt: List[int] = []
+    k_a1: List[float] = []
+    fp1: List[float] = []
+    abg_ipdel: List[int] = []
+    k_b1: List[float] = []
+    fp2: List[float] = []
 
-    if block.fixed:
-        f1 = cards[0].cut("MAT_LAW66_1")
+    is_fixed = block.fixed
+    if is_fixed:
+        for vc in valid_cards[:3]:
+            if "," in vc.raw or (len(vc.tokens()) > 1 and len(vc.raw[:20].split()) > 1):
+                is_fixed = False
+                break
+
+    if is_fixed:
+        # Card 1: RHO_I [Refer_Rho]
+        f1 = valid_cards[0].cut("MAT_LAW66_1")
         rho0 = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
-        refer_rho = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        refer_rho = _fval(f1[1], 0.0) if len(f1) > 1 and f1[1].strip() else 0.0
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            f2 = cards[1].cut("MAT_LAW66_2")
+        # Card 2: E, Nu, C_hard, F_cut, Fsmooth, Iyld_rate
+        if len(valid_cards) > 1:
+            f2 = valid_cards[1].cut("MAT_LAW66_2")
             e = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
             nu = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
             c_hard = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
             f_cut = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
             fsmooth = _ival(f2[4]) if len(f2) > 4 else 0
-            israte = _ival(f2[5]) if len(f2) > 5 else 0
+            israte = _ival(f2[5]) if len(f2) > 5 else 1
 
-        if len(cards) > 2 and not cards[2].is_blank:
-            f3 = cards[2].cut("MAT_LAW66_3")
+        # Card 3: P_c, P_t, EC, RPCT
+        if len(valid_cards) > 2:
+            f3 = valid_cards[2].cut("MAT_LAW66_3")
             p_c = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
             p_t = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
             ec = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
-            rpct = _fval(f3[3], 0.0) if len(f3) > 3 else 0.0
+            rpct = _fval(f3[3], 1.0) if len(f3) > 3 and f3[3].strip() else 1.0
 
         card_idx = 3
         if israte in (0, 1, 2, 3):
-            if len(cards) > card_idx and not cards[card_idx].is_blank:
-                f4 = cards[card_idx].cut("MAT_LAW66_ISRATE_0123")
+            if len(valid_cards) > card_idx:
+                f4 = valid_cards[card_idx].cut("MAT_LAW66_4")
                 funct_idc = _ival(f4[0]) if len(f4) > 0 else 0
                 funct_idt = _ival(f4[1]) if len(f4) > 1 else 0
-                fscalec = _fval(f4[2], 1.0) if len(f4) > 2 else 1.0
-                fscalet = _fval(f4[3], 1.0) if len(f4) > 3 else 1.0
+                fscalec = _fval(f4[2], 1.0) if len(f4) > 2 and f4[2].strip() else 1.0
+                fscalet = _fval(f4[3], 1.0) if len(f4) > 3 and f4[3].strip() else 1.0
                 card_idx += 1
-            if israte in (0, 1, 2) and len(cards) > card_idx and not cards[card_idx].is_blank:
-                f5 = cards[card_idx].cut("MAT_LAW66_ISRATE_012")
-                epsilon_0 = _fval(f5[0], 0.0) if len(f5) > 0 else 0.0
-                c = _fval(f5[1], 0.0) if len(f5) > 1 else 0.0
+            if israte in (0, 1, 2) and len(valid_cards) > card_idx:
+                f5 = valid_cards[card_idx].cut("MAT_LAW66_5")
+                epsilon_0 = _fval(f5[0], 1.0) if len(f5) > 0 and f5[0].strip() else 1.0
+                c = _fval(f5[1], 1.0) if len(f5) > 1 and f5[1].strip() else 1.0
                 sigma_y0 = _fval(f5[2], 0.0) if len(f5) > 2 else 0.0
                 vp = _ival(f5[3]) if len(f5) > 3 else 0
                 card_idx += 1
-            elif israte == 3 and len(cards) > card_idx and not cards[card_idx].is_blank:
-                f5 = cards[card_idx].cut("MAT_LAW66_ISRATE_3")
+            elif israte == 3 and len(valid_cards) > card_idx:
+                f5 = valid_cards[card_idx].cut("MAT_LAW66_ISRATE_3")
                 fnyrt_idc = _ival(f5[0]) if len(f5) > 0 else 0
                 fnyrt_idt = _ival(f5[1]) if len(f5) > 1 else 0
-                yrate_fscalec = _fval(f5[2], 1.0) if len(f5) > 2 else 1.0
-                yrate_fscalet = _fval(f5[3], 1.0) if len(f5) > 3 else 1.0
+                yrate_fscalec = _fval(f5[2], 1.0) if len(f5) > 2 and f5[2].strip() else 1.0
+                yrate_fscalet = _fval(f5[3], 1.0) if len(f5) > 3 and f5[3].strip() else 1.0
                 card_idx += 1
         elif israte == 4:
-            if len(cards) > card_idx and not cards[card_idx].is_blank:
-                f4 = cards[card_idx].cut("MAT_LAW66_ISRATE_4")
+            if len(valid_cards) > card_idx:
+                f4 = valid_cards[card_idx].cut("MAT_LAW66_ISRATE_4")
                 nfunc = _ival(f4[0]) if len(f4) > 0 else 0
                 tfunc = _ival(f4[1]) if len(f4) > 1 else 0
                 card_idx += 1
             for _ in range(nfunc):
-                if card_idx < len(cards) and not cards[card_idx].is_blank:
-                    fc = cards[card_idx].cut("MAT_LAW66_ISRATE_4_C")
-                    func_c_list.append(_ival(fc[0]) if len(fc) > 0 else 0)
-                    eps_c_list.append(_fval(fc[2], 0.0) if len(fc) > 2 else 0.0)
-                    fscale_c_list.append(_fval(fc[3], 1.0) if len(fc) > 3 else 1.0)
+                if card_idx < len(valid_cards):
+                    fc = valid_cards[card_idx].cut("MAT_LAW66_CURVE")
+                    abg_ipt.append(_ival(fc[0]) if len(fc) > 0 else 0)
+                    k_a1.append(_fval(fc[2], 0.0) if len(fc) > 2 else 0.0)
+                    fp1.append(_fval(fc[3], 1.0) if len(fc) > 3 and fc[3].strip() else 1.0)
                     card_idx += 1
             for _ in range(tfunc):
-                if card_idx < len(cards) and not cards[card_idx].is_blank:
-                    ft = cards[card_idx].cut("MAT_LAW66_ISRATE_4_T")
-                    func_t_list.append(_ival(ft[0]) if len(ft) > 0 else 0)
-                    eps_t_list.append(_fval(ft[2], 0.0) if len(ft) > 2 else 0.0)
-                    fscale_t_list.append(_fval(ft[3], 1.0) if len(ft) > 3 else 1.0)
+                if card_idx < len(valid_cards):
+                    ft = valid_cards[card_idx].cut("MAT_LAW66_CURVE")
+                    abg_ipdel.append(_ival(ft[0]) if len(ft) > 0 else 0)
+                    k_b1.append(_fval(ft[2], 0.0) if len(ft) > 2 else 0.0)
+                    fp2.append(_fval(ft[3], 1.0) if len(ft) > 3 and ft[3].strip() else 1.0)
                     card_idx += 1
     else:
-        t1 = cards[0].tokens()
+        # Free format
+        t1 = valid_cards[0].tokens()
         rho0 = float(t1[0]) if len(t1) > 0 else 0.0
         refer_rho = float(t1[1]) if len(t1) > 1 else 0.0
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            t2 = cards[1].tokens()
+        if len(valid_cards) > 1:
+            t2 = valid_cards[1].tokens()
             e = float(t2[0]) if len(t2) > 0 else 0.0
             nu = float(t2[1]) if len(t2) > 1 else 0.0
             c_hard = float(t2[2]) if len(t2) > 2 else 0.0
             f_cut = float(t2[3]) if len(t2) > 3 else 0.0
             fsmooth = int(float(t2[4])) if len(t2) > 4 else 0
-            israte = int(float(t2[5])) if len(t2) > 5 else 0
+            israte = int(float(t2[5])) if len(t2) > 5 else 1
 
-        if len(cards) > 2 and not cards[2].is_blank:
-            t3 = cards[2].tokens()
+        if len(valid_cards) > 2:
+            t3 = valid_cards[2].tokens()
             p_c = float(t3[0]) if len(t3) > 0 else 0.0
             p_t = float(t3[1]) if len(t3) > 1 else 0.0
             ec = float(t3[2]) if len(t3) > 2 else 0.0
-            rpct = float(t3[3]) if len(t3) > 3 else 0.0
+            rpct = float(t3[3]) if len(t3) > 3 else 1.0
 
         card_idx = 3
         if israte in (0, 1, 2, 3):
-            if len(cards) > card_idx and not cards[card_idx].is_blank:
-                t4 = cards[card_idx].tokens()
+            if len(valid_cards) > card_idx:
+                t4 = valid_cards[card_idx].tokens()
                 funct_idc = int(float(t4[0])) if len(t4) > 0 else 0
                 funct_idt = int(float(t4[1])) if len(t4) > 1 else 0
                 fscalec = float(t4[2]) if len(t4) > 2 else 1.0
                 fscalet = float(t4[3]) if len(t4) > 3 else 1.0
                 card_idx += 1
-            if israte in (0, 1, 2) and len(cards) > card_idx and not cards[card_idx].is_blank:
-                t5 = cards[card_idx].tokens()
-                epsilon_0 = float(t5[0]) if len(t5) > 0 else 0.0
-                c = float(t5[1]) if len(t5) > 1 else 0.0
+            if israte in (0, 1, 2) and len(valid_cards) > card_idx:
+                t5 = valid_cards[card_idx].tokens()
+                epsilon_0 = float(t5[0]) if len(t5) > 0 else 1.0
+                c = float(t5[1]) if len(t5) > 1 else 1.0
                 sigma_y0 = float(t5[2]) if len(t5) > 2 else 0.0
                 vp = int(float(t5[3])) if len(t5) > 3 else 0
                 card_idx += 1
-            elif israte == 3 and len(cards) > card_idx and not cards[card_idx].is_blank:
-                t5 = cards[card_idx].tokens()
+            elif israte == 3 and len(valid_cards) > card_idx:
+                t5 = valid_cards[card_idx].tokens()
                 fnyrt_idc = int(float(t5[0])) if len(t5) > 0 else 0
                 fnyrt_idt = int(float(t5[1])) if len(t5) > 1 else 0
                 yrate_fscalec = float(t5[2]) if len(t5) > 2 else 1.0
                 yrate_fscalet = float(t5[3]) if len(t5) > 3 else 1.0
                 card_idx += 1
         elif israte == 4:
-            if len(cards) > card_idx and not cards[card_idx].is_blank:
-                t4 = cards[card_idx].tokens()
+            if len(valid_cards) > card_idx:
+                t4 = valid_cards[card_idx].tokens()
                 nfunc = int(float(t4[0])) if len(t4) > 0 else 0
                 tfunc = int(float(t4[1])) if len(t4) > 1 else 0
                 card_idx += 1
             for _ in range(nfunc):
-                if card_idx < len(cards) and not cards[card_idx].is_blank:
-                    tok = cards[card_idx].tokens()
-                    func_c_list.append(int(float(tok[0])) if len(tok) > 0 else 0)
-                    eps_c_list.append(float(tok[1]) if len(tok) > 1 else 0.0)
-                    fscale_c_list.append(float(tok[2]) if len(tok) > 2 else 1.0)
+                if card_idx < len(valid_cards):
+                    tok = valid_cards[card_idx].tokens()
+                    if len(tok) >= 4:
+                        abg_ipt.append(int(float(tok[0])))
+                        k_a1.append(float(tok[-2]))
+                        fp1.append(float(tok[-1]))
+                    else:
+                        abg_ipt.append(int(float(tok[0])) if len(tok) > 0 else 0)
+                        k_a1.append(float(tok[1]) if len(tok) > 1 else 0.0)
+                        fp1.append(float(tok[2]) if len(tok) > 2 else 1.0)
                     card_idx += 1
             for _ in range(tfunc):
-                if card_idx < len(cards) and not cards[card_idx].is_blank:
-                    tok = cards[card_idx].tokens()
-                    func_t_list.append(int(float(tok[0])) if len(tok) > 0 else 0)
-                    eps_t_list.append(float(tok[1]) if len(tok) > 1 else 0.0)
-                    fscale_t_list.append(float(tok[2]) if len(tok) > 2 else 1.0)
+                if card_idx < len(valid_cards):
+                    tok = valid_cards[card_idx].tokens()
+                    if len(tok) >= 4:
+                        abg_ipdel.append(int(float(tok[0])))
+                        k_b1.append(float(tok[-2]))
+                        fp2.append(float(tok[-1]))
+                    else:
+                        abg_ipdel.append(int(float(tok[0])) if len(tok) > 0 else 0)
+                        k_b1.append(float(tok[1]) if len(tok) > 1 else 0.0)
+                        fp2.append(float(tok[2]) if len(tok) > 2 else 1.0)
                     card_idx += 1
 
-    m66 = MaterialLaw66(
-        id=mat_id, title=title, rho0=rho0, ref_rho=refer_rho,
-        e=e, nu=nu, c_hard=c_hard, f_cut=f_cut, fsmooth=fsmooth,
-        israte=israte, p_c=p_c, p_t=p_t, ec=ec, rpct=rpct,
-        funct_idc=funct_idc, funct_idt=funct_idt, fscalec=fscalec, fscalet=fscalet,
-        epsilon_0=epsilon_0, c=c, sigma_y0=sigma_y0, vp=vp,
-        fnyrt_idc=fnyrt_idc, fnyrt_idt=fnyrt_idt,
-        yrate_fscalec=yrate_fscalec, yrate_fscalet=yrate_fscalet,
-        nfunc=nfunc, tfunc=tfunc, func_c_list=func_c_list,
-        eps_c_list=eps_c_list, fscale_c_list=fscale_c_list,
-        func_t_list=func_t_list, eps_t_list=eps_t_list, fscale_t_list=fscale_t_list,
+    # Fortran defaults alignment:
+    if israte == 0:
+        israte = 1
+    if epsilon_0 == 0.0:
+        epsilon_0 = 1.0
+    if c == 0.0 and israte == 1:
+        c = 1.0
+    if rpct == 0.0:
+        rpct = 1.0
+
+    m66 = MatLaw66(
+        id=mat_id,
+        rho=rho0,
+        e=e,
+        nu=nu,
+        ec=ec,
+        pc=p_c,
+        pt=p_t,
+        rpct=rpct,
+        chard=c_hard,
+        asrate=f_cut,
+        fsmooth=fsmooth,
+        israte=israte,
+        fun_a1=funct_idc,
+        fun_a2=funct_idt,
+        fscale11=fscalec,
+        fscale22=fscalet,
+        epsp0=epsilon_0,
+        cp=c,
+        sigy=sigma_y0,
+        vp=vp,
+        fun_b1=fnyrt_idc,
+        fun_b2=fnyrt_idt,
+        fscale33=yrate_fscalec,
+        fscale12=yrate_fscalet,
+        nfunc=nfunc,
+        tfunc=tfunc,
+        abg_ipt=abg_ipt,
+        k_a1=k_a1,
+        fp1=fp1,
+        abg_ipdel=abg_ipdel,
+        k_b1=k_b1,
+        fp2=fp2,
+        title=title,
+        law=66,
+        law_name="LAW66",
+        refer_rho=refer_rho,
     )
     model.mat_law66s[mat_id] = m66
     model.materials[mat_id] = Material(
-        id=mat_id, law=66, rho0=rho0, title=title,
+        id=mat_id,
+        law=66,
+        rho0=rho0,
+        title=title,
         params={
-            "E": e, "nu": nu, "C_hard": c_hard, "F_cut": f_cut, "Fsmooth": fsmooth,
-            "ISRATE": israte, "P_c": p_c, "P_t": p_t, "EC": ec, "RPCT": rpct,
-            "funct_IDc": funct_idc, "funct_IDt": funct_idt,
-            "Fscalec": fscalec, "Fscalet": fscalet,
-            "Epsilon_0": epsilon_0, "c": c, "Sigma_Y0": sigma_y0, "VP": vp,
-            "fnYrt_IDc": fnyrt_idc, "fnYrt_IDt": fnyrt_idt,
-            "Yrate_Fscalec": yrate_fscalec, "Yrate_Fscalet": yrate_fscalet,
-            "NFUNCC": nfunc, "NFUNCT": tfunc,
-            "NFUNC": nfunc, "TFUNC": tfunc,
-            "func_c_list": func_c_list, "eps_c_list": eps_c_list, "fscale_c_list": fscale_c_list,
-            "func_t_list": func_t_list, "eps_t_list": eps_t_list, "fscale_t_list": fscale_t_list,
-            "ABG_IPt": func_c_list, "K_A1": eps_c_list, "Fp1": fscale_c_list,
-            "ABG_IPdel": func_t_list, "K_B1": eps_t_list, "Fp2": fscale_t_list,
-        }
+            "E": e,
+            "nu": nu,
+            "Nu": nu,
+            "C_hard": c_hard,
+            "chard": c_hard,
+            "fisokin": c_hard,
+            "F_cut": f_cut,
+            "asrate": f_cut,
+            "Fsmooth": fsmooth,
+            "fsmooth": fsmooth,
+            "ISRATE": israte,
+            "israte": israte,
+            "P_c": p_c,
+            "pc": p_c,
+            "P_t": p_t,
+            "pt": p_t,
+            "EC": ec,
+            "ec": ec,
+            "RPCT": rpct,
+            "rpct": rpct,
+            "funct_IDc": funct_idc,
+            "fun_a1": funct_idc,
+            "funct_IDt": funct_idt,
+            "fun_a2": funct_idt,
+            "Fscalec": fscalec,
+            "fscale11": fscalec,
+            "Fscalet": fscalet,
+            "fscale22": fscalet,
+            "Epsilon_0": epsilon_0,
+            "epsp0": epsilon_0,
+            "c": c,
+            "cp": c,
+            "Sigma_Y0": sigma_y0,
+            "sigy": sigma_y0,
+            "VP": vp,
+            "vp": vp,
+            "fnYrt_IDc": fnyrt_idc,
+            "fun_b1": fnyrt_idc,
+            "fnYrt_IDt": fnyrt_idt,
+            "fun_b2": fnyrt_idt,
+            "Yrate_Fscalec": yrate_fscalec,
+            "fscale33": yrate_fscalec,
+            "Yrate_Fscalet": yrate_fscalet,
+            "fscale12": yrate_fscalet,
+            "NFUNCC": nfunc,
+            "NFUNCT": tfunc,
+            "NFUNC": nfunc,
+            "TFUNC": tfunc,
+            "nfunc": nfunc,
+            "tfunc": tfunc,
+            "func_c_list": abg_ipt,
+            "eps_c_list": k_a1,
+            "fscale_c_list": fp1,
+            "func_t_list": abg_ipdel,
+            "eps_t_list": k_b1,
+            "fscale_t_list": fp2,
+            "ABG_IPt": abg_ipt,
+            "K_A1": k_a1,
+            "Fp1": fp1,
+            "ABG_IPdel": abg_ipdel,
+            "K_B1": k_b1,
+            "Fp2": fp2,
+            "abg_ipt": abg_ipt,
+            "k_a1": k_a1,
+            "fp1": fp1,
+            "abg_ipdel": abg_ipdel,
+            "k_b1": k_b1,
+            "fp2": fp2,
+            "G": m66.G,
+            "bulk": m66.bulk,
+            "K": m66.K,
+            "sound_speed": m66.sound_speed,
+            "sound_speed_solid": m66.sound_speed_solid,
+            "sound_speed_shell": m66.sound_speed_shell,
+            "refer_rho": refer_rho,
+        },
     )
 
 
@@ -85046,10 +85171,14 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_LAW33": read_mat,
     "MAT_FOAM_PLAS": read_mat,
     "HEAT_TRANSFER": read_heat,
-    # M172: MAT LAW66 (FOAM_TAB), LAW35 (FOAM_VISC), LAW62 (VISC_HYP), LAW28 (HONEYCOMB), LAW44 (COWPER_SYMONDS)
+    # M172 / M562: MAT LAW66 (FOAM_TAB, PLAS_TAB_COSSER, PLAS_COSSER), LAW35 (FOAM_VISC), LAW62 (VISC_HYP), LAW28 (HONEYCOMB), LAW44 (COWPER_SYMONDS)
     "MAT_LAW66": read_mat,
     "MAT_FOAM_TAB": read_mat,
     "FOAM_TAB": read_mat,
+    "MAT_PLAS_TAB_COSSER": read_mat,
+    "PLAS_TAB_COSSER": read_mat,
+    "MAT_PLAS_COSSER": read_mat,
+    "PLAS_COSSER": read_mat,
     "MAT_LAW35": read_mat,
     "MAT_FOAM_VISC": read_mat,
     "FOAM_VISC": read_mat,

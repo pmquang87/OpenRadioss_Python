@@ -104,10 +104,12 @@ class Card:
         line = self.raw.rstrip("\n")
         return [line[i * width:(i + 1) * width].strip() for i in range(n)]
 
-    def cut(self, layout_key: str) -> List[str]:
+    def cut(self, layout_key: Union[str, Sequence[int]]) -> List[str]:
         """Cut the raw line at the column widths of the shared
         :data:`card_layouts.LAYOUTS` entry ``layout_key`` (M37) — the way
         packed real cards with NO whitespace between fields are split."""
+        if isinstance(layout_key, (list, tuple)):
+            return split_fixed(self.raw, layout_key)
         return split_fixed(self.raw, LAYOUTS[layout_key])
 
     @property
