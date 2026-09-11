@@ -4380,6 +4380,7 @@ class StarterDeck:
         rhocp: float = 0.0,
         law_name: str = "LAW73",
         unit_id: Optional[int] = None,
+        fixed_format: bool = True,
         **kwargs,
     ) -> StarterDeck:
         """``/MAT/LAW73`` (/MAT/BARLAT2000, /MAT/HILL_THERM, /MAT/THERM_HILL) (M561)
@@ -4407,60 +4408,82 @@ class StarterDeck:
             return self
 
         kw_low = {k.lower(): v for k, v in kwargs.items()}
+        if "fixed_format" in kw_low:
+            fixed_format = bool(kw_low["fixed_format"])
+        if "fixed" in kw_low:
+            fixed_format = bool(kw_low["fixed"])
+        if "free" in kw_low and bool(kw_low["free"]):
+            fixed_format = False
+        if "law_name" in kw_low:
+            law_name = str(kw_low["law_name"])
+
         mat_obj = None
-        if hasattr(mid, "r00") and hasattr(mid, "rho"):
+        if hasattr(mid, "r00") and (hasattr(mid, "rho") or hasattr(mid, "rho0")):
             mat_obj = mid
-        elif hasattr(mid, "r00") and hasattr(mid, "rho0"):
+        elif hasattr(mid, "params") and ("r00" in getattr(mid, "params", {}) or "R00" in getattr(mid, "params", {}) or getattr(mid, "law", None) in (73, "73", "LAW73")):
             mat_obj = mid
-        elif "mat" in kw_low and hasattr(kw_low["mat"], "r00"):
+        elif "mat" in kw_low:
             mat_obj = kw_low["mat"]
-        elif "mat73" in kw_low and hasattr(kw_low["mat73"], "r00"):
+        elif "material" in kw_low:
+            mat_obj = kw_low["material"]
+        elif "mat73" in kw_low:
             mat_obj = kw_low["mat73"]
+        elif "mat_law73" in kw_low:
+            mat_obj = kw_low["mat_law73"]
+        elif "mat_hill_therm" in kw_low:
+            mat_obj = kw_low["mat_hill_therm"]
+        elif "mat_therm_hill" in kw_low:
+            mat_obj = kw_low["mat_therm_hill"]
+        elif "mat_barlat2000" in kw_low:
+            mat_obj = kw_low["mat_barlat2000"]
 
         if mat_obj is not None:
-            mid = getattr(mat_obj, "id", 0)
+            mid = getattr(mat_obj, "id", mid)
             if not title:
                 title = getattr(mat_obj, "title", "")
+            p = getattr(mat_obj, "params", {}) or {}
+            if not isinstance(p, dict):
+                p = {}
             if rho == 0.0:
-                rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", 0.0))
+                rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", p.get("rho", p.get("rho0", 0.0))))
             if rhor == 0.0:
-                rhor = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", 0.0))
+                rhor = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", p.get("refer_rho", p.get("rhor", 0.0))))
             if e == 0.0:
-                e = getattr(mat_obj, "e", getattr(mat_obj, "E", 0.0))
+                e = getattr(mat_obj, "e", getattr(mat_obj, "E", p.get("e", p.get("E", 0.0))))
             if nu == 0.0:
-                nu = getattr(mat_obj, "nu", getattr(mat_obj, "Nu", 0.0))
+                nu = getattr(mat_obj, "nu", getattr(mat_obj, "Nu", p.get("nu", p.get("Nu", 0.0))))
             if ifunce == 0:
-                ifunce = getattr(mat_obj, "ifunce", getattr(mat_obj, "yr_fun", 0))
+                ifunce = getattr(mat_obj, "ifunce", getattr(mat_obj, "yr_fun", p.get("ifunce", p.get("yr_fun", 0))))
             if einf == 0.0:
-                einf = getattr(mat_obj, "einf", getattr(mat_obj, "efib", 0.0))
+                einf = getattr(mat_obj, "einf", getattr(mat_obj, "efib", p.get("einf", p.get("efib", 0.0))))
             if ce == 0.0:
-                ce = getattr(mat_obj, "ce", getattr(mat_obj, "c", 0.0))
+                ce = getattr(mat_obj, "ce", getattr(mat_obj, "c", p.get("ce", p.get("c", 0.0))))
             if r00 == 1.0:
-                r00 = getattr(mat_obj, "r00", getattr(mat_obj, "r0", 1.0))
+                r00 = getattr(mat_obj, "r00", getattr(mat_obj, "r0", p.get("r00", p.get("r0", 1.0))))
             if r45 == 1.0:
-                r45 = getattr(mat_obj, "r45", 1.0)
+                r45 = getattr(mat_obj, "r45", p.get("r45", 1.0))
             if r90 == 1.0:
-                r90 = getattr(mat_obj, "r90", 1.0)
+                r90 = getattr(mat_obj, "r90", p.get("r90", 1.0))
             if chard == 0.0:
-                chard = getattr(mat_obj, "chard", getattr(mat_obj, "fisokin", 0.0))
+                chard = getattr(mat_obj, "chard", getattr(mat_obj, "fisokin", p.get("chard", p.get("fisokin", 0.0))))
             if iyield == 0:
-                iyield = getattr(mat_obj, "iyield", 0)
+                iyield = getattr(mat_obj, "iyield", p.get("iyield", 0))
             if eps_max == 1.0e30:
-                eps_max = getattr(mat_obj, "eps_max", getattr(mat_obj, "epsp_max", 1.0e30))
+                eps_max = getattr(mat_obj, "eps_max", getattr(mat_obj, "epsp_max", p.get("eps_max", p.get("epsp_max", 1.0e30))))
             if epsr1 == 1.0e30:
-                epsr1 = getattr(mat_obj, "epsr1", getattr(mat_obj, "epst1", 1.0e30))
+                epsr1 = getattr(mat_obj, "epsr1", getattr(mat_obj, "epst1", p.get("epsr1", p.get("epst1", 1.0e30))))
             if epsr2 == 2.0e30:
-                epsr2 = getattr(mat_obj, "epsr2", getattr(mat_obj, "epst2", 2.0e30))
+                epsr2 = getattr(mat_obj, "epsr2", getattr(mat_obj, "epst2", p.get("epsr2", p.get("epst2", 2.0e30))))
             if table_id == 0:
-                table_id = getattr(mat_obj, "table_id", getattr(mat_obj, "fun_a1", 0))
+                table_id = getattr(mat_obj, "table_id", getattr(mat_obj, "fun_a1", p.get("table_id", p.get("fun_a1", 0))))
             if fscale == 1.0:
-                fscale = getattr(mat_obj, "fscale", 1.0)
+                fscale = getattr(mat_obj, "fscale", p.get("fscale", 1.0))
             if pscale == 1.0:
-                pscale = getattr(mat_obj, "pscale", 1.0)
+                pscale = getattr(mat_obj, "pscale", p.get("pscale", 1.0))
             if t0 == 293.0:
-                t0 = getattr(mat_obj, "t0", getattr(mat_obj, "t_initial", 293.0))
+                t0 = getattr(mat_obj, "t0", getattr(mat_obj, "t_initial", p.get("t0", p.get("t_initial", 293.0))))
             if rhocp == 0.0:
-                rhocp = getattr(mat_obj, "rhocp", getattr(mat_obj, "spheat", 0.0))
+                rhocp = getattr(mat_obj, "rhocp", getattr(mat_obj, "spheat", p.get("rhocp", p.get("spheat", 0.0))))
 
         if "id" in kwargs and mid == 0:
             mid = kwargs["id"]
@@ -4509,41 +4532,62 @@ class StarterDeck:
             self._header("MAT", law_name, mid)
         self._title(title)
 
-        # Card 1: RHO [Refer_Rho]
-        if rhor is not None and float(rhor) != 0.0 and float(rhor) != float(rho):
-            self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(rhor, 20)}")
+        if fixed_format:
+            # Card 1: RHO [Refer_Rho]
+            if rhor is not None and float(rhor) != 0.0 and float(rhor) != float(rho):
+                self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(rhor, 20)}")
+            else:
+                self.lines.append(fmt_float(rho, 20))
+
+            # Card 2: E, nu
+            self.lines.append(f"{fmt_float(e, 20)}{fmt_float(nu, 20)}")
+
+            # Card 3: Yr_fun (10), blank(10), Einf (20), C (20)
+            self.lines.append(f"{fmt_int(ifunce, 10)}{' ' * 10}{fmt_float(einf, 20)}{fmt_float(ce, 20)}")
+
+            # Card 4: R00 (20), R45 (20), R90 (20), CHard (20), Iyield (10)
+            self.lines.append(
+                f"{fmt_float(r00, 20)}{fmt_float(r45, 20)}{fmt_float(r90, 20)}{fmt_float(chard, 20)}{fmt_int(iyield, 10)}"
+            )
+
+            # Card 5: EPS_max, EPST1, EPST2
+            self.lines.append(
+                f"{fmt_float(eps_max, 20)}{fmt_float(epsr1, 20)}{fmt_float(epsr2, 20)}"
+            )
+
+            # Card 6: Table_ID (10), blank(10), Fscale (20), Pscale (20)
+            self.lines.append(
+                f"{fmt_int(table_id, 10)}{' ' * 10}{fmt_float(fscale, 20)}{fmt_float(pscale, 20)}"
+            )
+
+            # Card 7: T0 (20), Rho_Cp (20)
+            self.lines.append(f"{fmt_float(t0, 20)}{fmt_float(rhocp, 20)}")
         else:
-            self.lines.append(fmt_float(rho, 20))
-
-        # Card 2: E, nu
-        self.lines.append(f"{fmt_float(e, 20)}{fmt_float(nu, 20)}")
-
-        # Card 3: Yr_fun (10), blank(10), Einf (20), C (20)
-        self.lines.append(f"{fmt_int(ifunce, 10)}{' ' * 10}{fmt_float(einf, 20)}{fmt_float(ce, 20)}")
-
-        # Card 4: R00 (20), R45 (20), R90 (20), CHard (20), Iyield (10)
-        self.lines.append(
-            f"{fmt_float(r00, 20)}{fmt_float(r45, 20)}{fmt_float(r90, 20)}{fmt_float(chard, 20)}{fmt_int(iyield, 10)}"
-        )
-
-        # Card 5: EPS_max, EPST1, EPST2
-        self.lines.append(
-            f"{fmt_float(eps_max, 20)}{fmt_float(epsr1, 20)}{fmt_float(epsr2, 20)}"
-        )
-
-        # Card 6: Table_ID (10), blank(10), Fscale (20), Pscale (20)
-        self.lines.append(
-            f"{fmt_int(table_id, 10)}{' ' * 10}{fmt_float(fscale, 20)}{fmt_float(pscale, 20)}"
-        )
-
-        # Card 7: T0 (20), Rho_Cp (20)
-        self.lines.append(f"{fmt_float(t0, 20)}{fmt_float(rhocp, 20)}")
+            delim = kw_low.get("delimiter", ", " if (kw_low.get("comma") or kw_low.get("comma_delimited")) else " ")
+            if rhor is not None and float(rhor) != 0.0 and float(rhor) != float(rho):
+                self.lines.append(f"{float(rho)}{delim}{float(rhor)}")
+            else:
+                self.lines.append(f"{float(rho)}")
+            self.lines.append(f"{float(e)}{delim}{float(nu)}")
+            self.lines.append(f"{int(ifunce)}{delim}{float(einf)}{delim}{float(ce)}")
+            self.lines.append(f"{float(r00)}{delim}{float(r45)}{delim}{float(r90)}{delim}{float(chard)}{delim}{int(iyield)}")
+            self.lines.append(f"{float(eps_max)}{delim}{float(epsr1)}{delim}{float(epsr2)}")
+            self.lines.append(f"{int(table_id)}{delim}{float(fscale)}{delim}{float(pscale)}")
+            self.lines.append(f"{float(t0)}{delim}{float(rhocp)}")
 
         return self
 
-    mat_hill_therm = mat_law73
-    mat_therm_hill = mat_law73
-    mat_barlat2000 = mat_law73
+    def mat_hill_therm(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "HILL_THERM")
+        return self.mat_law73(*args, **kwargs)
+
+    def mat_therm_hill(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "THERM_HILL")
+        return self.mat_law73(*args, **kwargs)
+
+    def mat_barlat2000(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "BARLAT2000")
+        return self.mat_law73(*args, **kwargs)
 
     def mat_law92(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/LAW92``."""

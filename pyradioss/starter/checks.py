@@ -3483,10 +3483,10 @@ _check_mat_law163 = check_mat_law163
 
 
 def check_mat_law73(
+    model: Any = None,
+    mat_id: Any = None,
     mat: Any = None,
-    log: Optional[MessageLog] = None,
-    model: Optional[Model] = None,
-    mat_id: int = 0,
+    log: Any = None,
     **kwargs: Any,
 ) -> None:
     """Validate /MAT/LAW73 (/MAT/BARLAT2000, /MAT/HILL_THERM, /MAT/THERM_HILL) parameter bounds (M561).
@@ -3499,14 +3499,76 @@ def check_mat_law73(
       - epsr1 < epsr2: if epsr1 >= epsr2, error (ANCMSG 1044)
       - Compatible elements: shells only; reject solid elements (ANCMSG 305) and 1D elements (ANCMSG 306).
     """
-    if mat is None and "material" in kwargs:
-        mat = kwargs["material"]
-    if log is None and "logger" in kwargs:
-        log = kwargs["logger"]
-    if log is None:
+    actual_log = log
+    actual_model = model
+    actual_mat = mat
+    actual_mid = mat_id
+
+    candidates = [c for c in (model, mat_id, mat, log) if c is not None]
+    if hasattr(model, "params") and not isinstance(model, Model):
+        actual_mat = model
+        actual_model = None
+        actual_log = mat_id if isinstance(mat_id, MessageLog) else log
+        actual_mid = getattr(actual_mat, "id", kwargs.get("mat_id", 0))
+    elif hasattr(mat_id, "params") and isinstance(mat, MessageLog):
+        actual_mat = mat_id
+        actual_log = mat
+        actual_mid = getattr(actual_mat, "id", kwargs.get("mat_id", 0))
+    else:
+        for c in candidates:
+            if isinstance(c, MessageLog):
+                actual_log = c
+            elif isinstance(c, Model):
+                actual_model = c
+            elif hasattr(c, "params") or hasattr(c, "rho") or hasattr(c, "rho0") or hasattr(c, "r00"):
+                actual_mat = c
+            elif isinstance(c, int) and not isinstance(c, bool):
+                actual_mid = c
+
+    if actual_mat is None:
+        if "mat" in kwargs:
+            actual_mat = kwargs["mat"]
+        elif "material" in kwargs:
+            actual_mat = kwargs["material"]
+        elif "mat73" in kwargs:
+            actual_mat = kwargs["mat73"]
+        elif "mat_law73" in kwargs:
+            actual_mat = kwargs["mat_law73"]
+        elif "mat_hill_therm" in kwargs:
+            actual_mat = kwargs["mat_hill_therm"]
+        elif "mat_therm_hill" in kwargs:
+            actual_mat = kwargs["mat_therm_hill"]
+        elif "mat_barlat2000" in kwargs:
+            actual_mat = kwargs["mat_barlat2000"]
+
+    if actual_log is None:
+        if "log" in kwargs:
+            actual_log = kwargs["log"]
+        elif "logger" in kwargs:
+            actual_log = kwargs["logger"]
+        else:
+            actual_log = MessageLog()
+
+    mid_kw = kwargs.get("mat_id", kwargs.get("mid", actual_mid))
+    if actual_mat is None and actual_model is not None:
+        if mid_kw is not None:
+            actual_mat = actual_model.materials.get(mid_kw) or getattr(actual_model, "mat_law73s", {}).get(mid_kw)
+        else:
+            for m_id, m_obj in list(getattr(actual_model, "mat_law73s", {}).items()):
+                check_mat_law73(model=actual_model, mat_id=m_id, mat=m_obj, log=actual_log)
+            for m_id, m_obj in list(getattr(actual_model, "materials", {}).items()):
+                if getattr(m_obj, "law", None) in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL") or getattr(m_obj, "law_name", None) in ("73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL"):
+                    if m_id not in getattr(actual_model, "mat_law73s", {}):
+                        check_mat_law73(model=actual_model, mat_id=m_id, mat=m_obj, log=actual_log)
+            return
+
+    if actual_mat is None:
         return
 
-    mid = mat_id or getattr(mat, "id", 0)
+    mat = actual_mat
+    log = actual_log
+    model = actual_model
+    mid = getattr(mat, "id", mid_kw if mid_kw is not None else 0)
     params = getattr(mat, "params", {}) or {}
 
     def _extract(keys: list[str], default: float = 0.0) -> float:
@@ -3603,6 +3665,19 @@ def check_mat_law73(
                 p_mid = getattr(part, "mat_id", getattr(part, "mid", None))
                 if p_mid == actual_mid:
                     etype = str(getattr(part, "elem_type", getattr(part, "type", ""))).upper()
+                    prop_id = getattr(part, "prop_id", None)
+                    if not etype or etype in ("NONE", ""):
+                        if prop_id is not None:
+                            props = getattr(model, "properties", {}) or getattr(model, "props", {})
+                            prop = props.get(prop_id) if isinstance(props, dict) else None
+                            if prop is None and hasattr(model, "prop_solids") and isinstance(model.prop_solids, dict) and prop_id in model.prop_solids:
+                                etype = "SOLID"
+                            elif prop is not None:
+                                ptype = str(getattr(prop, "type", getattr(prop, "card_name", ""))).upper()
+                                if any(s in ptype for s in ("SOLID", "TYPE14")):
+                                    etype = "SOLID"
+                                elif any(s in ptype for s in ("BEAM", "TRUSS", "SPRING", "TYPE3", "TYPE4", "TYPE12")):
+                                    etype = "BEAM"
                     if any(s in etype for s in ("SOLID", "BRICK", "TETRA", "HEXA", "PENTA", "PYRA")):
                         log.error(
                             f"/MAT/LAW73/{actual_mid} (/MAT/BARLAT2000) is not supported for solid elements ({etype.lower()}) (ANCMSG 305)",

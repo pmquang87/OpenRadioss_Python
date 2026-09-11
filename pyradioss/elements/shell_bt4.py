@@ -537,6 +537,14 @@ def _init_material_state(group, nip_max):
             if name not in st["mat_extra"]:
                 if name.startswith("off") or name.startswith("damt") or name.startswith("alpe") or name.startswith("uvar82"):
                     st["mat_extra"][name] = np.ones((n,) + shape)
+                elif name.startswith("thk"):
+                    thk_arr = st.get("thick")
+                    if thk_arr is None:
+                        thk_arr = np.full(n, getattr(prop, "thick", 1.0))
+                    st["mat_extra"][name] = np.ones((n,) + shape) * thk_arr.reshape((n,) + (1,) * len(shape))
+                elif name == "temp":
+                    t0_val = float(mat.params.get("t0", mat.params.get("T0", mat.params.get("T_i", 293.0)))) if hasattr(mat, "params") else 293.0
+                    st["mat_extra"][name] = np.full((n,) + shape, t0_val)
                 elif name in ("uvar", "uv69", "uvar69") and getattr(mat, "law", 1) in (69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "HYP_EXT_COMP", "HYPER_EXT_COMP"):
                     arr = np.zeros((n,) + shape)
                     arr[..., 2] = 1.0
@@ -585,6 +593,8 @@ def _layer_extra(st, sl, k, area=None):
         extra["area"] = area[sl]
     elif "area" in st:
         extra["area"] = st["area"][sl]
+    if "vol" not in extra and "area" in extra and "thk" in extra:
+        extra["vol"] = extra["area"] * extra["thk"]
     return extra
 
 
@@ -616,7 +626,9 @@ def _layer_failure(st, sl, mat, k, sig_k, epsp_old, deps_k, dt):
         layf[st["mat_extra"]["off52"][sl, k] == 0.0] = 0.0
     elif "off57" in st["mat_extra"]:
         layf[st["mat_extra"]["off57"][sl, k] == 0.0] = 0.0
-    elif "off" in st["mat_extra"] and getattr(mat, "law", 1) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3"):
+    elif "off73" in st["mat_extra"]:
+        layf[st["mat_extra"]["off73"][sl, k] <= 0.8] = 0.0
+    elif "off" in st["mat_extra"] and getattr(mat, "law", 1) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3", 73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL"):
         layf[st["mat_extra"]["off"][sl, k] == 0.0] = 0.0
     if getattr(mat, "law", 1) != 43:
         eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
@@ -638,8 +650,8 @@ def _element_deletion(st, nip_of):
     layfail = st["layfail"]
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         law = getattr(mat, "law", 1)
-        if not (mat.fail is not None or law in (15, 22, 25, 27, 43, 48, 52, 57, 60, 69)
-                or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3")
+        if not (mat.fail is not None or law in (15, 22, 25, 27, 43, 48, 52, 57, 60, 69, 73)
+                or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL")
                 or mat.params.get("eps_p_max", EP30) < 1e30
                 or mat.params.get("eps_max", EP30) < 1e30
                 or mat.params.get("EPSMAX", EP30) < 1e30
@@ -1074,6 +1086,9 @@ def forces(group, x, v, vr, dt, fint, mint):
         elif getattr(mat, "law", 1) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
             from ..materials import law57_barlat
             c[sl] = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
+        elif getattr(mat, "law", 1) in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
+            from ..materials import law73_hill_therm
+            c[sl] = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
         else:
             c[sl] = mat.sound_speed_shell()
         # elastic transverse shear resultant stress (with 5/6 factor)

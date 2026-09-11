@@ -621,12 +621,14 @@ def extra_shapes(mat: Any, nip: Optional[int] = None) -> Dict[str, Tuple[int, ..
             "pla73": (nip,),
             "off73": (nip,),
             "thk73": (nip,),
+            "temp": (nip,),
         }
     return {
         "uvar73": (7,),
         "pla73": (),
         "off73": (),
         "thk73": (),
+        "temp": (),
     }
 
 
@@ -720,7 +722,13 @@ def shell_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
     if len(off) == 1 and n > 1:
         off = np.full(n, off[0], dtype=float)
 
-    thk = np.asarray(extra.get("thk73", extra.get("thk", 1.0)), dtype=float).copy().flatten()
+    thk = None
+    if "thk73" in extra and extra["thk73"] is not None:
+        thk_arr = np.asarray(extra["thk73"], dtype=float).flatten().copy()
+        if not np.all(thk_arr == 0.0):
+            thk = thk_arr
+    if thk is None:
+        thk = np.asarray(extra.get("thk", extra.get("thkn", 1.0)), dtype=float).flatten().copy()
     if len(thk) == 1 and n > 1:
         thk = np.full(n, thk[0], dtype=float)
 
@@ -751,18 +759,13 @@ def shell_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
     # 3. Temperature calculation (sigeps73c.F:209-222)
     rhocp = p.rhocp
     rhocp_inv = 1.0 / rhocp if rhocp > 0.0 else 0.0
-    if "temp" in extra and extra["temp"] is not None:
-        temp = np.asarray(extra["temp"], dtype=float).flatten().copy()
-        if len(temp) == 1 and n > 1:
-            temp = np.full(n, temp[0], dtype=float)
-    elif "tempel" in extra and extra["tempel"] is not None:
+    if "tempel" in extra and extra["tempel"] is not None:
         temp = np.asarray(extra["tempel"], dtype=float).flatten().copy()
-        if len(temp) == 1 and n > 1:
+        if np.all(temp == 0.0):
+            temp = np.full(n, p.t0, dtype=float)
+        elif len(temp) == 1 and n > 1:
             temp = np.full(n, temp[0], dtype=float)
-    else:
-        temp = np.full(n, p.t0, dtype=float)
-
-    if rhocp > 0.0 and "eint" in extra and extra["eint"] is not None:
+    elif rhocp > 0.0 and "eint" in extra and extra["eint"] is not None:
         eint_raw = np.asarray(extra["eint"], dtype=float)
         if eint_raw.size == n:
             eint_tot = eint_raw.flatten()
@@ -772,7 +775,15 @@ def shell_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
             eint_tot = np.full(n, float(np.sum(eint_raw)))
         vol = float(np.asarray(extra.get("vol", 1.0)).ravel()[0])
         vol0 = vol * p.rho0
-        temp = np.maximum(temp, p.t0 + eint_tot * rhocp_inv / max(vol0, _EM20))
+        temp = p.t0 + eint_tot * rhocp_inv / max(vol0, _EM20)
+    elif "temp" in extra and extra["temp"] is not None:
+        temp = np.asarray(extra["temp"], dtype=float).flatten().copy()
+        if np.all(temp == 0.0):
+            temp = np.full(n, p.t0, dtype=float)
+        elif len(temp) == 1 and n > 1:
+            temp = np.full(n, temp[0], dtype=float)
+    else:
+        temp = np.full(n, p.t0, dtype=float)
 
     # 4. Back-stress shifted trial stress (sigeps73c.F:225-229)
     alpha_xx = uvar[:, 1]
@@ -803,6 +814,18 @@ def shell_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
         epsd = np.asarray(extra["epsd_pg"], dtype=float).flatten()
         if len(epsd) == 1 and n > 1:
             epsd = np.full(n, epsd[0], dtype=float)
+    elif "epsd" in extra and extra["epsd"] is not None:
+        epsd = np.asarray(extra["epsd"], dtype=float).flatten()
+        if len(epsd) == 1 and n > 1:
+            epsd = np.full(n, epsd[0], dtype=float)
+    elif "epsp_tensor" in extra and extra["epsp_tensor"] is not None:
+        ep_arr = np.asarray(extra["epsp_tensor"], dtype=float)
+        if ep_arr.ndim == 1:
+            ep_arr = ep_arr[None, :]
+        edxx = ep_arr[:, 0]
+        edyy = ep_arr[:, 1]
+        edxy = ep_arr[:, 2]
+        epsd = 0.5 * (np.abs(edxx + edyy) + np.sqrt((edxx - edyy) ** 2 + edxy ** 2))
     elif dt > 0.0:
         edxx = deps_arr[:, 0] / dt
         edyy = deps_arr[:, 1] / dt
@@ -840,7 +863,7 @@ def shell_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
     yld = np.maximum(yld, _EM20)
     h_slope = np.maximum(fail * dydx, 0.0)
 
-    if p.chard > 0.0:  # FISOKIN
+    if p.chard != 0.0:  # FISOKIN
         yk, _ = _eval_yield_table(p, np.zeros(n, dtype=float), edot_scaled, temp)
         yld = (1.0 - p.chard) * yld + p.chard * fail * yfac * yk
         yld = np.maximum(yld, _EM20)
@@ -934,7 +957,7 @@ def shell_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
                            (ayy_i * p_2 - a_xy_i * p_1 * 0.5) * pp2 * b_2 +
                            axy_hill[i] * pp3 * p_3 * b_3) * (a11_i - dr * h_eff) / max(y_cur, _EM20) - h_eff * y_cur
 
-                    if abs(df) > _EM20:
+                    if df != 0.0:
                         dpla_j = max(0.0, dpla_j - f * 0.5 / df)
                 else:
                     dpla_j = 0.0
@@ -981,10 +1004,10 @@ def shell_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
             dtemp = dpla_arr * svm * rhocp_inv / max(p.rho0, _EM20)
             temp += dtemp
 
-        # Element deletion check (sigeps73c.F:434)
-        deleted = (pla > p.eps_max) & (off == 1.0)
-        if np.any(deleted):
-            off[deleted] = 0.8 * off[deleted]
+    # Element deletion check (sigeps73c.F:434)
+    deleted = (pla > p.eps_max) & (off == 1.0)
+    if np.any(deleted):
+        off[deleted] = 0.8 * off[deleted]
 
     # 10. Reconstruct final Cauchy stress (sigeps73c.F:438-440)
     sig_out = np.zeros((n, ncomp), dtype=float)
@@ -1031,6 +1054,8 @@ def shell_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
         extra["thk"][:] = thk
     if "temp" in extra and isinstance(extra["temp"], np.ndarray):
         extra["temp"][:] = temp
+    else:
+        extra["temp"] = temp
     if "tempel" in extra and isinstance(extra["tempel"], np.ndarray):
         extra["tempel"][:] = temp
     if "eint" in extra and isinstance(extra["eint"], np.ndarray) and rhocp > 0.0:
@@ -1177,12 +1202,16 @@ def resolve(mat: Material, model: Any, log: Any = None) -> None:
         if p.ifunce in functions:
             p.curve_e = functions[p.ifunce]
             p.opte = 1
+            if hasattr(mat, "params") and isinstance(mat.params, dict):
+                mat.params["curve_e"] = p.curve_e
 
     if p.table_id > 0 and p.yield_table is None:
         if p.table_id in tables:
             p.yield_table = tables[p.table_id]
         elif p.table_id in functions:
             p.yield_table = functions[p.table_id]
+        if hasattr(mat, "params") and isinstance(mat.params, dict):
+            mat.params["yield_table"] = p.yield_table
 
 
 # ============================================================================

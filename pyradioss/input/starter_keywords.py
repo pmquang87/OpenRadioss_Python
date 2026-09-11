@@ -1008,7 +1008,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("57", "LAW57", "BARLAT3", "MAT_BARLAT3", "LAW57_BARLAT3"):
         read_mat_law57(block, model, log)
         return
-    if lawname in ("LAW87", "BARLAT", "BARLAT_YLD2000", "BARLAT2000", "MAT_BARLAT_YLD2000", "MAT_BARLAT2000", "LAW87_BARLAT", "MAT_BARLAT"):
+    if lawname in ("LAW87", "BARLAT", "BARLAT_YLD2000", "MAT_BARLAT_YLD2000", "LAW87_BARLAT", "MAT_BARLAT"):
         read_mat_law87(block, model, log)
         return
     if lawname in ("LAW95", "BERGSTROM_BOYCE", "HYP_VISC_PLAS", "FOAM_TAB", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE"):
@@ -1173,7 +1173,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW71", "SUPER_ELAS", "NITINOL", "MAT_SUPER_ELAS", "MAT_NITINOL", "LAW71_SUPER_ELAS"):
         read_mat_law71(block, model, log)
         return
-    if lawname in ("LAW73", "THERM_HILL", "MAT_THERM_HILL", "LAW73_THERM_HILL", "BARLAT2000", "MAT_BARLAT2000", "LAW73_BARLAT2000", "LAW73_HILL_THERM"):
+    if lawname in ("73", "LAW73", "THERM_HILL", "MAT_THERM_HILL", "LAW73_THERM_HILL", "BARLAT2000", "MAT_BARLAT2000", "LAW73_BARLAT2000", "LAW73_HILL_THERM", "MAT_LAW73", "MAT_73"):
         read_mat_law73(block, model, log)
         return
     if lawname in ("LAW84", "SWIFT_VOCE", "PLAS_SWIFT_VOCE", "MAT_SWIFT_VOCE", "MAT_PLAS_SWIFT_VOCE", "LAW84_SWIFT_VOCE"):
@@ -44294,10 +44294,17 @@ def read_mat_law73(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     table_id, fscale, pscale = 0, 1.0, 1.0
     t0, rhocp = 293.0, 0.0
 
+    is_fixed = block.fixed
+    if is_fixed:
+        for vc in valid_cards[:4]:
+            if "," in vc.raw or (len(vc.tokens()) > 1 and len(vc.raw[:20].split()) > 1):
+                is_fixed = False
+                break
+
     # Distinguish between legacy 5-card layout and standard 7-card layout
     if len(valid_cards) <= 5:
         # Legacy 5-card layout (M191)
-        if block.fixed:
+        if is_fixed:
             if len(valid_cards) > 0:
                 c0 = valid_cards[0].cut([20, 20])
                 rho0 = _safe_float(c0[0]) if len(c0) > 0 else 0.0
@@ -44361,7 +44368,7 @@ def read_mat_law73(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 ce = _safe_float(t4[2]) if len(t4) > 2 else 0.0
     else:
         # Standard 7-card layout (M561 / CFG matl73_73.cfg / hm_read_mat73.F)
-        if block.fixed:
+        if is_fixed:
             # Card 1: RHO, [REFER_RHO]
             if len(valid_cards) > 0:
                 c0 = valid_cards[0].cut("MAT_LAW73_2")
