@@ -1454,17 +1454,35 @@ def check_mat_law60(
 
     # 7. Reject trusses, beams, springs if attached to element groups
     if model is not None and hasattr(model, "element_groups"):
-        for name, el_group in model.element_groups():
+        try:
+            grps = model.element_groups()
+            if callable(grps):
+                grps = grps()
+        except TypeError:
+            grps = []
+        for item in grps:
+            if isinstance(item, tuple) and len(item) == 2:
+                name, el_group = item
+            else:
+                continue
             if name in ("trusses", "beams", "springs"):
-                for el in el_group.values():
-                    el_mid = getattr(el, "mat_id", getattr(el, "mid", None))
-                    if el_mid == mid:
-                        log.error(
-                            f"/MAT/LAW60/{mid} (/MAT/PLAS_T3) is not supported for {name} elements "
-                            f"(solids and shells only: bricks, tetras, penta6, pyra5, shells, shells_qbat, shells_qeph, sh3n, quads)",
-                            "MAT CHECK",
-                        )
-                        break
+                mids_in_group = set()
+                if hasattr(el_group, "values") and callable(el_group.values):
+                    for el in el_group.values():
+                        el_mid = getattr(el, "mat_id", getattr(el, "mid", None))
+                        if el_mid is not None:
+                            mids_in_group.add(el_mid)
+                if hasattr(el_group, "state") and isinstance(el_group.state, dict) and "slices" in el_group.state:
+                    for _, m, _ in el_group.state["slices"]:
+                        m_id = getattr(m, "id", None)
+                        if m_id is not None:
+                            mids_in_group.add(m_id)
+                if mid in mids_in_group:
+                    log.error(
+                        f"/MAT/LAW60/{mid} (/MAT/PLAS_T3) is not supported for {name} elements "
+                        f"(solids and shells only: bricks, tetras, penta6, pyra5, shells, shells_qbat, shells_qeph, sh3n, quads)",
+                        "MAT CHECK",
+                    )
 
 
 _check_mat_law60 = check_mat_law60

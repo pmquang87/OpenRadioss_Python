@@ -180,6 +180,10 @@ class Law60Params:
         return self.C1_0
 
     @property
+    def c1(self) -> float:
+        return self.C1_0
+
+    @property
     def params(self) -> dict[str, Any]:
         return {
             "id": self.id,
@@ -604,10 +608,10 @@ def solid_update(
 
     eps, deps, sig_old, epsp_old, dt, extra = _parse_update_args(args, kw)
 
-    if sig_old is None:
-        raise ValueError("solid_update requires stress tensor sig_old")
     if deps is None:
         raise ValueError("solid_update requires strain increment deps")
+    if sig_old is None:
+        sig_old = np.zeros_like(deps)
 
     sig_arr = np.asarray(sig_old, dtype=float).copy()
     single_element = (sig_arr.ndim == 1)
@@ -838,10 +842,10 @@ def shell_update(
 
     eps, deps, sig_old, epsp_old, dt, extra = _parse_update_args(args, kw)
 
-    if sig_old is None:
-        raise ValueError("shell_update requires stress tensor sig_old")
     if deps is None:
         raise ValueError("shell_update requires strain increment deps")
+    if sig_old is None:
+        sig_old = np.zeros_like(deps)
 
     sig_arr = np.asarray(sig_old, dtype=float).copy()
     single_element = (sig_arr.ndim == 1)
@@ -1003,94 +1007,223 @@ def shell_update(
 # Algorithmic Consistent Tangent Stiffness Tensors
 # ----------------------------------------------------------------------------
 
-def consistent_solid_tangent(
+def _slice_extra_for_element(extra: dict[str, Any] | None, i: int, n: int) -> dict[str, Any]:
+    """Extract single element state from a potentially batched extra dictionary."""
+    if extra is None:
+        return {}
+    res: dict[str, Any] = {}
+    for k, v in extra.items():
+        if isinstance(v, np.ndarray):
+            if v.ndim > 0 and v.shape[0] == n and n > 1:
+                res[k] = v[i:i + 1].copy()
+            else:
+                res[k] = v.copy()
+        elif isinstance(v, dict):
+            res[k] = _slice_extra_for_element(v, i, n)
+        else:
+            res[k] = v
+    return res
+
+
+def shell_membrane_tangent(
     mat_params: Any,
-    eps: np.ndarray | None = None,
-    deps: np.ndarray | None = None,
     sig: np.ndarray | None = None,
-    epsp: np.ndarray | None = None,
-    dt: float = 0.0,
+    epsp: float | np.ndarray | None = None,
     extra: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> np.ndarray:
-    """Algorithmic consistent elastoplastic solid tangent tensor (NEL, 6, 6).
+    """Constant (3, 3) elastic plane-stress membrane constitutive matrix.
 
-    Follows Simo & Hughes Box 7.3 J2 radial-return tangent algebra.
+    Returns [[A1, A2, 0], [A2, A1, 0], [0, 0, G]].
+    """
+    params = mat_params if isinstance(mat_params, Law60Params) else build_law60(mat_params)
+    pla_val = 0.0
+    if epsp is not None:
+        epsp_arr = np.asarray(epsp, dtype=float).flatten()
+        if epsp_arr.size > 0:
+            pla_val = float(epsp_arr[0])
+    elif extra is not None and "epsp" in extra:
+        pla_arr = np.asarray(extra["epsp"], dtype=float).flatten()
+        if pla_arr.size > 0:
+            pla_val = float(pla_arr[0])
+
+    e_cur, g_cur, _, a1_cur = _current_moduli(params, np.array([pla_val]))
+    a1 = float(a1_cur[0])
+    a2 = float(params.nu * a1)
+    g = float(g_cur[0])
+
+    off_val = 1.0
+    if extra is not None:
+        off_raw = extra.get("off", extra.get("off60", extra.get("layfail", None)))
+        if off_raw is not None:
+            off_arr = np.asarray(off_raw, dtype=float).flatten()
+            if off_arr.size > 0:
+                off_val = float(np.min(off_arr))
+    if "off" in kwargs and kwargs["off"] is not None:
+        off_val = min(off_val, float(np.min(np.asarray(kwargs["off"], dtype=float))))
+
+    if off_val <= 0.0:
+        return np.zeros((3, 3), dtype=float)
+
+    return np.array([
+        [a1, a2, 0.0],
+        [a2, a1, 0.0],
+        [0.0, 0.0, g],
+    ], dtype=float)
+
+
+def consistent_solid_tangent(
+    mat_params: Any,
+    sig: np.ndarray | None = None,
+    epsp: np.ndarray | float | None = None,
+    epsp_incr: np.ndarray | float | None = None,
+    *args: Any,
+    eps: np.ndarray | None = None,
+    deps: np.ndarray | None = None,
+    dt: float = 0.0,
+    extra: dict[str, Any] | None = None,
+    symmetric: bool = False,
+    h: float = 1e-7,
+    **kwargs: Any,
+) -> np.ndarray:
+    """Algorithmic consistent elastoplastic solid tangent tensor (NEL, 6, 6) or (6, 6).
+
+    Follows the exact discrete radial projection derivative:
+        D = KeeT + sfac * c_dev - 2.0 * g * sfac * (nv (x) nv)
+    where:
+        KeeT = K * (1 (x) 1) (volumetric bulk stiffness)
+        c_dev = 2*G * I_dev  (deviatoric shear projector)
+        sfac = yld / sig_vm  (radial return stress scale factor, 1.0 if elastic)
+        nv = s / ||s||       (unit deviatoric stress tensor)
     """
     params = mat_params if isinstance(mat_params, Law60Params) else build_law60(mat_params)
 
-    # Disambiguate arguments: (mat, sig, epsp, epsp_incr) vs (mat, eps, deps, sig, epsp, dt, extra)
-    epsp_incr = kwargs.get("epsp_incr", None)
-    if eps is not None and eps.shape[-1] == 6 and sig is None:
-        sig = eps
-        if deps is not None and deps.ndim == 1:
-            epsp = deps
-        if epsp_old := kwargs.get("epsp_old", None):
-            epsp = epsp_old
+    # Disambiguate flexible argument passing
+    if "deps" in kwargs and deps is None:
+        deps = kwargs["deps"]
+    if "eps" in kwargs and eps is None:
+        eps = kwargs["eps"]
+    if "epsp_incr" in kwargs and epsp_incr is None:
+        epsp_incr = kwargs["epsp_incr"]
+    if "extra" in kwargs and extra is None:
+        extra = kwargs["extra"]
+    if "dt" in kwargs:
+        dt = float(kwargs["dt"])
+    if "symmetric" in kwargs:
+        symmetric = bool(kwargs["symmetric"])
+    if "h" in kwargs:
+        h = float(kwargs["h"])
 
-    if sig is None:
-        raise ValueError("consistent_solid_tangent requires stress tensor sig")
+    if len(args) > 0:
+        if epsp is None and len(args) >= 1:
+            epsp = args[0]
+        if epsp_incr is None and len(args) >= 2:
+            epsp_incr = args[1]
+        if extra is None and len(args) >= 3 and isinstance(args[2], dict):
+            extra = args[2]
 
-    sig_arr = np.asarray(sig, dtype=float)
-    single_element = (sig_arr.ndim == 1)
-    if single_element:
-        sig_arr = sig_arr.reshape(1, 6)
+    # Handle case where single strain argument passed as sig or eps
+    deps_in = deps if deps is not None else eps
+    if deps_in is not None:
+        deps_in_arr = np.asarray(deps_in, dtype=float)
+        if deps_in_arr.shape[-1] != 6:
+            if epsp_incr is None:
+                epsp_incr = deps_in_arr
+            deps_in = None
 
-    nel = sig_arr.shape[0]
-    if nel == 0:
-        return np.empty((0, 6, 6), dtype=float)
+    if sig is None and deps_in is None:
+        # Default pure elastic ground-state tangent
+        c11 = params.C1_0 + (4.0 / 3.0) * params.G0
+        c12 = params.C1_0 - (2.0 / 3.0) * params.G0
+        c_el = np.zeros((6, 6), dtype=float)
+        c_el[0:3, 0:3] = c12
+        np.fill_diagonal(c_el[0:3, 0:3], c11)
+        c_el[3, 3] = params.G0
+        c_el[4, 4] = params.G0
+        c_el[5, 5] = params.G0
+        return c_el
 
-    if epsp is None:
-        epsp_arr = np.zeros(nel, dtype=float)
+    if deps_in is not None:
+        deps_arr = np.asarray(deps_in, dtype=float)
+        single_element = (deps_arr.ndim == 1)
+        if single_element:
+            deps_arr = deps_arr.reshape(1, 6)
+        nel = deps_arr.shape[0]
+
+        sig_old = np.asarray(sig, dtype=float) if sig is not None else np.zeros((nel, 6), dtype=float)
+        if sig_old.ndim == 1:
+            sig_old = sig_old.reshape(1, 6)
+
+        epsp_old = np.asarray(epsp, dtype=float).flatten() if epsp is not None else np.zeros(nel, dtype=float)
+        if len(epsp_old) == 1 and nel > 1:
+            epsp_old = np.full(nel, epsp_old[0], dtype=float)
+
+        # Run solid_update to obtain state variables at increment
+        sig_conv, epsp_conv, _ = solid_update(
+            params, sig_old=sig_old, deps=deps_arr, epsp_old=epsp_old, dt=dt, extra=extra
+        )
+        sig_arr = np.asarray(sig_conv, dtype=float).reshape(nel, 6)
+        epsp_conv_flat = np.asarray(epsp_conv, dtype=float).flatten()
+        epsp_arr = epsp_old
+        epsp_incr_arr = epsp_conv_flat - epsp_old
     else:
-        epsp_arr = np.asarray(epsp, dtype=float).reshape(nel)
+        sig_arr = np.asarray(sig, dtype=float)
+        single_element = (sig_arr.ndim == 1)
+        if single_element:
+            sig_arr = sig_arr.reshape(1, 6)
+        nel = sig_arr.shape[0]
 
+        if epsp is None:
+            epsp_arr = np.zeros(nel, dtype=float)
+        else:
+            epsp_arr = np.asarray(epsp, dtype=float).flatten()
+            if len(epsp_arr) == 1 and nel > 1:
+                epsp_arr = np.full(nel, epsp_arr[0], dtype=float)
+
+        if epsp_incr is None:
+            epsp_incr_arr = np.zeros(nel, dtype=float)
+        else:
+            epsp_incr_arr = np.asarray(epsp_incr, dtype=float).flatten()
+            if len(epsp_incr_arr) == 1 and nel > 1:
+                epsp_incr_arr = np.full(nel, epsp_incr_arr[0], dtype=float)
+
+    if nel == 0:
+        return np.empty((0, 6, 6), dtype=float) if not single_element else np.empty((6, 6), dtype=float)
+
+    # Moduli at start of increment
     e_cur, g_cur, c1_cur, _ = _current_moduli(params, epsp_arr)
-
-    # Build per-element elastic tangent C_el
-    D = np.zeros((nel, 6, 6), dtype=float)
-    for i in range(nel):
-        g = g_cur[i]
-        k = c1_cur[i]
-        c11 = k + (4.0 / 3.0) * g
-        c12 = k - (2.0 / 3.0) * g
-        D[i, 0:3, 0:3] = c12
-        np.fill_diagonal(D[i, 0:3, 0:3], c11)
-        D[i, 3, 3] = g
-        D[i, 4, 4] = g
-        D[i, 5, 5] = g
-
-    # Static rate 0 curve evaluation
     _, h_raw = _eval_yield_and_hardening(params, epsp_arr, np.zeros(nel))
 
+    # Element deletion tracking
+    off_val = np.ones(nel, dtype=float)
+    if extra is not None:
+        off_raw = extra.get("off", extra.get("off60", extra.get("layfail", None)))
+        if off_raw is not None:
+            off_arr = np.asarray(off_raw, dtype=float).flatten()
+            if len(off_arr) == 1 and nel > 1:
+                off_val = np.full(nel, off_arr[0], dtype=float)
+            elif len(off_arr) == nel:
+                off_val = off_arr
+    if "off" in kwargs and kwargs["off"] is not None:
+        off_k = np.asarray(kwargs["off"], dtype=float).flatten()
+        if len(off_k) == 1 and nel > 1:
+            off_val = np.minimum(off_val, np.full(nel, off_k[0], dtype=float))
+        elif len(off_k) == nel:
+            off_val = np.minimum(off_val, off_k)
+
+    ee = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+    ee_outer = np.outer(ee, ee)
+
+    D = np.zeros((nel, 6, 6), dtype=float)
     for i in range(nel):
-        s = sig_arr[i].copy()
-        p = (s[0] + s[1] + s[2]) / 3.0
-        s[0] -= p
-        s[1] -= p
-        s[2] -= p
-        snorm = np.sqrt(s[0] ** 2 + s[1] ** 2 + s[2] ** 2 + 2.0 * (s[3] ** 2 + s[4] ** 2 + s[5] ** 2))
-        q = np.sqrt(1.5) * snorm
-        if epsp_incr is not None:
-            dep = float(epsp_incr[i]) if hasattr(epsp_incr, "__getitem__") else float(epsp_incr)
-        elif deps is not None and deps.ndim == 1:
-            dep = float(deps[i])
-        else:
-            dep = 0.0
-        if dep <= 0.0:
+        if off_val[i] <= 0.0:
+            D[i] = 0.0
             continue
 
         g = g_cur[i]
         k = c1_cur[i]
-        nv = s / max(snorm, _EM30)
-        q_tr = q + 3.0 * g * dep
-        h = max(h_raw[i], -2.97 * g)
-        hd = max(3.0 * g + h, 0.03 * g)
+        keet = k * ee_outer
 
-        a = 3.0 * g * dep / max(q_tr, _EM30)
-        b = 6.0 * g * g * (dep / max(q_tr, _EM30) - 1.0 / hd)
-
-        # 2G I_dev in Voigt engineering shear
         c_dev = np.zeros((6, 6), dtype=float)
         c_dev[0:3, 0:3] = -2.0 * g / 3.0
         np.fill_diagonal(c_dev[0:3, 0:3], 4.0 * g / 3.0)
@@ -1098,8 +1231,31 @@ def consistent_solid_tangent(
         c_dev[4, 4] = g
         c_dev[5, 5] = g
 
+        c_el = keet + c_dev
+
+        dep = float(epsp_incr_arr[i])
+        if dep <= 0.0:
+            D[i] = c_el
+            continue
+
+        s = sig_arr[i].copy()
+        p = (s[0] + s[1] + s[2]) / 3.0
+        s[0] -= p
+        s[1] -= p
+        s[2] -= p
+        snorm = np.sqrt(s[0] ** 2 + s[1] ** 2 + s[2] ** 2 + 2.0 * (s[3] ** 2 + s[4] ** 2 + s[5] ** 2))
+        q = np.sqrt(1.5) * snorm
+
+        h_iso = (1.0 - params.fisokin) * h_raw[i]
+        q_tr = q + (3.0 * g + h_iso) * dep
+        sfac = q / max(q_tr, _EM30)
+        nv = s / max(snorm, _EM30)
         nn = np.outer(nv, nv)
-        D[i] -= a * c_dev - b * nn
+
+        D[i] = keet + sfac * c_dev - 2.0 * g * sfac * nn
+
+    if symmetric:
+        D = 0.5 * (D + np.swapaxes(D, -1, -2))
 
     if single_element:
         return D[0]
@@ -1108,87 +1264,178 @@ def consistent_solid_tangent(
 
 def consistent_shell_tangent(
     mat_params: Any,
+    sig: np.ndarray | None = None,
+    epsp: np.ndarray | float | None = None,
+    epsp_incr: np.ndarray | float | None = None,
+    *args: Any,
     eps: np.ndarray | None = None,
     deps: np.ndarray | None = None,
-    sig: np.ndarray | None = None,
-    epsp: np.ndarray | None = None,
     dt: float = 0.0,
     extra: dict[str, Any] | None = None,
+    symmetric: bool = False,
+    h: float = 1e-7,
     **kwargs: Any,
 ) -> np.ndarray:
-    """Algorithmic consistent plane-stress tangent tensor (NEL, 3, 3)."""
+    """Algorithmic consistent plane-stress tangent tensor (NEL, 3, 3) or (3, 3).
+
+    Follows the exact discrete radial projection derivative:
+        D = sfac * C_el - (sfac / q_tr^2) * (sig_tr (x) (C_el @ P @ sig_tr))
+    """
     params = mat_params if isinstance(mat_params, Law60Params) else build_law60(mat_params)
 
-    epsp_incr = kwargs.get("epsp_incr", None)
-    if eps is not None and eps.shape[-1] == 3 and sig is None:
-        sig = eps
-        if deps is not None and deps.ndim == 1:
-            epsp = deps
+    # Disambiguate flexible argument passing
+    if "deps" in kwargs and deps is None:
+        deps = kwargs["deps"]
+    if "eps" in kwargs and eps is None:
+        eps = kwargs["eps"]
+    if "epsp_incr" in kwargs and epsp_incr is None:
+        epsp_incr = kwargs["epsp_incr"]
+    if "extra" in kwargs and extra is None:
+        extra = kwargs["extra"]
+    if "dt" in kwargs:
+        dt = float(kwargs["dt"])
+    if "symmetric" in kwargs:
+        symmetric = bool(kwargs["symmetric"])
+    if "h" in kwargs:
+        h = float(kwargs["h"])
 
-    if sig is None:
-        raise ValueError("consistent_shell_tangent requires stress tensor sig")
+    if len(args) > 0:
+        if epsp is None and len(args) >= 1:
+            epsp = args[0]
+        if epsp_incr is None and len(args) >= 2:
+            epsp_incr = args[1]
+        if extra is None and len(args) >= 3 and isinstance(args[2], dict):
+            extra = args[2]
 
-    sig_arr = np.asarray(sig, dtype=float)
-    single_element = (sig_arr.ndim == 1)
-    if single_element:
-        sig_arr = sig_arr.reshape(1, 3)
+    deps_in = deps if deps is not None else eps
+    if deps_in is not None:
+        deps_in_arr = np.asarray(deps_in, dtype=float)
+        if deps_in_arr.shape[-1] != 3:
+            if epsp_incr is None:
+                epsp_incr = deps_in_arr
+            deps_in = None
 
-    nel = sig_arr.shape[0]
-    if nel == 0:
-        return np.empty((0, 3, 3), dtype=float)
+    if sig is None and deps_in is None:
+        # Default pure elastic ground-state membrane tangent
+        return shell_membrane_tangent(params)
 
-    if epsp is None:
-        epsp_arr = np.zeros(nel, dtype=float)
+    if deps_in is not None:
+        deps_arr = np.asarray(deps_in, dtype=float)
+        single_element = (deps_arr.ndim == 1)
+        if single_element:
+            deps_arr = deps_arr.reshape(1, 3)
+        nel = deps_arr.shape[0]
+
+        sig_old = np.asarray(sig, dtype=float) if sig is not None else np.zeros((nel, 3), dtype=float)
+        if sig_old.ndim == 1:
+            sig_old = sig_old.reshape(1, 3)
+
+        epsp_old = np.asarray(epsp, dtype=float).flatten() if epsp is not None else np.zeros(nel, dtype=float)
+        if len(epsp_old) == 1 and nel > 1:
+            epsp_old = np.full(nel, epsp_old[0], dtype=float)
+
+        sig_conv, epsp_conv, _ = shell_update(
+            params, sig_old=sig_old, deps=deps_arr, epsp_old=epsp_old, dt=dt, extra=extra
+        )
+        sig_arr = np.asarray(sig_conv, dtype=float).reshape(nel, 3)
+        epsp_conv_flat = np.asarray(epsp_conv, dtype=float).flatten()
+        epsp_arr = epsp_old
+        epsp_incr_arr = epsp_conv_flat - epsp_old
     else:
-        epsp_arr = np.asarray(epsp, dtype=float).reshape(nel)
+        sig_arr = np.asarray(sig, dtype=float)
+        single_element = (sig_arr.ndim == 1)
+        if single_element:
+            sig_arr = sig_arr.reshape(1, 3)
+        nel = sig_arr.shape[0]
+
+        if epsp is None:
+            epsp_arr = np.zeros(nel, dtype=float)
+        else:
+            epsp_arr = np.asarray(epsp, dtype=float).flatten()
+            if len(epsp_arr) == 1 and nel > 1:
+                epsp_arr = np.full(nel, epsp_arr[0], dtype=float)
+
+        if epsp_incr is None:
+            epsp_incr_arr = np.zeros(nel, dtype=float)
+        else:
+            epsp_incr_arr = np.asarray(epsp_incr, dtype=float).flatten()
+            if len(epsp_incr_arr) == 1 and nel > 1:
+                epsp_incr_arr = np.full(nel, epsp_incr_arr[0], dtype=float)
+
+    if nel == 0:
+        return np.empty((0, 3, 3), dtype=float) if not single_element else np.empty((3, 3), dtype=float)
 
     e_cur, g_cur, _, a1_cur = _current_moduli(params, epsp_arr)
     a2_cur = params.nu * a1_cur
+    _, h_raw = _eval_yield_and_hardening(params, epsp_arr, np.zeros(nel))
 
     p_plane = np.array([[1.0, -0.5, 0.0],
                         [-0.5, 1.0, 0.0],
                         [0.0, 0.0, 3.0]], dtype=float)
 
-    D = np.zeros((nel, 3, 3), dtype=float)
-    _, h_raw = _eval_yield_and_hardening(params, epsp_arr, np.zeros(nel))
+    # Element deletion tracking
+    off_val = np.ones(nel, dtype=float)
+    if extra is not None:
+        off_raw = extra.get("off", extra.get("off60", extra.get("layfail", None)))
+        if off_raw is not None:
+            off_arr = np.asarray(off_raw, dtype=float).flatten()
+            if len(off_arr) == 1 and nel > 1:
+                off_val = np.full(nel, off_arr[0], dtype=float)
+            elif len(off_arr) == nel:
+                off_val = off_arr
+    if "off" in kwargs and kwargs["off"] is not None:
+        off_k = np.asarray(kwargs["off"], dtype=float).flatten()
+        if len(off_k) == 1 and nel > 1:
+            off_val = np.minimum(off_val, np.full(nel, off_k[0], dtype=float))
+        elif len(off_k) == nel:
+            off_val = np.minimum(off_val, off_k)
 
+    D = np.zeros((nel, 3, 3), dtype=float)
     for i in range(nel):
+        if off_val[i] <= 0.0:
+            D[i] = 0.0
+            continue
+
         a1 = a1_cur[i]
         a2 = a2_cur[i]
         g = g_cur[i]
         c_el = np.array([[a1, a2, 0.0],
                          [a2, a1, 0.0],
                          [0.0, 0.0, g]], dtype=float)
-        D[i] = c_el.copy()
 
-        if epsp_incr is not None:
-            dep = float(epsp_incr[i]) if hasattr(epsp_incr, "__getitem__") else float(epsp_incr)
-        elif deps is not None and deps.ndim == 1:
-            dep = float(deps[i])
-        else:
-            dep = 0.0
+        dep = float(epsp_incr_arr[i])
         if dep <= 0.0:
+            D[i] = c_el
             continue
 
         s = sig_arr[i]
         sy = np.sqrt(max(float(s @ p_plane @ s), 0.0))
         sy = max(sy, _EM30)
-        q_tr = sy + 3.0 * g * dep
-        sfac = sy / q_tr
-        sig_tr = s / sfac
-
-        h = max(h_raw[i], -2.97 * g)
-        hd = max(3.0 * g + h, 0.03 * g)
-        hfrac = (hd - 3.0 * g) / hd
+        h_iso = (1.0 - params.fisokin) * h_raw[i]
+        q_tr = sy + (3.0 * g + h_iso) * dep
+        sfac = sy / max(q_tr, _EM30)
+        sig_tr = s / max(sfac, _EM30)
 
         cp = c_el @ p_plane
         gvec = cp @ sig_tr
-        coef = (hfrac - sfac) / (q_tr * q_tr)
+        coef = -sfac / max(q_tr * q_tr, _EM30)
         D[i] = sfac * c_el + coef * np.outer(sig_tr, gvec)
+
+    if symmetric:
+        D = 0.5 * (D + np.swapaxes(D, -1, -2))
 
     if single_element:
         return D[0]
     return D
+
+
+# Aliases
+solid_tangent = consistent_solid_tangent
+shell_tangent = consistent_shell_tangent
+law60_consistent_solid_tangent = consistent_solid_tangent
+law60_consistent_shell_tangent = consistent_shell_tangent
+law60_solid_tangent = consistent_solid_tangent
+law60_shell_tangent = consistent_shell_tangent
 
 
 # ----------------------------------------------------------------------------
