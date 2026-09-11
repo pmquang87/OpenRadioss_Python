@@ -380,7 +380,9 @@ def _init_material_state(group, dndx0):
         mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 48, 52, 60)
         or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS")
         or mat.params.get("eps_p_max", EP30) < 1e30
-        or mat.params.get("eps_max", EP30) < 1e30
+        or (getattr(mat, "law", 1) not in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB")
+            and getattr(mat, "law_name", None) not in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB")
+            and mat.params.get("eps_max", EP30) < 1e30)
         for _, mat, _ in st["slices"])
     st["mat_extra"] = {}
     for sl, mat, prop in st["slices"]:
@@ -394,6 +396,10 @@ def _init_material_state(group, dndx0):
                     st["mat_extra"][name] = arr
                 else:
                     st["mat_extra"][name] = np.zeros((n,) + shape)
+        if getattr(mat, "law", 1) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+            t0 = float(mat.params.get("t0", mat.params.get("T0", 300.0)))
+            if "theta" in st["mat_extra"]:
+                st["mat_extra"]["theta"][sl] = t0
         if getattr(mat, "law", 1) in (5, "5", "LAW5", "JWL"):
             e0 = float(mat.params.get("e0", mat.params.get("MAT_E0", 0.0)))
             st["eint"][sl] = e0 * st["vol0"][sl]
@@ -675,7 +681,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         for sl, mat, prop in st.get("slices", []):
             if getattr(mat, "law", 1) == 0:
                 is_void[sl] = True
-            elif getattr(mat, "law", 1) in (5, "5", "LAW5", "JWL", 21, "21", "LAW21", "DPRAG", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_LAW48", "LAW48_ZHAO", 52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
+            elif getattr(mat, "law", 1) in (5, "5", "LAW5", "JWL", 21, "21", "LAW21", "DPRAG", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_LAW48", "LAW48_ZHAO", 49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
                 c[sl] = materials.sound_speed(mat, rho[sl])
             elif hasattr(mat, "sound_speed_solid"):
                 c[sl] = mat.sound_speed_solid()
@@ -819,7 +825,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         for sl, mat, prop in st["slices"]:
             if getattr(mat, "law", 1) == 0:
                 continue
-            eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
+            if getattr(mat, "law", 1) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+                eps_max = mat.params.get("eps_p_max", EP30)
+            else:
+                eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
             if mat.fail is None and eps_max >= 1e30:
                 continue
             broken = np.zeros(sl.stop - sl.start, dtype=bool)

@@ -438,7 +438,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         F = np.einsum("nia,nib->nab", xe, st["dndx0"])
     for sl, mat, prop in st.get("slices", []):
         law = getattr(mat, "law", 1)
-        if law == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or (getattr(mat, "E", 0.0) <= 0.0 and law not in (5, "5", "LAW5", "JWL", 21, "21", "LAW21", "DPRAG", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG")):
+        if law == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or (getattr(mat, "E", 0.0) <= 0.0 and law not in (5, "5", "LAW5", "JWL", 21, "21", "LAW21", "DPRAG", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB")):
             sig[sl] = 0.0
             c[sl] = 0.0
             c_from_law[sl] = True
@@ -528,7 +528,10 @@ def forces(group, x, v, vr, dt, fint, mint):
     if st.get("chk_fail"):
         off = st["off"]
         for sl, mat, prop in st.get("slices", []):
-            eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
+            if getattr(mat, "law", 1) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+                eps_max = mat.params.get("eps_p_max", EP30)
+            else:
+                eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
             if mat.fail is None and eps_max >= 1e30:
                 continue
             broken = np.zeros(sl.stop - sl.start, dtype=bool)
