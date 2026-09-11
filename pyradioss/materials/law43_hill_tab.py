@@ -111,10 +111,10 @@ def _eval_yield_stress(mat: Material, epsp: np.ndarray, rate: np.ndarray
         vals[i], slps[i] = _curve_eval(cxs[i], cys[i], css[i], epsp_arr)
         vals0[i], _ = _curve_eval(cxs[i], cys[i], css[i], zeros_arr)
 
-    # Linear bracket interpolation in strain rate
+    # Linear bracket interpolation in strain rate (sigeps43c.F:206-235)
     j = np.clip(np.searchsorted(rates, rate_arr, side="right") - 1, 0, nfun - 2)
     denom = np.maximum(rates[j + 1] - rates[j], _EM20)
-    w = np.clip((rate_arr - rates[j]) / denom, 0.0, 1.0)
+    w = np.maximum((rate_arr - rates[j]) / denom, 0.0)
 
     cols = np.arange(len(epsp_arr))
     sy = (1.0 - w) * vals[j, cols] + w * vals[j + 1, cols]
@@ -145,7 +145,7 @@ def _eval_young_modulus(mat: Material, pla: np.ndarray
         if np.any(pos):
             scale, _ = _curve_eval(p["E_curve_x"], p["E_curve_y"], p["E_curve_s"], pla_arr[pos])
             e[pos] = scale * e0
-    elif ce > 0.0:
+    elif ce != 0.0:
         pos = pla_arr > 0.0
         if np.any(pos):
             e[pos] = e0 - (e0 - einf) * (1.0 - np.exp(-ce * pla_arr[pos]))
@@ -377,6 +377,13 @@ def build_law43(rec: Any = None, **kwargs: Any) -> Material:
             raw_rates = [0.0, 1.0]
             if raw_css is not None and len(raw_css) > 0:
                 raw_css = [raw_css[0], raw_css[0]]
+        elif len(raw_cxs) > 1 and raw_rates[0] != 0.0:
+            # hm_read_mat43.F line 206: if RATE(1) != 0, prepend curve at rate 0
+            raw_cxs = [raw_cxs[0]] + list(raw_cxs)
+            raw_cys = [raw_cys[0]] + list(raw_cys)
+            raw_rates = [0.0] + list(raw_rates)
+            if raw_css is not None and len(raw_css) > 0:
+                raw_css = [raw_css[0]] + list(raw_css)
 
         for i in range(len(raw_cxs)):
             xi = np.asarray(raw_cxs[i], dtype=float)
@@ -715,8 +722,12 @@ def shell_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
         syz_tr = None
         szx_tr = None
 
-    # Strain rate measure (sigeps43c.F lines 183-189)
-    if dt > 0.0:
+    # Strain rate measure (sigeps43c.F lines 183-189, mulawc.F90 lines 691-695)
+    if extra is not None and "epsd_pg" in extra and extra["epsd_pg"] is not None:
+        edot_inst = np.asarray(extra["epsd_pg"], dtype=float).flatten()
+        if len(edot_inst) == 1 and n > 1:
+            edot_inst = np.full(n, float(edot_inst[0]), dtype=float)
+    elif dt > 0.0:
         edxx = deps[:, 0] / dt
         edyy = deps[:, 1] / dt
         edxy = deps[:, 2] / dt
@@ -730,11 +741,13 @@ def shell_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
         edot = edot_inst
     else:
         edot_prev = uvar[:, 3]
-        # Exponential or factor smoothing
-        if 0.0 < asrate <= 1.0:
+        # mulawc.F90 line 692: asrate = min(one, pm(9,imat)*dt1)
+        if dt > 0.0 and asrate > 1.0:
+            alpha_f = min(1.0, asrate * dt)
+        elif 0.0 < asrate <= 1.0:
             alpha_f = asrate
-        elif asrate > 1.0 and dt > 0.0:
-            alpha_f = 1.0 - math.exp(-asrate * dt)
+        elif asrate > 0.0 and dt > 0.0:
+            alpha_f = min(1.0, asrate * dt)
         else:
             alpha_f = 1.0
         edot = alpha_f * edot_inst + (1.0 - alpha_f) * edot_prev
@@ -950,6 +963,12 @@ def shell_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
                 arr[...] = off[0]
             else:
                 arr[:] = off
+        if "layfail" in extra and extra["layfail"] is not None:
+            arr = extra["layfail"]
+            if arr.ndim == 0:
+                arr[...] = off[0]
+            else:
+                arr[:] = off
         if "pla43" in extra and extra["pla43"] is not None:
             arr = extra["pla43"]
             if arr.ndim == 0:
@@ -964,10 +983,28 @@ def shell_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
                 arr[:] = edot
         if "thk43" in extra and extra["thk43"] is not None:
             thk0 = extra.get("thk0", 1.0)
-            extra["thk43"] = extra["thk43"] + dezz_tot * thk0 * off
+            arr = extra["thk43"]
+            if isinstance(arr, np.ndarray):
+                arr[...] = arr + dezz_tot * thk0 * off
+            else:
+                extra["thk43"] = arr + dezz_tot * thk0 * off
         if "thk" in extra and extra["thk"] is not None:
             thk0 = extra.get("thk0", 1.0)
-            extra["thk"] = extra["thk"] + dezz_tot * thk0 * off
+            arr = extra["thk"]
+            if isinstance(arr, np.ndarray):
+                arr[...] = arr + dezz_tot * thk0 * off
+            else:
+                extra["thk"] = arr + dezz_tot * thk0 * off
+        if "seq" in extra or "seq43" in extra:
+            s1_seq = a01 * sig[:, 0] ** 2
+            s2_seq = a02 * sig[:, 1] ** 2
+            s3_seq = a03 * sig[:, 0] * sig[:, 1]
+            axy_seq = a12 * sig[:, 2] ** 2
+            seq_final = np.sqrt(np.maximum(0.0, s1_seq + s2_seq - s3_seq + axy_seq))
+            if "seq" in extra:
+                extra["seq"] = seq_final[0] if is_1d else seq_final
+            if "seq43" in extra:
+                extra["seq43"] = seq_final[0] if is_1d else seq_final
 
     if epsp_in is not None and isinstance(epsp_in, np.ndarray):
         epsp_in[:] = pla
@@ -1144,6 +1181,12 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
         f2 = cnm * (s1_c + s2_c - s3_c + anmxy)
         svm = np.sqrt(np.maximum(0.0, f1 + np.abs(f2)))
 
+        # Thickness strain (elastic part: sigeps43g.F:319-320)
+        nnu1 = nu / max(1.0 - nu, _EM20)
+        nu5 = 1.0 - nnu1
+        dezz_el = -(deps[:, 0] + deps[:, 1]) * nnu1
+        dezz_tot = dezz_el.copy()
+
         plastic = (svm > yld) & (off > 0.0)
         dpla = np.zeros(n, dtype=float)
 
@@ -1306,7 +1349,30 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
                 momnyy[i] = jq * (sm2 - sm1 * q21)
                 momnxy[i] = m3_xy
 
+                # Plastic thinning (sigeps43g.F:504-508)
+                s1_thin = a01 * signxx[i] + a02 * signyy[i] - a03 * (signxx[i] + signyy[i]) * 0.5
+                dezz_pl = -nu5 * dpla_i * s1_thin / yld_f
+                dezz_tot[i] += dezz_pl
+
         pla += dpla
+
+        if extra is not None:
+            if "thk43" in extra and extra["thk43"] is not None:
+                arr = extra["thk43"]
+                if isinstance(arr, np.ndarray):
+                    arr[...] = arr + arr * dezz_tot * off
+                else:
+                    extra["thk43"] = arr + arr * dezz_tot * off
+            if "thk" in extra and extra["thk"] is not None:
+                arr = extra["thk"]
+                if isinstance(arr, np.ndarray):
+                    arr[...] = arr + arr * dezz_tot * off
+                else:
+                    extra["thk"] = arr + arr * dezz_tot * off
+            if "seq" in extra:
+                extra["seq"] = svm[0] if is_1d else svm
+            if "seq43" in extra:
+                extra["seq43"] = svm[0] if is_1d else svm
         epsmax = float(p.get("EPSMAX", _INF))
         exceeded = (pla > epsmax) & (off > 0.0)
         if np.any(exceeded):
@@ -1454,14 +1520,88 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
 # Consistent Algorithmic Tangents
 # ============================================================================
 
-def shell_membrane_tangent(mat: Material) -> np.ndarray:
+def _copy_extra(extra: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Deep copy arrays and nested dictionaries inside extra state dictionary."""
+    if extra is None:
+        return {}
+    res: Dict[str, Any] = {}
+    for k, v in extra.items():
+        if isinstance(v, np.ndarray):
+            res[k] = v.copy()
+        elif isinstance(v, dict):
+            res[k] = _copy_extra(v)
+        elif hasattr(v, "copy"):
+            try:
+                res[k] = v.copy()
+            except Exception:
+                res[k] = v
+        else:
+            res[k] = v
+    return res
+
+
+def _slice_extra_for_element(extra: Optional[Dict[str, Any]], i: int, n: int) -> Dict[str, Any]:
+    """Extract single element state from a potentially batched extra dictionary."""
+    if extra is None:
+        return {}
+    res: Dict[str, Any] = {}
+    for k, v in extra.items():
+        if isinstance(v, np.ndarray):
+            if v.ndim > 0 and v.shape[0] == n and n > 1:
+                res[k] = v[i:i+1].copy()
+            else:
+                res[k] = v.copy()
+        elif isinstance(v, dict):
+            res[k] = _slice_extra_for_element(v, i, n)
+        else:
+            res[k] = v
+    return res
+
+
+def shell_membrane_tangent(mat: Material, sig: Optional[np.ndarray] = None,
+                           epsp: Optional[Union[float, np.ndarray]] = None,
+                           extra: Optional[Dict[str, Any]] = None,
+                           **kwargs: Any) -> np.ndarray:
     """Constant (3, 3) elastic plane-stress membrane constitutive matrix."""
     p = mat.params if hasattr(mat, "params") else {}
-    e0 = float(p.get("E0", p.get("E", p.get("e", getattr(mat, "E", getattr(mat, "e", 1.0))))))
     nu = float(p.get("nu", getattr(mat, "nu", 0.0)))
-    a1 = e0 / (1.0 - nu ** 2)
-    a2 = nu * a1
-    g = 0.5 * e0 / (1.0 + nu)
+
+    # Check element deletion (off == 0.0)
+    off_val = 1.0
+    if extra is not None:
+        off_raw = extra.get("off43", extra.get("off", extra.get("layfail", None)))
+        if off_raw is not None:
+            off_arr = np.asarray(off_raw, dtype=float).flatten()
+            if off_arr.size > 0:
+                off_val = float(np.min(off_arr))
+    if "off" in kwargs and kwargs["off"] is not None:
+        off_val = min(off_val, float(np.min(np.asarray(kwargs["off"], dtype=float))))
+    if off_val <= 0.0:
+        return np.zeros((3, 3), dtype=float)
+
+    # Check plastic strain for modulus degradation
+    pla_val = 0.0
+    if epsp is not None:
+        epsp_arr = np.asarray(epsp, dtype=float).flatten()
+        if epsp_arr.size > 0:
+            pla_val = float(epsp_arr[0])
+    elif extra is not None:
+        pla_raw = extra.get("pla43", extra.get("epsp", None))
+        if pla_raw is not None:
+            pla_arr = np.asarray(pla_raw, dtype=float).flatten()
+            if pla_arr.size > 0:
+                pla_val = float(pla_arr[0])
+
+    if pla_val > 0.0:
+        _, a1_arr, a2_arr, g_arr, _ = _eval_young_modulus(mat, np.array([pla_val]))
+        a1 = float(a1_arr[0])
+        a2 = float(a2_arr[0])
+        g = float(g_arr[0])
+    else:
+        e0 = float(p.get("E0", p.get("E", p.get("e", getattr(mat, "E", getattr(mat, "e", 1.0))))))
+        a1 = e0 / (1.0 - nu ** 2)
+        a2 = nu * a1
+        g = 0.5 * e0 / (1.0 + nu)
 
     return np.array([
         [a1, a2, 0.0],
@@ -1471,53 +1611,116 @@ def shell_membrane_tangent(mat: Material) -> np.ndarray:
 
 
 def consistent_shell_tangent(mat: Material, sig: np.ndarray,
-                             epsp: Optional[np.ndarray] = None,
-                             epsp_incr: Optional[np.ndarray] = None,
+                             epsp: Optional[Union[float, np.ndarray]] = None,
+                             dt: Any = 0.0,
                              extra: Optional[Dict[str, Any]] = None,
+                             epsp_incr: Optional[Union[float, np.ndarray]] = None,
                              deps: Optional[np.ndarray] = None,
-                             dt: float = 0.0,
-                             symmetric: bool = False) -> np.ndarray:
-    """Consistent algorithmic plane-stress tangent operator (n, 3, 3)."""
+                             symmetric: bool = False,
+                             h: float = 1.0e-7,
+                             **kwargs: Any) -> np.ndarray:
+    """Consistent algorithmic plane-stress tangent operator (n, 3, 3) or (3, 3)."""
+    # Disambiguate positional arguments
+    if isinstance(dt, (np.ndarray, list)):
+        epsp_incr = dt
+        dt = 0.0
+    elif isinstance(dt, dict) and extra is None:
+        extra = dt
+        dt = 0.0
+    elif isinstance(extra, (int, float, np.ndarray, list)) and epsp_incr is None:
+        epsp_incr = extra
+        extra = None
+    elif epsp_incr is None and deps is None and not isinstance(dt, dict) and dt != 0.0:
+        epsp_incr = dt
+        dt = 0.0
+
+    if "deps" in kwargs and deps is None:
+        deps = kwargs["deps"]
+    if "epsp_incr" in kwargs and epsp_incr is None:
+        epsp_incr = kwargs["epsp_incr"]
+    if "extra" in kwargs and extra is None:
+        extra = kwargs["extra"]
+    if "dt" in kwargs:
+        dt = float(kwargs["dt"])
+    if "symmetric" in kwargs:
+        symmetric = bool(kwargs["symmetric"])
+    if "h" in kwargs:
+        h = float(kwargs["h"])
+
     if not isinstance(sig, np.ndarray):
-        sig = np.array(sig, dtype=float)
+        sig = np.asarray(sig, dtype=float)
 
     is_1d = (sig.ndim == 1)
     if is_1d:
         sig = sig[None, :]
 
     n = sig.shape[0]
-    c_el = shell_membrane_tangent(mat)
-    d_tangent = np.tile(c_el, (n, 1, 1))
+    if n == 0:
+        return np.empty((0, 3, 3), dtype=float) if not is_1d else np.empty((3, 3), dtype=float)
+
+    # Extract epsp array
+    if epsp is not None:
+        epsp_arr = np.asarray(epsp, dtype=float).flatten()
+        if len(epsp_arr) == 1 and n > 1:
+            epsp_arr = np.full(n, epsp_arr[0], dtype=float)
+    elif extra is not None and "pla43" in extra and extra["pla43"] is not None:
+        epsp_arr = np.asarray(extra["pla43"], dtype=float).flatten()
+        if len(epsp_arr) == 1 and n > 1:
+            epsp_arr = np.full(n, epsp_arr[0], dtype=float)
+    else:
+        epsp_arr = np.zeros(n, dtype=float)
+
+    # Extract off (element deletion)
+    off_raw = None
+    if extra is not None:
+        off_raw = extra.get("off43", extra.get("off", extra.get("layfail", None)))
+    if "off" in kwargs and off_raw is None:
+        off_raw = kwargs["off"]
+
+    if off_raw is not None:
+        off_arr = np.asarray(off_raw, dtype=float).flatten()
+        if len(off_arr) == 1 and n > 1:
+            off_arr = np.full(n, off_arr[0], dtype=float)
+    else:
+        off_arr = np.ones(n, dtype=float)
+
+    d_tangent = np.zeros((n, 3, 3), dtype=float)
+    for i in range(n):
+        if off_arr[i] <= 0.0:
+            d_tangent[i] = 0.0
+        else:
+            d_tangent[i] = shell_membrane_tangent(mat, epsp=epsp_arr[i])
 
     if deps is not None:
-        # High-accuracy numerical central difference verified tangent
         deps_arr = np.asarray(deps, dtype=float)
         if deps_arr.ndim == 1:
             deps_arr = deps_arr[None, :]
-        h = 1.0e-7
 
+        h_val = float(h)
         for i in range(n):
+            if off_arr[i] <= 0.0:
+                d_tangent[i] = 0.0
+                continue
+
             d_num = np.zeros((3, 3), dtype=float)
             sig_i = sig[i].copy()
             deps_i = deps_arr[i].copy()
-            epsp_i = float(epsp[i]) if epsp is not None else 0.0
+            epsp_i = float(epsp_arr[i])
+
+            ext_i = _slice_extra_for_element(extra, i, n)
 
             for j in range(3):
                 deps_p = deps_i.copy()
                 deps_m = deps_i.copy()
-                deps_p[j] += h
-                deps_m[j] -= h
+                deps_p[j] += h_val
+                deps_m[j] -= h_val
 
-                ext_p = {**extra} if extra is not None else {}
-                ext_m = {**extra} if extra is not None else {}
-                if "uvar43" in ext_p:
-                    ext_p["uvar43"] = ext_p["uvar43"].copy()
-                if "uvar43" in ext_m:
-                    ext_m["uvar43"] = ext_m["uvar43"].copy()
+                ext_p = _copy_extra(ext_i)
+                ext_m = _copy_extra(ext_i)
 
                 sig_p, _, _ = shell_update(mat, sig_i.copy(), deps_p, epsp=epsp_i, dt=dt, extra=ext_p)
                 sig_m, _, _ = shell_update(mat, sig_i.copy(), deps_m, epsp=epsp_i, dt=dt, extra=ext_m)
-                d_num[:, j] = (sig_p[:3] - sig_m[:3]) / (2.0 * h)
+                d_num[:, j] = (sig_p[:3] - sig_m[:3]) / (2.0 * h_val)
 
             if symmetric:
                 d_num = 0.5 * (d_num + d_num.T)
@@ -1526,18 +1729,23 @@ def consistent_shell_tangent(mat: Material, sig: np.ndarray,
         return d_tangent[0] if is_1d else d_tangent
 
     if epsp_incr is None:
+        if symmetric:
+            d_tangent = 0.5 * (d_tangent + np.swapaxes(d_tangent, -1, -2))
         return d_tangent[0] if is_1d else d_tangent
 
     epsp_incr_arr = np.asarray(epsp_incr, dtype=float).flatten()
-    if epsp_incr_arr.ndim == 0 or len(epsp_incr_arr) == 1:
-        epsp_incr_arr = np.full(n, float(epsp_incr_arr.item() if epsp_incr_arr.ndim == 0 else epsp_incr_arr[0]), dtype=float)
+    if len(epsp_incr_arr) == 1 and n > 1:
+        epsp_incr_arr = np.full(n, float(epsp_incr_arr[0]), dtype=float)
+    elif len(epsp_incr_arr) == 0:
+        epsp_incr_arr = np.zeros(n, dtype=float)
 
-    plastic = epsp_incr_arr > 0.0
+    plastic = (epsp_incr_arr > 0.0) & (off_arr > 0.0)
     if not np.any(plastic):
+        if symmetric:
+            d_tangent = 0.5 * (d_tangent + np.swapaxes(d_tangent, -1, -2))
         return d_tangent[0] if is_1d else d_tangent
 
     p = mat.params
-    e0 = float(p.get("E0", p.get("E", 1.0)))
     a01 = float(p.get("A01", 1.0))
     a02 = float(p.get("A02", 1.0))
     a03 = float(p.get("A03", 1.0))
@@ -1551,12 +1759,16 @@ def consistent_shell_tangent(mat: Material, sig: np.ndarray,
 
     idx = np.where(plastic)[0]
     for ii in idx:
+        c_el = d_tangent[ii].copy()
+        e_curr, _, _, _, _ = _eval_young_modulus(mat, np.array([epsp_arr[ii]]))
+        e_val = float(e_curr[0])
+
         dl = float(epsp_incr_arr[ii])
         s_c = sig[ii, :3]
         seq_c = math.sqrt(max(0.0, float(s_c @ p_hill @ s_c)))
         seq_c = max(seq_c, _EM20)
 
-        q_tr = seq_c + e0 * dl
+        q_tr = seq_c + e_val * dl
         scale = seq_c / max(q_tr, _EM20)
         s_tr = s_c / max(scale, _EM20)
 
@@ -1567,74 +1779,152 @@ def consistent_shell_tangent(mat: Material, sig: np.ndarray,
         rank1 = np.outer(s_tr, g_vec)
         d_tangent[ii] = scale * c_el + gamma * rank1
 
-        if symmetric:
-            d_tangent[ii] = 0.5 * (d_tangent[ii] + d_tangent[ii].T)
+    if symmetric:
+        d_tangent = 0.5 * (d_tangent + np.swapaxes(d_tangent, -1, -2))
 
     return d_tangent[0] if is_1d else d_tangent
 
 
 def consistent_solid_tangent(mat: Material, sig: np.ndarray,
-                             epsp: Optional[np.ndarray] = None,
-                             epsp_incr: Optional[np.ndarray] = None,
+                             epsp: Optional[Union[float, np.ndarray]] = None,
+                             dt: Any = 0.0,
                              extra: Optional[Dict[str, Any]] = None,
+                             epsp_incr: Optional[Union[float, np.ndarray]] = None,
                              deps: Optional[np.ndarray] = None,
-                             dt: float = 0.0,
-                             symmetric: bool = False) -> np.ndarray:
-    """Consistent algorithmic solid tangent operator (n, 6, 6)."""
+                             symmetric: bool = False,
+                             h: float = 1.0e-7,
+                             **kwargs: Any) -> np.ndarray:
+    """Consistent algorithmic solid tangent operator (n, 6, 6) or (6, 6)."""
+    # Disambiguate positional arguments
+    if isinstance(dt, (np.ndarray, list)):
+        epsp_incr = dt
+        dt = 0.0
+    elif isinstance(dt, dict) and extra is None:
+        extra = dt
+        dt = 0.0
+    elif isinstance(extra, (int, float, np.ndarray, list)) and epsp_incr is None:
+        epsp_incr = extra
+        extra = None
+    elif epsp_incr is None and deps is None and not isinstance(dt, dict) and dt != 0.0:
+        epsp_incr = dt
+        dt = 0.0
+
+    if "deps" in kwargs and deps is None:
+        deps = kwargs["deps"]
+    if "epsp_incr" in kwargs and epsp_incr is None:
+        epsp_incr = kwargs["epsp_incr"]
+    if "extra" in kwargs and extra is None:
+        extra = kwargs["extra"]
+    if "dt" in kwargs:
+        dt = float(kwargs["dt"])
+    if "symmetric" in kwargs:
+        symmetric = bool(kwargs["symmetric"])
+    if "h" in kwargs:
+        h = float(kwargs["h"])
+
     if not isinstance(sig, np.ndarray):
-        sig = np.array(sig, dtype=float)
+        sig = np.asarray(sig, dtype=float)
 
     is_1d = (sig.ndim == 1)
     if is_1d:
         sig = sig[None, :]
 
     n = sig.shape[0]
+    if n == 0:
+        return np.empty((0, 6, 6), dtype=float) if not is_1d else np.empty((6, 6), dtype=float)
+
+    # Extract epsp
+    if epsp is not None:
+        epsp_arr = np.asarray(epsp, dtype=float).flatten()
+        if len(epsp_arr) == 1 and n > 1:
+            epsp_arr = np.full(n, epsp_arr[0], dtype=float)
+    elif extra is not None and "pla43" in extra and extra["pla43"] is not None:
+        epsp_arr = np.asarray(extra["pla43"], dtype=float).flatten()
+        if len(epsp_arr) == 1 and n > 1:
+            epsp_arr = np.full(n, epsp_arr[0], dtype=float)
+    else:
+        epsp_arr = np.zeros(n, dtype=float)
+
+    # Extract off
+    off_raw = None
+    if extra is not None:
+        off_raw = extra.get("off43", extra.get("off", extra.get("layfail", None)))
+    if "off" in kwargs and off_raw is None:
+        off_raw = kwargs["off"]
+
+    if off_raw is not None:
+        off_arr = np.asarray(off_raw, dtype=float).flatten()
+        if len(off_arr) == 1 and n > 1:
+            off_arr = np.full(n, off_arr[0], dtype=float)
+    else:
+        off_arr = np.ones(n, dtype=float)
+
     p = mat.params
-    e0 = float(p.get("E0", p.get("E", 1.0)))
-    nu = float(p.get("nu", 0.0))
-    k_bulk = e0 / (3.0 * (1.0 - 2.0 * nu))
-    g_shear = 0.5 * e0 / (1.0 + nu)
+    nu = float(p.get("nu", getattr(mat, "nu", 0.0)))
+    d_tangent = np.zeros((n, 6, 6), dtype=float)
 
-    # Elastic 6x6 tangent
-    c_el = np.zeros((6, 6), dtype=float)
-    c11 = k_bulk + 4.0 / 3.0 * g_shear
-    c12 = k_bulk - 2.0 / 3.0 * g_shear
-    c_el[0, 0] = c_el[1, 1] = c_el[2, 2] = c11
-    c_el[0, 1] = c_el[0, 2] = c_el[1, 0] = c_el[1, 2] = c_el[2, 0] = c_el[2, 1] = c12
-    c_el[3, 3] = c_el[4, 4] = c_el[5, 5] = g_shear
+    for i in range(n):
+        if off_arr[i] <= 0.0:
+            d_tangent[i] = 0.0
+            continue
 
-    d_tangent = np.tile(c_el, (n, 1, 1))
+        if epsp_arr[i] > 0.0:
+            e_curr, _, _, _, _ = _eval_young_modulus(mat, np.array([epsp_arr[i]]))
+            e_val = float(e_curr[0])
+        else:
+            e_val = float(p.get("E0", p.get("E", getattr(mat, "E", 1.0))))
+
+        k_bulk = e_val / (3.0 * (1.0 - 2.0 * nu))
+        g_shear = 0.5 * e_val / (1.0 + nu)
+
+        c11 = k_bulk + 4.0 / 3.0 * g_shear
+        c12 = k_bulk - 2.0 / 3.0 * g_shear
+
+        c_el = np.zeros((6, 6), dtype=float)
+        c_el[0, 0] = c_el[1, 1] = c_el[2, 2] = c11
+        c_el[0, 1] = c_el[0, 2] = c_el[1, 0] = c_el[1, 2] = c_el[2, 0] = c_el[2, 1] = c12
+        c_el[3, 3] = c_el[4, 4] = c_el[5, 5] = g_shear
+        d_tangent[i] = c_el
 
     if deps is not None:
         deps_arr = np.asarray(deps, dtype=float)
         if deps_arr.ndim == 1:
             deps_arr = deps_arr[None, :]
-        h = 1.0e-7
 
+        h_val = float(h)
         for i in range(n):
+            if off_arr[i] <= 0.0:
+                d_tangent[i] = 0.0
+                continue
+
             d_num = np.zeros((6, 6), dtype=float)
             sig_i = sig[i].copy()
             deps_i = deps_arr[i].copy()
-            epsp_i = float(epsp[i]) if epsp is not None else 0.0
+            epsp_i = float(epsp_arr[i])
+
+            ext_i = _slice_extra_for_element(extra, i, n)
 
             for j in range(6):
                 deps_p = deps_i.copy()
                 deps_m = deps_i.copy()
-                deps_p[j] += h
-                deps_m[j] -= h
+                deps_p[j] += h_val
+                deps_m[j] -= h_val
 
-                ext_p = {**extra} if extra is not None else {}
-                ext_m = {**extra} if extra is not None else {}
+                ext_p = _copy_extra(ext_i)
+                ext_m = _copy_extra(ext_i)
 
                 sig_p, _, _ = solid_update(mat, sig_i.copy(), deps_p, epsp=epsp_i, dt=dt, extra=ext_p)
                 sig_m, _, _ = solid_update(mat, sig_i.copy(), deps_m, epsp=epsp_i, dt=dt, extra=ext_m)
-                d_num[:, j] = (sig_p[:6] - sig_m[:6]) / (2.0 * h)
+                d_num[:, j] = (sig_p[:6] - sig_m[:6]) / (2.0 * h_val)
 
             if symmetric:
                 d_num = 0.5 * (d_num + d_num.T)
             d_tangent[i] = d_num
 
         return d_tangent[0] if is_1d else d_tangent
+
+    if symmetric:
+        d_tangent = 0.5 * (d_tangent + np.swapaxes(d_tangent, -1, -2))
 
     return d_tangent[0] if is_1d else d_tangent
 

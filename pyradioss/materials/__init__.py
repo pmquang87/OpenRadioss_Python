@@ -1249,7 +1249,7 @@ def shell_layer_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
     if getattr(mat, "law", None) in (43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB") or getattr(mat, "law_name", None) in ("43", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB"):
         _get_law43()
         if law43_shell_tangent is not None:
-            return law43_shell_tangent(mat, sig, epsp, epsp_incr, extra)
+            return law43_shell_tangent(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
         raise NotImplementedError("LAW43 consistent_shell_tangent not available in law43_hill_tab")
     if mat.law == 1:
         import numpy as np

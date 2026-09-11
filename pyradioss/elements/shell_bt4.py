@@ -538,9 +538,10 @@ def _init_material_state(group, nip_max):
     if any(mat.fail is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros((n, nip_max))
     st["chk_fail"] = any(
-        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27)
+        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43)
         or mat.params.get("eps_p_max", EP30) < 1e30
         or mat.params.get("eps_max", EP30) < 1e30
+        or mat.params.get("EPSMAX", EP30) < 1e30
         for _, mat, _ in st["slices"])
 
 
@@ -572,9 +573,10 @@ def _layer_failure(st, sl, mat, k, sig_k, epsp_old, deps_k, dt):
         broken = failure.shell_step(mat.fail, sig_k, d_ep, deps_k, dt,
                                     st["dama"][sl, k], tstar, eps_tot=eps_tot)
         layf[broken] = 0.0
-    eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
-    if eps_max < 1e30:
-        layf[st["epsp"][sl, k] > eps_max] = 0.0
+    if getattr(mat, "law", 1) != 43:
+        eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
+        if eps_max < 1e30:
+            layf[st["epsp"][sl, k] > eps_max] = 0.0
     sig_k[layf == 0.0] = 0.0
 
 
@@ -591,9 +593,10 @@ def _element_deletion(st, nip_of):
     layfail = st["layfail"]
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         law = getattr(mat, "law", 1)
-        if not (mat.fail is not None or law in (15, 22, 25, 27)
+        if not (mat.fail is not None or law in (15, 22, 25, 27, 43)
                 or mat.params.get("eps_p_max", EP30) < 1e30
-                or mat.params.get("eps_max", EP30) < 1e30):
+                or mat.params.get("eps_max", EP30) < 1e30
+                or mat.params.get("EPSMAX", EP30) < 1e30):
             continue
         nip = nip_of[isl]
         nbroken = (layfail[sl, :nip] == 0.0).sum(axis=1)
@@ -620,7 +623,7 @@ def _element_deletion(st, nip_of):
             # Membrane criterion: mid-surface layer (or all layers)
             mid = nip // 2
             dead = layfail[sl, mid] == 0.0
-        elif law == 27 or (mat.fail is not None and getattr(mat.fail, "ifail_sh", 1) == 2):
+        elif law in (27, 43) or (mat.fail is not None and getattr(mat.fail, "ifail_sh", 1) == 2):
             dead = nbroken == nip
         else:
             dead = nbroken >= 1

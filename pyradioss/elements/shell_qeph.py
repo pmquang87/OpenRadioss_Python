@@ -694,6 +694,10 @@ def _current_yield(st, sl, mat):
         ep = st["epsp"][sl, :nip].mean(axis=1)
         return np.interp(ep, mat.params["curve_x"][0],
                          mat.params["curve_y"][0])
+    if (mat.law in (43, "43", "LAW43", "HILL_TAB") or getattr(mat, "law_name", None) in ("43", "LAW43", "HILL_TAB")) and "curve_x" in mat.params and len(mat.params["curve_x"]) > 0:
+        ep = st["epsp"][sl, :nip].mean(axis=1)
+        return np.interp(ep, mat.params["curve_x"][0],
+                         mat.params["curve_y"][0])
     return None                                  # elastic — no relaxation
 
 
