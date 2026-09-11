@@ -585,8 +585,13 @@ def solid_update_law48(
     eps_key = "eps48" if "eps48" in extra else ("eps" if "eps" in extra else None)
     if eps_key is not None:
         eps_tot = extra[eps_key]
-        if single and eps_tot.ndim == 1:
-            eps_tot = eps_tot.reshape(1, 6)
+        if eps_tot.ndim == 1:
+            if nel == 1:
+                eps_tot = eps_tot.reshape(1, 6)
+                extra[eps_key] = eps_tot
+            else:
+                eps_tot = np.broadcast_to(eps_tot, (nel, 6)).copy()
+                extra[eps_key] = eps_tot
         eps_tot += deps_arr
     elif p.eps_t1 < _INF:
         eps_tot = deps_arr.copy()
@@ -871,8 +876,13 @@ def shell_update_law48(
     eps_key = "eps48" if "eps48" in extra else ("eps" if "eps" in extra else None)
     if eps_key is not None:
         eps_tot = extra[eps_key]
-        if single and eps_tot.ndim == 1:
-            eps_tot = eps_tot.reshape(1, -1)
+        if eps_tot.ndim == 1:
+            if nel == 1:
+                eps_tot = eps_tot.reshape(1, -1)
+                extra[eps_key] = eps_tot
+            else:
+                eps_tot = np.broadcast_to(eps_tot, (nel, eps_tot.shape[0])).copy()
+                extra[eps_key] = eps_tot
         eps_tot[:, :3] += deps_arr[:, :3]
     elif p.eps_t1 < _INF:
         eps_tot = deps_arr[:, :3].copy()
