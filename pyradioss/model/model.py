@@ -1337,8 +1337,9 @@ class Model:
         self.mat_sews = self.mat_law95s
         self.mat_law48s: Dict[int, Any] = {}                        # /MAT/LAW48, /MAT/ZHAO (M196)
         self.mat_zhaos = self.mat_law48s
-        self.mat_law49s: Dict[int, Any] = {}                        # /MAT/LAW49, /MAT/STEINB (M196)
+        self.mat_steinbs = self.mat_law49s
         self.mat_steinbergs = self.mat_law49s
+        self.mat_steinberg_guinans = self.mat_law49s
         self.mat_law106s: Dict[int, Any] = {}                       # /MAT/LAW106, /MAT/P_FOAM (M196)
         self.mat_poly_foams = self.mat_law106s
         self.mat_law77s: Dict[int, Any] = {}                        # /MAT/LAW77, /MAT/OGDEN_HYPO (M196)

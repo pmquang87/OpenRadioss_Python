@@ -105,6 +105,14 @@ class Law49Params:
     title: str = ""
 
     @property
+    def G0(self) -> float:
+        return self.g0
+
+    @property
+    def bulk_k(self) -> float:
+        return self.bulk
+
+    @property
     def E(self) -> float:
         return self.e0
 
@@ -193,7 +201,7 @@ def _get_params(mat: Any) -> Law49Params:
         bulk = 0.0
 
     # Yield and hardening parameters
-    sig0_val = p.get("sig0", p.get("sigy", p.get("MAT_SIGY", p.get("sigma_0", p.get("A", p.get("a"))))))
+    sig0_val = p.get("sig0", p.get("sigy", p.get("MAT_SIGY", p.get("sigma_0", p.get("sigma_y0", p.get("A", p.get("a")))))))
     sig0 = float(sig0_val) if sig0_val is not None else 0.0
 
     beta_val = p.get("beta", p.get("MAT_BETA", p.get("cb", p.get("B", p.get("b")))))
@@ -215,20 +223,20 @@ def _get_params(mat: Any) -> Law49Params:
     tmelt_val = p.get("tmelt", p.get("MAT_TMELT", p.get("Tmelt")))
     tmelt = float(tmelt_val) if tmelt_val is not None and float(tmelt_val) > 0.0 else _EP20
 
-    rhoc_p_val = p.get("rhoc_p", p.get("MAT_SPHEAT", p.get("sph", p.get("rho_cp", p.get("rhocp")))))
+    rhoc_p_val = p.get("rhoc_p", p.get("MAT_SPHEAT", p.get("sph", p.get("rho_cp", p.get("rhocp", p.get("Cv", p.get("cv")))))))
     rhoc_p = float(rhoc_p_val) if rhoc_p_val is not None else 0.0
 
-    pmin_val = p.get("pmin", p.get("MAT_PC", p.get("pc")))
+    pmin_val = p.get("pmin", p.get("MAT_PC", p.get("pc", p.get("Pmin"))))
     pmin = float(pmin_val) if pmin_val is not None and float(pmin_val) != 0.0 else -_EP20
 
     # Pressure and temperature coefficients
-    b1_val = p.get("b1", p.get("MAT_B1", p.get("cb1")))
+    b1_val = p.get("b1", p.get("MAT_B1", p.get("cb1", p.get("A", p.get("a_press")))))
     b1 = float(b1_val) if b1_val is not None else 0.0
 
-    b2_val = p.get("b2", p.get("MAT_B2", p.get("cb2")))
+    b2_val = p.get("b2", p.get("MAT_B2", p.get("cb2", p.get("b1", p.get("A", p.get("a_press"))))))
     b2 = float(b2_val) if b2_val is not None else 0.0
 
-    h_val = p.get("h", p.get("MAT_H", p.get("ch")))
+    h_val = p.get("h", p.get("MAT_H", p.get("ch", p.get("B", p.get("b_temp")))))
     h = float(h_val) if h_val is not None else 0.0
 
     f_val = p.get("f", p.get("MAT_F", p.get("cf")))
@@ -256,6 +264,9 @@ def _get_params(mat: Any) -> Law49Params:
         f=f,
         title=title,
     )
+
+
+_ensure_params = _get_params
 
 
 def build_law49(mat_def: Any) -> Material:
@@ -591,7 +602,7 @@ def solid_update(
     yld_actual = yld + dpla * qh
 
     # Return deviatoric stress (m49law.F lines 176-181)
-    s_new = scale[:, None] * s_tr
+    s_new = scale[:, None] * s_tr * off[:, None]
 
     # Accumulate equivalent plastic strain (m49law.F lines 182-183)
     epsp_new = (epsp_arr + dpla) * off
@@ -620,6 +631,7 @@ def solid_update(
     sig_new[:, 0] -= P_new
     sig_new[:, 1] -= P_new
     sig_new[:, 2] -= P_new
+    sig_new *= off[:, None]
 
     # 11. Acoustic sound speed
     c_solid = sound_speed_solid(p, rho=df * rho0, extra={"g": G})
@@ -677,30 +689,222 @@ def shell_update(*args: Any, **kwargs: Any) -> Any:
 shell_update_law49 = shell_update
 
 
-def consistent_solid_tangent(
+# -----------------------------------------------------------------------------
+# State Copy Helper
+# -----------------------------------------------------------------------------
+
+def _copy_extra(extra: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Deep copy dictionary of state variables for LAW49."""
+    if extra is None:
+        return None
+    res: dict[str, Any] = {}
+    for k, v in extra.items():
+        if isinstance(v, np.ndarray):
+            res[k] = v.copy()
+        elif isinstance(v, dict):
+            res[k] = _copy_extra(v)
+        elif hasattr(v, "copy"):
+            try:
+                res[k] = v.copy()
+            except Exception:
+                res[k] = v
+        else:
+            res[k] = v
+    return res
+
+
+# -----------------------------------------------------------------------------
+# Algorithmic Consistent Tangent Stiffness Tensor
+# -----------------------------------------------------------------------------
+
+def tangent_law49_solid(
     mat: Any,
-    sig: np.ndarray,
+    sig: np.ndarray | None = None,
+    deps: np.ndarray | None = None,
+    eps_dot: np.ndarray | None = None,
+    dt: float = 0.0,
+    *args: Any,
     epsp: np.ndarray | None = None,
     epsp_incr: np.ndarray | None = None,
     extra: dict | None = None,
+    symmetric: bool = False,
+    h: float = 1e-7,
     **kwargs: Any,
 ) -> np.ndarray:
-    """Algorithmic consistent elastoplastic tangent stiffness matrix for LAW49 in Voigt notation (n, 6, 6).
+    """Algorithmic consistent elastoplastic tangent stiffness matrix for LAW49 in Voigt notation.
 
-    Follows the Simo & Hughes (1998) J2 isotropic hardening formulation:
-    D = K (1 (x) 1) + 2G (1 - 3G de_p / q_tr) I_dev + 6G^2 (de_p/q_tr - 1/(3G + Q_H)) N (x) N.
+    Voigt convention: [xx, yy, zz, xy, yz, zx] with engineering shear.
+
+    Parameters
+    ----------
+    mat : Material or dict
+        Material definition.
+    sig : (6,) or (n, 6) ndarray, optional
+        Stress state (old stress if deps is provided, or current stress).
+    deps : (6,) or (n, 6) ndarray, optional
+        Strain increment tensor.
+    eps_dot, dt :
+        Optional rate and time step.
+    epsp, epsp_incr :
+        Optional plastic strain history.
+    extra : dict, optional
+        Extra state views (e.g. 'temp', 'e_spe', 'off', 'g').
+    symmetric : bool, default False
+        If True, returns symmetrized matrix 0.5 * (D + D^T).
+    h : float, default 1e-7
+        Perturbation step size for numerical algorithmic tangent.
+
+    Returns
+    -------
+    D : (6, 6) or (n, 6, 6) ndarray
+        Consistent tangent stiffness tensor.
     """
-    p = _get_params(mat)
-    sig_arr = np.atleast_2d(np.asarray(sig, dtype=float))
-    n_elem = sig_arr.shape[0]
+    # 0. Disambiguate keyword arguments
+    if "deps" in kwargs and deps is None:
+        deps = kwargs.pop("deps")
+    if "d_eps" in kwargs and deps is None:
+        deps = kwargs.pop("d_eps")
+    if "eps" in kwargs and deps is None:
+        deps = kwargs.pop("eps")
+    if "sig" in kwargs and sig is None:
+        sig = kwargs.pop("sig")
+    if "epsp" in kwargs and epsp is None:
+        epsp = kwargs.pop("epsp")
+    if "epsp_incr" in kwargs and epsp_incr is None:
+        epsp_incr = kwargs.pop("epsp_incr")
+    if "extra" in kwargs and extra is None:
+        extra = kwargs.pop("extra")
+    if "dt" in kwargs:
+        dt = float(kwargs.pop("dt"))
+    if "h" in kwargs:
+        h = float(kwargs.pop("h"))
+    if "symmetric" in kwargs:
+        symmetric = bool(kwargs.pop("symmetric"))
 
+    # 1. Disambiguate positional arguments
+    if deps is None and eps_dot is not None:
+        deps_check = np.asarray(eps_dot)
+        if (deps_check.ndim == 1 and deps_check.shape[0] == 6) or (deps_check.ndim == 2 and deps_check.shape[1] == 6):
+            deps = deps_check
+            eps_dot = None
+
+    if len(args) >= 1:
+        if isinstance(args[0], dict) and extra is None:
+            extra = args[0]
+        elif isinstance(args[0], (int, float)):
+            dt = float(args[0])
+        elif isinstance(args[0], np.ndarray):
+            arr = np.asarray(args[0])
+            if (arr.ndim == 1 and arr.shape[0] == 6) or (arr.ndim == 2 and arr.shape[1] == 6):
+                if deps is None:
+                    deps = arr
+            elif epsp_incr is None:
+                epsp_incr = args[0]
+    if len(args) >= 2:
+        if isinstance(args[1], dict) and extra is None:
+            extra = args[1]
+        elif isinstance(args[1], (int, float)):
+            dt = float(args[1])
+        elif epsp_incr is None:
+            epsp_incr = args[1]
+    if len(args) >= 3 and isinstance(args[2], dict) and extra is None:
+        extra = args[2]
+
+    # 2. Sizing and dimensionality
+    if sig is not None and deps is not None:
+        n_sig = 1 if np.ndim(sig) <= 1 else np.asarray(sig).shape[0]
+        n_deps = 1 if np.ndim(deps) <= 1 else np.asarray(deps).shape[0]
+        nel = max(n_sig, n_deps)
+        single = (np.ndim(sig) <= 1 and np.ndim(deps) <= 1)
+    elif sig is not None:
+        nel = 1 if np.ndim(sig) <= 1 else np.asarray(sig).shape[0]
+        single = (np.ndim(sig) <= 1)
+    elif deps is not None:
+        nel = 1 if np.ndim(deps) <= 1 else np.asarray(deps).shape[0]
+        single = (np.ndim(deps) <= 1)
+    else:
+        nel = 1
+        single = True
+
+    if nel == 0:
+        return np.empty((0, 6, 6), dtype=float)
+
+    if sig is not None:
+        sig_arr = np.asarray(sig, dtype=float).copy()
+        if sig_arr.ndim == 1:
+            sig_arr = sig_arr.reshape(1, -1)
+        if sig_arr.shape[0] == 1 and nel > 1:
+            sig_arr = np.repeat(sig_arr, nel, axis=0)
+    else:
+        sig_arr = np.zeros((nel, 6), dtype=float)
+
+    if deps is not None:
+        deps_arr = np.asarray(deps, dtype=float).copy()
+        if deps_arr.ndim == 1:
+            deps_arr = deps_arr.reshape(1, -1)
+        if deps_arr.shape[0] == 1 and nel > 1:
+            deps_arr = np.repeat(deps_arr, nel, axis=0)
+    else:
+        deps_arr = None
+
+    # Element deletion / deactivation status
+    off_arr = np.ones(nel, dtype=float)
+    if extra is not None:
+        for k in ("off", "off49"):
+            if k in extra and extra[k] is not None:
+                val = np.asarray(extra[k], dtype=float).flatten()
+                if len(val) == 1 and nel > 1:
+                    off_arr = np.full(nel, val[0], dtype=float)
+                else:
+                    off_arr = val.copy()
+                break
+    deleted_mask = (off_arr <= 0.0)
+
+    analytical_requested = bool(
+        kwargs.get("analytical", False) or kwargs.get("analytic", False) or kwargs.get("method") == "analytical"
+    )
+
+    # 3. If deps is provided and not explicitly requesting pure analytical:
+    if deps_arr is not None and not analytical_requested:
+        D = np.zeros((nel, 6, 6), dtype=float)
+        active = ~deleted_mask
+        h_step = float(h)
+        dt_call = dt if dt > 0.0 else 1.0
+        if np.any(active):
+            for j in range(6):
+                ej = np.zeros_like(deps_arr)
+                ej[:, j] = h_step
+
+                ext_p = _copy_extra(extra)
+                ext_m = _copy_extra(extra)
+
+                sp = solid_update_law49(mat, sig_arr.copy(), deps=deps_arr + ej, dt=dt_call, extra=ext_p, epsp=epsp)
+                sm = solid_update_law49(mat, sig_arr.copy(), deps=deps_arr - ej, dt=dt_call, extra=ext_m, epsp=epsp)
+
+                if sp.ndim == 1:
+                    sp = sp.reshape(1, 6)
+                if sm.ndim == 1:
+                    sm = sm.reshape(1, 6)
+
+                D[:, :, j] = (sp[:, :6] - sm[:, :6]) / (2.0 * h_step)
+
+        if np.any(deleted_mask):
+            D[deleted_mask] = 0.0
+
+        if symmetric:
+            D = 0.5 * (D + np.swapaxes(D, -1, -2))
+
+        return D[0] if single else D
+
+    # 4. Pure analytical consistent tangent (from sig_arr and extra)
+    p = _get_params(mat)
     G = p.g0
     K = p.bulk
 
     if extra is not None and "g" in extra and extra["g"] is not None:
         G_arr = np.atleast_1d(np.asarray(extra["g"], dtype=float))
     else:
-        G_arr = np.full(n_elem, G, dtype=float)
+        G_arr = np.full(nel, G, dtype=float)
 
     # Elastic tangent tensor C (6x6) in Voigt notation: [xx, yy, zz, xy, yz, zx]
     ee = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0], dtype=float)
@@ -709,69 +913,71 @@ def consistent_solid_tangent(
     I_dev = np.diag([2.0 / 3.0, 2.0 / 3.0, 2.0 / 3.0, 0.5, 0.5, 0.5])
     I_dev[0, 1] = I_dev[0, 2] = I_dev[1, 0] = I_dev[1, 2] = I_dev[2, 0] = I_dev[2, 1] = -1.0 / 3.0
 
-    D = np.zeros((n_elem, 6, 6), dtype=float)
-    for i in range(n_elem):
+    D = np.zeros((nel, 6, 6), dtype=float)
+    for i in range(nel):
         D[i] = KeeT + 2.0 * G_arr[i] * I_dev
 
-    if epsp_incr is None:
-        return D
+    if epsp_incr is not None:
+        epsp_incr_arr = np.atleast_1d(np.asarray(epsp_incr, dtype=float))
+        if epsp_incr_arr.shape != (nel,):
+            epsp_incr_arr = np.full(nel, float(epsp_incr_arr.flat[0]), dtype=float)
 
-    epsp_incr_arr = np.atleast_1d(np.asarray(epsp_incr, dtype=float))
-    if epsp_incr_arr.shape != (n_elem,):
-        epsp_incr_arr = np.full(n_elem, float(epsp_incr_arr.flat[0]), dtype=float)
+        plastic = epsp_incr_arr > 0.0
+        if np.any(plastic):
+            p_old = (sig_arr[:, 0] + sig_arr[:, 1] + sig_arr[:, 2]) / 3.0
+            s = sig_arr.copy()
+            s[:, 0] -= p_old
+            s[:, 1] -= p_old
+            s[:, 2] -= p_old
 
-    plastic = epsp_incr_arr > 0.0
-    if not np.any(plastic):
-        return D
+            epsp_arr = np.zeros(nel, dtype=float) if epsp is None else np.atleast_1d(np.asarray(epsp, dtype=float))
 
-    # For plastic points, compute the algorithmic correction
-    p_old = (sig_arr[:, 0] + sig_arr[:, 1] + sig_arr[:, 2]) / 3.0
-    s = sig_arr.copy()
-    s[:, 0] -= p_old
-    s[:, 1] -= p_old
-    s[:, 2] -= p_old
+            for i in range(nel):
+                if not plastic[i] or G_arr[i] <= 0.0:
+                    continue
+                g_i = G_arr[i]
+                dep = epsp_incr_arr[i]
 
-    epsp_arr = np.zeros(n_elem, dtype=float) if epsp is None else np.atleast_1d(np.asarray(epsp, dtype=float))
+                s_i = s[i]
+                snorm = math.sqrt(
+                    s_i[0] ** 2 + s_i[1] ** 2 + s_i[2] ** 2
+                    + 2.0 * (s_i[3] ** 2 + s_i[4] ** 2 + s_i[5] ** 2)
+                )
+                snorm = max(snorm, 1e-30)
+                Nv = s_i / snorm
+                q = math.sqrt(1.5) * snorm
+                q_tr = q + 3.0 * g_i * dep
 
-    for i in range(n_elem):
-        if not plastic[i] or G_arr[i] <= 0.0:
-            continue
-        g_i = G_arr[i]
-        dep = epsp_incr_arr[i]
+                cur_epsp = epsp_arr[i] if len(epsp_arr) > i else 0.0
+                if p.n >= 1.0:
+                    qh = p.sig0 * p.beta * p.n * ((1.0 + p.beta * cur_epsp) ** (p.n - 1.0))
+                else:
+                    qh = (
+                        p.sig0 * p.beta * p.n / ((1.0 + p.beta * max(cur_epsp, _EM15)) ** (1.0 - p.n))
+                        if cur_epsp > 0.0
+                        else 0.0
+                    )
+                if cur_epsp >= p.eps_max:
+                    qh = 0.0
 
-        s_i = s[i]
-        snorm = math.sqrt(
-            s_i[0] ** 2 + s_i[1] ** 2 + s_i[2] ** 2
-            + 2.0 * (s_i[3] ** 2 + s_i[4] ** 2 + s_i[5] ** 2)
-        )
-        snorm = max(snorm, 1e-30)
-        Nv = s_i / snorm
-        q = math.sqrt(1.5) * snorm
-        q_tr = q + 3.0 * g_i * dep
+                a = 3.0 * g_i * dep / q_tr
+                b = 6.0 * g_i * g_i * (dep / q_tr - 1.0 / max(3.0 * g_i + qh, _EM15))
 
-        # Evaluate hardening slope QH
-        cur_epsp = epsp_arr[i] if len(epsp_arr) > i else 0.0
-        if p.n >= 1.0:
-            qh = p.sig0 * p.beta * p.n * ((1.0 + p.beta * cur_epsp) ** (p.n - 1.0))
-        else:
-            qh = (
-                p.sig0 * p.beta * p.n / ((1.0 + p.beta * max(cur_epsp, _EM15)) ** (1.0 - p.n))
-                if cur_epsp > 0.0
-                else 0.0
-            )
-        if cur_epsp >= p.eps_max:
-            qh = 0.0
+                NN = np.outer(Nv, Nv)
+                D[i] = KeeT + 2.0 * g_i * (1.0 - a) * I_dev + b * NN
 
-        a = 3.0 * g_i * dep / q_tr
-        b = 6.0 * g_i * g_i * (dep / q_tr - 1.0 / max(3.0 * g_i + qh, _EM15))
+    if np.any(deleted_mask):
+        D[deleted_mask] = 0.0
 
-        NN = np.outer(Nv, Nv)
-        D[i] = KeeT + 2.0 * g_i * (1.0 - a) * I_dev + b * NN
+    if symmetric:
+        D = 0.5 * (D + np.swapaxes(D, -1, -2))
 
-    return D
+    return D[0] if single else D
 
 
-tangent_law49_solid = consistent_solid_tangent
+consistent_solid_tangent = tangent_law49_solid
+solid_tangent = tangent_law49_solid
+solid_tangent_law49 = tangent_law49_solid
 
 
 def _register() -> None:
