@@ -377,7 +377,8 @@ def _init_material_state(group, dndx0):
     if any(mat.fail is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros(n)
     st["chk_fail"] = any(
-        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 48, 60)
+        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 48, 52, 60)
+        or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS")
         or mat.params.get("eps_p_max", EP30) < 1e30
         or mat.params.get("eps_max", EP30) < 1e30
         for _, mat, _ in st["slices"])
@@ -674,7 +675,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         for sl, mat, prop in st.get("slices", []):
             if getattr(mat, "law", 1) == 0:
                 is_void[sl] = True
-            elif getattr(mat, "law", 1) in (5, "5", "LAW5", "JWL", 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_LAW48", "LAW48_ZHAO"):
+            elif getattr(mat, "law", 1) in (5, "5", "LAW5", "JWL", 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_LAW48", "LAW48_ZHAO", 52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
                 c[sl] = materials.sound_speed(mat, rho[sl])
             elif hasattr(mat, "sound_speed_solid"):
                 c[sl] = mat.sound_speed_solid()
@@ -767,6 +768,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             st["off"][sl] = np.minimum(st["off"][sl], extra["off60"])
         elif "off48" in extra:
             st["off"][sl] = np.minimum(st["off"][sl], extra["off48"])
+        elif "off52" in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra["off52"])
         elif "off" in extra:
             st["off"][sl] = extra["off"]
 

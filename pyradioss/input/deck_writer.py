@@ -1974,6 +1974,205 @@ class StarterDeck:
         kwargs.setdefault("law_name", "PLAS_ZHAO")
         return self.mat_law48(*args, **kwargs)
 
+    def mat_law52(
+        self,
+        mid: int = 0,
+        title: str = "",
+        rho: float = 0.0,
+        refer_rho: Optional[float] = None,
+        e: float = 0.0,
+        nu: float = 0.0,
+        iflag: int = 0,
+        fsmooth: int = 0,
+        fcut: float = 1.0e30,
+        a: float = 0.0,
+        b: float = 0.0,
+        n: float = 0.0,
+        c: float = 1.0e30,
+        pc: float = 1.0,
+        q1: float = 1.0e-20,
+        q2: float = 0.0,
+        q3: float = 0.0,
+        s_n: float = 0.0,
+        eps_n: float = 0.0,
+        f_i: float = 0.0,
+        f_n: float = 0.0,
+        f_c: float = 0.0,
+        f_f: float = 0.0,
+        itable: int = 0,
+        xfac: float = 1.0,
+        yfac: float = 1.0,
+        fixed_format: bool = True,
+        law_name: str = "LAW52",
+        unit_id: Optional[int] = None,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW52`` (/MAT/GURSON, /MAT/PLAS_GURS) — Gurson porous metal plasticity.
+
+        Cites ``radioss110/MAT/matl52_gurson.cfg``, ``radioss130/MAT/matl52_gurson.cfg``, and ``hm_read_mat52.F``:
+          Card 1: RHO, Refer_Rho (%20lg%20lg)
+          Card 2: E, nu, Iflag, Fsmooth, Fcut, Iyield (%20lg%20lg%10d%10d%20lg%10d)
+          Card 3: a, b, n, c, p (%20lg%20lg%20lg%20lg%20lg)
+          Card 4: q1, q2, q3, SN, EpsN (%20lg%20lg%20lg%20lg%20lg)
+          Card 5: Fi, FN, Fc, FF (%20lg%20lg%20lg%20lg)
+          Card 6 (if itable != 0): Tab_ID, XFAC, YFAC (%10d          %20lg%20lg)
+        """
+        mat_obj = None
+        if hasattr(mid, "f_i") or hasattr(mid, "q1") or hasattr(mid, "f_c") or (hasattr(mid, "a") and hasattr(mid, "b") and hasattr(mid, "nu")):
+            mat_obj = mid
+        elif "mat" in kwargs and (hasattr(kwargs["mat"], "f_i") or hasattr(kwargs["mat"], "q1")):
+            mat_obj = kwargs["mat"]
+        elif "mat_law52" in kwargs and (hasattr(kwargs["mat_law52"], "f_i") or hasattr(kwargs["mat_law52"], "q1")):
+            mat_obj = kwargs["mat_law52"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", 0)
+            if not title:
+                title = getattr(mat_obj, "title", "")
+            if rho == 0.0:
+                rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", 0.0))
+            if refer_rho is None:
+                refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", getattr(mat_obj, "ref_rho", None)))
+            if e == 0.0:
+                e = getattr(mat_obj, "e", getattr(mat_obj, "E", 0.0))
+            if nu == 0.0:
+                nu = getattr(mat_obj, "nu", 0.0)
+            if iflag == 0:
+                iflag = getattr(mat_obj, "iflag", 0)
+            if fsmooth == 0:
+                fsmooth = getattr(mat_obj, "fsmooth", 0)
+            if fcut == 1.0e30:
+                fcut = getattr(mat_obj, "fcut", 1.0e30)
+            if a == 0.0:
+                a = getattr(mat_obj, "a", getattr(mat_obj, "yield_stress", 0.0))
+            if b == 0.0:
+                b = getattr(mat_obj, "b", getattr(mat_obj, "hardening_b", 0.0))
+            if n == 0.0:
+                n = getattr(mat_obj, "n", getattr(mat_obj, "hardening_n", 0.0))
+            if c == 1.0e30:
+                c = getattr(mat_obj, "c", 1.0e30)
+            if pc == 1.0:
+                pc = getattr(mat_obj, "pc", 1.0)
+            if q1 == 1.0e-20:
+                q1 = getattr(mat_obj, "q1", 1.0e-20)
+            if q2 == 0.0:
+                q2 = getattr(mat_obj, "q2", 0.0)
+            if q3 == 0.0:
+                q3 = getattr(mat_obj, "q3", 0.0)
+            if s_n == 0.0:
+                s_n = getattr(mat_obj, "s_n", getattr(mat_obj, "sn", 0.0))
+            if eps_n == 0.0:
+                eps_n = getattr(mat_obj, "eps_n", getattr(mat_obj, "epsn", 0.0))
+            if f_i == 0.0:
+                f_i = getattr(mat_obj, "f_i", getattr(mat_obj, "fi", 0.0))
+            if f_n == 0.0:
+                f_n = getattr(mat_obj, "f_n", getattr(mat_obj, "fn", 0.0))
+            if f_c == 0.0:
+                f_c = getattr(mat_obj, "f_c", getattr(mat_obj, "fc", 0.0))
+            if f_f == 0.0:
+                f_f = getattr(mat_obj, "f_f", getattr(mat_obj, "ff", 0.0))
+            if itable == 0:
+                itable = getattr(mat_obj, "itable", getattr(mat_obj, "mat_tab_id", 0))
+            if xfac == 1.0:
+                xfac = getattr(mat_obj, "xfac", 1.0)
+            if yfac == 1.0:
+                yfac = getattr(mat_obj, "yfac", 1.0)
+
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+        if "mat_id" in kw_low and mid == 0:
+            mid = kw_low["mat_id"]
+        if "id" in kw_low and mid == 0:
+            mid = kw_low["id"]
+        if "rho0" in kw_low and rho == 0.0:
+            rho = kw_low["rho0"]
+        if "refer_rho" in kw_low and refer_rho is None:
+            refer_rho = kw_low["refer_rho"]
+        if "rho_ref" in kw_low and refer_rho is None:
+            refer_rho = kw_low["rho_ref"]
+        if "rhor" in kw_low and refer_rho is None:
+            refer_rho = kw_low["rhor"]
+        if "yield_stress" in kw_low and a == 0.0:
+            a = kw_low["yield_stress"]
+        if "hardening_b" in kw_low and b == 0.0:
+            b = kw_low["hardening_b"]
+        if "hardening_n" in kw_low and n == 0.0:
+            n = kw_low["hardening_n"]
+        if "fixed_format" in kw_low:
+            fixed_format = bool(kw_low["fixed_format"])
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        if fixed_format:
+            # Card 1: RHO, Refer_Rho (MAT_LAW52_1: [20, 20])
+            if refer_rho is not None and float(refer_rho) != 0.0:
+                self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(refer_rho, 20)}")
+            else:
+                self.lines.append(fmt_float(rho, 20))
+
+            # Card 2: E, nu, Iflag, Fsmooth, Fcut, Iyield (MAT_LAW52_2: [20, 20, 10, 10, 20, 10])
+            if itable != 0:
+                self.lines.append(
+                    f"{fmt_float(e, 20)}{fmt_float(nu, 20)}{fmt_int(iflag, 10)}{fmt_int(fsmooth, 10)}{fmt_float(fcut, 20)}{fmt_int(1, 10)}"
+                )
+            else:
+                self.lines.append(
+                    f"{fmt_float(e, 20)}{fmt_float(nu, 20)}{fmt_int(iflag, 10)}{fmt_int(fsmooth, 10)}{fmt_float(fcut, 20)}"
+                )
+
+            # Card 3: a, b, n, c, p (MAT_LAW52_3: [20, 20, 20, 20, 20])
+            self.lines.append(
+                f"{fmt_float(a, 20)}{fmt_float(b, 20)}{fmt_float(n, 20)}{fmt_float(c, 20)}{fmt_float(pc, 20)}"
+            )
+
+            # Card 4: q1, q2, q3, SN, EpsN (MAT_LAW52_4: [20, 20, 20, 20, 20])
+            self.lines.append(
+                f"{fmt_float(q1, 20)}{fmt_float(q2, 20)}{fmt_float(q3, 20)}{fmt_float(s_n, 20)}{fmt_float(eps_n, 20)}"
+            )
+
+            # Card 5: Fi, FN, Fc, FF (MAT_LAW52_5: [20, 20, 20, 20])
+            self.lines.append(
+                f"{fmt_float(f_i, 20)}{fmt_float(f_n, 20)}{fmt_float(f_c, 20)}{fmt_float(f_f, 20)}"
+            )
+
+            # Card 6: Tab_ID, blank(10), XFAC, YFAC (MAT_LAW52_6: [10, 10, 20, 20])
+            if itable != 0:
+                self.lines.append(
+                    f"{fmt_int(itable, 10)}{blank(10)}{fmt_float(xfac, 20)}{fmt_float(yfac, 20)}"
+                )
+        else:
+            delim = kw_low.get("delimiter", ", " if (kw_low.get("comma") or kw_low.get("comma_delimited")) else " ")
+            if refer_rho is not None and float(refer_rho) != 0.0:
+                self.lines.append(f"{rho}{delim}{refer_rho}")
+            else:
+                self.lines.append(f"{rho}")
+
+            if itable != 0:
+                self.lines.append(f"{e}{delim}{nu}{delim}{iflag}{delim}{fsmooth}{delim}{fcut}{delim}1")
+            else:
+                self.lines.append(f"{e}{delim}{nu}{delim}{iflag}{delim}{fsmooth}{delim}{fcut}")
+
+            self.lines.append(f"{a}{delim}{b}{delim}{n}{delim}{c}{delim}{pc}")
+            self.lines.append(f"{q1}{delim}{q2}{delim}{q3}{delim}{s_n}{delim}{eps_n}")
+            self.lines.append(f"{f_i}{delim}{f_n}{delim}{f_c}{delim}{f_f}")
+            if itable != 0:
+                self.lines.append(f"{itable}{delim}{xfac}{delim}{yfac}")
+
+        return self
+
+    def mat_gurson(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/GURSON`` — synonym for ``/MAT/LAW52``."""
+        kwargs.setdefault("law_name", "GURSON")
+        return self.mat_law52(*args, **kwargs)
+
+    def mat_plas_gurs(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/PLAS_GURS`` — synonym for ``/MAT/LAW52``."""
+        kwargs.setdefault("law_name", "PLAS_GURS")
+        return self.mat_law52(*args, **kwargs)
+
     def mat_law58(
         self,
         mid: int = 0,

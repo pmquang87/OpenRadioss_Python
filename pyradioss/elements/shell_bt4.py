@@ -542,7 +542,8 @@ def _init_material_state(group, nip_max):
     if any(mat.fail is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros((n, nip_max))
     st["chk_fail"] = any(
-        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43, 48, 60, 69)
+        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43, 48, 52, 60, 69)
+        or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS")
         or mat.params.get("eps_p_max", EP30) < 1e30
         or mat.params.get("eps_max", EP30) < 1e30
         or mat.params.get("EPSMAX", EP30) < 1e30
@@ -596,6 +597,10 @@ def _layer_failure(st, sl, mat, k, sig_k, epsp_old, deps_k, dt):
             broken = (sig_k[:, 0] > tenscut) | (sig_k[:, 1] > tenscut)
             if np.any(broken):
                 layf[broken] = 0.0
+    if "off52" in st["mat_extra"]:
+        layf[st["mat_extra"]["off52"][sl, k] == 0.0] = 0.0
+    elif "off" in st["mat_extra"] and getattr(mat, "law", 1) in (52, "52", "LAW52", "GURSON", "PLAS_GURS"):
+        layf[st["mat_extra"]["off"][sl, k] == 0.0] = 0.0
     if getattr(mat, "law", 1) != 43:
         eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
         if eps_max < 1e30:
@@ -616,7 +621,8 @@ def _element_deletion(st, nip_of):
     layfail = st["layfail"]
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         law = getattr(mat, "law", 1)
-        if not (mat.fail is not None or law in (15, 22, 25, 27, 43, 48, 60, 69)
+        if not (mat.fail is not None or law in (15, 22, 25, 27, 43, 48, 52, 60, 69)
+                or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS")
                 or mat.params.get("eps_p_max", EP30) < 1e30
                 or mat.params.get("eps_max", EP30) < 1e30
                 or mat.params.get("EPSMAX", EP30) < 1e30
@@ -820,6 +826,9 @@ def forces(group, x, v, vr, dt, fint, mint):
         for sl, mat, prop in st.get("slices", []):
             if getattr(mat, "law", 1) == 0:
                 is_void[sl] = True
+            elif getattr(mat, "law", 1) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
+                from ..materials import law52_gurson
+                c[sl] = law52_gurson.sound_speed_shell_law52(mat, getattr(mat, "rho0", None))
             elif getattr(mat, "law", 1) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A"):
                 from ..materials import law58_fabr_a
                 c[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))
@@ -1036,7 +1045,10 @@ def forces(group, x, v, vr, dt, fint, mint):
                 if cs is not None else s_new        # fiber -> elem
             Nres[sl] += wk[:, None] * s_res
             Mres[sl] += (wk * zk)[:, None] * s_res
-        if getattr(mat, "law", 1) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A"):
+        if getattr(mat, "law", 1) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
+            from ..materials import law52_gurson
+            c[sl] = law52_gurson.sound_speed_shell_law52(mat, getattr(mat, "rho0", None))
+        elif getattr(mat, "law", 1) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A"):
             from ..materials import law58_fabr_a
             c[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))
         else:

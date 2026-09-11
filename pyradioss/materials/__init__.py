@@ -105,6 +105,7 @@ from .law52_gurson import (
     sound_speed_shell_law52,
     tangent_law52_solid,
     tangent_law52_shell,
+    shell_membrane_tangent as law52_shell_membrane_tangent,
     solid_update as law52_solid_update,
     shell_update as law52_shell_update,
     sound_speed as law52_sound_speed,
@@ -806,6 +807,14 @@ LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
     "MAT_LAW48": {"plane_stress": True, "solid": True, "shell": True},
     "MAT_ZHAO": {"plane_stress": True, "solid": True, "shell": True},
     "LAW48_ZHAO": {"plane_stress": True, "solid": True, "shell": True},
+    52: {"plane_stress": True, "solid": True, "shell": True},
+    "52": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW52": {"plane_stress": True, "solid": True, "shell": True},
+    "GURSON": {"plane_stress": True, "solid": True, "shell": True},
+    "PLAS_GURS": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_LAW52": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_GURSON": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_PLAS_GURS": {"plane_stress": True, "solid": True, "shell": True},
     58: {"plane_stress": True, "solid": False, "shell": True},
     "58": {"plane_stress": True, "solid": False, "shell": True},
     "LAW58": {"plane_stress": True, "solid": False, "shell": True},
@@ -829,6 +838,10 @@ MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
     48: solid_update_law48, "48": solid_update_law48, "LAW48": solid_update_law48,
     "ZHAO": solid_update_law48, "MAT_LAW48": solid_update_law48, "MAT_ZHAO": solid_update_law48,
     "PLAS_ZHAO": solid_update_law48, "LAW48_ZHAO": solid_update_law48,
+    52: solid_update_law52, "52": solid_update_law52, "LAW52": solid_update_law52,
+    "GURSON": solid_update_law52, "PLAS_GURS": solid_update_law52,
+    "MAT_LAW52": solid_update_law52, "MAT_GURSON": solid_update_law52,
+    "MAT_PLAS_GURS": solid_update_law52,
     58: solid_update_law58, "58": solid_update_law58, "LAW58": solid_update_law58,
     "FABR_A": solid_update_law58, "FABRIC_A": solid_update_law58,
     "MAT_LAW58": solid_update_law58, "MAT_FABR_A": solid_update_law58,
@@ -839,6 +852,10 @@ MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
     48: shell_update_law48, "48": shell_update_law48, "LAW48": shell_update_law48,
     "ZHAO": shell_update_law48, "MAT_LAW48": shell_update_law48, "MAT_ZHAO": shell_update_law48,
     "PLAS_ZHAO": shell_update_law48, "LAW48_ZHAO": shell_update_law48,
+    52: shell_update_law52, "52": shell_update_law52, "LAW52": shell_update_law52,
+    "GURSON": shell_update_law52, "PLAS_GURS": shell_update_law52,
+    "MAT_LAW52": shell_update_law52, "MAT_GURSON": shell_update_law52,
+    "MAT_PLAS_GURS": shell_update_law52,
     58: shell_update_law58, "58": shell_update_law58, "LAW58": shell_update_law58,
     "FABR_A": shell_update_law58, "FABRIC_A": shell_update_law58,
     "MAT_LAW58": shell_update_law58, "MAT_FABR_A": shell_update_law58,
@@ -932,6 +949,7 @@ def register_materials():
     _register_law60()
     _register_law48()
     _register_law58()
+    _register_law52()
 
 
 def extra_shapes(mat, nip=None):
@@ -1063,6 +1081,8 @@ def extra_shapes(mat, nip=None):
                           off60=(nip,) if nip else ())
     if getattr(mat, "law", None) in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO") or getattr(mat, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO"):
         shapes.update(law48_zhao.extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
+        shapes.update(law52_gurson.extra_shapes(mat, nip=nip))
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
         shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
     return shapes
@@ -1390,6 +1410,8 @@ def sound_speed(mat, rho=None, extra=None):
         return law82_sound_speed(mat, rho=rho, extra=extra)
     if law in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO") or law_name in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO"):
         return law48_zhao.sound_speed_solid_law48(mat, rho0=rho)
+    if law in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON") or law_name in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON"):
+        return law52_gurson.sound_speed_solid_law52(mat, rho=rho)
     if law in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A") or law_name in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A"):
         return sound_speed_shell_law58(mat, rho0=rho)
     if hasattr(mat, "sound_speed_solid"):
@@ -1731,6 +1753,8 @@ def shell_membrane_tangent(mat):
         ])
     if getattr(mat, "law", None) in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO") or getattr(mat, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO"):
         return law48_zhao.shell_membrane_tangent(mat)
+    if getattr(mat, "law", None) in (52, "52", "LAW52", "GURSON", "PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS"):
+        return law52_shell_membrane_tangent(mat)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic, "
         f"LAW3 plas_bost, LAW19 fabric, LAW34 Boltzmann, LAW32 Hill and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")

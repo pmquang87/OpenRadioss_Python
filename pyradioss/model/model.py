@@ -1177,6 +1177,7 @@ class Model:
         # M189 containers and aliases
         self.mat_law52s: Dict[int, MatLaw52] = {}                   # /MAT/LAW52, /MAT/GURSON (M189)
         self.mat_gursons = self.mat_law52s
+        self.mat_plas_gurs = self.mat_law52s
         self.mat_law16s: Dict[int, MatLaw16] = {}                   # /MAT/LAW16, /MAT/GRAY (M189)
         self.mat_grays = self.mat_law16s
         self.mat_camclays = self.mat_law14s

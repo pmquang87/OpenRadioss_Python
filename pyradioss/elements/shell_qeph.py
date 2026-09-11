@@ -577,10 +577,17 @@ def init_group(group, model, log):
         shf[sl] = 0.0 if one_pt else SHEAR_FACTOR    # GEO(38) default 5/6
         dn_val = float(params.get("dn", 0.0)) if "dn" in params else float(getattr(prop, "dn", 0.0))
         amu[sl] = dn_val if dn_val > 0.0 else _DN_DEFAULT
+        is_law52 = getattr(mat, "law", None) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS")
         is_law58 = getattr(mat, "law", None) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A")
-        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58
+        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58 or is_law52
         if getattr(mat, "rho0", 0.0) > 0.0 and has_stiff and getattr(mat, "law", 1) != 0:
-            if is_law58:
+            if is_law52:
+                try:
+                    from ..materials import law52_gurson
+                    cspd[sl] = law52_gurson.sound_speed_shell_law52(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    cspd[sl] = mat.sound_speed_shell()
+            elif is_law58:
                 try:
                     from ..materials import law58_fabr_a
                     cspd[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))
@@ -707,6 +714,15 @@ def _current_yield(st, sl, mat):
         ep = st["epsp"][sl, :nip].mean(axis=1)
         return np.interp(ep, mat.params["curve_x"][0],
                          mat.params["curve_y"][0])
+    if getattr(mat, "law", None) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
+        if "sigm" in st.get("mat_extra", {}):
+            return st["mat_extra"]["sigm"][sl, :nip].mean(axis=1)
+        p = getattr(mat, "params", {}) or {}
+        a = float(p.get("yield_a", p.get("a", p.get("A", 0.0))))
+        b = float(p.get("hard_b", p.get("b", p.get("B", 0.0))))
+        n_exp = float(p.get("hard_n", p.get("n", p.get("N", 1.0))))
+        ep = st["epsp"][sl, :nip].mean(axis=1)
+        return a + b * np.maximum(ep, 0.0) ** n_exp
     return None                                  # elastic — no relaxation
 
 

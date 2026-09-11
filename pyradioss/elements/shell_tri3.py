@@ -191,7 +191,14 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
         w2bend = _bend_shear_omega2(B1, B2, area, sl, mat,
                                     t_val, 3, rho0_val)
         w2max = np.maximum(w2max, w2bend)
-        c = mat.sound_speed_shell()
+        if hasattr(mat, "sound_speed_shell"):
+            c = mat.sound_speed_shell()
+        else:
+            try:
+                from ..materials import law52_gurson
+                c = law52_gurson.sound_speed_shell_law52(mat, rho0_val)
+            except Exception:
+                c = 0.0
         if c > 0.0:
             dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
             fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
@@ -364,12 +371,19 @@ def forces(group, x, v, vr, dt, fint, mint):
                 if cs is not None else s_new        # fiber -> elem
             Nres[sl] += wk[:, None] * s_res
             Mres[sl] += (wk * zk)[:, None] * s_res
+        is_law52 = getattr(mat, "law", None) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS")
         is_law58 = getattr(mat, "law", None) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A")
-        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58
+        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58 or is_law52
         if getattr(mat, "law", 1) == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or not has_stiff:
             c[sl] = 0.0
         else:
-            if is_law58:
+            if is_law52:
+                try:
+                    from ..materials import law52_gurson
+                    c[sl] = law52_gurson.sound_speed_shell_law52(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    c[sl] = mat.sound_speed_shell()
+            elif is_law58:
                 try:
                     from ..materials import law58_fabr_a
                     c[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))

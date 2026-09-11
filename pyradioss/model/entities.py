@@ -276,6 +276,12 @@ class Material:
                 return float(law48_zhao.sound_speed_solid_law48(self, rho0=self.rho0))
             except Exception:
                 pass
+        if self.law in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(self, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
+            try:
+                from ..materials import law52_gurson
+                return float(law52_gurson.sound_speed_solid_law52(self, rho=self.rho0))
+            except Exception:
+                pass
         return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
 
     def sound_speed_shell(self) -> float:
@@ -312,6 +318,12 @@ class Material:
             try:
                 from ..materials import law48_zhao
                 return float(law48_zhao.sound_speed_shell_law48(self, rho0=self.rho0))
+            except Exception:
+                pass
+        if self.law in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(self, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
+            try:
+                from ..materials import law52_gurson
+                return float(law52_gurson.sound_speed_shell_law52(self, rho=self.rho0))
             except Exception:
                 pass
         if self.law in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A") or getattr(self, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A"):
@@ -10873,17 +10885,24 @@ class PropType5:
 # -------------------------------------------------------------------------
 
 
+class CallableFloat(float):
+    """Float that is also callable returning itself (compatible with both property and method access)."""
+    def __call__(self) -> float:
+        return float(self)
+
+
 @dataclass
 class MatLaw52:
-    """``/MAT/LAW52`` or ``/MAT/GURSON``: Gurson-Tvergaard-Needleman porous metal plasticity."""
+    """``/MAT/LAW52`` or ``/MAT/GURSON`` / ``/MAT/PLAS_GURS`` (M189/M554): Gurson porous metal plasticity.
+
+    Fortran origin: ``starter/source/materials/mat/mat052/hm_read_mat52.F`` and
+    ``radioss110/MAT/matl52_gurson.cfg`` / ``radioss130/MAT/matl52_gurson.cfg``.
+    """
     id: int = 0
-    rho0: float = 0.0
-    rhor: float = 0.0
+    rho: float = 0.0
+    refer_rho: float = 0.0
     e: float = 0.0
     nu: float = 0.0
-    iflag: int = 0
-    fsmooth: int = 0
-    fcut: float = 0.0
     a: float = 0.0
     b: float = 0.0
     n: float = 0.0
@@ -10898,7 +10917,234 @@ class MatLaw52:
     f_n: float = 0.0
     f_c: float = 0.0
     f_f: float = 0.0
+    iflag: int = 0
+    fsmooth: int = 0
+    fcut: float = 0.0
+    itable: int = 0
+    xfac: float = 1.0
+    yfac: float = 1.0
     title: str = ""
+    raw_fcut: float = 0.0
+    raw_c: float = 0.0
+    raw_pc: float = 0.0
+    law: int = 52
+    law_name: str = "LAW52"
+    fail: Optional[Any] = None
+    eos: Optional[Any] = None
+
+    def __init__(
+        self,
+        id: int = 0,
+        rho: float = 0.0,
+        refer_rho: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        a: float = 0.0,
+        b: float = 0.0,
+        n: float = 0.0,
+        c: float = 0.0,
+        pc: float = 0.0,
+        q1: float = 0.0,
+        q2: float = 0.0,
+        q3: float = 0.0,
+        s_n: float = 0.0,
+        eps_n: float = 0.0,
+        f_i: float = 0.0,
+        f_n: float = 0.0,
+        f_c: float = 0.0,
+        f_f: float = 0.0,
+        iflag: int = 0,
+        fsmooth: int = 0,
+        fcut: float = 0.0,
+        itable: int = 0,
+        xfac: float = 1.0,
+        yfac: float = 1.0,
+        title: str = "",
+        raw_fcut: float = 0.0,
+        raw_c: float = 0.0,
+        raw_pc: float = 0.0,
+        **kwargs: Any,
+    ) -> None:
+        self.id = id
+        if rho == 0.0 and "rho0" in kwargs:
+            rho = kwargs["rho0"]
+        if refer_rho == 0.0 and "rhor" in kwargs:
+            refer_rho = kwargs["rhor"]
+        self.rho = float(rho)
+        self.refer_rho = float(refer_rho)
+        self.e = float(e)
+        self.nu = float(nu)
+        self.a = float(a)
+        self.b = float(b)
+        self.n = float(n)
+        self.c = float(c)
+        self.pc = float(pc)
+        self.q1 = float(q1)
+        self.q2 = float(q2)
+        self.q3 = float(q3)
+        self.s_n = float(s_n)
+        self.eps_n = float(eps_n)
+        self.f_i = float(f_i)
+        self.f_n = float(f_n)
+        self.f_c = float(f_c)
+        self.f_f = float(f_f)
+        self.iflag = int(iflag)
+        self.fsmooth = int(fsmooth)
+        self.fcut = float(fcut)
+        self.itable = int(itable)
+        self.xfac = float(xfac)
+        self.yfac = float(yfac)
+        self.title = str(title)
+        self.raw_fcut = float(raw_fcut)
+        self.raw_c = float(raw_c)
+        self.raw_pc = float(raw_pc)
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @rho0.setter
+    def rho0(self, value: float) -> None:
+        self.rho = value
+
+    @property
+    def rhor(self) -> float:
+        return self.refer_rho
+
+    @rhor.setter
+    def rhor(self, value: float) -> None:
+        self.refer_rho = value
+
+    @property
+    def yield_stress(self) -> float:
+        return self.a
+
+    @yield_stress.setter
+    def yield_stress(self, value: float) -> None:
+        self.a = value
+
+    @property
+    def hardening_b(self) -> float:
+        return self.b
+
+    @hardening_b.setter
+    def hardening_b(self, value: float) -> None:
+        self.b = value
+
+    @property
+    def hardening_n(self) -> float:
+        return self.n
+
+    @hardening_n.setter
+    def hardening_n(self, value: float) -> None:
+        self.n = value
+
+    @property
+    def fu(self) -> float:
+        q1_val = self.q1 if self.q1 != 0.0 else 1.0e-20
+        return 1.0 / q1_val
+
+    @property
+    def sound_speed(self) -> CallableFloat:
+        rho_val = self.rho if self.rho > 0.0 else self.refer_rho
+        if rho_val > 0.0 and self.e > 0.0:
+            import math
+            return CallableFloat(math.sqrt(self.e / rho_val))
+        return CallableFloat(0.0)
+
+    @property
+    def sound_speed_solid(self) -> CallableFloat:
+        """Solid sound speed: c = sqrt((K + 4/3 G) / rho0)."""
+        rho_val = self.rho if self.rho > 0.0 else self.refer_rho
+        if rho_val > 0.0 and self.e > 0.0 and (1.0 - 2.0 * self.nu) > 0.0 and (1.0 + self.nu) > 0.0:
+            import math
+            g = 0.5 * self.e / (1.0 + self.nu)
+            c1 = self.e / (3.0 * (1.0 - 2.0 * self.nu))
+            c = math.sqrt((c1 + 4.0 * g / 3.0) / rho_val)
+            return CallableFloat(c)
+        return CallableFloat(0.0)
+
+    @property
+    def sound_speed_shell(self) -> CallableFloat:
+        """Shell plane-stress sound speed: c = sqrt(E / (rho0 * (1 - nu^2)))."""
+        rho_val = self.rho if self.rho > 0.0 else self.refer_rho
+        if rho_val > 0.0 and self.e > 0.0 and (1.0 - self.nu**2) > 0.0:
+            import math
+            c = math.sqrt(self.e / (rho_val * (1.0 - self.nu**2)))
+            return CallableFloat(c)
+        return CallableFloat(0.0)
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @E.setter
+    def E(self, value: float) -> None:
+        self.e = value
+
+    @property
+    def G(self) -> float:
+        return 0.5 * self.e / (1.0 + self.nu) if (1.0 + self.nu) > 0.0 else 0.0
+
+    @property
+    def K(self) -> float:
+        denom = 3.0 * (1.0 - 2.0 * self.nu)
+        return self.e / denom if abs(denom) > 1e-12 else self.e
+
+    @property
+    def params(self) -> Dict[str, Any]:
+        return {
+            "E": self.e,
+            "nu": self.nu,
+            "a": self.a,
+            "b": self.b,
+            "n": self.n,
+            "c": self.c,
+            "pc": self.pc,
+            "q1": self.q1,
+            "q2": self.q2,
+            "q3": self.q3,
+            "s_n": self.s_n,
+            "eps_n": self.eps_n,
+            "f_i": self.f_i,
+            "f_n": self.f_n,
+            "f_c": self.f_c,
+            "f_f": self.f_f,
+            "iflag": self.iflag,
+            "fsmooth": self.fsmooth,
+            "fcut": self.fcut,
+            "itable": self.itable,
+            "xfac": self.xfac,
+            "yfac": self.yfac,
+            "yield_a": self.a,
+            "hard_b": self.b,
+            "hard_n": self.n,
+            "rho": self.rho,
+            "rho0": self.rho0,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        p = self.params
+        if key in p:
+            return p[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            raise KeyError(f"Cannot set unknown attribute {key!r} on MatLaw52")
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or key in self.params
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
 
 MatGurson = MatLaw52

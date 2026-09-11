@@ -40440,101 +40440,170 @@ def read_prop_type54(block: KeywordBlock, model: Model, log: MessageLog) -> None
 
 
 def read_mat_law52(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW52`` or ``/MAT/GURSON`` (M189): Gurson-Tvergaard-Needleman porous metal plasticity."""
+    """``/MAT/LAW52`` or ``/MAT/GURSON`` / ``/MAT/PLAS_GURS`` (M189/M554): Gurson porous metal plasticity."""
     from ..model.entities import MatLaw52, Material
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
     if not valid_cards:
         log.error(f"/MAT/LAW52/{mat_id}: missing data card", block.source)
         return
 
-    rho0, rhor = 0.0, 0.0
+    rho, refer_rho = 0.0, 0.0
     e, nu = 0.0, 0.0
     iflag, fsmooth = 0, 0
     fcut = 0.0
+    iyield = 0
     a, b, n, c, pc = 0.0, 0.0, 0.0, 0.0, 0.0
     q1, q2, q3, s_n, eps_n = 0.0, 0.0, 0.0, 0.0, 0.0
     f_i, f_n, f_c, f_f = 0.0, 0.0, 0.0, 0.0
+    itable = 0
+    xfac, yfac = 0.0, 0.0
 
-    if block.fixed:
+    is_fixed = getattr(block, "fixed", False)
+    if is_fixed and valid_cards:
+        raw0 = valid_cards[0].raw.rstrip()
+        raw1 = valid_cards[1].raw.rstrip() if len(valid_cards) > 1 else ""
+        raw2 = valid_cards[2].raw.rstrip() if len(valid_cards) > 2 else ""
+        if "," in raw0 or "," in raw1 or "," in raw2:
+            is_fixed = False
+        elif len(valid_cards) > 1 and len(valid_cards[1].tokens()) >= 2 and len(raw1) < 80:
+            is_fixed = False
+        elif len(valid_cards) > 2 and len(valid_cards[2].tokens()) >= 2 and len(raw2) < 80:
+            is_fixed = False
+
+    def _split_tokens(card: Card) -> List[str]:
+        return card.raw.replace(",", " ").split()
+
+    if is_fixed:
         if len(valid_cards) > 0:
             c0 = valid_cards[0].cut("MAT_LAW52_1")
-            rho0 = _safe_float(c0[0]) if len(c0) > 0 else 0.0
-            rhor = _safe_float(c0[1]) if len(c0) > 1 else 0.0
+            rho = _safe_float(c0[0]) if len(c0) > 0 and c0[0] else 0.0
+            refer_rho = _safe_float(c0[1]) if len(c0) > 1 and c0[1] else 0.0
         if len(valid_cards) > 1:
             c1 = valid_cards[1].cut("MAT_LAW52_2")
-            e = _safe_float(c1[0]) if len(c1) > 0 else 0.0
-            nu = _safe_float(c1[1]) if len(c1) > 1 else 0.0
-            iflag = _safe_int(c1[2]) if len(c1) > 2 else 0
-            fsmooth = _safe_int(c1[3]) if len(c1) > 3 else 0
-            fcut = _safe_float(c1[4]) if len(c1) > 4 else 0.0
+            e = _safe_float(c1[0]) if len(c1) > 0 and c1[0] else 0.0
+            nu = _safe_float(c1[1]) if len(c1) > 1 and c1[1] else 0.0
+            iflag = _safe_int(c1[2]) if len(c1) > 2 and c1[2] else 0
+            fsmooth = _safe_int(c1[3]) if len(c1) > 3 and c1[3] else 0
+            fcut = _safe_float(c1[4]) if len(c1) > 4 and c1[4] else 0.0
+            iyield = _safe_int(c1[5]) if len(c1) > 5 and c1[5] else 0
         if len(valid_cards) > 2:
             c2 = valid_cards[2].cut("MAT_LAW52_3")
-            a = _safe_float(c2[0]) if len(c2) > 0 else 0.0
-            b = _safe_float(c2[1]) if len(c2) > 1 else 0.0
-            n = _safe_float(c2[2]) if len(c2) > 2 else 0.0
-            c = _safe_float(c2[3]) if len(c2) > 3 else 0.0
-            pc = _safe_float(c2[4]) if len(c2) > 4 else 0.0
+            a = _safe_float(c2[0]) if len(c2) > 0 and c2[0] else 0.0
+            b = _safe_float(c2[1]) if len(c2) > 1 and c2[1] else 0.0
+            n = _safe_float(c2[2]) if len(c2) > 2 and c2[2] else 0.0
+            c = _safe_float(c2[3]) if len(c2) > 3 and c2[3] else 0.0
+            pc = _safe_float(c2[4]) if len(c2) > 4 and c2[4] else 0.0
         if len(valid_cards) > 3:
             c3 = valid_cards[3].cut("MAT_LAW52_4")
-            q1 = _safe_float(c3[0]) if len(c3) > 0 else 0.0
-            q2 = _safe_float(c3[1]) if len(c3) > 1 else 0.0
-            q3 = _safe_float(c3[2]) if len(c3) > 2 else 0.0
-            s_n = _safe_float(c3[3]) if len(c3) > 3 else 0.0
-            eps_n = _safe_float(c3[4]) if len(c3) > 4 else 0.0
+            q1 = _safe_float(c3[0]) if len(c3) > 0 and c3[0] else 0.0
+            q2 = _safe_float(c3[1]) if len(c3) > 1 and c3[1] else 0.0
+            q3 = _safe_float(c3[2]) if len(c3) > 2 and c3[2] else 0.0
+            s_n = _safe_float(c3[3]) if len(c3) > 3 and c3[3] else 0.0
+            eps_n = _safe_float(c3[4]) if len(c3) > 4 and c3[4] else 0.0
         if len(valid_cards) > 4:
             c4 = valid_cards[4].cut("MAT_LAW52_5")
-            f_i = _safe_float(c4[0]) if len(c4) > 0 else 0.0
-            f_n = _safe_float(c4[1]) if len(c4) > 1 else 0.0
-            f_c = _safe_float(c4[2]) if len(c4) > 2 else 0.0
-            f_f = _safe_float(c4[3]) if len(c4) > 3 else 0.0
+            f_i = _safe_float(c4[0]) if len(c4) > 0 and c4[0] else 0.0
+            f_n = _safe_float(c4[1]) if len(c4) > 1 and c4[1] else 0.0
+            f_c = _safe_float(c4[2]) if len(c4) > 2 and c4[2] else 0.0
+            f_f = _safe_float(c4[3]) if len(c4) > 3 and c4[3] else 0.0
+        if len(valid_cards) > 5:
+            c5 = valid_cards[5].cut("MAT_LAW52_6")
+            itable = _safe_int(c5[0]) if len(c5) > 0 and c5[0] else 0
+            xfac = _safe_float(c5[2]) if len(c5) > 2 and c5[2] else 0.0
+            yfac = _safe_float(c5[3]) if len(c5) > 3 and c5[3] else 0.0
     else:
         if len(valid_cards) > 0:
-            t0 = valid_cards[0].tokens()
-            rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
-            rhor = _safe_float(t0[1]) if len(t0) > 1 else 0.0
+            t0 = _split_tokens(valid_cards[0])
+            rho = _safe_float(t0[0]) if len(t0) > 0 else 0.0
+            refer_rho = _safe_float(t0[1]) if len(t0) > 1 else 0.0
         if len(valid_cards) > 1:
-            t1 = valid_cards[1].tokens()
+            t1 = _split_tokens(valid_cards[1])
             e = _safe_float(t1[0]) if len(t1) > 0 else 0.0
             nu = _safe_float(t1[1]) if len(t1) > 1 else 0.0
             iflag = _safe_int(t1[2]) if len(t1) > 2 else 0
             fsmooth = _safe_int(t1[3]) if len(t1) > 3 else 0
             fcut = _safe_float(t1[4]) if len(t1) > 4 else 0.0
+            iyield = _safe_int(t1[5]) if len(t1) > 5 else 0
         if len(valid_cards) > 2:
-            t2 = valid_cards[2].tokens()
+            t2 = _split_tokens(valid_cards[2])
             a = _safe_float(t2[0]) if len(t2) > 0 else 0.0
             b = _safe_float(t2[1]) if len(t2) > 1 else 0.0
             n = _safe_float(t2[2]) if len(t2) > 2 else 0.0
             c = _safe_float(t2[3]) if len(t2) > 3 else 0.0
             pc = _safe_float(t2[4]) if len(t2) > 4 else 0.0
         if len(valid_cards) > 3:
-            t3 = valid_cards[3].tokens()
+            t3 = _split_tokens(valid_cards[3])
             q1 = _safe_float(t3[0]) if len(t3) > 0 else 0.0
             q2 = _safe_float(t3[1]) if len(t3) > 1 else 0.0
             q3 = _safe_float(t3[2]) if len(t3) > 2 else 0.0
             s_n = _safe_float(t3[3]) if len(t3) > 3 else 0.0
             eps_n = _safe_float(t3[4]) if len(t3) > 4 else 0.0
         if len(valid_cards) > 4:
-            t4 = valid_cards[4].tokens()
+            t4 = _split_tokens(valid_cards[4])
             f_i = _safe_float(t4[0]) if len(t4) > 0 else 0.0
             f_n = _safe_float(t4[1]) if len(t4) > 1 else 0.0
             f_c = _safe_float(t4[2]) if len(t4) > 2 else 0.0
             f_f = _safe_float(t4[3]) if len(t4) > 3 else 0.0
+        if len(valid_cards) > 5:
+            t5 = _split_tokens(valid_cards[5])
+            itable = _safe_int(t5[0]) if len(t5) > 0 else 0
+            if len(t5) >= 3:
+                xfac = _safe_float(t5[1])
+                yfac = _safe_float(t5[2])
+            elif len(t5) == 2:
+                xfac = _safe_float(t5[1])
+
+    raw_fcut = fcut
+    raw_c = c
+    raw_pc = pc
+
+    # Default values matching hm_read_mat52.F:
+    if refer_rho == 0.0:
+        refer_rho = rho
+    if c > 0.0 and pc > 0.0 and fcut == 0.0:
+        log.warning(f"/MAT/LAW52/{mat_id}: strain rate filtering is recommended when C > 0 and P > 0 with Fcut == 0 (ANCMSG 1220)", block.source)
+    if c == 0.0:
+        c = 1.0e30
+    if pc == 0.0:
+        pc = 1.0
+    if fcut <= 0.0:
+        fcut = 1.0e30
+    if q1 == 0.0:
+        q1 = 1.0e-20
+    fu = 1.0 / q1
+    if xfac == 0.0:
+        xfac = 1.0
+    if yfac == 0.0:
+        yfac = 1.0
+
+    if f_f < f_c or f_f < f_i or f_c < f_i:
+        log.error(f"/MAT/LAW52/{mat_id}: void volume fractions must satisfy f_I <= f_C <= f_F (got f_I={f_i:g}, f_C={f_c:g}, f_F={f_f:g}) (ANCMSG 1745)", block.source)
 
     mat = MatLaw52(
-        id=mat_id, rho0=rho0, rhor=rhor, e=e, nu=nu, iflag=iflag, fsmooth=fsmooth, fcut=fcut,
-        a=a, b=b, n=n, c=c, pc=pc, q1=q1, q2=q2, q3=q3, s_n=s_n, eps_n=eps_n,
-        f_i=f_i, f_n=f_n, f_c=f_c, f_f=f_f, title=title
+        id=mat_id, rho=rho, refer_rho=refer_rho, e=e, nu=nu,
+        a=a, b=b, n=n, c=c, pc=pc, q1=q1, q2=q2, q3=q3,
+        s_n=s_n, eps_n=eps_n, f_i=f_i, f_n=f_n, f_c=f_c, f_f=f_f,
+        iflag=iflag, fsmooth=fsmooth, fcut=fcut,
+        itable=itable, xfac=xfac, yfac=yfac,
+        title=title, raw_fcut=raw_fcut, raw_c=raw_c, raw_pc=raw_pc,
     )
     model.mat_law52s[mat_id] = mat
+    if hasattr(model, "mat_gursons"):
+        model.mat_gursons[mat_id] = mat
+    if hasattr(model, "mat_plas_gurs"):
+        model.mat_plas_gurs[mat_id] = mat
     model.materials[mat_id] = Material(
-        id=mat_id, law=52, rho0=rho0, title=title,
+        id=mat_id, law=52, rho0=rho, title=title,
         params={
-            "rho_i": rho0, "rho_o": rhor, "e": e, "nu": nu, "iflag": iflag,
-            "fsmooth": fsmooth, "fcut": fcut, "a": a, "b": b, "n": n, "c": c, "pc": pc,
+            "rho": rho, "rho_i": rho, "refer_rho": refer_rho, "rho_o": refer_rho,
+            "e": e, "nu": nu, "iflag": iflag, "fsmooth": fsmooth, "fcut": fcut,
+            "raw_fcut": raw_fcut, "raw_c": raw_c, "raw_pc": raw_pc,
+            "a": a, "yield": a, "b": b, "n": n, "c": c, "pc": pc,
             "q1": q1, "q2": q2, "q3": q3, "s_n": s_n, "eps_n": eps_n,
-            "f_i": f_i, "f_n": f_n, "f_c": f_c, "f_f": f_f
+            "f_i": f_i, "f_n": f_n, "f_c": f_c, "f_f": f_f, "fu": fu,
+            "itable": itable, "xfac": xfac, "yfac": yfac,
         }
     )
 
@@ -84583,6 +84652,13 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "FABRIC_A": read_mat_law58,
     "LAW58": read_mat_law58,
     "LAW58_FABR_A": read_mat_law58,
+    "MAT_LAW52": read_mat_law52,
+    "MAT_GURSON": read_mat_law52,
+    "MAT_PLAS_GURS": read_mat_law52,
+    "GURSON": read_mat_law52,
+    "PLAS_GURS": read_mat_law52,
+    "LAW52": read_mat_law52,
+    "LAW52_GURSON": read_mat_law52,
     "MAT_LAW20": read_mat,
     "MAT_BIMAT": read_mat,
     "BIMAT": read_mat,

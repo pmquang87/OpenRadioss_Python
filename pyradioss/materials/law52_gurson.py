@@ -242,28 +242,42 @@ def build_law52(rec: Any = None, **kwargs) -> Any:
 # Acoustic Sound Speed Calculations
 # ===================================================================
 
-def sound_speed_solid_law52(mat: Any, rho: Optional[float] = None, extra: Any = None) -> float:
+def sound_speed_solid_law52(mat: Any, rho: Optional[Union[float, np.ndarray]] = None, extra: Any = None) -> Union[float, np.ndarray]:
     """Instantaneous sound speed for 3D solid continuum elements:
 
     .. math::
         c_{\\mathrm{solid}} = \\sqrt{\\frac{E(1-\\nu)}{(1+\\nu)(1-2\\nu)\\rho_0}}
     """
     p = _extract_params(mat)
-    rho_val = p.rho0 if rho is None or rho <= 0.0 else rho
+    r = rho if rho is not None else p.rho0
     c1 = p.E * (1.0 - p.nu) / ((1.0 + p.nu) * (1.0 - 2.0 * p.nu))
-    return math.sqrt(max(c1 / max(rho_val, _EM20), _EM20))
+    if isinstance(r, np.ndarray):
+        r_val = np.where(r > 0.0, r, p.rho0 if p.rho0 > 0.0 else 1.0)
+        c_sq = c1 / np.maximum(r_val, _EM20)
+        return np.sqrt(np.maximum(c_sq, _EM20))
+    else:
+        r_val = r if (r is not None and r > 0.0) else (p.rho0 if p.rho0 > 0.0 else 1.0)
+        c_sq = c1 / max(r_val, _EM20)
+        return math.sqrt(max(c_sq, _EM20))
 
 
-def sound_speed_shell_law52(mat: Any, rho: Optional[float] = None, extra: Any = None) -> float:
+def sound_speed_shell_law52(mat: Any, rho: Optional[Union[float, np.ndarray]] = None, extra: Any = None) -> Union[float, np.ndarray]:
     """Instantaneous sound speed for 2D shell plane-stress elements:
 
     .. math::
         c_{\\mathrm{shell}} = \\sqrt{\\frac{E}{(1-\\nu^2)\\rho_0}}
     """
     p = _extract_params(mat)
-    rho_val = p.rho0 if rho is None or rho <= 0.0 else rho
+    r = rho if rho is not None else p.rho0
     a1 = p.E / (1.0 - p.nu * p.nu)
-    return math.sqrt(max(a1 / max(rho_val, _EM20), _EM20))
+    if isinstance(r, np.ndarray):
+        r_val = np.where(r > 0.0, r, p.rho0 if p.rho0 > 0.0 else 1.0)
+        c_sq = a1 / np.maximum(r_val, _EM20)
+        return np.sqrt(np.maximum(c_sq, _EM20))
+    else:
+        r_val = r if (r is not None and r > 0.0) else (p.rho0 if p.rho0 > 0.0 else 1.0)
+        c_sq = a1 / max(r_val, _EM20)
+        return math.sqrt(max(c_sq, _EM20))
 
 
 # ===================================================================
@@ -1256,6 +1270,18 @@ def tangent_law52_shell(
     if is_1d:
         return D_tangent[0]
     return D_tangent
+
+
+def shell_membrane_tangent(mat: Any) -> np.ndarray:
+    """Return 3x3 plane-stress elastic membrane tangent matrix for LAW52."""
+    p = _extract_params(mat)
+    c = p.E / max(1.0 - p.nu * p.nu, 1e-15)
+    g = p.E / max(2.0 * (1.0 + p.nu), 1e-15)
+    return np.array([
+        [c, p.nu * c, 0.0],
+        [p.nu * c, c, 0.0],
+        [0.0, 0.0, g],
+    ], dtype=np.float64)
 
 
 # Standard function aliases for solver compatibility

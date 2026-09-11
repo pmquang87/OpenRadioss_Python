@@ -25,5 +25,6 @@ from .entities import (  # noqa: F401
     RigidWall, Interface, Line, THRequest, Box,
     MatLaw25, MatCompPlas, MatCompsh, MatTsaiWu, MatCrasurv, MatCompositePlas,
     MatLaw58, MatFabrA, MatFabricA,
+    MatLaw52, MatGurson, MatPlasGurs,
 )
 

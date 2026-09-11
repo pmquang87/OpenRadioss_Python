@@ -954,6 +954,50 @@ MAT_FABRIC_A_CFG_6 = MAT_LAW58_6
 MAT_FABRIC_A_CFG_7 = MAT_LAW58_7
 
 
+# M554: /MAT/LAW52 (/MAT/GURSON, /MAT/PLAS_GURS) card layout constants citing radioss110/MAT/matl52_gurson.cfg & radioss130/MAT/matl52_gurson.cfg
+MAT_LAW52_1 = (20, 20)
+MAT_LAW52_2 = (20, 20, 10, 10, 20, 10)
+MAT_LAW52_3 = (20, 20, 20, 20, 20)
+MAT_LAW52_4 = (20, 20, 20, 20, 20)
+MAT_LAW52_5 = (20, 20, 20, 20)
+MAT_LAW52_6 = (10, 10, 20, 20)
+
+MAT_LAW52_CFG_1 = MAT_LAW52_1
+MAT_LAW52_CFG_2 = MAT_LAW52_2
+MAT_LAW52_CFG_3 = MAT_LAW52_3
+MAT_LAW52_CFG_4 = MAT_LAW52_4
+MAT_LAW52_CFG_5 = MAT_LAW52_5
+MAT_LAW52_CFG_6 = MAT_LAW52_6
+
+MAT_GURSON_1 = MAT_LAW52_1
+MAT_GURSON_2 = MAT_LAW52_2
+MAT_GURSON_3 = MAT_LAW52_3
+MAT_GURSON_4 = MAT_LAW52_4
+MAT_GURSON_5 = MAT_LAW52_5
+MAT_GURSON_6 = MAT_LAW52_6
+
+MAT_GURSON_CFG_1 = MAT_LAW52_1
+MAT_GURSON_CFG_2 = MAT_LAW52_2
+MAT_GURSON_CFG_3 = MAT_LAW52_3
+MAT_GURSON_CFG_4 = MAT_LAW52_4
+MAT_GURSON_CFG_5 = MAT_LAW52_5
+MAT_GURSON_CFG_6 = MAT_LAW52_6
+
+MAT_PLAS_GURS_1 = MAT_LAW52_1
+MAT_PLAS_GURS_2 = MAT_LAW52_2
+MAT_PLAS_GURS_3 = MAT_LAW52_3
+MAT_PLAS_GURS_4 = MAT_LAW52_4
+MAT_PLAS_GURS_5 = MAT_LAW52_5
+MAT_PLAS_GURS_6 = MAT_LAW52_6
+
+MAT_PLAS_GURS_CFG_1 = MAT_LAW52_1
+MAT_PLAS_GURS_CFG_2 = MAT_LAW52_2
+MAT_PLAS_GURS_CFG_3 = MAT_LAW52_3
+MAT_PLAS_GURS_CFG_4 = MAT_LAW52_4
+MAT_PLAS_GURS_CFG_5 = MAT_LAW52_5
+MAT_PLAS_GURS_CFG_6 = MAT_LAW52_6
+
+
 # ============================================================================
 # The per-card column-layout table (reader side of the shared knowledge)
 # ============================================================================
@@ -3804,6 +3848,24 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_FABRIC_A_5": [10, 10, 20, 20, 20, 20],
     "MAT_FABRIC_A_6": [10, 10, 20],
     "MAT_FABRIC_A_7": [10, 10, 20, 20, 10, 20],
+    "MAT_LAW52_1": [20, 20],
+    "MAT_LAW52_2": [20, 20, 10, 10, 20, 10],
+    "MAT_LAW52_3": [20, 20, 20, 20, 20],
+    "MAT_LAW52_4": [20, 20, 20, 20, 20],
+    "MAT_LAW52_5": [20, 20, 20, 20],
+    "MAT_LAW52_6": [10, 10, 20, 20],
+    "MAT_GURSON_1": [20, 20],
+    "MAT_GURSON_2": [20, 20, 10, 10, 20, 10],
+    "MAT_GURSON_3": [20, 20, 20, 20, 20],
+    "MAT_GURSON_4": [20, 20, 20, 20, 20],
+    "MAT_GURSON_5": [20, 20, 20, 20],
+    "MAT_GURSON_6": [10, 10, 20, 20],
+    "MAT_PLAS_GURS_1": [20, 20],
+    "MAT_PLAS_GURS_2": [20, 20, 10, 10, 20, 10],
+    "MAT_PLAS_GURS_3": [20, 20, 20, 20, 20],
+    "MAT_PLAS_GURS_4": [20, 20, 20, 20, 20],
+    "MAT_PLAS_GURS_5": [20, 20, 20, 20],
+    "MAT_PLAS_GURS_6": [10, 10, 20, 20],
     "MAT_LAW20_1": [20, 20],
     "MAT_LAW20_2": [10, 10],
     "MAT_LAW20_3": [20, 20],
