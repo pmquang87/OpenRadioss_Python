@@ -459,7 +459,7 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
             from ..materials import law38_visc_tab
             if hasattr(law38_visc_tab, "resolve"):
                 law38_visc_tab.resolve(mat, model, log)
-        elif mat.law in (43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB") or getattr(mat, "law_name", None) in ("LAW43", "HILL_TAB"):
+        elif mat.law in (43, "43", "LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB") or getattr(mat, "law_name", None) in ("LAW43", "HILL_TAB", "HILL_PLAS_TAB", "LAW43_HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "MAT_LAW43_HILL_TAB"):
             from ..materials import law43_hill_tab
             if hasattr(law43_hill_tab, "resolve"):
                 law43_hill_tab.resolve(mat, model, log)

@@ -1262,6 +1262,8 @@ class Model:
         self.mat_plas_polys = self.mat_law101s
         self.mat_law43s: Dict[int, MatLaw43] = {}                   # /MAT/LAW43, /MAT/HILL_TAB (M191)
         self.mat_hill_tabs = self.mat_law43s
+        self.mat_hill_plas_tabs = self.mat_law43s
+        self.mat_law43_hill_tabs = self.mat_law43s
         self.fail_lemaitres: Dict[int, FailLemaitre] = {}           # /FAIL/LEMAITRE (M191)
         self.fail_composites: Dict[int, FailComposite] = {}         # /FAIL/COMPOSITE (M191)
         self.fail_tab2s: Dict[int, FailTab2] = {}                   # /FAIL/TAB2, /FAIL/TABULATED2 (M191)

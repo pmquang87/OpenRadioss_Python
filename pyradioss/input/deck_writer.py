@@ -1495,6 +1495,60 @@ class StarterDeck:
           Card 5: EPS_max, EPST1, EPST2, Fcut, Fsmooth (MAT_LAW43_5: [20, 20, 20, 20, 10])
           Curve cards: fct_ID, Fscale, EPS_DOT (MAT_LAW43_CURVE: [10, 20, 20])
         """
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+        mat_obj = None
+        if hasattr(mid, "r00") and hasattr(mid, "rho0"):
+            mat_obj = mid
+        elif hasattr(mid, "R00") and hasattr(mid, "rho0"):
+            mat_obj = mid
+        elif "mat" in kw_low and (hasattr(kw_low["mat"], "r00") or hasattr(kw_low["mat"], "R00")):
+            mat_obj = kw_low["mat"]
+        elif "mat43" in kw_low and (hasattr(kw_low["mat43"], "r00") or hasattr(kw_low["mat43"], "R00")):
+            mat_obj = kw_low["mat43"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", 0)
+            if not title:
+                title = getattr(mat_obj, "title", "")
+            if rho == 0.0:
+                rho = getattr(mat_obj, "rho0", getattr(mat_obj, "rho", 0.0))
+            if rhor == 0.0 and getattr(mat_obj, "rhor", 0.0) > 0.0:
+                rhor = getattr(mat_obj, "rhor", 0.0)
+            if e == 0.0:
+                e = getattr(mat_obj, "e", getattr(mat_obj, "E", getattr(mat_obj, "E0", 0.0)))
+            if nu == 0.0:
+                nu = getattr(mat_obj, "nu", getattr(mat_obj, "NU", 0.0))
+            if ifunce == 0:
+                ifunce = getattr(mat_obj, "ifunce", getattr(mat_obj, "yr_fun", 0))
+            if einf == 0.0:
+                einf = getattr(mat_obj, "einf", getattr(mat_obj, "efib", 0.0))
+            if ce == 0.0:
+                ce = getattr(mat_obj, "ce", getattr(mat_obj, "c", 0.0))
+            if r00 == 1.0:
+                r00 = getattr(mat_obj, "r00", getattr(mat_obj, "r0", getattr(mat_obj, "R00", 1.0)))
+            if r45 == 1.0:
+                r45 = getattr(mat_obj, "r45", getattr(mat_obj, "R45", 1.0))
+            if r90 == 1.0:
+                r90 = getattr(mat_obj, "r90", getattr(mat_obj, "R90", 1.0))
+            if chard == 0.0:
+                chard = getattr(mat_obj, "chard", getattr(mat_obj, "fisokin", getattr(mat_obj, "c_hard", 0.0)))
+            if iyield == 0:
+                iyield = getattr(mat_obj, "iyield", 0)
+            if eps_max == 0.0:
+                eps_max = getattr(mat_obj, "eps_max", getattr(mat_obj, "eps", getattr(mat_obj, "epsp_max", 0.0)))
+            if epst1 == 0.0:
+                epst1 = getattr(mat_obj, "epst1", getattr(mat_obj, "epsr1", getattr(mat_obj, "eps_t", 0.0)))
+            if epst2 == 0.0:
+                epst2 = getattr(mat_obj, "epst2", getattr(mat_obj, "epsr2", getattr(mat_obj, "eps_m", 0.0)))
+            if fcut == 0.0:
+                fcut = getattr(mat_obj, "fcut", getattr(mat_obj, "asrate", 0.0))
+            if fsmooth == 0:
+                fsmooth = getattr(mat_obj, "fsmooth", getattr(mat_obj, "israte", 0))
+            if curves is None:
+                curves = getattr(mat_obj, "curves", None)
+                if curves is None and hasattr(mat_obj, "params") and isinstance(mat_obj.params, dict):
+                    curves = mat_obj.params.get("curves", None)
+
         if "id" in kwargs and mid == 0:
             mid = kwargs["id"]
         elif "mat_id" in kwargs and mid == 0:
@@ -1585,6 +1639,28 @@ class StarterDeck:
             self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
             return self
         kwargs.setdefault("law_name", "HILL_TAB")
+        return self.mat_law43(*args, **kwargs)
+
+    def mat_hill_plas_tab(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/HILL_PLAS_TAB`` — synonym for ``/MAT/LAW43``."""
+        if len(args) == 3 and isinstance(args[2], (list, tuple)) and not kwargs:
+            mid, title, data_cards = args
+            self._header("MAT", "HILL_PLAS_TAB", mid)
+            self._title(title)
+            self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+            return self
+        kwargs.setdefault("law_name", "HILL_PLAS_TAB")
+        return self.mat_law43(*args, **kwargs)
+
+    def mat_law43_hill_tab(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/LAW43_HILL_TAB`` — synonym for ``/MAT/LAW43``."""
+        if len(args) == 3 and isinstance(args[2], (list, tuple)) and not kwargs:
+            mid, title, data_cards = args
+            self._header("MAT", "LAW43_HILL_TAB", mid)
+            self._title(title)
+            self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+            return self
+        kwargs.setdefault("law_name", "LAW43_HILL_TAB")
         return self.mat_law43(*args, **kwargs)
 
 

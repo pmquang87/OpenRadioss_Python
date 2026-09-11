@@ -11618,6 +11618,8 @@ class MatLaw43:
 
 
 MatHillTab = MatLaw43
+MatHillPlasTab = MatLaw43
+MatLaw43HillTab = MatLaw43
 
 
 @dataclass
