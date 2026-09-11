@@ -1,4 +1,4 @@
-"""
+r"""
 LAW52 — Gurson-Tvergaard-Needleman (GTN) porous metal plasticity material model
 (/MAT/LAW52, /MAT/GURSON, /MAT/PLAS_GURS).
 
@@ -753,11 +753,23 @@ def shell_update_law52(
         dmg[:, 2] = 0.0
         dmg[:, 3] = f_init
         dmg[:, 4] = f_star_init
+        if "fg" in extra and np.any(extra["fg"]):
+            dmg[:, 1] = extra["fg"]
+        if "fn" in extra and np.any(extra["fn"]):
+            dmg[:, 2] = extra["fn"]
+        if "f" in extra and np.any(extra["f"]):
+            dmg[:, 3] = extra["f"]
+        if "fstar" in extra and np.any(extra["fstar"]):
+            dmg[:, 0] = extra["fstar"]
+            dmg[:, 4] = extra["fstar"]
         extra["dmg"] = dmg
     dmg = extra["dmg"]
 
     if "off" not in extra:
-        extra["off"] = np.ones(n, dtype=float)
+        if "off52" in extra:
+            extra["off"] = extra["off52"].copy()
+        else:
+            extra["off"] = np.ones(n, dtype=float)
     off = extra["off"]
 
     if "thk" not in extra:
@@ -980,6 +992,19 @@ def shell_update_law52(
         if f_star_new >= params.fu or f_new >= params.ff:
             off[i] = 0.0
             sig[i, :] = 0.0
+
+    if "fg" in extra:
+        extra["fg"][:] = dmg[:, 1]
+    if "fn" in extra:
+        extra["fn"][:] = dmg[:, 2]
+    if "f" in extra:
+        extra["f"][:] = dmg[:, 3]
+    if "fstar" in extra:
+        extra["fstar"][:] = dmg[:, 0]
+    if "off52" in extra:
+        extra["off52"][:] = off[:]
+    if "layfail" in extra:
+        extra["layfail"][off == 0.0] = 0.0
 
     if orig_shape == (3,) or orig_shape == (5,):
         sig = sig.reshape(orig_shape[0])
@@ -1252,15 +1277,25 @@ def extra_shapes(mat: Any = None, nip: Optional[int] = None) -> Dict[str, Tuple[
             "epsm": (),
             "sigm": (),
             "dmg": (5,),
+            "fg": (),
+            "fn": (),
+            "f": (),
+            "fstar": (),
             "off": (),
+            "off52": (),
         }
     return {
         "epsm": (nip,),
         "sigm": (nip,),
         "dmg": (nip, 5),
+        "fg": (nip,),
+        "fn": (nip,),
+        "f": (nip,),
+        "fstar": (nip,),
         "thk": (nip,),
         "thk0": (nip,),
         "off": (nip,),
+        "off52": (nip,),
     }
 
 
