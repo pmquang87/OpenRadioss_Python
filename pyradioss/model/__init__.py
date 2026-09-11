@@ -26,5 +26,6 @@ from .entities import (  # noqa: F401
     MatLaw25, MatCompPlas, MatCompsh, MatTsaiWu, MatCrasurv, MatCompositePlas,
     MatLaw58, MatFabrA, MatFabricA,
     MatLaw52, MatGurson, MatPlasGurs,
+    MatLaw21, MatDprag,
 )
 

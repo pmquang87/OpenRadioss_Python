@@ -278,8 +278,10 @@ class TestFieldLayouts:
 
         assert CARD_LAYOUTS["MAT_LAW10_CFG_1"] == [100]
         assert CARD_LAYOUTS["MAT_SOIL_CFG_1"] == [100]
-        assert CARD_LAYOUTS["MAT_DPRAG_1"] == [100]
-        assert CARD_LAYOUTS["MAT_DPRAG_CFG_1"] == [100]
+        assert CARD_LAYOUTS["MAT_DPRAG1_1"] == [100]
+        assert CARD_LAYOUTS["MAT_DPRAG1_CFG_1"] == [100]
+        assert CARD_LAYOUTS["MAT_DPRAG_1"] == [20, 20]
+        assert CARD_LAYOUTS["MAT_DPRAG_CFG_1"] == [20, 20]
 
     def test_law10_deck_writer_unit_id_and_aliases(self):
         d = dw.StarterDeck("T")
@@ -289,9 +291,9 @@ class TestFieldLayouts:
         assert cards[0] == "with_unit"
         assert float(cards[1][0:20]) == 1.5e-9
 
-        # Test aliases mat_soil and mat_dprag on StarterDeck
+        # Test aliases mat_soil and mat_dprag1 for LAW10 on StarterDeck
         assert d.mat_soil == d.mat_law10
-        assert d.mat_dprag == d.mat_law10
+        assert d.mat_dprag1 == d.mat_law10
 
     def test_fmt_float_roundtrip(self):
         for v in (0.3, 7.8e-6, -9.81e-3, 1e30, 12345.6789012345,

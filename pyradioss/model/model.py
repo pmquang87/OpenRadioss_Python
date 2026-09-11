@@ -1138,7 +1138,8 @@ class Model:
         self.mat_law5s: Dict[int, MatLaw5] = {}                     # /MAT/LAW5, /MAT/JCOOK_TAB (M187)
         self.mat_law10s: Dict[int, MatLaw10] = {}                   # /MAT/LAW10, /MAT/SOIL (M187)
         self.mat_law14s: Dict[int, MatLaw14] = {}                   # /MAT/LAW14, /MAT/CAM_CLAY (M187)
-        self.mat_law21s: Dict[int, MatLaw21] = {}                   # /MAT/LAW21, /MAT/DUCKHUB (M187)
+        self.mat_law21s: Dict[int, MatLaw21] = {}                   # /MAT/LAW21, /MAT/DPRAG (M187/M556)
+        self.mat_dprags = self.mat_law21s
         self.mat_law32s: Dict[int, MatLaw32] = {}                   # /MAT/LAW32, /MAT/HILL (M187/M542)
         self.mat_hills = self.mat_law32s
         self.mat_law37s: Dict[int, MatLaw37] = {}                   # /MAT/LAW37, /MAT/BIQUAD (M187)

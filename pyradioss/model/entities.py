@@ -10035,20 +10035,159 @@ MatCompSol = MatLaw14
 
 @dataclass
 class MatLaw21:
-    """``/MAT/LAW21`` or ``/MAT/DUCKHUB``: Drucker-Prager / Cap geological plasticity model."""
+    """``/MAT/LAW21`` or ``/MAT/DPRAG``: Drucker-Prager geological / soil / concrete material model.
+
+    Upstream Fortran reference:
+      hm_read_mat21.F and matl21_dprag.cfg (radioss110).
+
+    Yield surface:
+      F(p, J2) = sqrt(2 * J2) - (a0 + a1 * p + a2 * p^2) <= 0
+      with amax limit on sqrt(2 * J2).
+    """
     id: int = 0
-    rho0: float = 0.0
+    rho: float = 0.0
+    refer_rho: float = 0.0
     e: float = 0.0
     nu: float = 0.0
     a0: float = 0.0
     a1: float = 0.0
     a2: float = 0.0
-    w: float = 0.0
-    d: float = 0.0
-    x0: float = 0.0
+    amax: float = 1.0e20
+    ifunc: int = 0
+    c1: float = 0.0
+    pfscale: float = 1.0
+    pmin: float = -1.0e30
+    pext: float = 0.0
+    bunl: float = 0.0
+    mumax: float = 1.0e20
     title: str = ""
+    law: int = 21
+    law_name: str = "LAW21"
+    unit_id: Optional[int] = None
+    comments: List[str] = field(default_factory=list)
+    fail: Optional[Any] = None
+    eos: Optional[Any] = None
+    params: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.params, dict):
+            self.params = {}
+        core = {
+            "rho": self.rho,
+            "rho0": self.rho0,
+            "refer_rho": self.refer_rho,
+            "rhor": self.rhor,
+            "e": self.e,
+            "E": self.e,
+            "nu": self.nu,
+            "Nu": self.nu,
+            "a0": self.a0,
+            "a1": self.a1,
+            "a2": self.a2,
+            "amax": self.amax,
+            "ifunc": self.ifunc,
+            "c1": self.c1,
+            "pfscale": self.pfscale,
+            "pmin": self.pmin,
+            "pext": self.pext,
+            "bunl": self.bunl,
+            "mumax": self.mumax,
+            "G": self.G,
+        }
+        for k, v in core.items():
+            if k not in self.params:
+                self.params[k] = v
+
+    # Property helpers
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @rho0.setter
+    def rho0(self, val: float) -> None:
+        self.rho = val
+
+    @property
+    def rhor(self) -> float:
+        return self.refer_rho if self.refer_rho != 0.0 else self.rho
+
+    @rhor.setter
+    def rhor(self, val: float) -> None:
+        self.refer_rho = val
+
+    @property
+    def G(self) -> float:
+        return self.e / (2.0 * (1.0 + self.nu)) if (1.0 + self.nu) != 0.0 else 0.0
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @E.setter
+    def E(self, val: float) -> None:
+        self.e = val
+
+    @property
+    def Nu(self) -> float:
+        return self.nu
+
+    @Nu.setter
+    def Nu(self, val: float) -> None:
+        self.nu = val
+
+    @property
+    def sound_speed(self) -> CallableFloat:
+        rho_val = self.rho0
+        c = (self.e / rho_val)**0.5 if rho_val > 0.0 and self.e > 0.0 else 0.0
+        return CallableFloat(c)
 
 
+    @property
+    def sound_speed_solid(self) -> CallableFloat:
+        """Solid sound speed: c = sqrt((C1 + 4/3 G) / rho0) per matl21_dprag.cfg DRAWABLES."""
+        rho_val = self.rho0
+        c = 0.0
+        if rho_val > 0.0:
+            bulk = self.c1
+            if bulk <= 0.0 and self.e > 0.0 and (1.0 - 2.0 * self.nu) > 0.0:
+                bulk = self.e / (3.0 * (1.0 - 2.0 * self.nu))
+            c2 = (bulk + 4.0 * self.G / 3.0) / rho_val
+            if c2 > 0.0:
+                c = c2**0.5
+        return CallableFloat(c)
+
+    # Mapping protocol
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        if key in self.params:
+            return self.params[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            self.params[key] = value
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or (key in self.params)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self) -> List[str]:
+        import dataclasses
+        k = [f.name for f in dataclasses.fields(self)]
+        k.extend(["rho0", "rhor", "G", "sound_speed", "sound_speed_solid"])
+        k.extend(list(self.params.keys()))
+        return list(dict.fromkeys(k))
+
+
+MatDprag = MatLaw21
 MatDuckhub = MatLaw21
 
 

@@ -1071,7 +1071,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("CAM_CLAY", "CAMCLAY", "MAT_CAM_CLAY", "MAT_CAMCLAY", "LAW14_CAM_CLAY"):
         read_mat_cam_clay(block, model, log)
         return
-    if lawname in ("LAW21", "DUCKHUB", "MAT_DUCKHUB", "LAW21_DUCKHUB"):
+    if lawname in ("LAW21", "21", "DPRAG", "MAT_DPRAG", "LAW21_DPRAG", "DUCKHUB", "MAT_DUCKHUB", "LAW21_DUCKHUB"):
         read_mat_law21(block, model, log)
         return
     if lawname in ("LAW32", "HILL", "MAT_HILL", "LAW32_HILL", "32"):
@@ -37616,59 +37616,237 @@ def read_mat_cam_clay(block: KeywordBlock, model: Model, log: MessageLog) -> Non
 
 
 def read_mat_law21(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW21`` or ``/MAT/DUCKHUB`` / ``/MAT/DRUCKER_PRAGER`` (M187): Drucker-Prager / Cap geological model."""
-    from ..model.entities import MatLaw21
-    from .mat_reader import InactiveMaterial
+    """``/MAT/LAW21`` or ``/MAT/DPRAG`` (M556): Drucker-Prager geological / soil / concrete model.
+
+    Upstream Fortran reference:
+      hm_read_mat21.F and matl21_dprag.cfg (radioss110).
+    """
+    from ..model.entities import MatLaw21, Material
     mat_id = block.user_id or 0
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+
+    def _card_tokens(c: Card) -> list[str]:
+        raw = c.raw.strip()
+        for ch in ("#", "$"):
+            if ch in raw:
+                raw = raw.split(ch)[0].strip()
+        if not raw:
+            return []
+        if "," in raw:
+            parts = [p.strip() for p in raw.split(",")]
+            while parts and parts[-1] == "":
+                parts.pop()
+            toks = []
+            for p in parts:
+                toks.append(p)
+            return toks
+        return raw.split()
+
+    has_comma = any("," in c.raw for c in block.cards)
+    is_fixed = block.fixed and not has_comma
+    if is_fixed:
+        for c in block.cards:
+            raw_s = c.raw.strip()
+            if not raw_s or raw_s.startswith(("#", "$")):
+                continue
+            if "\t" in c.raw:
+                is_fixed = False
+                break
+            toks = raw_s.split()
+            if len(toks) > 1 and len(c.raw[:20].split()) > 1:
+                is_fixed = False
+                break
+            if len(toks) > 1 and len(c.raw.rstrip()) <= 20:
+                is_fixed = False
+                break
+
+    title, cards = _fixed_data(block) if is_fixed else _title_and_data(block)
+    if is_fixed:
+        valid_cards = [c for c in cards if not c.raw.strip().startswith(("#", "$"))]
+    else:
+        valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith(("#", "$"))]
+
     if not valid_cards:
         log.error(f"/MAT/LAW21/{mat_id}: missing data card", block.source)
         return
 
-    rho0, e, nu = 0.0, 0.0, 0.0
-    a0, a1, a2, w, d, x0 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    rho = 0.0
+    refer_rho = 0.0
+    e = 0.0
+    nu = 0.0
+    a0 = 0.0
+    a1 = 0.0
+    a2 = 0.0
+    amax = 1.0e20
+    ifunc = 0
+    c1 = 0.0
+    pfscale = 1.0
+    pmin = -1.0e30
+    pext = 0.0
+    bunl = 0.0
+    mumax = 1.0e20
 
-    if block.fixed:
-        if len(valid_cards) > 0:
-            f0 = valid_cards[0].cut("MAT_LAW21_1")
-            rho0 = _safe_float(f0[0]) if len(f0) > 0 else 0.0
-            e = _safe_float(f0[1]) if len(f0) > 1 else 0.0
-            nu = _safe_float(f0[2]) if len(f0) > 2 else 0.0
-        if len(valid_cards) > 1:
-            f1 = valid_cards[1].cut("MAT_LAW21_2")
-            a0 = _safe_float(f1[0]) if len(f1) > 0 else 0.0
-            a1 = _safe_float(f1[1]) if len(f1) > 1 else 0.0
-            a2 = _safe_float(f1[2]) if len(f1) > 2 else 0.0
-            w = _safe_float(f1[3]) if len(f1) > 3 else 0.0
-            d = _safe_float(f1[4]) if len(f1) > 4 else 0.0
-            x0 = _safe_float(f1[5]) if len(f1) > 5 else 0.0
-    else:
-        if len(valid_cards) > 0:
-            t0 = valid_cards[0].tokens()
-            rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
-            e = _safe_float(t0[1]) if len(t0) > 1 else 0.0
-            nu = _safe_float(t0[2]) if len(t0) > 2 else 0.0
-        if len(valid_cards) > 1:
-            t1 = valid_cards[1].tokens()
-            a0 = _safe_float(t1[0]) if len(t1) > 0 else 0.0
-            a1 = _safe_float(t1[1]) if len(t1) > 1 else 0.0
-            a2 = _safe_float(t1[2]) if len(t1) > 2 else 0.0
-            w = _safe_float(t1[3]) if len(t1) > 3 else 0.0
-            d = _safe_float(t1[4]) if len(t1) > 4 else 0.0
-            x0 = _safe_float(t1[5]) if len(t1) > 5 else 0.0
+    try:
+        if is_fixed:
+            # Card 1: rho, refer_rho (MAT_LAW21_1: [20, 20])
+            if len(valid_cards) > 0:
+                f0 = valid_cards[0].cut("MAT_LAW21_1")
+                rho = _safe_float(f0[0]) if len(f0) > 0 and f0[0].strip() else 0.0
+                refer_rho = _safe_float(f0[1]) if len(f0) > 1 and f0[1].strip() else 0.0
 
-    mat = MatLaw21(
-        id=mat_id, rho0=rho0, e=e, nu=nu, a0=a0, a1=a1, a2=a2, w=w, d=d, x0=x0, title=title
-    )
-    model.mat_law21s[mat_id] = mat
-    model.materials[mat_id] = InactiveMaterial(
-        id=mat_id, law=21, rho0=rho0, title=title, law_name="LAW21",
-        params={
-            "E": e if e > 0 else 200e9, "nu": nu if 0.0 <= nu < 0.5 else 0.3,
-            "a0": a0, "a1": a1, "a2": a2, "w": w, "d": d, "x0": x0, "rho": rho0
+            # Card 2: e, nu (MAT_LAW21_2: [20, 20])
+            if len(valid_cards) > 1:
+                f1 = valid_cards[1].cut("MAT_LAW21_2")
+                e = _safe_float(f1[0]) if len(f1) > 0 and f1[0].strip() else 0.0
+                nu = _safe_float(f1[1]) if len(f1) > 1 and f1[1].strip() else 0.0
+
+            # Card 3: a0, a1, a2, amax (MAT_LAW21_3: [20, 20, 20, 20])
+            if len(valid_cards) > 2:
+                f2 = valid_cards[2].cut("MAT_LAW21_3")
+                a0 = _safe_float(f2[0]) if len(f2) > 0 and f2[0].strip() else 0.0
+                a1 = _safe_float(f2[1]) if len(f2) > 1 and f2[1].strip() else 0.0
+                a2 = _safe_float(f2[2]) if len(f2) > 2 and f2[2].strip() else 0.0
+                amax = _safe_float(f2[3]) if len(f2) > 3 and f2[3].strip() else 0.0
+
+            # Card 4: ifunc (10 col), blank (10 col), c1 (20 col), pfscale (20 col)
+            if len(valid_cards) > 3:
+                f3 = valid_cards[3].cut("MAT_LAW21_4")
+                ifunc = _safe_int(f3[0]) if len(f3) > 0 and f3[0].strip() else 0
+                c1 = _safe_float(f3[2]) if len(f3) > 2 and f3[2].strip() else 0.0
+                pfscale = _safe_float(f3[3]) if len(f3) > 3 and f3[3].strip() else 0.0
+
+            # Card 5: pmin (MAT_LAW21_5: [20])
+            if len(valid_cards) > 4:
+                f4 = valid_cards[4].cut("MAT_LAW21_5")
+                pmin = _safe_float(f4[0]) if len(f4) > 0 and f4[0].strip() else 0.0
+
+            # Card 6: bunl, mumax (MAT_LAW21_6: [20, 20])
+            if len(valid_cards) > 5:
+                f5 = valid_cards[5].cut("MAT_LAW21_6")
+                bunl = _safe_float(f5[0]) if len(f5) > 0 and f5[0].strip() else 0.0
+                mumax = _safe_float(f5[1]) if len(f5) > 1 and f5[1].strip() else 0.0
+        else:
+            # Free format (comma or space delimited)
+            # Card 1: rho, refer_rho
+            if len(valid_cards) > 0:
+                t0 = _card_tokens(valid_cards[0])
+                rho = _safe_float(t0[0]) if len(t0) > 0 and t0[0] else 0.0
+                refer_rho = _safe_float(t0[1]) if len(t0) > 1 and t0[1] else 0.0
+
+            # Card 2: e, nu
+            if len(valid_cards) > 1:
+                t1 = _card_tokens(valid_cards[1])
+                e = _safe_float(t1[0]) if len(t1) > 0 and t1[0] else 0.0
+                nu = _safe_float(t1[1]) if len(t1) > 1 and t1[1] else 0.0
+
+            # Card 3: a0, a1, a2, amax
+            if len(valid_cards) > 2:
+                t2 = _card_tokens(valid_cards[2])
+                a0 = _safe_float(t2[0]) if len(t2) > 0 and t2[0] else 0.0
+                a1 = _safe_float(t2[1]) if len(t2) > 1 and t2[1] else 0.0
+                a2 = _safe_float(t2[2]) if len(t2) > 2 and t2[2] else 0.0
+                amax = _safe_float(t2[3]) if len(t2) > 3 and t2[3] else 0.0
+
+            # Card 4: ifunc, [blank], c1, pfscale
+            if len(valid_cards) > 3:
+                t3 = _card_tokens(valid_cards[3])
+                if len(t3) >= 4:
+                    ifunc = _safe_int(t3[0]) if t3[0] else 0
+                    # t3[1] is blank / dummy
+                    c1 = _safe_float(t3[2]) if t3[2] else 0.0
+                    pfscale = _safe_float(t3[3]) if t3[3] else 0.0
+                elif len(t3) == 3:
+                    ifunc = _safe_int(t3[0]) if t3[0] else 0
+                    c1 = _safe_float(t3[1]) if t3[1] else 0.0
+                    pfscale = _safe_float(t3[2]) if t3[2] else 0.0
+                elif len(t3) == 2:
+                    ifunc = _safe_int(t3[0]) if t3[0] else 0
+                    c1 = _safe_float(t3[1]) if t3[1] else 0.0
+                elif len(t3) == 1 and t3[0]:
+                    try:
+                        c1 = float(t3[0])
+                    except ValueError:
+                        ifunc = _safe_int(t3[0])
+
+            # Card 5: pmin
+            if len(valid_cards) > 4:
+                t4 = _card_tokens(valid_cards[4])
+                pmin = _safe_float(t4[0]) if len(t4) > 0 and t4[0] else 0.0
+
+            # Card 6: bunl, mumax
+            if len(valid_cards) > 5:
+                t5 = _card_tokens(valid_cards[5])
+                bunl = _safe_float(t5[0]) if len(t5) > 0 and t5[0] else 0.0
+                mumax = _safe_float(t5[1]) if len(t5) > 1 and t5[1] else 0.0
+
+        # Default values per hm_read_mat21.F:
+        if refer_rho == 0.0:
+            refer_rho = rho
+        if pmin == 0.0:
+            pmin = -1.0e30
+        if bunl == 0.0:
+            bunl = c1
+        if amax == 0.0:
+            amax = 1.0e20
+        if mumax == 0.0:
+            mumax = 1.0e20
+        if pfscale == 0.0:
+            pfscale = 1.0
+
+        unit_id = block.unit_id if hasattr(block, "unit_id") else None
+
+        mat = MatLaw21(
+            id=mat_id,
+            rho=rho,
+            refer_rho=refer_rho,
+            e=e,
+            nu=nu,
+            a0=a0,
+            a1=a1,
+            a2=a2,
+            amax=amax,
+            ifunc=ifunc,
+            c1=c1,
+            pfscale=pfscale,
+            pmin=pmin,
+            pext=pext,
+            bunl=bunl,
+            mumax=mumax,
+            title=title,
+            law=21,
+            law_name="LAW21",
+            unit_id=unit_id,
+        )
+        model.mat_law21s[mat_id] = mat
+
+        params: Dict[str, Any] = {
+            "rho": rho, "rho0": rho, "refer_rho": refer_rho, "rhor": refer_rho,
+            "e": e, "E": e, "young": e,
+            "nu": nu, "NU": nu,
+            "a0": a0, "A0": a0,
+            "a1": a1, "A1": a1,
+            "a2": a2, "A2": a2,
+            "amax": amax, "AMAX": amax, "amx": amax,
+            "ifunc": ifunc, "IFUNC": ifunc, "fun_a1": ifunc, "FUN_A1": ifunc,
+            "c1": c1, "C1": c1, "bulk": c1, "BULK": c1, "mat_bulk": c1, "MAT_BULK": c1,
+            "pfscale": pfscale, "PFSCALE": pfscale, "fac_y": pfscale,
+            "pmin": pmin, "PMIN": pmin, "mat_pc": pmin, "MAT_PC": pmin,
+            "pext": pext, "PEXT": pext,
+            "bunl": bunl, "BUNL": bunl, "k_unload": bunl, "mat_k_unload": bunl,
+            "mumax": mumax, "MUMAX": mumax, "xmumx": mumax, "mat_sig": mumax,
+            "G": mat.G,
         }
-    )
+
+        model.materials[mat_id] = Material(
+            id=mat_id,
+            law=21,
+            rho0=rho,
+            title=title,
+            law_name="LAW21",
+            params=params,
+        )
+    except ValueError as err:
+        log.error(f"/MAT/LAW21/{mat_id}: malformed numeric input ({err})", block.source)
+
 
 
 def read_mat_law32(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -84608,9 +84786,17 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_CAMCLAY": read_mat,
     "CAM_CLAY": read_mat,
     "CAMCLAY": read_mat,
-    "MAT_LAW21": read_mat,
-    "MAT_DUCKHUB": read_mat,
-    "DUCKHUB": read_mat,
+    "LAW21": read_mat_law21,
+    "MAT_LAW21": read_mat_law21,
+    "MAT/LAW21": read_mat_law21,
+    "MAT/DPRAG": read_mat_law21,
+    "MAT/DUCKHUB": read_mat_law21,
+    "MAT/LAW21_DPRAG": read_mat_law21,
+    "DPRAG": read_mat_law21,
+    "MAT_DPRAG": read_mat_law21,
+    "LAW21_DPRAG": read_mat_law21,
+    "MAT_DUCKHUB": read_mat_law21,
+    "DUCKHUB": read_mat_law21,
     "MAT_LAW32": read_mat,
     "LAW32": read_mat,
     "MAT_HILL": read_mat,

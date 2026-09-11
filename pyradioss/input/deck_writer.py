@@ -547,7 +547,206 @@ class StarterDeck:
         self.lines.append(fmt_float(b) + fmt_float(mue_max))
 
     mat_soil = mat_law10
-    mat_dprag = mat_law10
+    mat_dprag1 = mat_law10
+
+    def mat_law21(
+        self,
+        mat_id: int = 0,
+        rho: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        a0: float = 0.0,
+        a1: float = 0.0,
+        a2: float = 0.0,
+        amax: float = 1.0e20,
+        ifunc: int = 0,
+        c1: float = 0.0,
+        pfscale: float = 1.0,
+        pmin: float = -1.0e30,
+        bunl: float = 0.0,
+        mumax: float = 1.0e20,
+        refer_rho: float | None = None,
+        title: str = "",
+        unit_id: int | None = None,
+        law_name: str = "LAW21",
+        fixed_format: bool = True,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW21`` (/MAT/DPRAG) — Drucker-Prager geological / soil / concrete model.
+
+        Upstream reference: hm_read_mat21.F and matl21_dprag.cfg (radioss110):
+          Card 1: MAT_RHO, [Refer_Rho] (%20lg[%20lg]) — MAT_LAW21_1: [20, 20]
+          Card 2: MAT_E, MAT_NU (%20lg%20lg) — MAT_LAW21_2: [20, 20]
+          Card 3: MAT_A0, MAT_A1, MAT_A2, MAT_AMAX (%20lg*4) — MAT_LAW21_3: [20, 20, 20, 20]
+          Card 4: FUN_A1, blank, MAT_BULK, PFscale (%10d          %20lg%20lg) — MAT_LAW21_4: [10, 10, 20, 20]
+          Card 5: MAT_PC (%20lg) — MAT_LAW21_5: [20]
+          Card 6: MAT_K_UNLOAD, MAT_SIG (%20lg%20lg) — MAT_LAW21_6: [20, 20]
+        """
+        # Allow title as 2nd positional argument if passed as string: mat_law21(1, "title", rho, e, nu...)
+        if isinstance(rho, str):
+            actual_title = rho
+            actual_rho = float(e) if isinstance(e, (int, float, str)) and str(e).strip() else 0.0
+            actual_e = float(nu) if isinstance(nu, (int, float, str)) and str(nu).strip() else 0.0
+            actual_nu = float(a0) if isinstance(a0, (int, float, str)) and str(a0).strip() else 0.0
+            actual_a0 = float(a1) if isinstance(a1, (int, float, str)) and str(a1).strip() else 0.0
+            actual_a1 = float(a2) if isinstance(a2, (int, float, str)) and str(a2).strip() else 0.0
+            actual_a2 = float(amax) if isinstance(amax, (int, float, str)) and str(amax).strip() else 0.0
+            actual_amax = float(ifunc) if isinstance(ifunc, (int, float, str)) and str(ifunc).strip() else 1.0e20
+            actual_ifunc = int(c1) if isinstance(c1, (int, float, str)) and str(c1).strip() else 0
+            actual_c1 = float(pfscale) if isinstance(pfscale, (int, float, str)) and str(pfscale).strip() else 0.0
+            actual_pfscale = float(pmin) if isinstance(pmin, (int, float, str)) and str(pmin).strip() else 1.0
+            actual_pmin = float(bunl) if isinstance(bunl, (int, float, str)) and str(bunl).strip() else -1.0e30
+            actual_bunl = float(mumax) if isinstance(mumax, (int, float, str)) and str(mumax).strip() else 0.0
+            actual_mumax = float(refer_rho) if isinstance(refer_rho, (int, float, str)) and str(refer_rho).strip() else 1.0e20
+            actual_refer_rho = None
+            title = actual_title
+            rho = actual_rho
+            e = actual_e
+            nu = actual_nu
+            a0 = actual_a0
+            a1 = actual_a1
+            a2 = actual_a2
+            amax = actual_amax
+            ifunc = actual_ifunc
+            c1 = actual_c1
+            pfscale = actual_pfscale
+            pmin = actual_pmin
+            bunl = actual_bunl
+            mumax = actual_mumax
+            refer_rho = actual_refer_rho
+
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+        if "mid" in kw_low and mat_id == 0:
+            mat_id = int(kw_low["mid"])
+        if "id" in kw_low and mat_id == 0:
+            mat_id = int(kw_low["id"])
+        if "rhor" in kw_low and refer_rho is None:
+            refer_rho = float(kw_low["rhor"])
+        if "ref_rho" in kw_low and refer_rho is None:
+            refer_rho = float(kw_low["ref_rho"])
+        if "refer_rho" in kw_low and refer_rho is None:
+            refer_rho = float(kw_low["refer_rho"])
+        if "mat_rho" in kw_low and rho == 0.0:
+            rho = float(kw_low["mat_rho"])
+        if "mat_e" in kw_low and e == 0.0:
+            e = float(kw_low["mat_e"])
+        if "mat_nu" in kw_low and nu == 0.0:
+            nu = float(kw_low["mat_nu"])
+        if "mat_a0" in kw_low and a0 == 0.0:
+            a0 = float(kw_low["mat_a0"])
+        if "mat_a1" in kw_low and a1 == 0.0:
+            a1 = float(kw_low["mat_a1"])
+        if "mat_a2" in kw_low and a2 == 0.0:
+            a2 = float(kw_low["mat_a2"])
+        if "mat_amax" in kw_low and amax == 1.0e20:
+            amax = float(kw_low["mat_amax"])
+        if "fun_a1" in kw_low and ifunc == 0:
+            ifunc = int(kw_low["fun_a1"])
+        if "fct_id" in kw_low and ifunc == 0:
+            ifunc = int(kw_low["fct_id"])
+        if "mat_bulk" in kw_low and c1 == 0.0:
+            c1 = float(kw_low["mat_bulk"])
+        if "bulk" in kw_low and c1 == 0.0:
+            c1 = float(kw_low["bulk"])
+        if "kt" in kw_low and c1 == 0.0:
+            c1 = float(kw_low["kt"])
+        if "fac_y" in kw_low and pfscale == 1.0:
+            pfscale = float(kw_low["fac_y"])
+        if "fscalep" in kw_low and pfscale == 1.0:
+            pfscale = float(kw_low["fscalep"])
+        if "mat_pc" in kw_low and pmin == -1.0e30:
+            pmin = float(kw_low["mat_pc"])
+        if "pc" in kw_low and pmin == -1.0e30:
+            pmin = float(kw_low["pc"])
+        if "mat_k_unload" in kw_low and bunl == 0.0:
+            bunl = float(kw_low["mat_k_unload"])
+        if "k_unload" in kw_low and bunl == 0.0:
+            bunl = float(kw_low["k_unload"])
+        if "b" in kw_low and bunl == 0.0:
+            bunl = float(kw_low["b"])
+        if "mat_sig" in kw_low and mumax == 1.0e20:
+            mumax = float(kw_low["mat_sig"])
+        if "xmumx" in kw_low and mumax == 1.0e20:
+            mumax = float(kw_low["xmumx"])
+        if "mu_max" in kw_low and mumax == 1.0e20:
+            mumax = float(kw_low["mu_max"])
+        if "title" in kw_low and not title:
+            title = str(kw_low["title"])
+        if "fixed_format" in kw_low:
+            fixed_format = bool(kw_low["fixed_format"])
+        if "fixed" in kw_low:
+            fixed_format = bool(kw_low["fixed"])
+        if "free" in kw_low and bool(kw_low["free"]):
+            fixed_format = False
+        if "law" in kw_low:
+            law_name = str(kw_low["law"])
+
+        if refer_rho is None or refer_rho == 0.0:
+            refer_rho = rho
+        if bunl == 0.0:
+            bunl = c1
+        if pfscale == 0.0:
+            pfscale = 1.0
+        if amax == 0.0:
+            amax = 1.0e20
+        if mumax == 0.0:
+            mumax = 1.0e20
+        if pmin == 0.0:
+            pmin = -1.0e30
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mat_id, unit_id)
+        else:
+            self._header("MAT", law_name, mat_id)
+        self._title(title)
+
+        if fixed_format:
+            # Card 1: rho, refer_rho (MAT_LAW21_1: [20, 20])
+            if refer_rho is not None and float(refer_rho) != 0.0 and float(refer_rho) != float(rho):
+                self.lines.append("#        Init. dens.          Ref. dens.")
+                self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(refer_rho, 20)}")
+            else:
+                self.lines.append("#        Init. dens.")
+                self.lines.append(fmt_float(rho, 20))
+
+            # Card 2: e, nu (MAT_LAW21_2: [20, 20])
+            self.lines.append("#                  E                  Nu")
+            self.lines.append(f"{fmt_float(e, 20)}{fmt_float(nu, 20)}")
+
+            # Card 3: a0, a1, a2, amax (MAT_LAW21_3: [20, 20, 20, 20])
+            self.lines.append("#                 A0                  A1                  A2                Amax")
+            self.lines.append(f"{fmt_float(a0, 20)}{fmt_float(a1, 20)}{fmt_float(a2, 20)}{fmt_float(amax, 20)}")
+
+            # Card 4: ifunc (10 col), blank (10 col), c1 (20 col), pfscale (20 col)
+            self.lines.append("# func_IDf                            Kt             FscaleP")
+            self.lines.append(f"{ifunc:>10d}          {fmt_float(c1, 20)}{fmt_float(pfscale, 20)}")
+
+            # Card 5: pmin (MAT_LAW21_5: [20])
+            self.lines.append("#              P_min")
+            self.lines.append(fmt_float(pmin, 20))
+
+            # Card 6: bunl, mumax (MAT_LAW21_6: [20, 20])
+            self.lines.append("#                  B              Mu_max")
+            self.lines.append(f"{fmt_float(bunl, 20)}{fmt_float(mumax, 20)}")
+        else:
+            delim = kw_low.get("delimiter", ", " if (kw_low.get("comma") or kw_low.get("comma_delimited")) else " ")
+            if refer_rho is not None and float(refer_rho) != 0.0 and float(refer_rho) != float(rho):
+                self.lines.append(f"{rho}{delim}{refer_rho}")
+            else:
+                self.lines.append(f"{rho}")
+            self.lines.append(f"{e}{delim}{nu}")
+            self.lines.append(f"{a0}{delim}{a1}{delim}{a2}{delim}{amax}")
+            self.lines.append(f"{ifunc}{delim}{c1}{delim}{pfscale}")
+            self.lines.append(f"{pmin}")
+            self.lines.append(f"{bunl}{delim}{mumax}")
+
+        return self
+
+    def mat_dprag(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/DPRAG`` — synonym for ``/MAT/LAW21``."""
+        kwargs.setdefault("law_name", "DPRAG")
+        return self.mat_law21(*args, **kwargs)
+
 
     def mat_law28(
         self,

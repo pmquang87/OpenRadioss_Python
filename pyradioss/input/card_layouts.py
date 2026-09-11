@@ -329,6 +329,35 @@ MAT_HILL_CFG_3 = MAT_LAW32_3
 MAT_HILL_CFG_4 = MAT_LAW32_4
 MAT_HILL_CFG_5 = MAT_LAW32_5
 
+# M556: /MAT/LAW21 (/MAT/DPRAG) card layout constants citing radioss110/MAT/matl21_dprag.cfg
+MAT_LAW21_1 = (20, 20)  # MAT_RHO, Refer_Rho
+MAT_LAW21_2 = (20, 20)  # MAT_E, MAT_NU
+MAT_LAW21_3 = (20, 20, 20, 20)  # MAT_A0, MAT_A1, MAT_A2, MAT_AMAX
+MAT_LAW21_4 = (10, 10, 20, 20)  # FUN_A1, blank(10), MAT_BULK (C1), PFscale
+MAT_LAW21_5 = (20,)  # MAT_PC (pmin)
+MAT_LAW21_6 = (20, 20)  # MAT_K_UNLOAD (bunl), MAT_SIG (mumax)
+
+MAT_LAW21_CFG_1 = MAT_LAW21_1
+MAT_LAW21_CFG_2 = MAT_LAW21_2
+MAT_LAW21_CFG_3 = MAT_LAW21_3
+MAT_LAW21_CFG_4 = MAT_LAW21_4
+MAT_LAW21_CFG_5 = MAT_LAW21_5
+MAT_LAW21_CFG_6 = MAT_LAW21_6
+
+MAT_DPRAG_1 = MAT_LAW21_1
+MAT_DPRAG_2 = MAT_LAW21_2
+MAT_DPRAG_3 = MAT_LAW21_3
+MAT_DPRAG_4 = MAT_LAW21_4
+MAT_DPRAG_5 = MAT_LAW21_5
+MAT_DPRAG_6 = MAT_LAW21_6
+
+MAT_DPRAG_CFG_1 = MAT_LAW21_1
+MAT_DPRAG_CFG_2 = MAT_LAW21_2
+MAT_DPRAG_CFG_3 = MAT_LAW21_3
+MAT_DPRAG_CFG_4 = MAT_LAW21_4
+MAT_DPRAG_CFG_5 = MAT_LAW21_5
+MAT_DPRAG_CFG_6 = MAT_LAW21_6
+
 # M543: /MAT/LAW25 (/MAT/COMP_PLAS, /MAT/COMPSH, /MAT/TSAI_WU, /MAT/CRASURV) card layout constants citing radioss110/MAT/matl25_compsh.cfg
 MAT_LAW25_1 = (20, 20)
 MAT_LAW25_2 = (20, 20, 20, 10, 10, 20)
@@ -3405,21 +3434,33 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_SOIL_CFG_6": _LayoutList([20, 20]),
     "MAT_SOIL_CFG_7": _LayoutList([20, 20]),
 
-    "MAT_DPRAG_1": _LayoutList([100]),
+    "MAT_DPRAG_1": _LayoutList([20, 20]),
     "MAT_DPRAG_2": _LayoutList([20, 20]),
-    "MAT_DPRAG_3": _LayoutList([20, 20]),
-    "MAT_DPRAG_4": _LayoutList([20, 20, 20, 20]),
-    "MAT_DPRAG_5": _LayoutList([20, 20, 20, 20]),
+    "MAT_DPRAG_3": _LayoutList([20, 20, 20, 20]),
+    "MAT_DPRAG_4": _LayoutList([10, 10, 20, 20]),
+    "MAT_DPRAG_5": _LayoutList([20]),
     "MAT_DPRAG_6": _LayoutList([20, 20]),
-    "MAT_DPRAG_7": _LayoutList([20, 20]),
 
-    "MAT_DPRAG_CFG_1": _LayoutList([100]),
+    "MAT_DPRAG_CFG_1": _LayoutList([20, 20]),
     "MAT_DPRAG_CFG_2": _LayoutList([20, 20]),
-    "MAT_DPRAG_CFG_3": _LayoutList([20, 20]),
-    "MAT_DPRAG_CFG_4": _LayoutList([20, 20, 20, 20]),
-    "MAT_DPRAG_CFG_5": _LayoutList([20, 20, 20, 20]),
+    "MAT_DPRAG_CFG_3": _LayoutList([20, 20, 20, 20]),
+    "MAT_DPRAG_CFG_4": _LayoutList([10, 10, 20, 20]),
+    "MAT_DPRAG_CFG_5": _LayoutList([20]),
     "MAT_DPRAG_CFG_6": _LayoutList([20, 20]),
-    "MAT_DPRAG_CFG_7": _LayoutList([20, 20]),
+
+    "MAT_LAW21_1": _LayoutList([20, 20]),
+    "MAT_LAW21_2": _LayoutList([20, 20]),
+    "MAT_LAW21_3": _LayoutList([20, 20, 20, 20]),
+    "MAT_LAW21_4": _LayoutList([10, 10, 20, 20]),
+    "MAT_LAW21_5": _LayoutList([20]),
+    "MAT_LAW21_6": _LayoutList([20, 20]),
+
+    "MAT_LAW21_CFG_1": _LayoutList([20, 20]),
+    "MAT_LAW21_CFG_2": _LayoutList([20, 20]),
+    "MAT_LAW21_CFG_3": _LayoutList([20, 20, 20, 20]),
+    "MAT_LAW21_CFG_4": _LayoutList([10, 10, 20, 20]),
+    "MAT_LAW21_CFG_5": _LayoutList([20]),
+    "MAT_LAW21_CFG_6": _LayoutList([20, 20]),
 
     "MAT_DPRAG1_1": _LayoutList([100]),
     "MAT_DPRAG1_2": _LayoutList([20, 20]),
@@ -3429,6 +3470,14 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_DPRAG1_6": _LayoutList([20, 20]),
     "MAT_DPRAG1_7": _LayoutList([20, 20]),
 
+    "MAT_DPRAG1_CFG_1": _LayoutList([100]),
+    "MAT_DPRAG1_CFG_2": _LayoutList([20, 20]),
+    "MAT_DPRAG1_CFG_3": _LayoutList([20, 20]),
+    "MAT_DPRAG1_CFG_4": _LayoutList([20, 20, 20, 20]),
+    "MAT_DPRAG1_CFG_5": _LayoutList([20, 20, 20, 20]),
+    "MAT_DPRAG1_CFG_6": _LayoutList([20, 20]),
+    "MAT_DPRAG1_CFG_7": _LayoutList([20, 20]),
+
     # Legacy / M187 aliases kept for backwards compatibility
     "MAT_SOIL_1": [20, 20, 20, 20, 20, 20],
     "MAT_SOIL_2": [20, 20, 10],
@@ -3436,10 +3485,12 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_SOIL_CONC_2": [20, 20, 10],
     "MAT_CAM_CLAY_1": [20, 20, 20],
     "MAT_CAM_CLAY_2": [20, 20, 20, 20, 20],
-    "MAT_LAW21_1": [20, 20, 20],
-    "MAT_LAW21_2": [20, 20, 20, 20, 20, 20],
-    "MAT_DUCKHUB_1": [20, 20, 20],
-    "MAT_DUCKHUB_2": [20, 20, 20, 20, 20, 20],
+    "MAT_DUCKHUB_1": [20, 20],
+    "MAT_DUCKHUB_2": [20, 20],
+    "MAT_DUCKHUB_3": [20, 20, 20, 20],
+    "MAT_DUCKHUB_4": [10, 10, 20, 20],
+    "MAT_DUCKHUB_5": [20],
+    "MAT_DUCKHUB_6": [20, 20],
     "MAT_LAW32_1": [20, 20, 20, 20, 20, 20, 20],
     "MAT_LAW32_2": [20, 20, 20],
     "MAT_LAW32_3": [10, 10, 10, 10, 10, 10],
