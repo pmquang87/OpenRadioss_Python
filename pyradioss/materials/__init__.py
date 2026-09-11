@@ -96,6 +96,23 @@ from .law48_zhao import (
     consistent_solid_tangent as law48_solid_tangent,
     consistent_shell_tangent as law48_shell_tangent,
 )
+from .law52_gurson import (
+    Law52Params,
+    build_law52,
+    solid_update_law52,
+    shell_update_law52,
+    sound_speed_solid_law52,
+    sound_speed_shell_law52,
+    tangent_law52_solid,
+    tangent_law52_shell,
+    solid_update as law52_solid_update,
+    shell_update as law52_shell_update,
+    sound_speed as law52_sound_speed,
+    sound_speed_solid as law52_solid_sound_speed,
+    sound_speed_shell as law52_shell_sound_speed,
+    consistent_solid_tangent as law52_solid_tangent,
+    consistent_shell_tangent as law52_shell_tangent,
+)
 from .law60_plast3 import (
     Law60Params,
     build_law60,
@@ -646,6 +663,29 @@ def _register_law58():
 
 
 _register_law58()
+
+
+def _register_law52():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law52_gurson, "build_law52", None)
+        if builder is None:
+            def _dynamic_law52_builder(rec):
+                from ..model.entities import Material
+                params = dict(rec.params) if hasattr(rec, "params") else {}
+                density = getattr(rec, "rho0", getattr(rec, "rho", getattr(rec, "density", 0.0)))
+                mid = getattr(rec, "id", 0)
+                title = getattr(rec, "title", "")
+                return Material(id=mid, law=52, rho0=density, title=title, law_name="LAW52", params=params)
+            builder = _dynamic_law52_builder
+        for k in (52, "52", "LAW52", "GURSON", "PLAS_GURS",
+                  "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
+            MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law52()
 
 
 def _register_law25():
