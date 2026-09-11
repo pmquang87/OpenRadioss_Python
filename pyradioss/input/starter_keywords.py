@@ -1173,7 +1173,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW71", "SUPER_ELAS", "NITINOL", "MAT_SUPER_ELAS", "MAT_NITINOL", "LAW71_SUPER_ELAS"):
         read_mat_law71(block, model, log)
         return
-    if lawname in ("73", "LAW73", "THERM_HILL", "MAT_THERM_HILL", "LAW73_THERM_HILL", "BARLAT2000", "MAT_BARLAT2000", "LAW73_BARLAT2000", "LAW73_HILL_THERM", "MAT_LAW73", "MAT_73"):
+    if lawname in ("73", "LAW73", "LAW73_THERM_HILL", "BARLAT2000", "MAT_BARLAT2000", "LAW73_BARLAT2000", "LAW73_HILL_THERM", "MAT_LAW73", "MAT_73"):
         read_mat_law73(block, model, log)
         return
     if lawname in ("LAW84", "SWIFT_VOCE", "PLAS_SWIFT_VOCE", "MAT_SWIFT_VOCE", "MAT_PLAS_SWIFT_VOCE", "LAW84_SWIFT_VOCE"):
@@ -1198,10 +1198,10 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW54", "PREDIT", "MAT_PREDIT", "LAW54_PREDIT"):
         read_mat_law54(block, model, log)
         return
-    if lawname in ("74", "LAW74", "HILL_3D", "ORTH_PLAS", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "LAW74_HILL_THERM", "LAW74_HILL_3D", "LAW74_ORTH_PLAS", "MAT_74"):
+    if lawname in ("74", "LAW74", "HILL_3D", "ORTH_PLAS", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "LAW74_HILL_THERM", "LAW74_THERM_HILL", "LAW74_HILL_3D", "LAW74_ORTH_PLAS", "MAT_74"):
         read_mat_law74(block, model, log)
         return
-    if lawname in ("HILL_THERM", "MAT_HILL_THERM"):
+    if lawname in ("HILL_THERM", "MAT_HILL_THERM", "THERM_HILL", "MAT_THERM_HILL"):
         # Disambiguate between LAW73 (shell Thermal Hill, Card 2 has 2 values) and LAW74 (3D solid Thermal Hill, Card 2 has 5 values)
         _t, _cards = _fixed_data(block) if block.fixed else _title_and_data(block)
         _vc = [c for c in _cards if not c.is_blank and not c.raw.strip().startswith("#")]

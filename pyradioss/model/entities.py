@@ -14559,11 +14559,27 @@ class MatLaw74:
         self.s11y = val
 
     @property
+    def sigma11y(self) -> float:
+        return self.s11y
+
+    @sigma11y.setter
+    def sigma11y(self, val: float) -> None:
+        self.s11y = val
+
+    @property
     def sig22y(self) -> float:
         return self.s22y
 
     @sig22y.setter
     def sig22y(self, val: float) -> None:
+        self.s22y = val
+
+    @property
+    def sigma22y(self) -> float:
+        return self.s22y
+
+    @sigma22y.setter
+    def sigma22y(self, val: float) -> None:
         self.s22y = val
 
     @property
@@ -14575,11 +14591,27 @@ class MatLaw74:
         self.s33y = val
 
     @property
+    def sigma33y(self) -> float:
+        return self.s33y
+
+    @sigma33y.setter
+    def sigma33y(self, val: float) -> None:
+        self.s33y = val
+
+    @property
     def sig12y(self) -> float:
         return self.s12y
 
     @sig12y.setter
     def sig12y(self, val: float) -> None:
+        self.s12y = val
+
+    @property
+    def sigma12y(self) -> float:
+        return self.s12y
+
+    @sigma12y.setter
+    def sigma12y(self, val: float) -> None:
         self.s12y = val
 
     @property
@@ -14591,11 +14623,27 @@ class MatLaw74:
         self.s23y = val
 
     @property
+    def sigma23y(self) -> float:
+        return self.s23y
+
+    @sigma23y.setter
+    def sigma23y(self, val: float) -> None:
+        self.s23y = val
+
+    @property
     def sig31y(self) -> float:
         return self.s31y
 
     @sig31y.setter
     def sig31y(self, val: float) -> None:
+        self.s31y = val
+
+    @property
+    def sigma31y(self) -> float:
+        return self.s31y
+
+    @sigma31y.setter
+    def sigma31y(self, val: float) -> None:
         self.s31y = val
 
     @property

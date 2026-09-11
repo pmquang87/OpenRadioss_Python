@@ -3954,12 +3954,12 @@ def check_mat_law74(
     # 1. Density rho0 > 0
     rho0 = _extract(["rho", "rho0", "MAT_RHO", "RHO", "RHO0"], default=0.0)
     if rho0 <= 0.0:
-        log.error(f"/MAT/LAW74/{mid}: initial density RHO must be > 0 (got {rho0:g})", "MAT CHECK")
+        log.error(f"/MAT/LAW74/{mid}: initial density RHO must be > 0 (got {rho0:g}) (ANCMSG 1514)", "MAT CHECK")
 
     # 2. Young's modulus E > 0
     e = _extract(["e", "E", "MAT_E", "young"], default=0.0)
     if e <= 0.0:
-        log.error(f"/MAT/LAW74/{mid}: Young's modulus E must be > 0 (got {e:g})", "MAT CHECK")
+        log.error(f"/MAT/LAW74/{mid}: Young's modulus E must be > 0 (got {e:g}) (ANCMSG 1514)", "MAT CHECK")
 
     # 3. Poisson's ratio: 0.0 <= nu < 0.5 (ANCMSG 1514)
     nu = _extract(["nu", "Nu", "NU", "MAT_NU"], default=0.0)

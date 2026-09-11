@@ -634,13 +634,13 @@ def _get_params(mat: Any) -> Law74Params:
 # Sound Speed & Allocations
 # ============================================================================
 
-def sound_speed_solid(mat: Any, rho: Optional[float] = None, extra: Optional[Dict[str, Any]] = None) -> float:
+def sound_speed_solid(mat: Any, rho: Optional[Any] = None, extra: Optional[Dict[str, Any]] = None) -> Any:
     """Acoustic longitudinal sound speed for solids: c = sqrt((c11 + 4/3*g) / rho).
 
     Upstream reference: sigeps74.F line 305 (SOUNDSP = SQRT((C11+FOUR*G1/THREE)/RHO0)).
     """
     p = _get_params(mat)
-    rho_val = float(rho) if rho is not None and float(rho) > 0.0 else p.rho0
+    r = rho if rho is not None else (extra.get("rho") if extra and "rho" in extra else p.rho0)
 
     e_curr = p.e
     if extra is not None and "uvar74" in extra and extra["uvar74"] is not None:
@@ -656,7 +656,10 @@ def sound_speed_solid(mat: Any, rho: Optional[float] = None, extra: Optional[Dic
 
     g = 0.5 * e_curr / (1.0 + p.nu)
     c1 = e_curr / (3.0 * (1.0 - 2.0 * p.nu))
-    return math.sqrt((c1 + 4.0 / 3.0 * g) / max(rho_val, _EM20))
+    num = c1 + 4.0 / 3.0 * g
+    if isinstance(r, np.ndarray):
+        return np.sqrt(num / np.maximum(r, _EM20))
+    return math.sqrt(num / max(float(r), _EM20))
 
 
 sound_speed = sound_speed_solid
@@ -896,7 +899,7 @@ def solid_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
         amu = rho_curr / max(p.rho0, _EM20) - 1.0
         p_hydro = c11 * amu
     else:
-        p_hydro = -p0 - c11 * 3.0 * dav
+        p_hydro = p0 - c11 * 3.0 * dav
 
     if p.ipla == 1:
         dpla = (1.0 - r) * cri / np.maximum(g31 + h, _EM20)
@@ -1117,6 +1120,7 @@ def resolve(mat: Material, model: Any, log: Any = None) -> None:
             p.yield_table = functions[p.table_id]
         if hasattr(mat, "params") and isinstance(mat.params, dict):
             mat.params["yield_table"] = p.yield_table
+            mat.params["_obj"] = p
 
 
 # ============================================================================
