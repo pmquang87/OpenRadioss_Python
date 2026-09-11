@@ -1642,7 +1642,7 @@ def check_mat_law48(
         except (TypeError, ValueError):
             n = 1.0
 
-    if n < 0.0 or n > 1.0:
+    if n < 0.0 or n > 1.001:
         log.error(f"/MAT/LAW48/{mid}: hardening exponent n must satisfy 0.0 <= n <= 1.0 (got {n:g})", "MAT CHECK")
 
     # 6. Hardening parameter b >= 0

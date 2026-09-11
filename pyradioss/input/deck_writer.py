@@ -1896,6 +1896,22 @@ class StarterDeck:
             eps_t1 = kw_low["eta1"]
         if "eta2" in kw_low and eps_t2 == 2.0e30:
             eps_t2 = kw_low["eta2"]
+        if "ca" in kw_low and a == 0.0:
+            a = kw_low["ca"]
+        if "cb" in kw_low and b == 0.0:
+            b = kw_low["cb"]
+        if "cn" in kw_low and n == 1.0:
+            n = kw_low["cn"]
+        if "cc" in kw_low and c == 1.0:
+            c = kw_low["cc"]
+        if "cd" in kw_low and d == 0.0:
+            d = kw_low["cd"]
+        if "cm" in kw_low and m == 1.0:
+            m = kw_low["cm"]
+        if "ce" in kw_low and e1 == 0.0:
+            e1 = kw_low["ce"]
+        if "ck" in kw_low and k == 1.0:
+            k = kw_low["ck"]
         if "fixed_format" in kw_low:
             fixed_format = bool(kw_low["fixed_format"])
 
@@ -1933,17 +1949,18 @@ class StarterDeck:
                 f"{fmt_float(eps_max, 20)}{fmt_float(eps_t1, 20)}{fmt_float(eps_t2, 20)}"
             )
         else:
-            # Free format (space-separated)
+            delim = kw_low.get("delimiter", ", " if (kw_low.get("comma") or kw_low.get("comma_delimited")) else " ")
+            # Free format (space-separated or comma-separated)
             if ref_rho is not None and float(ref_rho) != 0.0:
-                self.lines.append(f"{rho} {ref_rho}")
+                self.lines.append(f"{rho}{delim}{ref_rho}")
             else:
                 self.lines.append(f"{rho}")
 
-            self.lines.append(f"{e} {nu}")
-            self.lines.append(f"{a} {b} {n} {chard} {sig_max}")
-            self.lines.append(f"{c} {d} {m} {e1} {k}")
-            self.lines.append(f"{eps_rate_0} {fcut}")
-            self.lines.append(f"{eps_max} {eps_t1} {eps_t2}")
+            self.lines.append(f"{e}{delim}{nu}")
+            self.lines.append(f"{a}{delim}{b}{delim}{n}{delim}{chard}{delim}{sig_max}")
+            self.lines.append(f"{c}{delim}{d}{delim}{m}{delim}{e1}{delim}{k}")
+            self.lines.append(f"{eps_rate_0}{delim}{fcut}")
+            self.lines.append(f"{eps_max}{delim}{eps_t1}{delim}{eps_t2}")
 
         return self
 

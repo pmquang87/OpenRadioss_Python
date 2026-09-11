@@ -310,11 +310,12 @@ def eval_yield_and_hardening(
     yld_raw = np.minimum(smax_pc, yy)
 
     # Plastic hardening slope H = P_DA + P_DB
-    # P_DA (derivative of work hardening curve)
+    # P_DA (derivative of work hardening curve; E when pla <= 0 per sigeps48.F:285 / sigeps48c.F:279)
     if params.cn >= 1.0:
         pda = params.cb * params.cn * (safe_pla ** (params.cn - 1.0))
     else:
         pda = params.cb * params.cn * (safe_pla ** (1.0 - params.cn))
+    pda = np.where(pla <= 0.0, params.E, pda)
 
     # P_DB (upstream sigeps48.F:287-293)
     if params.cm >= 1.0:
@@ -356,19 +357,24 @@ def eval_yield_and_hardening(
 # Maximum principal strain solvers & Tensile failure factor
 # ----------------------------------------------------------------------------
 
-def _principal_strain_3d(eps: np.ndarray) -> np.ndarray:
+def _principal_strain_3d(eps: np.ndarray) -> np.ndarray | float:
     """Maximum principal total strain from 3D strain tensor (sigeps48.F:201-245).
 
     Uses the exact 4-iteration Newton solver on the deviatoric cubic equation,
     including the convergence check ABS(Y) > 1e-8.
     """
-    dav = (eps[:, 0] + eps[:, 1] + eps[:, 2]) / 3.0
-    e1 = eps[:, 0] - dav
-    e2 = eps[:, 1] - dav
-    e3 = eps[:, 2] - dav
-    e4 = 0.5 * eps[:, 3]
-    e5 = 0.5 * eps[:, 4]
-    e6 = 0.5 * eps[:, 5]
+    eps_arr = np.asarray(eps, dtype=float)
+    single = eps_arr.ndim == 1
+    if single:
+        eps_arr = eps_arr.reshape(1, 6)
+
+    dav = (eps_arr[:, 0] + eps_arr[:, 1] + eps_arr[:, 2]) / 3.0
+    e1 = eps_arr[:, 0] - dav
+    e2 = eps_arr[:, 1] - dav
+    e3 = eps_arr[:, 2] - dav
+    e4 = 0.5 * eps_arr[:, 3]
+    e5 = 0.5 * eps_arr[:, 4]
+    e6 = 0.5 * eps_arr[:, 5]
 
     e42 = e4 * e4
     e52 = e5 * e5
@@ -390,16 +396,22 @@ def _principal_strain_3d(eps: np.ndarray) -> np.ndarray:
         step = np.where(active & (yp != 0.0), y_val / np.where(yp == 0.0, 1.0, yp), 0.0)
         x = x - step
 
-    return np.where(active, x + dav, epst)
+    res = np.where(active, x + dav, epst)
+    return res[0] if single else res
 
 
-def _principal_strain_2d(eps: np.ndarray) -> np.ndarray:
+def _principal_strain_2d(eps: np.ndarray) -> np.ndarray | float:
     """Maximum in-plane principal total strain (sigeps48c.F:245-247)."""
-    exx = eps[:, 0]
-    eyy = eps[:, 1]
-    exy = eps[:, 2]
+    eps_arr = np.asarray(eps, dtype=float)
+    single = eps_arr.ndim == 1
+    if single:
+        eps_arr = eps_arr.reshape(1, -1)
+    exx = eps_arr[:, 0]
+    eyy = eps_arr[:, 1]
+    exy = eps_arr[:, 2]
     diff = exx - eyy
-    return 0.5 * (exx + eyy + np.sqrt(diff * diff + exy * exy))
+    res = 0.5 * (exx + eyy + np.sqrt(diff * diff + exy * exy))
+    return res[0] if single else res
 
 
 def tensile_failure_factor(params: Law48Params, epst: np.ndarray | float) -> np.ndarray:
@@ -553,8 +565,16 @@ def solid_update_law48(
     if p.fcut < _INF and dt > 0.0:
         alpha = min(1.0, 2.0 * math.pi * p.fcut * dt)
         if epsd_key is not None:
-            extra[epsd_key][:] = alpha * raw_rate + (1.0 - alpha) * extra[epsd_key]
-            epsd = extra[epsd_key].copy()
+            prev_rate = np.asarray(extra[epsd_key], dtype=float)
+            filtered_rate = alpha * raw_rate + (1.0 - alpha) * prev_rate
+            if isinstance(extra[epsd_key], np.ndarray):
+                if extra[epsd_key].ndim > 0:
+                    extra[epsd_key][:] = filtered_rate
+                else:
+                    extra[epsd_key].fill(float(filtered_rate.flat[0]))
+            else:
+                extra[epsd_key] = float(filtered_rate.flat[0]) if single else filtered_rate
+            epsd = filtered_rate
         else:
             extra["epsd48"] = raw_rate.copy()
             epsd = raw_rate.copy()
@@ -630,11 +650,23 @@ def solid_update_law48(
     if np.any(deleted):
         sig_out[deleted] = 0.0
         if "off" in extra:
-            extra["off"][deleted] = 0.0
+            if isinstance(extra["off"], np.ndarray):
+                if extra["off"].ndim > 0:
+                    extra["off"][deleted] = 0.0
+                else:
+                    extra["off"].fill(0.0)
+            else:
+                extra["off"] = 0.0
         else:
             extra["off"] = np.where(deleted, 0.0, 1.0)
         if "off48" in extra:
-            extra["off48"][deleted] = 0.0
+            if isinstance(extra["off48"], np.ndarray):
+                if extra["off48"].ndim > 0:
+                    extra["off48"][deleted] = 0.0
+                else:
+                    extra["off48"].fill(0.0)
+            else:
+                extra["off48"] = 0.0
 
     c = sound_speed_solid_law48(p, rho0=extra.get("rho"))
     if not isinstance(c, np.ndarray):
@@ -649,6 +681,83 @@ def solid_update_law48(
 # Shell update (sigeps48c.F)
 # ----------------------------------------------------------------------------
 
+def plane_stress_return_newton_law48(
+    params: Law48Params,
+    sig_rel: np.ndarray,
+    yld: np.ndarray,
+    h_iso: np.ndarray,
+    epsp_arr: np.ndarray,
+    off: np.ndarray | None = None,
+    nmax: int = 3,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Iterative plane-stress plasticity return via Newton-Raphson (sigeps48c.F:346-423).
+
+    Solves the nonlinear scalar constraint F(dpla) = 0 for in-plane plane stress
+    using up to nmax (default 3) Newton-Raphson iterations.
+
+    Returns
+    -------
+    sig_rel_new : (NEL, 3) updated plane stress tensor [xx, yy, xy]
+    dpla : (NEL,) plastic strain increment
+    dezz_pl : (NEL,) plastic through-thickness thinning increment
+    """
+    s1 = sig_rel[:, 0] + sig_rel[:, 1]
+    s2 = sig_rel[:, 0] - sig_rel[:, 1]
+    s3 = sig_rel[:, 2]
+
+    aa = 0.25 * s1 * s1
+    bb = 0.75 * s2 * s2 + 3.0 * s3 * s3
+    svm = np.sqrt(np.maximum(aa + bb, 0.0))
+
+    if off is None:
+        off_arr = np.ones_like(svm)
+    else:
+        off_arr = np.asarray(off, dtype=float)
+
+    plastic = (svm > yld) & (off_arr == 1.0)
+    nel = len(svm)
+
+    dpla_j = np.where(plastic, (svm - yld) / np.maximum(3.0 * params.G + h_iso, _EM20), 0.0)
+    dpla_i = dpla_j.copy()
+
+    nu11 = 1.0 / (1.0 - params.nu)
+    nu21 = 1.0 / (1.0 + params.nu)
+    nu31 = (1.0 - 2.0 * params.nu) / (1.0 - params.nu)
+
+    pp = np.ones(nel, dtype=float)
+    qq = np.ones(nel, dtype=float)
+    dr = np.zeros(nel, dtype=float)
+
+    if np.any(plastic):
+        for _ in range(nmax):
+            dpla_i = dpla_j.copy()
+            yld_i = yld + h_iso * dpla_i
+            dr = 0.5 * params.E * dpla_i / np.maximum(yld_i, _EM20)
+            pp = 1.0 / (1.0 + dr * nu11)
+            qq = 1.0 / (1.0 + 3.0 * dr * nu21)
+            p2 = pp * pp
+            q2 = qq * qq
+            f = aa * p2 + bb * q2 - yld_i * yld_i
+            df = -(aa * nu11 * p2 * pp + 3.0 * bb * nu21 * q2 * qq) * (params.E - 2.0 * dr * h_iso) / np.maximum(yld_i, _EM20) - 2.0 * h_iso * yld_i
+            safe_df = np.where(df == 0.0, -1.0, df)
+            step = np.where(plastic & (dpla_i > 0.0), f / safe_df, 0.0)
+            dpla_j = np.where(plastic, np.maximum(0.0, dpla_i - step), 0.0)
+
+    # Plastically admissible stresses (sigeps48c.F:409-417)
+    s1_corr = s1 * pp
+    s2_corr = s2 * qq
+
+    sig_rel_new = sig_rel.copy()
+    sig_rel_new[:, 0] = np.where(plastic, 0.5 * (s1_corr + s2_corr), sig_rel[:, 0])
+    sig_rel_new[:, 1] = np.where(plastic, 0.5 * (s1_corr - s2_corr), sig_rel[:, 1])
+    sig_rel_new[:, 2] = np.where(plastic, s3 * qq, sig_rel[:, 2])
+
+    dezz_pl = np.where(plastic, -nu31 * dr * s1_corr / params.E, 0.0)
+    dpla = np.where(plastic, dpla_i, 0.0)
+
+    return sig_rel_new, dpla, dezz_pl
+
+
 def shell_update_law48(
     mat: Any,
     sig: np.ndarray,
@@ -656,6 +765,7 @@ def shell_update_law48(
     epsp: np.ndarray | None = None,
     dt: float = 0.0,
     extra: dict[str, Any] | None = None,
+    iflag: int | None = None,
     **kwargs: Any,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Constitutive plane-stress cycle for shell elements (/MAT/LAW48).
@@ -668,6 +778,7 @@ def shell_update_law48(
     epsp : (NEL,) or float plastic strain
     dt : time increment
     extra : dict of persistent state views (sigb48, eps48, epsd48, off, thk, etc.)
+    iflag : 0 for radial projection (sigeps48c.F:321-340), 1 for Newton-Raphson return (sigeps48c.F:346-423)
 
     Returns
     -------
@@ -775,23 +886,52 @@ def shell_update_law48(
     # 5. Yield stress and hardening slope
     yld, h_total, h_iso, h_kin = eval_yield_and_hardening(p, epsp_arr, epsd, fail)
 
-    # 6. Plane stress von Mises & radial projection (sigeps48c.F:323-340)
-    sxx = sig_rel[:, 0]
-    syy = sig_rel[:, 1]
-    sxy = sig_rel[:, 2]
-    svm2 = sxx * sxx + syy * syy - sxx * syy + 3.0 * sxy * sxy
-    svm = np.sqrt(np.maximum(svm2, 0.0))
+    # 6. Plane stress projection (IFLAG=0: radial projection, IFLAG=1: Newton-Raphson return)
+    iflag_val = iflag
+    if iflag_val is None:
+        if "iflag" in extra:
+            iflag_val = int(extra["iflag"])
+        else:
+            iflag_val = int(kwargs.get("iflag", 0))
 
-    r = np.minimum(1.0, yld / np.maximum(svm, _EM20))
-    dpla = (1.0 - r) * svm / np.maximum(G3 + h_iso, _EM20)
-    plastic = dpla > 0.0
+    nnu11 = p.nu / (1.0 - p.nu)
+    nu31 = (1.0 - 2.0 * p.nu) / (1.0 - p.nu)
 
-    yld_corr = yld + dpla * h_iso
-    yld_corr = np.where(epsp_arr + dpla > p.eps_max, 0.0, yld_corr)
-    r_corr = np.minimum(1.0, yld_corr / np.maximum(svm, _EM20))
-    sig_rel_new = sig_rel * r_corr[:, None]
+    if iflag_val == 1:
+        off_arr = extra.get("off", np.ones(nel))
+        sig_rel_new, dpla, dezz_pl = plane_stress_return_newton_law48(
+            p, sig_rel, yld, h_iso, epsp_arr, off=off_arr, nmax=int(kwargs.get("nmax", 3))
+        )
+        plastic = dpla > 0.0
+        epsp_arr += dpla
+        dezz_el = -(deps_arr[:, 0] + deps_arr[:, 1]) * nnu11
+        dezz = dezz_el + dezz_pl
+    else:
+        # Radial projection (sigeps48c.F:323-340)
+        sxx = sig_rel[:, 0]
+        syy = sig_rel[:, 1]
+        sxy = sig_rel[:, 2]
+        svm2 = sxx * sxx + syy * syy - sxx * syy + 3.0 * sxy * sxy
+        svm = np.sqrt(np.maximum(svm2, 0.0))
 
-    epsp_arr += dpla
+        r = np.minimum(1.0, yld / np.maximum(svm, _EM20))
+        dpla = (1.0 - r) * svm / np.maximum(G3 + h_iso, _EM20)
+        plastic = dpla > 0.0
+
+        two_step = kwargs.get("two_step", True)
+        if two_step:
+            yld_corr = yld + dpla * h_iso
+            yld_corr = np.where(epsp_arr + dpla > p.eps_max, 0.0, yld_corr)
+            r_corr = np.minimum(1.0, yld_corr / np.maximum(svm, _EM20))
+            sig_rel_new = sig_rel * r_corr[:, None]
+        else:
+            sig_rel_new = sig_rel * r[:, None]
+
+        epsp_arr += dpla
+        dezz_el = -(deps_arr[:, 0] + deps_arr[:, 1]) * nnu11
+        s_mean = 0.5 * (sig_rel_new[:, 0] + sig_rel_new[:, 1])
+        dezz_pl = -dpla * s_mean / np.maximum(yld, _EM20)
+        dezz = dezz_el + nu31 * dezz_pl
 
     # 7. Kinematic hardening update (sigeps48c.F:476-496)
     if sigb is not None:
@@ -808,19 +948,19 @@ def shell_update_law48(
         sigpyy = beta * (4.0 * deyy + 2.0 * dexx)
         sigpxy = beta * dexy
 
-        sigb[:, 0] += np.where(plastic, sigpxx, 0.0)
-        sigb[:, 1] += np.where(plastic, sigpyy, 0.0)
-        sigb[:, 2] += np.where(plastic, sigpxy, 0.0)
-
         sig_out = sig_tr.copy()
         sig_out[:, 0] = sig_rel_new[:, 0] + sigb[:, 0]
         sig_out[:, 1] = sig_rel_new[:, 1] + sigb[:, 1]
         sig_out[:, 2] = sig_rel_new[:, 2] + sigb[:, 2]
+
+        sigb[:, 0] += np.where(plastic, sigpxx, 0.0)
+        sigb[:, 1] += np.where(plastic, sigpyy, 0.0)
+        sigb[:, 2] += np.where(plastic, sigpxy, 0.0)
     else:
         sig_out = sig_tr.copy()
         sig_out[:, :3] = sig_rel_new
 
-    # 8. Layer thinning update dezz (sigeps48c.F:336-339)
+    # 8. Layer thinning update dezz (sigeps48c.F:336-339 / 419-421)
     nnu11 = p.nu / (1.0 - p.nu)
     nu31 = (1.0 - 2.0 * p.nu) / (1.0 - p.nu)
     dezz_el = -(deps_arr[:, 0] + deps_arr[:, 1]) * nnu11
@@ -836,13 +976,31 @@ def shell_update_law48(
     if np.any(deleted):
         sig_out[deleted] = 0.0
         if "off" in extra:
-            extra["off"][deleted] = 0.0
+            if isinstance(extra["off"], np.ndarray):
+                if extra["off"].ndim > 0:
+                    extra["off"][deleted] = 0.0
+                else:
+                    extra["off"].fill(0.0)
+            else:
+                extra["off"] = 0.0
         else:
             extra["off"] = np.where(deleted, 0.0, 1.0)
         if "off48" in extra:
-            extra["off48"][deleted] = 0.0
+            if isinstance(extra["off48"], np.ndarray):
+                if extra["off48"].ndim > 0:
+                    extra["off48"][deleted] = 0.0
+                else:
+                    extra["off48"].fill(0.0)
+            else:
+                extra["off48"] = 0.0
         if "layfail" in extra:
-            extra["layfail"][deleted] = 0.0
+            if isinstance(extra["layfail"], np.ndarray):
+                if extra["layfail"].ndim > 0:
+                    extra["layfail"][deleted] = 0.0
+                else:
+                    extra["layfail"].fill(0.0)
+            else:
+                extra["layfail"] = 0.0
 
     if single:
         return sig_out[0], float(epsp_arr[0])
@@ -864,6 +1022,26 @@ def shell_membrane_tangent(mat: Any) -> np.ndarray:
     ], dtype=float)
 
 
+def _copy_extra(extra: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Deep-copy arrays and nested dicts in state extra dictionary."""
+    if extra is None:
+        return None
+    res: dict[str, Any] = {}
+    for k, v in extra.items():
+        if isinstance(v, np.ndarray):
+            res[k] = v.copy()
+        elif isinstance(v, dict):
+            res[k] = _copy_extra(v)
+        elif hasattr(v, "copy"):
+            try:
+                res[k] = v.copy()
+            except Exception:
+                res[k] = v
+        else:
+            res[k] = v
+    return res
+
+
 def tangent_law48_solid(
     mat: Any,
     sig: np.ndarray | None = None,
@@ -871,18 +1049,61 @@ def tangent_law48_solid(
     epsp_incr: np.ndarray | float | None = None,
     dt: float = 0.0,
     extra: dict[str, Any] | None = None,
+    *args: Any,
+    deps: np.ndarray | None = None,
+    eps: np.ndarray | None = None,
+    symmetric: bool = False,
+    h: float = 1e-7,
     **kwargs: Any,
 ) -> np.ndarray:
     """The consistent (algorithmic) elastoplastic tangent of the radial return
     for solid elements, (NEL, 6, 6) or (6, 6), Voigt / engineering shear.
 
-    Derivation:
-        D = C - a (C - K 1(x)1) + b (N (x) N)
-        a = 3G Δεp / q_tr,   b = 6G^2 (Δεp/q_tr - 1/(3G+H_iso))
+    Supports both:
+    1. Direct numerical perturbation (when ``deps`` is supplied or rate/damage is active):
+       D_ij = (sigma(deps + h*e_j) - sigma(deps - h*e_j)) / (2*h)
+    2. Analytical Simo & Hughes / de Souza Neto return-mapping operator:
+       D = C - a (C - K 1(x)1) + b (N (x) N)
+       a = 3G Δεp / q_tr,   b = 6G^2 (Δεp/q_tr - 1/(3G+H_iso))
     """
     p = _get_params(mat)
     G = p.G
     Kb = p.K
+
+    # Disambiguate arguments
+    if "deps" in kwargs and deps is None:
+        deps = kwargs["deps"]
+    if "eps" in kwargs and eps is None:
+        eps = kwargs["eps"]
+    if deps is None and eps is not None:
+        deps = eps
+    if "epsp_incr" in kwargs and epsp_incr is None:
+        epsp_incr = kwargs["epsp_incr"]
+    if "extra" in kwargs and extra is None:
+        extra = kwargs["extra"]
+    if "dt" in kwargs:
+        dt = float(kwargs["dt"])
+    if "symmetric" in kwargs:
+        symmetric = bool(kwargs["symmetric"])
+    if "h" in kwargs:
+        h = float(kwargs["h"])
+
+    # Disambiguate positional args
+    if len(args) > 0:
+        if epsp_incr is None and len(args) >= 1:
+            epsp_incr = args[0]
+        if extra is None and len(args) >= 2 and isinstance(args[1], dict):
+            extra = args[1]
+
+    # If sig was passed as deps or deps passed in epsp position
+    if deps is None and epsp is not None and isinstance(epsp, np.ndarray):
+        if (epsp.ndim == 2 and epsp.shape[1] == 6) or (epsp.ndim == 1 and epsp.shape[0] == 6):
+            deps = epsp
+            epsp = None
+    if deps is None and epsp_incr is not None and isinstance(epsp_incr, np.ndarray):
+        if (epsp_incr.ndim == 2 and epsp_incr.shape[1] == 6) or (epsp_incr.ndim == 1 and epsp_incr.shape[0] == 6):
+            deps = epsp_incr
+            epsp_incr = None
 
     # Build 6x6 elastic matrix C
     C = np.zeros((6, 6), dtype=float)
@@ -894,34 +1115,105 @@ def tangent_law48_solid(
     C[4, 4] = G
     C[5, 5] = G
 
-    if sig is None:
+    if sig is None and deps is None:
         return C
 
-    sig_arr = np.asarray(sig, dtype=float)
-    single = sig_arr.ndim == 1
-    if single:
-        sig_arr = sig_arr.reshape(1, 6)
+    # Determine element count and shapes
+    if deps is not None:
+        deps_arr = np.asarray(deps, dtype=float)
+        single = (deps_arr.ndim == 1)
+        if single:
+            deps_arr = deps_arr.reshape(1, 6)
+        nel = deps_arr.shape[0]
+        sig_arr = np.asarray(sig, dtype=float) if sig is not None else np.zeros((nel, 6), dtype=float)
+        if sig_arr.ndim == 1:
+            sig_arr = sig_arr.reshape(1, 6)
+    else:
+        sig_arr = np.asarray(sig, dtype=float)
+        single = (sig_arr.ndim == 1)
+        if single:
+            sig_arr = sig_arr.reshape(1, 6)
+        nel = sig_arr.shape[0]
+        deps_arr = None
 
-    nel = sig_arr.shape[0]
-    D = np.broadcast_to(C, (nel, 6, 6)).copy()
+    if nel == 0:
+        return np.empty((0, 6, 6), dtype=float) if not single else np.empty((6, 6), dtype=float)
 
-    if epsp_incr is None:
-        return D[0] if single else D
-
-    dep_arr = np.asarray(epsp_incr, dtype=float)
-    if dep_arr.ndim == 0:
-        dep_arr = np.full(nel, float(dep_arr))
-
-    plastic = dep_arr > 0.0
-    if not np.any(plastic):
-        return D[0] if single else D
-
+    # Extract plastic strain
     if epsp is None:
         epsp_arr = np.zeros(nel, dtype=float)
     else:
-        epsp_arr = np.asarray(epsp, dtype=float)
-        if epsp_arr.ndim == 0:
-            epsp_arr = np.full(nel, float(epsp_arr))
+        epsp_arr = np.asarray(epsp, dtype=float).flatten()
+        if len(epsp_arr) == 1 and nel > 1:
+            epsp_arr = np.full(nel, epsp_arr[0], dtype=float)
+
+    # Extract element deletion mask
+    off_raw = None
+    if extra is not None:
+        off_raw = extra.get("off", extra.get("off48", extra.get("layfail", None)))
+    if "off" in kwargs and off_raw is None:
+        off_raw = kwargs["off"]
+
+    deleted_mask = (epsp_arr > p.eps_max)
+    if off_raw is not None:
+        off_arr = np.asarray(off_raw, dtype=float).flatten()
+        if len(off_arr) == 1 and nel > 1:
+            off_arr = np.full(nel, off_arr[0], dtype=float)
+        deleted_mask = deleted_mask | (off_arr <= 0.0)
+
+    # Check total strain damage deletion if total strain is present
+    eps_key = "eps48" if (extra is not None and "eps48" in extra) else ("eps" if (extra is not None and "eps" in extra) else None)
+    if eps_key is not None and p.eps_t1 < _INF:
+        eps_tot = np.asarray(extra[eps_key], dtype=float)
+        if eps_tot.ndim == 1:
+            eps_tot = eps_tot.reshape(1, -1)
+        if eps_tot.shape[0] == nel:
+            epst_chk = _principal_strain_3d(eps_tot)
+            deleted_mask = deleted_mask | (epst_chk >= p.eps_t2)
+
+    # Numerical perturbation path when deps is provided
+    if deps_arr is not None:
+        D = np.zeros((nel, 6, 6), dtype=float)
+        active = ~deleted_mask
+        if np.any(active):
+            for j in range(6):
+                ej = np.zeros_like(deps_arr)
+                ej[:, j] = h
+                ex_p = _copy_extra(extra)
+                ex_m = _copy_extra(extra)
+                sp, _, _ = solid_update_law48(p, sig_arr, deps_arr + ej, epsp=epsp_arr, dt=dt, extra=ex_p)
+                sm, _, _ = solid_update_law48(p, sig_arr, deps_arr - ej, epsp=epsp_arr, dt=dt, extra=ex_m)
+                if sp.ndim == 1:
+                    sp = sp.reshape(1, 6)
+                    sm = sm.reshape(1, 6)
+                D[:, :, j] = (sp - sm) / (2.0 * h)
+        if np.any(deleted_mask):
+            D[deleted_mask] = 0.0
+        if symmetric:
+            D = 0.5 * (D + np.swapaxes(D, -1, -2))
+        return D[0] if single else D
+
+    # Analytical Simo & Hughes path
+    D = np.broadcast_to(C, (nel, 6, 6)).copy()
+
+    if epsp_incr is None:
+        if np.any(deleted_mask):
+            D[deleted_mask] = 0.0
+        if symmetric:
+            D = 0.5 * (D + np.swapaxes(D, -1, -2))
+        return D[0] if single else D
+
+    dep_arr = np.asarray(epsp_incr, dtype=float).flatten()
+    if len(dep_arr) == 1 and nel > 1:
+        dep_arr = np.full(nel, dep_arr[0], dtype=float)
+
+    plastic = (dep_arr > 0.0) & (~deleted_mask)
+    if not np.any(plastic):
+        if np.any(deleted_mask):
+            D[deleted_mask] = 0.0
+        if symmetric:
+            D = 0.5 * (D + np.swapaxes(D, -1, -2))
+        return D[0] if single else D
 
     idx = np.where(plastic)[0]
     s = sig_arr[idx].copy()
@@ -941,12 +1233,24 @@ def tangent_law48_solid(
     q_tr = q + 3.0 * G * dep
 
     fail = np.ones(len(idx), dtype=float)
-    eps_key = "eps48" if (extra is not None and "eps48" in extra) else ("eps" if (extra is not None and "eps" in extra) else None)
     if eps_key is not None and p.eps_t1 < _INF:
-        epst = _principal_strain_3d(extra[eps_key][idx])
+        eps_tot = np.asarray(extra[eps_key], dtype=float)
+        if eps_tot.ndim == 1:
+            eps_tot = eps_tot.reshape(1, -1)
+        epst = _principal_strain_3d(eps_tot[idx])
         fail = tensile_failure_factor(p, epst)
 
     edot = np.zeros(len(idx), dtype=float)
+    epsd_key = "epsd48" if (extra is not None and "epsd48" in extra) else ("epsd" if (extra is not None and "epsd" in extra) else None)
+    if epsd_key is not None:
+        epsd_tot = np.asarray(extra[epsd_key], dtype=float)
+        if epsd_tot.ndim == 0:
+            edot = np.full(len(idx), float(epsd_tot))
+        elif len(epsd_tot) == 1 and nel > 1:
+            edot = np.full(len(idx), float(epsd_tot[0]))
+        else:
+            edot = epsd_tot[idx]
+
     _, _, h_iso, _ = eval_yield_and_hardening(p, epsp_arr[idx], edot, fail)
     Hbar = np.maximum(h_iso, 0.0)
 
@@ -963,6 +1267,12 @@ def tangent_law48_solid(
         - a[:, None, None] * C_minus_vol[None, :, :]
         + b[:, None, None] * NN
     )
+
+    if np.any(deleted_mask):
+        D[deleted_mask] = 0.0
+
+    if symmetric:
+        D = 0.5 * (D + np.swapaxes(D, -1, -2))
 
     if single:
         return D[0]
@@ -985,45 +1295,158 @@ def tangent_law48_shell(
     epsp_incr: np.ndarray | float | None = None,
     dt: float = 0.0,
     extra: dict[str, Any] | None = None,
+    *args: Any,
+    deps: np.ndarray | None = None,
+    eps: np.ndarray | None = None,
+    symmetric: bool = False,
+    h: float = 1e-7,
     **kwargs: Any,
 ) -> np.ndarray:
     """The consistent algorithmic plane-stress tangent for shells,
     (NEL, 3, 3) or (3, 3), Voigt [xx, yy, xy] with engineering shear.
 
-    Derivation:
-        D = s C + [H_iso/(3G+H_iso) - s] / q_tr^2 * sig_tr (x) (C P sig_tr)
+    Supports both:
+    1. Direct numerical perturbation (when ``deps`` is supplied or rate/damage is active):
+       D_ij = (sigma(deps + h*e_j) - sigma(deps - h*e_j)) / (2*h)
+    2. Analytical plane-stress radial return tangent:
+       D = s C + [H_iso/(3G+H_iso) - s] / q_tr^2 * sig_tr (x) (C P sig_tr)
     """
     p = _get_params(mat)
     C = shell_membrane_tangent(p)
 
-    if sig is None:
+    # Disambiguate arguments
+    if "deps" in kwargs and deps is None:
+        deps = kwargs["deps"]
+    if "eps" in kwargs and eps is None:
+        eps = kwargs["eps"]
+    if deps is None and eps is not None:
+        deps = eps
+    if "epsp_incr" in kwargs and epsp_incr is None:
+        epsp_incr = kwargs["epsp_incr"]
+    if "extra" in kwargs and extra is None:
+        extra = kwargs["extra"]
+    if "dt" in kwargs:
+        dt = float(kwargs["dt"])
+    if "symmetric" in kwargs:
+        symmetric = bool(kwargs["symmetric"])
+    if "h" in kwargs:
+        h = float(kwargs["h"])
+
+    # Disambiguate positional args
+    if len(args) > 0:
+        if epsp_incr is None and len(args) >= 1:
+            epsp_incr = args[0]
+        if extra is None and len(args) >= 2 and isinstance(args[1], dict):
+            extra = args[1]
+
+    # If sig was passed as deps or deps passed in epsp position
+    if deps is None and epsp is not None and isinstance(epsp, np.ndarray):
+        if (epsp.ndim == 2 and epsp.shape[1] in (3, 5)) or (epsp.ndim == 1 and epsp.shape[0] in (3, 5)):
+            deps = epsp
+            epsp = None
+    if deps is None and epsp_incr is not None and isinstance(epsp_incr, np.ndarray):
+        if (epsp_incr.ndim == 2 and epsp_incr.shape[1] in (3, 5)) or (epsp_incr.ndim == 1 and epsp_incr.shape[0] in (3, 5)):
+            deps = epsp_incr
+            epsp_incr = None
+
+    if sig is None and deps is None:
         return C
 
-    sig_arr = np.asarray(sig, dtype=float)
-    single = sig_arr.ndim == 1
-    if single:
-        sig_arr = sig_arr.reshape(1, -1)
+    # Determine element count and shapes
+    if deps is not None:
+        deps_arr = np.asarray(deps, dtype=float)
+        single = (deps_arr.ndim == 1)
+        if single:
+            deps_arr = deps_arr.reshape(1, -1)
+        nel = deps_arr.shape[0]
+        sig_arr = np.asarray(sig, dtype=float) if sig is not None else np.zeros((nel, deps_arr.shape[1]), dtype=float)
+        if sig_arr.ndim == 1:
+            sig_arr = sig_arr.reshape(1, -1)
+    else:
+        sig_arr = np.asarray(sig, dtype=float)
+        single = (sig_arr.ndim == 1)
+        if single:
+            sig_arr = sig_arr.reshape(1, -1)
+        nel = sig_arr.shape[0]
+        deps_arr = None
 
-    nel = sig_arr.shape[0]
-    D = np.broadcast_to(C, (nel, 3, 3)).copy()
+    if nel == 0:
+        return np.empty((0, 3, 3), dtype=float) if not single else np.empty((3, 3), dtype=float)
 
-    if epsp_incr is None:
-        return D[0] if single else D
-
-    dep_arr = np.asarray(epsp_incr, dtype=float)
-    if dep_arr.ndim == 0:
-        dep_arr = np.full(nel, float(dep_arr))
-
-    plastic = dep_arr > 0.0
-    if not np.any(plastic):
-        return D[0] if single else D
-
+    # Extract plastic strain
     if epsp is None:
         epsp_arr = np.zeros(nel, dtype=float)
     else:
-        epsp_arr = np.asarray(epsp, dtype=float)
-        if epsp_arr.ndim == 0:
-            epsp_arr = np.full(nel, float(epsp_arr))
+        epsp_arr = np.asarray(epsp, dtype=float).flatten()
+        if len(epsp_arr) == 1 and nel > 1:
+            epsp_arr = np.full(nel, epsp_arr[0], dtype=float)
+
+    # Extract element deletion mask
+    off_raw = None
+    if extra is not None:
+        off_raw = extra.get("off", extra.get("off48", extra.get("layfail", None)))
+    if "off" in kwargs and off_raw is None:
+        off_raw = kwargs["off"]
+
+    deleted_mask = (epsp_arr > p.eps_max)
+    if off_raw is not None:
+        off_arr = np.asarray(off_raw, dtype=float).flatten()
+        if len(off_arr) == 1 and nel > 1:
+            off_arr = np.full(nel, off_arr[0], dtype=float)
+        deleted_mask = deleted_mask | (off_arr <= 0.0)
+
+    eps_key = "eps48" if (extra is not None and "eps48" in extra) else ("eps" if (extra is not None and "eps" in extra) else None)
+    if eps_key is not None and p.eps_t1 < _INF:
+        eps_tot = np.asarray(extra[eps_key], dtype=float)
+        if eps_tot.ndim == 1:
+            eps_tot = eps_tot.reshape(1, -1)
+        if eps_tot.shape[0] == nel:
+            epst_chk = _principal_strain_2d(eps_tot[:, :3])
+            deleted_mask = deleted_mask | (epst_chk >= p.eps_t2)
+
+    # Numerical perturbation path when deps is provided
+    if deps_arr is not None:
+        D = np.zeros((nel, 3, 3), dtype=float)
+        active = ~deleted_mask
+        if np.any(active):
+            for j in range(3):
+                ej = np.zeros_like(deps_arr)
+                ej[:, j] = h
+                ex_p = _copy_extra(extra)
+                ex_m = _copy_extra(extra)
+                sp, _ = shell_update_law48(p, sig_arr, deps_arr + ej, epsp=epsp_arr, dt=dt, extra=ex_p)
+                sm, _ = shell_update_law48(p, sig_arr, deps_arr - ej, epsp=epsp_arr, dt=dt, extra=ex_m)
+                if sp.ndim == 1:
+                    sp = sp.reshape(1, -1)
+                    sm = sm.reshape(1, -1)
+                D[:, :, j] = (sp[:, :3] - sm[:, :3]) / (2.0 * h)
+        if np.any(deleted_mask):
+            D[deleted_mask] = 0.0
+        if symmetric:
+            D = 0.5 * (D + np.swapaxes(D, -1, -2))
+        return D[0] if single else D
+
+    # Analytical plane-stress radial projection path
+    D = np.broadcast_to(C, (nel, 3, 3)).copy()
+
+    if epsp_incr is None:
+        if np.any(deleted_mask):
+            D[deleted_mask] = 0.0
+        if symmetric:
+            D = 0.5 * (D + np.swapaxes(D, -1, -2))
+        return D[0] if single else D
+
+    dep_arr = np.asarray(epsp_incr, dtype=float).flatten()
+    if len(dep_arr) == 1 and nel > 1:
+        dep_arr = np.full(nel, dep_arr[0], dtype=float)
+
+    plastic = (dep_arr > 0.0) & (~deleted_mask)
+    if not np.any(plastic):
+        if np.any(deleted_mask):
+            D[deleted_mask] = 0.0
+        if symmetric:
+            D = 0.5 * (D + np.swapaxes(D, -1, -2))
+        return D[0] if single else D
 
     idx = np.where(plastic)[0]
     dl = dep_arr[idx]
@@ -1036,12 +1459,24 @@ def tangent_law48_shell(
     sig_tr = s_c / s_factor[:, None]
 
     fail = np.ones(len(idx), dtype=float)
-    eps_key = "eps48" if (extra is not None and "eps48" in extra) else ("eps" if (extra is not None and "eps" in extra) else None)
     if eps_key is not None and p.eps_t1 < _INF:
-        epst = _principal_strain_2d(extra[eps_key][idx, :3])
+        eps_tot = np.asarray(extra[eps_key], dtype=float)
+        if eps_tot.ndim == 1:
+            eps_tot = eps_tot.reshape(1, -1)
+        epst = _principal_strain_2d(eps_tot[idx, :3])
         fail = tensile_failure_factor(p, epst)
 
     edot = np.zeros(len(idx), dtype=float)
+    epsd_key = "epsd48" if (extra is not None and "epsd48" in extra) else ("epsd" if (extra is not None and "epsd" in extra) else None)
+    if epsd_key is not None:
+        epsd_tot = np.asarray(extra[epsd_key], dtype=float)
+        if epsd_tot.ndim == 0:
+            edot = np.full(len(idx), float(epsd_tot))
+        elif len(epsd_tot) == 1 and nel > 1:
+            edot = np.full(len(idx), float(epsd_tot[0]))
+        else:
+            edot = epsd_tot[idx]
+
     _, _, h_iso, _ = eval_yield_and_hardening(p, epsp_arr[idx], edot, fail)
     Hbar = np.maximum(h_iso, 0.0)
 
@@ -1050,6 +1485,12 @@ def tangent_law48_shell(
     v = np.einsum("ij,mj->mi", CP, sig_tr)
     rank1 = np.einsum("mi,mj->mij", sig_tr, v)
     D[idx] = s_factor[:, None, None] * C[None, :, :] + gamma[:, None, None] * rank1
+
+    if np.any(deleted_mask):
+        D[deleted_mask] = 0.0
+
+    if symmetric:
+        D = 0.5 * (D + np.swapaxes(D, -1, -2))
 
     if single:
         return D[0]
@@ -1069,6 +1510,29 @@ consistent_solid_tangent = tangent_law48_solid
 consistent_shell_tangent = tangent_law48_shell
 solid_tangent = tangent_law48_solid
 shell_tangent = tangent_law48_shell
+
+
+def extra_shapes(mat: Any = None, nip: int | None = None) -> dict[str, tuple[int, ...]]:
+    """Per-element persistent state shapes for LAW48.
+
+    Solids (nip=None):
+      eps48: (6,) total strain
+      sigb48: (6,) backstress
+      epsd48: () filtered strain rate
+      off48: () alive mask
+    Shells (nip given):
+      eps48: (nip, 3) total in-plane strain
+      sigb48: (nip, 3) in-plane backstress
+      epsd48: (nip,) layer filtered strain rate
+      off48: (nip,) layer alive mask
+    """
+    return {
+        "eps48": (nip, 3) if nip else (6,),
+        "sigb48": (nip, 3) if nip else (6,),
+        "epsd48": (nip,) if nip else (),
+        "off48": (nip,) if nip else (),
+    }
+
 
 
 def _register():

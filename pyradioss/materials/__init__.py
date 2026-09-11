@@ -959,12 +959,7 @@ def extra_shapes(mat, nip=None):
             shapes.update(uvar=(nip, *uvar_dim) if nip else uvar_dim,
                           off60=(nip,) if nip else ())
     if getattr(mat, "law", None) in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO") or getattr(mat, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO"):
-        shapes.update(
-            eps48=(nip, 3) if nip else (6,),
-            sigb48=(nip, 3) if nip else (6,),
-            epsd48=(nip,) if nip else (),
-            off48=(nip,) if nip else (),
-        )
+        shapes.update(law48_zhao.extra_shapes(mat, nip=nip))
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
         shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
     return shapes

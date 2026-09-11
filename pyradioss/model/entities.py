@@ -8819,6 +8819,71 @@ class MatLaw48:
         self.a = val
 
     @property
+    def ca(self) -> float:
+        return self.a
+
+    @ca.setter
+    def ca(self, val: float) -> None:
+        self.a = val
+
+    @property
+    def cb(self) -> float:
+        return self.b
+
+    @cb.setter
+    def cb(self, val: float) -> None:
+        self.b = val
+
+    @property
+    def cn(self) -> float:
+        return self.n
+
+    @cn.setter
+    def cn(self, val: float) -> None:
+        self.n = val
+
+    @property
+    def cc(self) -> float:
+        return self.c
+
+    @cc.setter
+    def cc(self, val: float) -> None:
+        self.c = val
+
+    @property
+    def cd(self) -> float:
+        return self.d
+
+    @cd.setter
+    def cd(self, val: float) -> None:
+        self.d = val
+
+    @property
+    def cm(self) -> float:
+        return self.m
+
+    @cm.setter
+    def cm(self, val: float) -> None:
+        self.m = val
+
+    @property
+    def ce(self) -> float:
+        return self.e1
+
+    @ce.setter
+    def ce(self, val: float) -> None:
+        self.e1 = val
+
+    @property
+    def ck(self) -> float:
+        return self.k
+
+    @ck.setter
+    def ck(self, val: float) -> None:
+        self.k = val
+
+
+    @property
     def hard(self) -> float:
         return self.n
 

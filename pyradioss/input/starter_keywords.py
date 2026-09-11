@@ -35635,7 +35635,7 @@ def read_mat_law48(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     def _card_tokens(card) -> list[str]:
         raw = card.raw.strip()
         if "," in raw:
-            return [t.strip() for t in raw.split(",") if t.strip()]
+            return [t.strip() for t in raw.split(",")]
         return card.tokens()
 
     is_fixed = getattr(block, "fixed", False)
