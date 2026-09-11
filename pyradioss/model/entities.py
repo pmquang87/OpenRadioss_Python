@@ -8377,11 +8377,35 @@ class MatLaw50:
     et: float = 0.0
     vcomp: float = 0.0
     title: str = ""
+    law: int = 50
+    law_name: str = "LAW50"
+    unit_id: Optional[int] = None
     params: dict = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.refer_rho == 0.0:
+            self.refer_rho = self.rho
+        if not self.sfac11:
+            self.sfac11 = [1.0, 1.0, 1.0, 1.0, 1.0]
+        if not self.sfac22:
+            self.sfac22 = [1.0, 1.0, 1.0, 1.0, 1.0]
+        if not self.sfac33:
+            self.sfac33 = [1.0, 1.0, 1.0, 1.0, 1.0]
+        if not self.sfac12:
+            self.sfac12 = [1.0, 1.0, 1.0, 1.0, 1.0]
+        if not self.sfac23:
+            self.sfac23 = [1.0, 1.0, 1.0, 1.0, 1.0]
+        if not self.sfac31:
+            self.sfac31 = [1.0, 1.0, 1.0, 1.0, 1.0]
+        if self.irate == 0:
+            self.irate = 2
+        if not isinstance(self.params, dict):
+            self.params = {}
 
     @property
     def rho0(self) -> float:
         return self.rho
+
 
     @property
     def rhor(self) -> float:
@@ -8465,12 +8489,21 @@ class MatLaw50:
         return self.sound_speed
 
     @property
-    def law(self) -> int:
-        return 50
+    def fcut(self) -> float:
+        return self.asrate
+
+    @fcut.setter
+    def fcut(self, val: float) -> None:
+        self.asrate = val
 
     @property
-    def law_name(self) -> str:
-        return "LAW50"
+    def icomp(self) -> int:
+        return 1 if (self.ecomp * self.sigy * self.vcomp > 0.0) else 0
+
+    @property
+    def icompact(self) -> int:
+        return self.icomp
+
 
     def __getitem__(self, key: str) -> Any:
         if hasattr(self, key):

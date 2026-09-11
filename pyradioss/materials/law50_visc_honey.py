@@ -914,6 +914,7 @@ def solid_update(
         epsp_rate = np.zeros_like(deps)
 
     uvar = None
+    uvar_is_1d = False
     if extra is not None:
         if "uvar50" in extra:
             uvar = extra["uvar50"]
@@ -924,6 +925,9 @@ def solid_update(
         uvar = np.zeros((n, 6), dtype=sig.dtype)
         if extra is not None:
             extra["uvar50"] = uvar
+    elif uvar.ndim == 1:
+        uvar_is_1d = True
+        uvar = uvar.reshape(1, -1)
 
     if irate == 2:
         for k_dir in range(6):
@@ -939,6 +943,12 @@ def solid_update(
         uvar[:, 0] = asrate * eq_rate + (1.0 - asrate) * uvar[:, 0]
         dep1 = dep2 = dep3 = dep4 = dep5 = dep6 = uvar[:, 0]
         epsd = uvar[:, 0].copy()
+
+    if uvar_is_1d and extra is not None:
+        if "uvar50" in extra and extra["uvar50"].ndim == 1:
+            extra["uvar50"][:] = uvar[0]
+        elif "uvar" in extra and extra["uvar"].ndim == 1:
+            extra["uvar"][:] = uvar[0]
 
     if extra is not None:
         extra["epsd50"] = epsd

@@ -1487,8 +1487,9 @@ class StarterDeck:
 
     def mat_law50(
         self,
-        mat_id: int,
-        rho: float = 0.0,
+        mat_id: int | Any = 0,
+        *args,
+        rho: float | str = 0.0,
         ea: float = 0.0,
         eb: float = 0.0,
         ec: float = 0.0,
@@ -1532,38 +1533,222 @@ class StarterDeck:
         title: str = "",
         unit_id: int | None = None,
         law_name: str = "LAW50",
+        fixed_format: bool = True,
         **kwargs,
     ) -> StarterDeck:
         """``/MAT/LAW50`` (/MAT/VISC_HONEY, /MAT/HYP_FOAM) — cfg MAT/mat_law50.cfg
-        Rate-dependent viscoelastic honeycomb material model.
+        Rate-dependent viscoelastic honeycomb material model (M183, M559).
         """
-        if "mid" in kwargs and mat_id == 0:
-            mat_id = kwargs["mid"]
-        if "id" in kwargs and mat_id == 0:
-            mat_id = kwargs["id"]
-        if "rho0" in kwargs and rho == 0.0:
-            rho = kwargs["rho0"]
-        if rho_ref is None and "refer_rho" in kwargs:
-            rho_ref = kwargs["refer_rho"]
-        if rho_ref is None and "rhor" in kwargs:
-            rho_ref = kwargs["rhor"]
-        if "e11" in kwargs and ea == 0.0: ea = kwargs["e11"]
-        if "e22" in kwargs and eb == 0.0: eb = kwargs["e22"]
-        if "e33" in kwargs and ec == 0.0: ec = kwargs["e33"]
-        if "g12" in kwargs and gab == 0.0: gab = kwargs["g12"]
-        if "gbc" in kwargs and gbc == 0.0: gbc = kwargs["g23"]
-        if "gca" in kwargs and gca == 0.0: gca = kwargs["g31"]
-        if "fcut" in kwargs and asrate == 0.0: asrate = kwargs["fcut"]
-        if "irate" in kwargs: irate = kwargs["irate"]
-        if "Irate" in kwargs: irate = kwargs["Irate"]
-        if "IRATE" in kwargs: irate = kwargs["IRATE"]
-        if "nu" in kwargs and pr == 0.0: pr = kwargs["nu"]
-        if "ecomp" in kwargs and ecomp == 0.0: ecomp = kwargs["ecomp"]
-        if "sigy" in kwargs and sigy == 0.0: sigy = kwargs["sigy"]
-        if "et" in kwargs and et == 0.0: et = kwargs["et"]
-        if "hcomp" in kwargs and et == 0.0: et = kwargs["hcomp"]
-        if "vcomp" in kwargs and vcomp == 0.0: vcomp = kwargs["vcomp"]
-        if "law" in kwargs: law_name = kwargs["law"]
+        # Handle positional args if provided: mat_law50(50, "title", rho, ea, ...) or mat_law50(50, rho, ea, ...)
+        pos_names = [
+            "rho", "ea", "eb", "ec", "gab", "gbc", "gca", "asrate", "irate", "gflag",
+            "eps_max11", "eps_max22", "eps_max33",
+            "yfun11", "sfac11", "eps11",
+            "yfun22", "sfac22", "eps22",
+            "yfun33", "sfac33", "eps33",
+            "vflag",
+            "eps_max12", "eps_max23", "eps_max31",
+            "yfun12", "sfac12", "eps12",
+            "yfun23", "sfac23", "eps23",
+            "yfun31", "sfac31", "eps31",
+            "rho_ref", "ecomp", "pr", "sigy", "et", "vcomp",
+        ]
+        curr_args = list(args)
+        if curr_args and isinstance(curr_args[0], str):
+            title = curr_args.pop(0)
+        for i, val in enumerate(curr_args):
+            if i < len(pos_names):
+                name = pos_names[i]
+                if name == "rho": rho = val
+                elif name == "ea": ea = val
+                elif name == "eb": eb = val
+                elif name == "ec": ec = val
+                elif name == "gab": gab = val
+                elif name == "gbc": gbc = val
+                elif name == "gca": gca = val
+                elif name == "asrate": asrate = val
+                elif name == "irate": irate = val
+                elif name == "gflag": gflag = val
+                elif name == "eps_max11": eps_max11 = val
+                elif name == "eps_max22": eps_max22 = val
+                elif name == "eps_max33": eps_max33 = val
+                elif name == "yfun11": yfun11 = val
+                elif name == "sfac11": sfac11 = val
+                elif name == "eps11": eps11 = val
+                elif name == "yfun22": yfun22 = val
+                elif name == "sfac22": sfac22 = val
+                elif name == "eps22": eps22 = val
+                elif name == "yfun33": yfun33 = val
+                elif name == "sfac33": sfac33 = val
+                elif name == "eps33": eps33 = val
+                elif name == "vflag": vflag = val
+                elif name == "eps_max12": eps_max12 = val
+                elif name == "eps_max23": eps_max23 = val
+                elif name == "eps_max31": eps_max31 = val
+                elif name == "yfun12": yfun12 = val
+                elif name == "sfac12": sfac12 = val
+                elif name == "eps12": eps12 = val
+                elif name == "yfun23": yfun23 = val
+                elif name == "sfac23": sfac23 = val
+                elif name == "eps23": eps23 = val
+                elif name == "yfun31": yfun31 = val
+                elif name == "sfac31": sfac31 = val
+                elif name == "eps31": eps31 = val
+                elif name == "rho_ref": rho_ref = val
+                elif name == "ecomp": ecomp = val
+                elif name == "pr": pr = val
+                elif name == "sigy": sigy = val
+                elif name == "et": et = val
+                elif name == "vcomp": vcomp = val
+
+        if isinstance(rho, str):
+            title = rho
+            rho = 0.0
+
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+
+        mat_obj = None
+        if hasattr(mat_id, "ea") or hasattr(mat_id, "e11") or hasattr(mat_id, "yfun11") or hasattr(mat_id, "gcomp"):
+            mat_obj = mat_id
+        elif hasattr(mat_id, "params") and ("ea" in getattr(mat_id, "params", {}) or "e11" in getattr(mat_id, "params", {})):
+            mat_obj = mat_id
+        elif "mat" in kw_low:
+            mat_obj = kw_low["mat"]
+        elif "mat50" in kw_low:
+            mat_obj = kw_low["mat50"]
+        elif "mat_law50" in kw_low:
+            mat_obj = kw_low["mat_law50"]
+        elif "mat_visc_honey" in kw_low:
+            mat_obj = kw_low["mat_visc_honey"]
+        elif "mat_hyp_foam" in kw_low:
+            mat_obj = kw_low["mat_hyp_foam"]
+
+        if mat_obj is not None:
+            mat_id = getattr(mat_obj, "id", mat_id)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", rho))
+            refer_rho_cand = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", getattr(mat_obj, "rho_ref", None)))
+            if refer_rho_cand is not None:
+                rho_ref = refer_rho_cand
+            ea = getattr(mat_obj, "ea", getattr(mat_obj, "e11", ea))
+            eb = getattr(mat_obj, "eb", getattr(mat_obj, "e22", eb))
+            ec = getattr(mat_obj, "ec", getattr(mat_obj, "e33", ec))
+            gab = getattr(mat_obj, "gab", getattr(mat_obj, "g12", gab))
+            gbc = getattr(mat_obj, "gbc", getattr(mat_obj, "g23", gbc))
+            gca = getattr(mat_obj, "gca", getattr(mat_obj, "g31", gca))
+            asrate = getattr(mat_obj, "asrate", getattr(mat_obj, "fcut", asrate))
+            irate = getattr(mat_obj, "irate", irate)
+            gflag = getattr(mat_obj, "gflag", gflag)
+            eps_max11 = getattr(mat_obj, "eps_max11", eps_max11)
+            eps_max22 = getattr(mat_obj, "eps_max22", eps_max22)
+            eps_max33 = getattr(mat_obj, "eps_max33", eps_max33)
+            yfun11 = getattr(mat_obj, "yfun11", yfun11)
+            sfac11 = getattr(mat_obj, "sfac11", sfac11)
+            eps11 = getattr(mat_obj, "eps11", eps11)
+            yfun22 = getattr(mat_obj, "yfun22", yfun22)
+            sfac22 = getattr(mat_obj, "sfac22", sfac22)
+            eps22 = getattr(mat_obj, "eps22", eps22)
+            yfun33 = getattr(mat_obj, "yfun33", yfun33)
+            sfac33 = getattr(mat_obj, "sfac33", sfac33)
+            eps33 = getattr(mat_obj, "eps33", eps33)
+            vflag = getattr(mat_obj, "vflag", vflag)
+            eps_max12 = getattr(mat_obj, "eps_max12", eps_max12)
+            eps_max23 = getattr(mat_obj, "eps_max23", eps_max23)
+            eps_max31 = getattr(mat_obj, "eps_max31", eps_max31)
+            yfun12 = getattr(mat_obj, "yfun12", yfun12)
+            sfac12 = getattr(mat_obj, "sfac12", sfac12)
+            eps12 = getattr(mat_obj, "eps12", eps12)
+            yfun23 = getattr(mat_obj, "yfun23", yfun23)
+            sfac23 = getattr(mat_obj, "sfac23", sfac23)
+            eps23 = getattr(mat_obj, "eps23", eps23)
+            yfun31 = getattr(mat_obj, "yfun31", yfun31)
+            sfac31 = getattr(mat_obj, "sfac31", sfac31)
+            eps31 = getattr(mat_obj, "eps31", eps31)
+            ecomp = getattr(mat_obj, "ecomp", ecomp)
+            pr = getattr(mat_obj, "pr", getattr(mat_obj, "nu", pr))
+            sigy = getattr(mat_obj, "sigy", sigy)
+            et = getattr(mat_obj, "et", getattr(mat_obj, "hcomp", et))
+            vcomp = getattr(mat_obj, "vcomp", vcomp)
+            p_dict = getattr(mat_obj, "params", {}) or {}
+            if isinstance(p_dict, dict):
+                rho = p_dict.get("rho0", p_dict.get("rho", rho))
+                if rho_ref is None:
+                    rho_ref = p_dict.get("refer_rho", p_dict.get("rhor", p_dict.get("rho_ref", None)))
+                ea = p_dict.get("ea", p_dict.get("e11", ea))
+                eb = p_dict.get("eb", p_dict.get("e22", eb))
+                ec = p_dict.get("ec", p_dict.get("e33", ec))
+                gab = p_dict.get("gab", p_dict.get("g12", gab))
+                gbc = p_dict.get("gbc", p_dict.get("g23", gbc))
+                gca = p_dict.get("gca", p_dict.get("g31", gca))
+                asrate = p_dict.get("asrate", p_dict.get("fcut", asrate))
+                irate = p_dict.get("irate", irate)
+                gflag = p_dict.get("gflag", gflag)
+                eps_max11 = p_dict.get("eps_max11", eps_max11)
+                eps_max22 = p_dict.get("eps_max22", eps_max22)
+                eps_max33 = p_dict.get("eps_max33", eps_max33)
+                if yfun11 is None or len(yfun11) == 0: yfun11 = p_dict.get("yfun11", yfun11)
+                if sfac11 is None or len(sfac11) == 0: sfac11 = p_dict.get("sfac11", sfac11)
+                if eps11 is None or len(eps11) == 0: eps11 = p_dict.get("eps11", eps11)
+                if yfun22 is None or len(yfun22) == 0: yfun22 = p_dict.get("yfun22", yfun22)
+                if sfac22 is None or len(sfac22) == 0: sfac22 = p_dict.get("sfac22", sfac22)
+                if eps22 is None or len(eps22) == 0: eps22 = p_dict.get("eps22", eps22)
+                if yfun33 is None or len(yfun33) == 0: yfun33 = p_dict.get("yfun33", yfun33)
+                if sfac33 is None or len(sfac33) == 0: sfac33 = p_dict.get("sfac33", sfac33)
+                if eps33 is None or len(eps33) == 0: eps33 = p_dict.get("eps33", eps33)
+                vflag = p_dict.get("vflag", vflag)
+                eps_max12 = p_dict.get("eps_max12", eps_max12)
+                eps_max23 = p_dict.get("eps_max23", eps_max23)
+                eps_max31 = p_dict.get("eps_max31", eps_max31)
+                if yfun12 is None or len(yfun12) == 0: yfun12 = p_dict.get("yfun12", yfun12)
+                if sfac12 is None or len(sfac12) == 0: sfac12 = p_dict.get("sfac12", sfac12)
+                if eps12 is None or len(eps12) == 0: eps12 = p_dict.get("eps12", eps12)
+                if yfun23 is None or len(yfun23) == 0: yfun23 = p_dict.get("yfun23", yfun23)
+                if sfac23 is None or len(sfac23) == 0: sfac23 = p_dict.get("sfac23", sfac23)
+                if eps23 is None or len(eps23) == 0: eps23 = p_dict.get("eps23", eps23)
+                if yfun31 is None or len(yfun31) == 0: yfun31 = p_dict.get("yfun31", yfun31)
+                if sfac31 is None or len(sfac31) == 0: sfac31 = p_dict.get("sfac31", sfac31)
+                if eps31 is None or len(eps31) == 0: eps31 = p_dict.get("eps31", eps31)
+                ecomp = p_dict.get("ecomp", ecomp)
+                pr = p_dict.get("pr", p_dict.get("nu", pr))
+                sigy = p_dict.get("sigy", sigy)
+                et = p_dict.get("et", p_dict.get("hcomp", et))
+                vcomp = p_dict.get("vcomp", vcomp)
+
+        if "mid" in kw_low and mat_id == 0: mat_id = kw_low["mid"]
+        if "id" in kw_low and mat_id == 0: mat_id = kw_low["id"]
+        if "rho0" in kw_low and rho == 0.0: rho = kw_low["rho0"]
+        if "rho" in kw_low and rho == 0.0: rho = kw_low["rho"]
+        if "mat_rho" in kw_low and rho == 0.0: rho = kw_low["mat_rho"]
+        if rho_ref is None and "refer_rho" in kw_low: rho_ref = kw_low["refer_rho"]
+        if rho_ref is None and "rhor" in kw_low: rho_ref = kw_low["rhor"]
+        if rho_ref is None and "rho_ref" in kw_low: rho_ref = kw_low["rho_ref"]
+        if "e11" in kw_low and ea == 0.0: ea = kw_low["e11"]
+        if "e22" in kw_low and eb == 0.0: eb = kw_low["e22"]
+        if "e33" in kw_low and ec == 0.0: ec = kw_low["e33"]
+        if "g12" in kw_low and gab == 0.0: gab = kw_low["g12"]
+        if "g23" in kw_low and gbc == 0.0: gbc = kw_low["g23"]
+        if "g31" in kw_low and gca == 0.0: gca = kw_low["g31"]
+        if "mat_ea" in kw_low and ea == 0.0: ea = kw_low["mat_ea"]
+        if "mat_eb" in kw_low and eb == 0.0: eb = kw_low["mat_eb"]
+        if "mat_ec" in kw_low and ec == 0.0: ec = kw_low["mat_ec"]
+        if "mat_gab" in kw_low and gab == 0.0: gab = kw_low["mat_gab"]
+        if "mat_gbc" in kw_low and gbc == 0.0: gbc = kw_low["mat_gbc"]
+        if "mat_gca" in kw_low and gca == 0.0: gca = kw_low["mat_gca"]
+        if "fcut" in kw_low and asrate == 0.0: asrate = kw_low["fcut"]
+        if "irate" in kw_low: irate = kw_low["irate"]
+        if "Irate" in kw_low: irate = kw_low["Irate"]
+        if "IRATE" in kw_low: irate = kw_low["IRATE"]
+        if "nu" in kw_low and pr == 0.0: pr = kw_low["nu"]
+        if "ecomp" in kw_low and ecomp == 0.0: ecomp = kw_low["ecomp"]
+        if "sigy" in kw_low and sigy == 0.0: sigy = kw_low["sigy"]
+        if "et" in kw_low and et == 0.0: et = kw_low["et"]
+        if "hcomp" in kw_low and et == 0.0: et = kw_low["hcomp"]
+        if "vcomp" in kw_low and vcomp == 0.0: vcomp = kw_low["vcomp"]
+        if "fixed_format" in kw_low: fixed_format = bool(kw_low["fixed_format"])
+        if "fixed" in kw_low: fixed_format = bool(kw_low["fixed"])
+        if "free" in kw_low and bool(kw_low["free"]): fixed_format = False
+        if "law" in kw_low: law_name = kw_low["law"]
+        if "title" in kw_low and not title: title = str(kw_low["title"])
 
         def _pad_5(vals, default):
             v = list(vals) if vals is not None else []
@@ -1595,43 +1780,79 @@ class StarterDeck:
         sfac31_l = _pad_5(sfac31, 1.0)
         eps31_l = _pad_5(eps31, 0.0)
 
+        has_compaction = (ecomp > 0.0 or vcomp > 0.0 or sigy > 0.0 or et > 0.0 or pr > 0.0)
+        write_card25 = bool(has_compaction or kw_low.get("card25") or kw_low.get("all_cards") or kw_low.get("write_card25") or kw_low.get("compaction"))
+
         if unit_id is not None:
             self._header("MAT", law_name, mat_id, unit_id)
         else:
             self._header("MAT", law_name, mat_id)
         self._title(title)
-        if rho_ref is not None and rho_ref != 0.0:
-            self.lines.append(fmt_float(rho) + fmt_float(rho_ref))
+
+        if fixed_format:
+            if rho_ref is not None and rho_ref != 0.0:
+                self.lines.append(fmt_float(rho) + fmt_float(rho_ref))
+            else:
+                self.lines.append(fmt_float(rho))
+            self.lines.append(fmt_float(ea) + fmt_float(eb) + fmt_float(ec))
+            self.lines.append(fmt_float(gab) + fmt_float(gbc) + fmt_float(gca))
+            if irate is not None:
+                self.lines.append(fmt_float(asrate) + fmt_int(irate))
+            else:
+                self.lines.append(fmt_float(asrate))
+            self.lines.append(fmt_int(gflag) + fmt_float(eps_max11) + fmt_float(eps_max22) + fmt_float(eps_max33))
+            self.lines.append("".join(fmt_int(x) for x in yfun11_l))
+            self.lines.append("".join(fmt_float(x) for x in sfac11_l))
+            self.lines.append("".join(fmt_float(x) for x in eps11_l))
+            self.lines.append("".join(fmt_int(x) for x in yfun22_l))
+            self.lines.append("".join(fmt_float(x) for x in sfac22_l))
+            self.lines.append("".join(fmt_float(x) for x in eps22_l))
+            self.lines.append("".join(fmt_int(x) for x in yfun33_l))
+            self.lines.append("".join(fmt_float(x) for x in sfac33_l))
+            self.lines.append("".join(fmt_float(x) for x in eps33_l))
+            self.lines.append(fmt_int(vflag) + fmt_float(eps_max12) + fmt_float(eps_max23) + fmt_float(eps_max31))
+            self.lines.append("".join(fmt_int(x) for x in yfun12_l))
+            self.lines.append("".join(fmt_float(x) for x in sfac12_l))
+            self.lines.append("".join(fmt_float(x) for x in eps12_l))
+            self.lines.append("".join(fmt_int(x) for x in yfun23_l))
+            self.lines.append("".join(fmt_float(x) for x in sfac23_l))
+            self.lines.append("".join(fmt_float(x) for x in eps23_l))
+            self.lines.append("".join(fmt_int(x) for x in yfun31_l))
+            self.lines.append("".join(fmt_float(x) for x in sfac31_l))
+            self.lines.append("".join(fmt_float(x) for x in eps31_l))
+            if write_card25:
+                self.lines.append(fmt_float(ecomp) + fmt_float(pr) + fmt_float(sigy) + fmt_float(et) + fmt_float(vcomp))
         else:
-            self.lines.append(fmt_float(rho))
-        self.lines.append(fmt_float(ea) + fmt_float(eb) + fmt_float(ec))
-        self.lines.append(fmt_float(gab) + fmt_float(gbc) + fmt_float(gca))
-        if irate is not None:
-            self.lines.append(fmt_float(asrate) + fmt_int(irate))
-        else:
-            self.lines.append(fmt_float(asrate))
-        self.lines.append(fmt_int(gflag) + fmt_float(eps_max11) + fmt_float(eps_max22) + fmt_float(eps_max33))
-        self.lines.append("".join(fmt_int(x) for x in yfun11_l))
-        self.lines.append("".join(fmt_float(x) for x in sfac11_l))
-        self.lines.append("".join(fmt_float(x) for x in eps11_l))
-        self.lines.append("".join(fmt_int(x) for x in yfun22_l))
-        self.lines.append("".join(fmt_float(x) for x in sfac22_l))
-        self.lines.append("".join(fmt_float(x) for x in eps22_l))
-        self.lines.append("".join(fmt_int(x) for x in yfun33_l))
-        self.lines.append("".join(fmt_float(x) for x in sfac33_l))
-        self.lines.append("".join(fmt_float(x) for x in eps33_l))
-        self.lines.append(fmt_int(vflag) + fmt_float(eps_max12) + fmt_float(eps_max23) + fmt_float(eps_max31))
-        self.lines.append("".join(fmt_int(x) for x in yfun12_l))
-        self.lines.append("".join(fmt_float(x) for x in sfac12_l))
-        self.lines.append("".join(fmt_float(x) for x in eps12_l))
-        self.lines.append("".join(fmt_int(x) for x in yfun23_l))
-        self.lines.append("".join(fmt_float(x) for x in sfac23_l))
-        self.lines.append("".join(fmt_float(x) for x in eps23_l))
-        self.lines.append("".join(fmt_int(x) for x in yfun31_l))
-        self.lines.append("".join(fmt_float(x) for x in sfac31_l))
-        self.lines.append("".join(fmt_float(x) for x in eps31_l))
-        if ecomp > 0.0 or vcomp > 0.0 or sigy > 0.0 or et > 0.0 or pr > 0.0:
-            self.lines.append(fmt_float(ecomp) + fmt_float(pr) + fmt_float(sigy) + fmt_float(et) + fmt_float(vcomp))
+            delim = kw_low.get("delimiter", ", " if (kw_low.get("comma") or kw_low.get("comma_delimited")) else " ")
+            if rho_ref is not None and rho_ref != 0.0:
+                self.lines.append(f"{rho}{delim}{rho_ref}")
+            else:
+                self.lines.append(f"{rho}")
+            self.lines.append(f"{ea}{delim}{eb}{delim}{ec}")
+            self.lines.append(f"{gab}{delim}{gbc}{delim}{gca}")
+            self.lines.append(f"{asrate}{delim}{irate}")
+            self.lines.append(f"{gflag}{delim}{eps_max11}{delim}{eps_max22}{delim}{eps_max33}")
+            self.lines.append(delim.join(str(x) for x in yfun11_l))
+            self.lines.append(delim.join(str(x) for x in sfac11_l))
+            self.lines.append(delim.join(str(x) for x in eps11_l))
+            self.lines.append(delim.join(str(x) for x in yfun22_l))
+            self.lines.append(delim.join(str(x) for x in sfac22_l))
+            self.lines.append(delim.join(str(x) for x in eps22_l))
+            self.lines.append(delim.join(str(x) for x in yfun33_l))
+            self.lines.append(delim.join(str(x) for x in sfac33_l))
+            self.lines.append(delim.join(str(x) for x in eps33_l))
+            self.lines.append(f"{vflag}{delim}{eps_max12}{delim}{eps_max23}{delim}{eps_max31}")
+            self.lines.append(delim.join(str(x) for x in yfun12_l))
+            self.lines.append(delim.join(str(x) for x in sfac12_l))
+            self.lines.append(delim.join(str(x) for x in eps12_l))
+            self.lines.append(delim.join(str(x) for x in yfun23_l))
+            self.lines.append(delim.join(str(x) for x in sfac23_l))
+            self.lines.append(delim.join(str(x) for x in eps23_l))
+            self.lines.append(delim.join(str(x) for x in yfun31_l))
+            self.lines.append(delim.join(str(x) for x in sfac31_l))
+            self.lines.append(delim.join(str(x) for x in eps31_l))
+            if write_card25:
+                self.lines.append(f"{ecomp}{delim}{pr}{delim}{sigy}{delim}{et}{delim}{vcomp}")
         return self
 
     def mat_visc_honey(self, *args, **kwargs) -> StarterDeck:
@@ -1641,6 +1862,7 @@ class StarterDeck:
     def mat_hyp_foam(self, *args, **kwargs) -> StarterDeck:
         kwargs.setdefault("law_name", "HYP_FOAM")
         return self.mat_law50(*args, **kwargs)
+
 
     def mat_law34(
         self,

@@ -33593,8 +33593,68 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/MAT/LAW50/id`` or ``/MAT/VISC_HONEY/id`` or ``/MAT/HYP_FOAM/id`` (M183, M559): Rate-dependent honeycomb."""
     from ..model.entities import MatLaw50, Material
     mat_id = block.user_id or 0
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank]
+
+    def _card_tokens(c: Any) -> list[str]:
+        raw = getattr(c, "raw", str(c)).strip()
+        for ch in ("#", "$"):
+            if ch in raw:
+                raw = raw.split(ch)[0].strip()
+        if not raw:
+            return []
+        if "," in raw:
+            parts = [p.strip() for p in raw.split(",")]
+            while parts and parts[-1] == "":
+                parts.pop()
+            return parts
+        return raw.split()
+
+    def _fval_safe(v: Any, default: float = 0.0) -> float:
+        if v is None:
+            return default
+        s = str(v).strip().replace("D", "E").replace("d", "e")
+        if not s:
+            return default
+        try:
+            return float(s)
+        except (ValueError, TypeError):
+            return default
+
+    def _ival_safe(v: Any, default: int = 0) -> int:
+        if v is None:
+            return default
+        s = str(v).strip()
+        if not s:
+            return default
+        try:
+            return int(float(s))
+        except (ValueError, TypeError):
+            return default
+
+    has_comma = any("," in getattr(c, "raw", str(c)) for c in block.cards)
+    is_fixed = block.fixed and not has_comma
+    if is_fixed:
+        for c in block.cards:
+            c_raw = getattr(c, "raw", str(c))
+            raw_s = c_raw.strip()
+            if not raw_s or raw_s.startswith(("#", "$")):
+                continue
+            if "\t" in c_raw:
+                is_fixed = False
+                break
+            toks = raw_s.split()
+            if len(toks) > 1 and len(c_raw[:20].split()) > 1:
+                is_fixed = False
+                break
+            if len(toks) > 1 and len(c_raw.rstrip()) <= 20:
+                is_fixed = False
+                break
+
+    title, cards = _fixed_data(block) if is_fixed else _title_and_data(block)
+    if is_fixed:
+        valid_cards = [c for c in cards if not getattr(c, "raw", str(c)).strip().startswith(("#", "$"))]
+    else:
+        valid_cards = [c for c in cards if not getattr(c, "is_blank", False) and not getattr(c, "raw", str(c)).strip().startswith(("#", "$"))]
+
     if not valid_cards:
         log.error(f"/MAT/LAW50/{mat_id}: missing data cards", block.source)
         return
@@ -33605,252 +33665,272 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     asrate = 0.0
     irate = 2
     gflag = 0
-    eps_max11, eps_max22, eps_max33 = 0.0, 0.0, 0.0
-    yfun11, sfac11, eps11 = [], [], []
-    yfun22, sfac22, eps22 = [], [], []
-    yfun33, sfac33, eps33 = [], [], []
+    eps_max11, eps_max22, eps_max33 = 1.0e30, 1.0e30, 1.0e30
+    yfun11, sfac11, eps11 = [], [1.0, 1.0, 1.0, 1.0, 1.0], []
+    yfun22, sfac22, eps22 = [], [1.0, 1.0, 1.0, 1.0, 1.0], []
+    yfun33, sfac33, eps33 = [], [1.0, 1.0, 1.0, 1.0, 1.0], []
     vflag = 0
-    eps_max12, eps_max23, eps_max31 = 0.0, 0.0, 0.0
-    yfun12, sfac12, eps12 = [], [], []
-    yfun23, sfac23, eps23 = [], [], []
-    yfun31, sfac31, eps31 = [], [], []
+    eps_max12, eps_max23, eps_max31 = 1.0e30, 1.0e30, 1.0e30
+    yfun12, sfac12, eps12 = [], [1.0, 1.0, 1.0, 1.0, 1.0], []
+    yfun23, sfac23, eps23 = [], [1.0, 1.0, 1.0, 1.0, 1.0], []
+    yfun31, sfac31, eps31 = [], [1.0, 1.0, 1.0, 1.0, 1.0], []
     ecomp, pr, sigy, et, vcomp = 0.0, 0.0, 0.0, 0.0, 0.0
 
-    if block.fixed:
+    def _pad_sfac(sfac_list: list[float]) -> list[float]:
+        res = list(sfac_list)
+        while len(res) < 5:
+            res.append(1.0)
+        return res[:5]
+
+    if is_fixed:
         f1 = valid_cards[0].cut("MAT_LAW50_1")
-        rho = _fval(f1[0]) if len(f1) > 0 else 0.0
-        refer_rho = _fval(f1[1]) if len(f1) > 1 else 0.0
+        rho = _fval_safe(f1[0]) if len(f1) > 0 else 0.0
+        refer_rho = _fval_safe(f1[1], rho) if len(f1) > 1 and f1[1].strip() else rho
+        if refer_rho == 0.0:
+            refer_rho = rho
 
         if len(valid_cards) > 1:
             f2 = valid_cards[1].cut("MAT_LAW50_2")
-            ea = _fval(f2[0]) if len(f2) > 0 else 0.0
-            eb = _fval(f2[1]) if len(f2) > 1 else 0.0
-            ec = _fval(f2[2]) if len(f2) > 2 else 0.0
+            ea = _fval_safe(f2[0]) if len(f2) > 0 else 0.0
+            eb = _fval_safe(f2[1]) if len(f2) > 1 else 0.0
+            ec = _fval_safe(f2[2]) if len(f2) > 2 else 0.0
 
         if len(valid_cards) > 2:
             f3 = valid_cards[2].cut("MAT_LAW50_3")
-            gab = _fval(f3[0]) if len(f3) > 0 else 0.0
-            gbc = _fval(f3[1]) if len(f3) > 1 else 0.0
-            gca = _fval(f3[2]) if len(f3) > 2 else 0.0
+            gab = _fval_safe(f3[0]) if len(f3) > 0 else 0.0
+            gbc = _fval_safe(f3[1]) if len(f3) > 1 else 0.0
+            gca = _fval_safe(f3[2]) if len(f3) > 2 else 0.0
 
         if len(valid_cards) > 3:
             f4 = valid_cards[3].cut("MAT_LAW50_4")
-            asrate = _fval(f4[0]) if len(f4) > 0 else 0.0
-            irate = _ival(f4[1]) if len(f4) > 1 and f4[1].strip() else 2
+            asrate = _fval_safe(f4[0]) if len(f4) > 0 else 0.0
+            irate = _ival_safe(f4[1], default=2) if len(f4) > 1 and f4[1].strip() else 2
             if irate == 0:
                 irate = 2
 
         if len(valid_cards) > 4:
             f5 = valid_cards[4].cut("MAT_LAW50_5")
-            gflag = _ival(f5[0]) if len(f5) > 0 else 0
-            eps_max11 = _fval(f5[1]) if len(f5) > 1 else 0.0
-            eps_max22 = _fval(f5[2]) if len(f5) > 2 else 0.0
-            eps_max33 = _fval(f5[3]) if len(f5) > 3 else 0.0
+            gflag = _ival_safe(f5[0]) if len(f5) > 0 else 0
+            eps_max11 = _fval_safe(f5[1], 1.0e30) if len(f5) > 1 and f5[1].strip() else 1.0e30
+            eps_max22 = _fval_safe(f5[2], 1.0e30) if len(f5) > 2 and f5[2].strip() else 1.0e30
+            eps_max33 = _fval_safe(f5[3], 1.0e30) if len(f5) > 3 and f5[3].strip() else 1.0e30
+            if eps_max11 <= 0.0: eps_max11 = 1.0e30
+            if eps_max22 <= 0.0: eps_max22 = 1.0e30
+            if eps_max33 <= 0.0: eps_max33 = 1.0e30
 
         if len(valid_cards) > 5:
             f6 = valid_cards[5].cut("MAT_LAW50_6")
-            yfun11 = [_ival(x) for x in f6 if x.strip()]
+            yfun11 = [_ival_safe(x) for x in f6 if x.strip()]
         if len(valid_cards) > 6:
             f7 = valid_cards[6].cut("MAT_LAW50_7")
-            sfac11 = [_fval(x, 1.0) for x in f7 if x.strip()]
+            sfac11 = _pad_sfac([_fval_safe(x, 1.0) if x.strip() else 1.0 for x in f7])
         if len(valid_cards) > 7:
             f8 = valid_cards[7].cut("MAT_LAW50_8")
-            eps11 = [_fval(x) for x in f8 if x.strip()]
+            eps11 = [_fval_safe(x) for x in f8 if x.strip()]
 
         if len(valid_cards) > 8:
             f9 = valid_cards[8].cut("MAT_LAW50_9")
-            yfun22 = [_ival(x) for x in f9 if x.strip()]
+            yfun22 = [_ival_safe(x) for x in f9 if x.strip()]
         if len(valid_cards) > 9:
             f10 = valid_cards[9].cut("MAT_LAW50_10")
-            sfac22 = [_fval(x, 1.0) for x in f10 if x.strip()]
+            sfac22 = _pad_sfac([_fval_safe(x, 1.0) if x.strip() else 1.0 for x in f10])
         if len(valid_cards) > 10:
             f11 = valid_cards[10].cut("MAT_LAW50_11")
-            eps22 = [_fval(x) for x in f11 if x.strip()]
+            eps22 = [_fval_safe(x) for x in f11 if x.strip()]
 
         if len(valid_cards) > 11:
             f12 = valid_cards[11].cut("MAT_LAW50_12")
-            yfun33 = [_ival(x) for x in f12 if x.strip()]
+            yfun33 = [_ival_safe(x) for x in f12 if x.strip()]
         if len(valid_cards) > 12:
             f13 = valid_cards[12].cut("MAT_LAW50_13")
-            sfac33 = [_fval(x, 1.0) for x in f13 if x.strip()]
+            sfac33 = _pad_sfac([_fval_safe(x, 1.0) if x.strip() else 1.0 for x in f13])
         if len(valid_cards) > 13:
             f14 = valid_cards[13].cut("MAT_LAW50_14")
-            eps33 = [_fval(x) for x in f14 if x.strip()]
+            eps33 = [_fval_safe(x) for x in f14 if x.strip()]
 
         if len(valid_cards) > 14:
             f15 = valid_cards[14].cut("MAT_LAW50_15")
-            vflag = _ival(f15[0]) if len(f15) > 0 else 0
-            eps_max12 = _fval(f15[1]) if len(f15) > 1 else 0.0
-            eps_max23 = _fval(f15[2]) if len(f15) > 2 else 0.0
-            eps_max31 = _fval(f15[3]) if len(f15) > 3 else 0.0
+            vflag = _ival_safe(f15[0]) if len(f15) > 0 else 0
+            eps_max12 = _fval_safe(f15[1], 1.0e30) if len(f15) > 1 and f15[1].strip() else 1.0e30
+            eps_max23 = _fval_safe(f15[2], 1.0e30) if len(f15) > 2 and f15[2].strip() else 1.0e30
+            eps_max31 = _fval_safe(f15[3], 1.0e30) if len(f15) > 3 and f15[3].strip() else 1.0e30
+            if eps_max12 <= 0.0: eps_max12 = 1.0e30
+            if eps_max23 <= 0.0: eps_max23 = 1.0e30
+            if eps_max31 <= 0.0: eps_max31 = 1.0e30
 
         if len(valid_cards) > 15:
             f16 = valid_cards[15].cut("MAT_LAW50_16")
-            yfun12 = [_ival(x) for x in f16 if x.strip()]
+            yfun12 = [_ival_safe(x) for x in f16 if x.strip()]
         if len(valid_cards) > 16:
             f17 = valid_cards[16].cut("MAT_LAW50_17")
-            sfac12 = [_fval(x, 1.0) for x in f17 if x.strip()]
+            sfac12 = _pad_sfac([_fval_safe(x, 1.0) if x.strip() else 1.0 for x in f17])
         if len(valid_cards) > 17:
             f18 = valid_cards[17].cut("MAT_LAW50_18")
-            eps12 = [_fval(x) for x in f18 if x.strip()]
+            eps12 = [_fval_safe(x) for x in f18 if x.strip()]
 
         if len(valid_cards) > 18:
             f19 = valid_cards[18].cut("MAT_LAW50_19")
-            yfun23 = [_ival(x) for x in f19 if x.strip()]
+            yfun23 = [_ival_safe(x) for x in f19 if x.strip()]
         if len(valid_cards) > 19:
             f20 = valid_cards[19].cut("MAT_LAW50_20")
-            sfac23 = [_fval(x, 1.0) for x in f20 if x.strip()]
+            sfac23 = _pad_sfac([_fval_safe(x, 1.0) if x.strip() else 1.0 for x in f20])
         if len(valid_cards) > 20:
             f21 = valid_cards[20].cut("MAT_LAW50_21")
-            eps23 = [_fval(x) for x in f21 if x.strip()]
+            eps23 = [_fval_safe(x) for x in f21 if x.strip()]
 
         if len(valid_cards) > 21:
             f22 = valid_cards[21].cut("MAT_LAW50_22")
-            yfun31 = [_ival(x) for x in f22 if x.strip()]
+            yfun31 = [_ival_safe(x) for x in f22 if x.strip()]
         if len(valid_cards) > 22:
             f23 = valid_cards[22].cut("MAT_LAW50_23")
-            sfac31 = [_fval(x, 1.0) for x in f23 if x.strip()]
+            sfac31 = _pad_sfac([_fval_safe(x, 1.0) if x.strip() else 1.0 for x in f23])
         if len(valid_cards) > 23:
             f24 = valid_cards[23].cut("MAT_LAW50_24")
-            eps31 = [_fval(x) for x in f24 if x.strip()]
+            eps31 = [_fval_safe(x) for x in f24 if x.strip()]
 
         if len(valid_cards) > 24:
             f25 = valid_cards[24].cut("MAT_LAW50_25")
-            ecomp = _fval(f25[0]) if len(f25) > 0 else 0.0
-            pr = _fval(f25[1]) if len(f25) > 1 else 0.0
-            sigy = _fval(f25[2]) if len(f25) > 2 else 0.0
-            et = _fval(f25[3]) if len(f25) > 3 else 0.0
-            vcomp = _fval(f25[4]) if len(f25) > 4 else 0.0
+            ecomp = _fval_safe(f25[0]) if len(f25) > 0 else 0.0
+            pr = _fval_safe(f25[1]) if len(f25) > 1 else 0.0
+            sigy = _fval_safe(f25[2]) if len(f25) > 2 else 0.0
+            et = _fval_safe(f25[3]) if len(f25) > 3 else 0.0
+            vcomp = _fval_safe(f25[4]) if len(f25) > 4 else 0.0
         elif len(valid_cards) == 5:
             f5_comp = valid_cards[4].cut("MAT_LAW50_25")
-            if len(f5_comp) >= 5 and any(_fval(x) != 0.0 for x in f5_comp):
-                ecomp = _fval(f5_comp[0]) if len(f5_comp) > 0 else 0.0
-                pr = _fval(f5_comp[1]) if len(f5_comp) > 1 else 0.0
-                sigy = _fval(f5_comp[2]) if len(f5_comp) > 2 else 0.0
-                et = _fval(f5_comp[3]) if len(f5_comp) > 3 else 0.0
-                vcomp = _fval(f5_comp[4]) if len(f5_comp) > 4 else 0.0
+            if len(f5_comp) >= 5 and any(_fval_safe(x) != 0.0 for x in f5_comp):
+                ecomp = _fval_safe(f5_comp[0]) if len(f5_comp) > 0 else 0.0
+                pr = _fval_safe(f5_comp[1]) if len(f5_comp) > 1 else 0.0
+                sigy = _fval_safe(f5_comp[2]) if len(f5_comp) > 2 else 0.0
+                et = _fval_safe(f5_comp[3]) if len(f5_comp) > 3 else 0.0
+                vcomp = _fval_safe(f5_comp[4]) if len(f5_comp) > 4 else 0.0
     else:
-        def _card_tokens(c: Card) -> list[str]:
-            raw = getattr(c, "raw", str(c)).strip()
-            for ch in ("#", "$"):
-                if ch in raw:
-                    raw = raw.split(ch)[0].strip()
-            if not raw:
-                return []
-            if "," in raw:
-                parts = [p.strip() for p in raw.split(",")]
-                while parts and parts[-1] == "":
-                    parts.pop()
-                return parts
-            return raw.split()
-
         toks1 = _card_tokens(valid_cards[0])
-        rho = float(toks1[0]) if len(toks1) > 0 else 0.0
-        refer_rho = float(toks1[1]) if len(toks1) > 1 else 0.0
+        rho = _fval_safe(toks1[0]) if len(toks1) > 0 else 0.0
+        refer_rho = _fval_safe(toks1[1], rho) if len(toks1) > 1 and toks1[1].strip() else rho
+        if refer_rho == 0.0:
+            refer_rho = rho
 
         if len(valid_cards) > 1:
             toks2 = _card_tokens(valid_cards[1])
-            ea = float(toks2[0]) if len(toks2) > 0 else 0.0
-            eb = float(toks2[1]) if len(toks2) > 1 else 0.0
-            ec = float(toks2[2]) if len(toks2) > 2 else 0.0
+            ea = _fval_safe(toks2[0]) if len(toks2) > 0 else 0.0
+            eb = _fval_safe(toks2[1]) if len(toks2) > 1 else 0.0
+            ec = _fval_safe(toks2[2]) if len(toks2) > 2 else 0.0
 
         if len(valid_cards) > 2:
             toks3 = _card_tokens(valid_cards[2])
-            gab = float(toks3[0]) if len(toks3) > 0 else 0.0
-            gbc = float(toks3[1]) if len(toks3) > 1 else 0.0
-            gca = float(toks3[2]) if len(toks3) > 2 else 0.0
+            gab = _fval_safe(toks3[0]) if len(toks3) > 0 else 0.0
+            gbc = _fval_safe(toks3[1]) if len(toks3) > 1 else 0.0
+            gca = _fval_safe(toks3[2]) if len(toks3) > 2 else 0.0
 
         if len(valid_cards) > 3:
             toks4 = _card_tokens(valid_cards[3])
-            asrate = float(toks4[0]) if len(toks4) > 0 else 0.0
-            irate = int(float(toks4[1])) if len(toks4) > 1 else 2
+            asrate = _fval_safe(toks4[0]) if len(toks4) > 0 else 0.0
+            irate = _ival_safe(toks4[1], default=2) if len(toks4) > 1 and toks4[1].strip() else 2
             if irate == 0:
                 irate = 2
 
         if len(valid_cards) > 4:
             toks5 = _card_tokens(valid_cards[4])
-            gflag = int(float(toks5[0])) if len(toks5) > 0 else 0
-            eps_max11 = float(toks5[1]) if len(toks5) > 1 else 0.0
-            eps_max22 = float(toks5[2]) if len(toks5) > 2 else 0.0
-            eps_max33 = float(toks5[3]) if len(toks5) > 3 else 0.0
+            gflag = _ival_safe(toks5[0]) if len(toks5) > 0 else 0
+            eps_max11 = _fval_safe(toks5[1], 1.0e30) if len(toks5) > 1 and toks5[1].strip() else 1.0e30
+            eps_max22 = _fval_safe(toks5[2], 1.0e30) if len(toks5) > 2 and toks5[2].strip() else 1.0e30
+            eps_max33 = _fval_safe(toks5[3], 1.0e30) if len(toks5) > 3 and toks5[3].strip() else 1.0e30
+            if eps_max11 <= 0.0: eps_max11 = 1.0e30
+            if eps_max22 <= 0.0: eps_max22 = 1.0e30
+            if eps_max33 <= 0.0: eps_max33 = 1.0e30
 
         if len(valid_cards) > 5:
-            yfun11 = [int(float(x)) for x in _card_tokens(valid_cards[5])]
+            yfun11 = [_ival_safe(x) for x in _card_tokens(valid_cards[5])]
         if len(valid_cards) > 6:
-            sfac11 = [float(x) for x in _card_tokens(valid_cards[6])]
+            sfac11 = _pad_sfac([_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[6])])
         if len(valid_cards) > 7:
-            eps11 = [float(x) for x in _card_tokens(valid_cards[7])]
+            eps11 = [_fval_safe(x) for x in _card_tokens(valid_cards[7])]
 
         if len(valid_cards) > 8:
-            yfun22 = [int(float(x)) for x in _card_tokens(valid_cards[8])]
+            yfun22 = [_ival_safe(x) for x in _card_tokens(valid_cards[8])]
         if len(valid_cards) > 9:
-            sfac22 = [float(x) for x in _card_tokens(valid_cards[9])]
+            sfac22 = _pad_sfac([_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[9])])
         if len(valid_cards) > 10:
-            eps22 = [float(x) for x in _card_tokens(valid_cards[10])]
+            eps22 = [_fval_safe(x) for x in _card_tokens(valid_cards[10])]
 
         if len(valid_cards) > 11:
-            yfun33 = [int(float(x)) for x in _card_tokens(valid_cards[11])]
+            yfun33 = [_ival_safe(x) for x in _card_tokens(valid_cards[11])]
         if len(valid_cards) > 12:
-            sfac33 = [float(x) for x in _card_tokens(valid_cards[12])]
+            sfac33 = _pad_sfac([_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[12])])
         if len(valid_cards) > 13:
-            eps33 = [float(x) for x in _card_tokens(valid_cards[13])]
+            eps33 = [_fval_safe(x) for x in _card_tokens(valid_cards[13])]
 
         if len(valid_cards) > 14:
             toks15 = _card_tokens(valid_cards[14])
-            vflag = int(float(toks15[0])) if len(toks15) > 0 else 0
-            eps_max12 = float(toks15[1]) if len(toks15) > 1 else 0.0
-            eps_max23 = float(toks15[2]) if len(toks15) > 2 else 0.0
-            eps_max31 = float(toks15[3]) if len(toks15) > 3 else 0.0
+            vflag = _ival_safe(toks15[0]) if len(toks15) > 0 else 0
+            eps_max12 = _fval_safe(toks15[1], 1.0e30) if len(toks15) > 1 and toks15[1].strip() else 1.0e30
+            eps_max23 = _fval_safe(toks15[2], 1.0e30) if len(toks15) > 2 and toks15[2].strip() else 1.0e30
+            eps_max31 = _fval_safe(toks15[3], 1.0e30) if len(toks15) > 3 and toks15[3].strip() else 1.0e30
+            if eps_max12 <= 0.0: eps_max12 = 1.0e30
+            if eps_max23 <= 0.0: eps_max23 = 1.0e30
+            if eps_max31 <= 0.0: eps_max31 = 1.0e30
 
         if len(valid_cards) > 15:
-            yfun12 = [int(float(x)) for x in _card_tokens(valid_cards[15])]
+            yfun12 = [_ival_safe(x) for x in _card_tokens(valid_cards[15])]
         if len(valid_cards) > 16:
-            sfac12 = [float(x) for x in _card_tokens(valid_cards[16])]
+            sfac12 = _pad_sfac([_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[16])])
         if len(valid_cards) > 17:
-            eps12 = [float(x) for x in _card_tokens(valid_cards[17])]
+            eps12 = [_fval_safe(x) for x in _card_tokens(valid_cards[17])]
 
         if len(valid_cards) > 18:
-            yfun23 = [int(float(x)) for x in _card_tokens(valid_cards[18])]
+            yfun23 = [_ival_safe(x) for x in _card_tokens(valid_cards[18])]
         if len(valid_cards) > 19:
-            sfac23 = [float(x) for x in _card_tokens(valid_cards[19])]
+            sfac23 = _pad_sfac([_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[19])])
         if len(valid_cards) > 20:
-            eps23 = [float(x) for x in _card_tokens(valid_cards[20])]
+            eps23 = [_fval_safe(x) for x in _card_tokens(valid_cards[20])]
 
         if len(valid_cards) > 21:
-            yfun31 = [int(float(x)) for x in _card_tokens(valid_cards[21])]
+            yfun31 = [_ival_safe(x) for x in _card_tokens(valid_cards[21])]
         if len(valid_cards) > 22:
-            sfac31 = [float(x) for x in _card_tokens(valid_cards[22])]
+            sfac31 = _pad_sfac([_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[22])])
         if len(valid_cards) > 23:
-            eps31 = [float(x) for x in _card_tokens(valid_cards[23])]
+            eps31 = [_fval_safe(x) for x in _card_tokens(valid_cards[23])]
 
         if len(valid_cards) > 24:
             toks25 = _card_tokens(valid_cards[24])
-            ecomp = float(toks25[0]) if len(toks25) > 0 else 0.0
-            pr = float(toks25[1]) if len(toks25) > 1 else 0.0
-            sigy = float(toks25[2]) if len(toks25) > 2 else 0.0
-            et = float(toks25[3]) if len(toks25) > 3 else 0.0
-            vcomp = float(toks25[4]) if len(toks25) > 4 else 0.0
+            ecomp = _fval_safe(toks25[0]) if len(toks25) > 0 else 0.0
+            pr = _fval_safe(toks25[1]) if len(toks25) > 1 else 0.0
+            sigy = _fval_safe(toks25[2]) if len(toks25) > 2 else 0.0
+            et = _fval_safe(toks25[3]) if len(toks25) > 3 else 0.0
+            vcomp = _fval_safe(toks25[4]) if len(toks25) > 4 else 0.0
         elif len(valid_cards) == 5:
             toks5_comp = _card_tokens(valid_cards[4])
             if len(toks5_comp) >= 5:
-                ecomp = float(toks5_comp[0]) if len(toks5_comp) > 0 else 0.0
-                pr = float(toks5_comp[1]) if len(toks5_comp) > 1 else 0.0
-                sigy = float(toks5_comp[2]) if len(toks5_comp) > 2 else 0.0
-                et = float(toks5_comp[3]) if len(toks5_comp) > 3 else 0.0
-                vcomp = float(toks5_comp[4]) if len(toks5_comp) > 4 else 0.0
+                ecomp = _fval_safe(toks5_comp[0]) if len(toks5_comp) > 0 else 0.0
+                pr = _fval_safe(toks5_comp[1]) if len(toks5_comp) > 1 else 0.0
+                sigy = _fval_safe(toks5_comp[2]) if len(toks5_comp) > 2 else 0.0
+                et = _fval_safe(toks5_comp[3]) if len(toks5_comp) > 3 else 0.0
+                vcomp = _fval_safe(toks5_comp[4]) if len(toks5_comp) > 4 else 0.0
 
     icompact = 1 if (ecomp * sigy * vcomp > 0.0) else 0
     nu_eff = min(pr, 0.495)
     gcomp = ecomp / (1.0 + nu_eff) if (icompact == 1 and ecomp > 0.0) else 0.0
     bulk = ecomp / (3.0 * (1.0 - 2.0 * nu_eff)) if (icompact == 1 and ecomp > 0.0) else max(ea, eb, ec, gab, gbc, gca)
 
+    raw_law = block.parts[1].upper() if len(block.parts) > 1 else "LAW50"
+    if raw_law in ("50", "LAW50", "MAT_LAW50"):
+        law_name = "LAW50"
+    elif raw_law in ("VISC_HONEY", "MAT_VISC_HONEY", "LAW50_VISC_HONEY"):
+        law_name = "VISC_HONEY"
+    elif raw_law in ("HYP_FOAM", "MAT_HYP_FOAM", "LAW50_HYP_FOAM"):
+        law_name = "HYP_FOAM"
+    else:
+        law_name = raw_law
+
+    unit_id = getattr(block, "unit_id", None)
+
     params = {
-        "rho": rho, "rho0": rho, "refer_rho": refer_rho,
+        "rho": rho, "rho0": rho, "refer_rho": refer_rho, "rhor": refer_rho,
         "ea": ea, "eb": eb, "ec": ec, "e11": ea, "e22": eb, "e33": ec,
         "E": max(ea, eb, ec), "E11": ea, "E22": eb, "E33": ec,
         "gab": gab, "gbc": gbc, "gca": gca, "g12": gab, "g23": gbc, "g31": gca,
         "G": max(gab, gbc, gca), "G12": gab, "G23": gbc, "G31": gca,
-        "asrate": asrate, "irate": irate, "gflag": gflag, "vflag": vflag,
+        "asrate": asrate, "fcut": asrate, "irate": irate, "gflag": gflag, "vflag": vflag,
         "eps_max11": eps_max11, "eps_max22": eps_max22, "eps_max33": eps_max33,
         "eps_max12": eps_max12, "eps_max23": eps_max23, "eps_max31": eps_max31,
         "yfun11": yfun11, "sfac11": sfac11, "eps11": eps11,
@@ -33860,7 +33940,7 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "yfun23": yfun23, "sfac23": sfac23, "eps23": eps23,
         "yfun31": yfun31, "sfac31": sfac31, "eps31": eps31,
         "ecomp": ecomp, "pr": pr, "nu": pr, "sigy": sigy, "et": et, "hcomp": et, "vcomp": vcomp,
-        "icompact": icompact, "icomp": icompact, "gcomp": gcomp, "bulk": bulk,
+        "icompact": icompact, "icomp": icompact, "gcomp": gcomp, "bulk": bulk, "K": bulk,
     }
 
     m50 = MatLaw50(
@@ -33875,14 +33955,20 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         yfun23=yfun23, sfac23=sfac23, eps23=eps23,
         yfun31=yfun31, sfac31=sfac31, eps31=eps31,
         ecomp=ecomp, pr=pr, sigy=sigy, et=et, vcomp=vcomp,
-        title=title, params=params,
+        title=title, law=50, law_name=law_name, unit_id=unit_id, params=params,
     )
     model.mat_law50s[mat_id] = m50
+    if hasattr(model, "mat_visc_honeys"):
+        model.mat_visc_honeys[mat_id] = m50
+    if hasattr(model, "mat_hyp_foams"):
+        model.mat_hyp_foams[mat_id] = m50
+
     model.materials[mat_id] = Material(
         id=mat_id, law=50, rho0=rho, title=title,
-        law_name="LAW50",
+        law_name=law_name,
         params=params,
     )
+
 
 
 def read_mat_law57(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -92927,6 +93013,17 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 
 MATERIAL_DISPATCH: Dict[str, Any] = {
+    "/MAT/LAW50": read_mat_law50,
+    "/MAT/VISC_HONEY": read_mat_law50,
+    "/MAT/HYP_FOAM": read_mat_law50,
+    "LAW50": read_mat_law50,
+    "VISC_HONEY": read_mat_law50,
+    "HYP_FOAM": read_mat_law50,
+    "MAT_LAW50": read_mat_law50,
+    "MAT_VISC_HONEY": read_mat_law50,
+    "MAT_HYP_FOAM": read_mat_law50,
+    "LAW50_VISC_HONEY": read_mat_law50,
+    "LAW50_HYP_FOAM": read_mat_law50,
     "/MAT/LAW79": read_mat_law79,
     "/MAT/JOHN_HOLM": read_mat_law79,
     "/MAT/JOHNSON_HOLMQUIST": read_mat_law79,
