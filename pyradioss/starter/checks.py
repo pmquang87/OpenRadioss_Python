@@ -2933,52 +2933,80 @@ def check_mat_law79(
         return default
 
     # 1. Density rho > 0
-    rho = getattr(mat, "rho", None)
-    if rho is None:
-        rho = getattr(mat, "rho0", None)
-    if rho is None:
-        rho = _extract(["rho", "rho0", "MAT_RHO", "RHO", "RHO0", "rho_i"], default=0.0)
-    else:
+    if "rho" in kwargs and kwargs["rho"] is not None:
         try:
-            rho = float(rho)
+            rho = float(kwargs["rho"])
         except (TypeError, ValueError):
             rho = 0.0
+    else:
+        rho = getattr(mat, "rho", None)
+        if rho is None:
+            rho = getattr(mat, "rho0", None)
+        if rho is None:
+            rho = _extract(["rho", "rho0", "MAT_RHO", "RHO", "RHO0", "rho_i"], default=0.0)
+        else:
+            try:
+                rho = float(rho)
+            except (TypeError, ValueError):
+                rho = 0.0
 
     if rho <= 0.0:
         log.error(f"/MAT/LAW79/{mid}: initial density RHO must be > 0 (got {rho:g})", "MAT CHECK")
 
     # 2. Shear modulus G > 0 (ANCMSG 908)
-    shear = getattr(mat, "tau_shear", None)
-    if shear is None:
-        shear = getattr(mat, "shear", None)
-    if shear is None:
-        shear = getattr(mat, "G", None)
-    if shear is None:
-        shear = getattr(mat, "g", None)
-    if shear is None:
-        shear = _extract(["tau_shear", "shear", "G", "g", "MAT_G"], default=0.0)
-    else:
+    if "shear" in kwargs and kwargs["shear"] is not None:
         try:
-            shear = float(shear)
+            shear = float(kwargs["shear"])
         except (TypeError, ValueError):
             shear = 0.0
+    elif "tau_shear" in kwargs and kwargs["tau_shear"] is not None:
+        try:
+            shear = float(kwargs["tau_shear"])
+        except (TypeError, ValueError):
+            shear = 0.0
+    else:
+        shear = getattr(mat, "tau_shear", None)
+        if shear is None:
+            shear = getattr(mat, "shear", None)
+        if shear is None:
+            shear = getattr(mat, "G", None)
+        if shear is None:
+            shear = getattr(mat, "g", None)
+        if shear is None:
+            shear = _extract(["tau_shear", "shear", "G", "g", "MAT_G"], default=0.0)
+        else:
+            try:
+                shear = float(shear)
+            except (TypeError, ValueError):
+                shear = 0.0
 
     if shear <= 0.0:
         log.error(f"/MAT/LAW79/{mid}: shear modulus must be > 0 (got {shear:g}) (ANCMSG 908)", "MAT CHECK")
 
     # 3. Bulk modulus K1 > 0 (ANCMSG 909)
-    k1 = getattr(mat, "k1", None)
-    if k1 is None:
-        k1 = getattr(mat, "K1", None)
-    if k1 is None:
-        k1 = getattr(mat, "bulk", None)
-    if k1 is None:
-        k1 = _extract(["k1", "K1", "bulk", "K", "MAT_BULK"], default=0.0)
-    else:
+    if "k1" in kwargs and kwargs["k1"] is not None:
         try:
-            k1 = float(k1)
+            k1 = float(kwargs["k1"])
         except (TypeError, ValueError):
             k1 = 0.0
+    elif "bulk" in kwargs and kwargs["bulk"] is not None:
+        try:
+            k1 = float(kwargs["bulk"])
+        except (TypeError, ValueError):
+            k1 = 0.0
+    else:
+        k1 = getattr(mat, "k1", None)
+        if k1 is None:
+            k1 = getattr(mat, "K1", None)
+        if k1 is None:
+            k1 = getattr(mat, "bulk", None)
+        if k1 is None:
+            k1 = _extract(["k1", "K1", "bulk", "K", "MAT_BULK"], default=0.0)
+        else:
+            try:
+                k1 = float(k1)
+            except (TypeError, ValueError):
+                k1 = 0.0
 
     if k1 <= 0.0:
         log.error(f"/MAT/LAW79/{mid}: bulk modulus K1 must be > 0 (got {k1:g}) (ANCMSG 909)", "MAT CHECK")
@@ -2990,27 +3018,39 @@ def check_mat_law79(
         log.error(f"/MAT/LAW79/{mid}: pressure at HEL (PHEL={phel:g}) cannot exceed HEL ({hel:g}) (ANCMSG 907)", "MAT CHECK")
 
     # 5. Reference strain rate EPS0 > 0 (ANCMSG 910)
-    eps0 = getattr(mat, "eps0", None)
-    if eps0 is None:
-        eps0 = _extract(["eps0", "EPS0", "MAT_Epsilon_F", "epsilon_f"], default=1.0)
-    else:
+    if "eps0" in kwargs and kwargs["eps0"] is not None:
         try:
-            eps0 = float(eps0)
+            eps0 = float(kwargs["eps0"])
         except (TypeError, ValueError):
             eps0 = 1.0
+    else:
+        eps0 = getattr(mat, "eps0", None)
+        if eps0 is None:
+            eps0 = _extract(["eps0", "EPS0", "MAT_Epsilon_F", "epsilon_f"], default=1.0)
+        else:
+            try:
+                eps0 = float(eps0)
+            except (TypeError, ValueError):
+                eps0 = 1.0
 
     if eps0 <= 0.0:
         log.error(f"/MAT/LAW79/{mid}: reference strain rate EPS0 must be > 0 (got {eps0:g}) (ANCMSG 910)", "MAT CHECK")
 
     # 6. Bulking coefficient BETA in [0, 1] (ANCMSG 911)
-    beta = getattr(mat, "beta", None)
-    if beta is None:
-        beta = _extract(["beta", "BETA", "MAT_Beta"], default=1.0)
-    else:
+    if "beta" in kwargs and kwargs["beta"] is not None:
         try:
-            beta = float(beta)
+            beta = float(kwargs["beta"])
         except (TypeError, ValueError):
             beta = 1.0
+    else:
+        beta = getattr(mat, "beta", None)
+        if beta is None:
+            beta = _extract(["beta", "BETA", "MAT_Beta"], default=1.0)
+        else:
+            try:
+                beta = float(beta)
+            except (TypeError, ValueError):
+                beta = 1.0
 
     if beta < 0.0 or beta > 1.0:
         log.error(f"/MAT/LAW79/{mid}: bulking coefficient BETA must satisfy 0 <= BETA <= 1 (got {beta:g}) (ANCMSG 911)", "MAT CHECK")

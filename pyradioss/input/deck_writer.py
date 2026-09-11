@@ -1091,7 +1091,7 @@ class StarterDeck:
         n: float = 0.0,
         c: float = 0.0,
         eps0: float = 1.0,
-        sigfmax: float = 1.0e30,
+        sigfmax: float = 1.0e20,
         fcut: float = 0.0,
         t: float = 0.0,
         hel: float = 0.0,
@@ -1099,7 +1099,7 @@ class StarterDeck:
         d1: float = 0.0,
         d2: float = 1.0,
         idel: int = 0,
-        epsmax: float = 1.0e30,
+        epsmax: float = 1.0e20,
         k1: float = 0.0,
         k2: float = 0.0,
         k3: float = 0.0,
@@ -1133,7 +1133,7 @@ class StarterDeck:
             actual_n = float(c) if isinstance(c, (int, float, str)) and str(c).strip() else 0.0
             actual_c = float(eps0) if isinstance(eps0, (int, float, str)) and str(eps0).strip() else 0.0
             actual_eps0 = float(sigfmax) if isinstance(sigfmax, (int, float, str)) and str(sigfmax).strip() else 1.0
-            actual_sigfmax = float(fcut) if isinstance(fcut, (int, float, str)) and str(fcut).strip() else 1.0e30
+            actual_sigfmax = float(fcut) if isinstance(fcut, (int, float, str)) and str(fcut).strip() else 1.0e20
             actual_fcut = float(t) if isinstance(t, (int, float, str)) and str(t).strip() else 0.0
             actual_t = float(hel) if isinstance(hel, (int, float, str)) and str(hel).strip() else 0.0
             actual_hel = float(phel) if isinstance(phel, (int, float, str)) and str(phel).strip() else 0.0
@@ -1141,7 +1141,7 @@ class StarterDeck:
             actual_d1 = float(d2) if isinstance(d2, (int, float, str)) and str(d2).strip() else 0.0
             actual_d2 = float(idel) if isinstance(idel, (int, float, str)) and str(idel).strip() else 1.0
             actual_idel = int(epsmax) if isinstance(epsmax, (int, float, str)) and str(epsmax).strip() else 0
-            actual_epsmax = float(k1) if isinstance(k1, (int, float, str)) and str(k1).strip() else 1.0e30
+            actual_epsmax = float(k1) if isinstance(k1, (int, float, str)) and str(k1).strip() else 1.0e20
             actual_k1 = float(k2) if isinstance(k2, (int, float, str)) and str(k2).strip() else 0.0
             actual_k2 = float(k3) if isinstance(k3, (int, float, str)) and str(k3).strip() else 0.0
             actual_k3 = float(beta) if isinstance(beta, (int, float, str)) and str(beta).strip() else 0.0
@@ -1264,12 +1264,26 @@ class StarterDeck:
             c = float(kw_low["mat_c"])
         if "mat_epsilon_f" in kw_low and eps0 == 1.0:
             eps0 = float(kw_low["mat_epsilon_f"])
-        if "mat_sig1max_t" in kw_low and sigfmax == 1.0e30:
+        if "mat_sig1max_t" in kw_low and sigfmax in (1.0e20, 1.0e30):
             sigfmax = float(kw_low["mat_sig1max_t"])
+        if "sigfmax" in kw_low and (sigfmax in (1.0e20, 1.0e30) or sigfmax == 0.0):
+            sigfmax = float(kw_low["sigfmax"])
+        if "sigma_fmax" in kw_low and (sigfmax in (1.0e20, 1.0e30) or sigfmax == 0.0):
+            sigfmax = float(kw_low["sigma_fmax"])
+        if "eps_max" in kw_low and (epsmax in (1.0e20, 1.0e30) or epsmax == 0.0):
+            epsmax = float(kw_low["eps_max"])
+        if "epsmax" in kw_low and (epsmax in (1.0e20, 1.0e30) or epsmax == 0.0):
+            epsmax = float(kw_low["epsmax"])
+        if "bulk" in kw_low and k1 == 0.0:
+            k1 = float(kw_low["bulk"])
+        if "k" in kw_low and k1 == 0.0:
+            k1 = float(kw_low["k"])
         if "mat_fcut" in kw_low and fcut == 0.0:
             fcut = float(kw_low["mat_fcut"])
         if "mat_t0" in kw_low and t == 0.0:
             t = float(kw_low["mat_t0"])
+        if "t0" in kw_low and t == 0.0:
+            t = float(kw_low["t0"])
         if "mat_e" in kw_low and hel == 0.0:
             hel = float(kw_low["mat_e"])
         if "mat_eps" in kw_low and phel == 0.0:
@@ -1292,9 +1306,9 @@ class StarterDeck:
         if eps0 == 0.0:
             eps0 = 1.0
         if sigfmax == 0.0:
-            sigfmax = 1.0e30
+            sigfmax = 1.0e20
         if epsmax == 0.0:
-            epsmax = 1.0e30
+            epsmax = 1.0e20
         idel = max(0, min(int(idel), 3))
 
         if unit_id is not None:

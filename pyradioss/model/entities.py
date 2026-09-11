@@ -288,6 +288,18 @@ class Material:
                 return float(law21_dprag.sound_speed(self, rho=self.rho0))
             except Exception:
                 pass
+        if self.law in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or getattr(self, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+            try:
+                from ..materials import law49_steinb
+                return float(law49_steinb.sound_speed_solid(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM") or getattr(self, "law_name", None) in ("79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM"):
+            try:
+                from ..materials import law79_john_holm
+                return float(law79_john_holm.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
         return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
 
     def sound_speed_shell(self) -> float:
@@ -7420,9 +7432,9 @@ class MatLaw79:
         if self.eps0 == 0.0:
             self.eps0 = 1.0
         if self.sigfmax == 0.0:
-            self.sigfmax = 1.0e30
+            self.sigfmax = 1.0e20
         if self.epsmax == 0.0:
-            self.epsmax = 1.0e30
+            self.epsmax = 1.0e20
         self.idel = min(max(0, self.idel), 3)
 
         if not isinstance(self.params, dict):
@@ -7456,6 +7468,7 @@ class MatLaw79:
             "d2": self.d2,
             "idel": self.idel,
             "epsmax": self.epsmax,
+            "eps_max": self.epsmax,
             "k1": self.k1,
             "k2": self.k2,
             "k3": self.k3,
@@ -7527,6 +7540,14 @@ class MatLaw79:
     @sigma_fmax.setter
     def sigma_fmax(self, val: float) -> None:
         self.sigfmax = float(val)
+
+    @property
+    def eps_max(self) -> float:
+        return self.epsmax
+
+    @eps_max.setter
+    def eps_max(self, val: float) -> None:
+        self.epsmax = float(val)
 
     @property
     def shel(self) -> float:

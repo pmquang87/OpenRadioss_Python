@@ -31908,7 +31908,7 @@ def read_mat_law79(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     rho, refer_rho = 0.0, 0.0
     tau_shear = 0.0
     a, b, m, n = 0.0, 0.0, 0.0, 0.0
-    c_val, eps0, sigfmax, fcut = 0.0, 1.0, 1.0e30, 0.0
+    c_val, eps0, sigfmax, fcut = 0.0, 1.0, 1.0e20, 0.0
     t, hel, phel = 0.0, 0.0, 0.0
     d1, d2, idel, epsmax = 0.0, 0.0, 0, 0.0
     k1, k2, k3, beta = 0.0, 0.0, 0.0, 0.0
@@ -31935,7 +31935,7 @@ def read_mat_law79(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             f4 = valid_cards[3].cut("MAT_LAW79_4")
             c_val = _fval_safe(f4[0]) if len(f4) > 0 else 0.0
             eps0 = _fval_safe(f4[1], 1.0) if len(f4) > 1 and f4[1].strip() else 1.0
-            sigfmax = _fval_safe(f4[2], 1.0e30) if len(f4) > 2 and f4[2].strip() else 1.0e30
+            sigfmax = _fval_safe(f4[2], 1.0e20) if len(f4) > 2 and f4[2].strip() else 1.0e20
             fcut = _fval_safe(f4[3]) if len(f4) > 3 else 0.0
         # Card 5: t, hel, phel (MAT_LAW79_5: [20, 20, 20])
         if len(valid_cards) > 4:
@@ -31949,7 +31949,7 @@ def read_mat_law79(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             d1 = _fval_safe(f6[0]) if len(f6) > 0 else 0.0
             d2 = _fval_safe(f6[1]) if len(f6) > 1 else 0.0
             idel = int(_fval_safe(f6[3])) if len(f6) > 3 else 0
-            epsmax = _fval_safe(f6[4]) if len(f6) > 4 else 0.0
+            epsmax = _fval_safe(f6[4], 1.0e20) if len(f6) > 4 and f6[4].strip() else 1.0e20
         # Card 7: k1, k2, k3, beta (MAT_LAW79_7: [20, 20, 20, 20])
         if len(valid_cards) > 6:
             f7 = valid_cards[6].cut("MAT_LAW79_7")
@@ -31976,7 +31976,7 @@ def read_mat_law79(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             t4 = _card_tokens(valid_cards[3])
             c_val = _fval_safe(t4[0]) if len(t4) > 0 else 0.0
             eps0 = _fval_safe(t4[1], 1.0) if len(t4) > 1 and t4[1].strip() else 1.0
-            sigfmax = _fval_safe(t4[2], 1.0e30) if len(t4) > 2 and t4[2].strip() else 1.0e30
+            sigfmax = _fval_safe(t4[2], 1.0e20) if len(t4) > 2 and t4[2].strip() else 1.0e20
             fcut = _fval_safe(t4[3]) if len(t4) > 3 else 0.0
         if len(valid_cards) > 4:
             t5 = _card_tokens(valid_cards[4])
@@ -31990,17 +31990,17 @@ def read_mat_law79(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             if len(t6) >= 5:
                 if t6[2] == "":
                     idel = int(_fval_safe(t6[3]))
-                    epsmax = _fval_safe(t6[4])
+                    epsmax = _fval_safe(t6[4], 1.0e20) if t6[4].strip() else 1.0e20
                 else:
                     try:
                         idel = int(_fval_safe(t6[3]))
-                        epsmax = _fval_safe(t6[4])
+                        epsmax = _fval_safe(t6[4], 1.0e20) if t6[4].strip() else 1.0e20
                     except (ValueError, IndexError):
                         idel = int(_fval_safe(t6[2]))
-                        epsmax = _fval_safe(t6[3])
+                        epsmax = _fval_safe(t6[3], 1.0e20) if t6[3].strip() else 1.0e20
             elif len(t6) >= 4:
                 idel = int(_fval_safe(t6[2]))
-                epsmax = _fval_safe(t6[3])
+                epsmax = _fval_safe(t6[3], 1.0e20) if t6[3].strip() else 1.0e20
             elif len(t6) == 3:
                 idel = int(_fval_safe(t6[2]))
         if len(valid_cards) > 6:
@@ -32018,9 +32018,9 @@ def read_mat_law79(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif eps0 == 0.0:
         eps0 = 1.0
     if sigfmax == 0.0:
-        sigfmax = 1.0e30
+        sigfmax = 1.0e20
     if epsmax == 0.0:
-        epsmax = 1.0e30
+        epsmax = 1.0e20
     idel = min(max(0, idel), 3)
 
     m79 = MatLaw79(
@@ -32058,7 +32058,7 @@ def read_mat_law79(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "tstar": (t / phel) if phel != 0.0 else 0.0,
             "D1": d1, "d1": d1, "D2": d2, "d2": d2,
             "IDEL": idel, "idel": idel,
-            "EPSMAX": epsmax, "epsmax": epsmax,
+            "EPSMAX": epsmax, "epsmax": epsmax, "eps_max": epsmax,
             "MAT_Beta": beta, "beta": beta,
         }
     )

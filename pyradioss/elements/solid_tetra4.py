@@ -438,7 +438,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         F = np.einsum("nia,nib->nab", xe, st["dndx0"])
     for sl, mat, prop in st.get("slices", []):
         law = getattr(mat, "law", 1)
-        if law == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or (getattr(mat, "E", 0.0) <= 0.0 and law not in (5, "5", "LAW5", "JWL", 21, "21", "LAW21", "DPRAG", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB")):
+        if law == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or (getattr(mat, "E", 0.0) <= 0.0 and law not in (5, "5", "LAW5", "JWL", 21, "21", "LAW21", "DPRAG", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM") and getattr(mat, "law_name", None) not in ("79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM")):
             sig[sl] = 0.0
             c[sl] = 0.0
             c_from_law[sl] = True
@@ -487,8 +487,10 @@ def forces(group, x, v, vr, dt, fint, mint):
             st["off"][sl] = np.minimum(st["off"][sl], extra["off48"])
         elif "off52" in extra:
             st["off"][sl] = np.minimum(st["off"][sl], extra["off52"])
+        elif "off79" in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra["off79"])
         elif "off" in extra:
-            st["off"][sl] = extra["off"]
+            st["off"][sl] = np.minimum(st["off"][sl], extra["off"])
 
         # ---- /EOS pressure (M6, eosmain) — see solid_hexa8 -----------------
         if mat.eos is not None:
@@ -528,7 +530,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     if st.get("chk_fail"):
         off = st["off"]
         for sl, mat, prop in st.get("slices", []):
-            if getattr(mat, "law", 1) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+            if getattr(mat, "law", 1) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM"):
                 eps_max = mat.params.get("eps_p_max", EP30)
             else:
                 eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))

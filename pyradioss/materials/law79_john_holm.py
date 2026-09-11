@@ -232,7 +232,7 @@ def _get_params(mat: Any) -> Law79Params:
                 p[attr] = getattr(mat, attr)
 
     # 1. Density
-    if rho0_val is None:
+    if rho0_val is None or float(rho0_val) == 0.0:
         rho0_val = _extract_param(p, ("rho0", "rho", "density", "MAT_RHO", "Refer_Rho"), 0.0)
     rho0 = float(rho0_val)
 
@@ -444,7 +444,14 @@ def sound_speed_solid_law79(
 
     mu = 0.0
     if extra is not None:
-        if "mu" in extra and extra["mu"] is not None:
+        if "rho" in extra and extra["rho"] is not None:
+            rho_arr = np.asarray(extra["rho"], dtype=float)
+            mu = rho_arr / rho0 - 1.0
+        elif "vol" in extra and "vol0" in extra and extra["vol"] is not None and extra["vol0"] is not None:
+            v = np.asarray(extra["vol"], dtype=float)
+            v0 = np.asarray(extra["vol0"], dtype=float)
+            mu = v0 / np.maximum(v, 1e-30) - 1.0
+        elif "mu" in extra and extra["mu"] is not None:
             mu = extra["mu"]
         elif "amu" in extra and extra["amu"] is not None:
             mu = extra["amu"]
@@ -608,13 +615,17 @@ def solid_update_law79(
 
     # Volumetric strain mu = rho / rho0 - 1
     tr_deps = deps_arr[:, 0] + deps_arr[:, 1] + deps_arr[:, 2]
-    if "amu" in extra and extra["amu"] is not None:
-        mu = np.asarray(extra["amu"], dtype=float).copy()
-    elif "mu" in extra and extra["mu"] is not None:
-        mu = np.asarray(extra["mu"], dtype=float).copy()
-    elif "rho" in extra and extra["rho"] is not None:
+    if "rho" in extra and extra["rho"] is not None:
         rho_arr = np.asarray(extra["rho"], dtype=float)
         mu = rho_arr / rho0 - 1.0
+    elif "vol" in extra and "vol0" in extra and extra["vol"] is not None and extra["vol0"] is not None:
+        v = np.asarray(extra["vol"], dtype=float)
+        v0 = np.asarray(extra["vol0"], dtype=float)
+        mu = v0 / np.maximum(v, 1e-30) - 1.0
+    elif "mu" in extra and extra["mu"] is not None:
+        mu = np.asarray(extra["mu"], dtype=float).copy()
+    elif "amu" in extra and extra["amu"] is not None:
+        mu = np.asarray(extra["amu"], dtype=float).copy()
     else:
         mu_prev = np.asarray(extra.get("mu_prev", extra.get("mu_total", 0.0)), dtype=float)
         if mu_prev.shape != (n,):
@@ -708,7 +719,7 @@ def solid_update_law79(
 
     scale = np.ones(n, dtype=float)
     over_yield = (sigstar >= sigy) & (vm > 0.0)
-    scale = np.where(over_yield, yield_actual / np.maximum(vm, _EM30), scale)
+    scale = np.where(over_yield, sigy / np.maximum(sigstar, _EM30), scale)
     scale = np.where((sigstar >= sigy) & (vm <= 0.0), 0.0, scale)
 
     s_new = s_tr.copy()
