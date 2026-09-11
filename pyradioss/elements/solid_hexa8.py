@@ -377,7 +377,7 @@ def _init_material_state(group, dndx0):
     if any(mat.fail is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros(n)
     st["chk_fail"] = any(
-        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27)
+        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 60)
         or mat.params.get("eps_p_max", EP30) < 1e30
         or mat.params.get("eps_max", EP30) < 1e30
         for _, mat, _ in st["slices"])
@@ -763,6 +763,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             st["off"][sl] = np.minimum(st["off"][sl], extra["off14"])
         elif "off43" in extra:
             st["off"][sl] = np.minimum(st["off"][sl], extra["off43"])
+        elif "off60" in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra["off60"])
         elif "off" in extra:
             st["off"][sl] = extra["off"]
 

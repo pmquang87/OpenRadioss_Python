@@ -542,7 +542,7 @@ def _init_material_state(group, nip_max):
     if any(mat.fail is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros((n, nip_max))
     st["chk_fail"] = any(
-        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43, 69)
+        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43, 60, 69)
         or mat.params.get("eps_p_max", EP30) < 1e30
         or mat.params.get("eps_max", EP30) < 1e30
         or mat.params.get("EPSMAX", EP30) < 1e30
@@ -612,7 +612,7 @@ def _element_deletion(st, nip_of):
     layfail = st["layfail"]
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         law = getattr(mat, "law", 1)
-        if not (mat.fail is not None or law in (15, 22, 25, 27, 43, 69)
+        if not (mat.fail is not None or law in (15, 22, 25, 27, 43, 60, 69)
                 or mat.params.get("eps_p_max", EP30) < 1e30
                 or mat.params.get("eps_max", EP30) < 1e30
                 or mat.params.get("EPSMAX", EP30) < 1e30

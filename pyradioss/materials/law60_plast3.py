@@ -586,7 +586,7 @@ def solid_update(
     sound_speed : np.ndarray (NEL,)
         Instantaneous longitudinal sound speed.
     """
-    params = mat_params if isinstance(mat_params, Law60Params) else build_law60(mat_params)
+    params = mat_params if (isinstance(mat_params, Law60Params) and len(mat_params.curve_x) > 0) else build_law60(mat_params)
 
     kw = dict(kwargs)
     if eps is not None:
@@ -725,8 +725,11 @@ def solid_update(
     deleted = epsp_new >= params.eps_max
     if np.any(deleted):
         sig_new[deleted] = 0.0
-        if extra is not None and "off" in extra:
-            extra["off"][deleted] = 0.0
+        if extra is not None:
+            if "off" in extra:
+                extra["off"][deleted] = 0.0
+            if "off60" in extra:
+                extra["off60"][deleted] = 0.0
 
     # 10. Instantaneous sound speed
     sound_speed = np.sqrt((c1_cur + (4.0 / 3.0) * g_cur) / max(params.rho0, _EM20))
@@ -777,7 +780,7 @@ def shell_update(
     sound_speed : np.ndarray (NEL,)
         Instantaneous shell membrane sound speed.
     """
-    params = mat_params if isinstance(mat_params, Law60Params) else build_law60(mat_params)
+    params = mat_params if (isinstance(mat_params, Law60Params) and len(mat_params.curve_x) > 0) else build_law60(mat_params)
 
     kw = dict(kwargs)
     if eps is not None:
@@ -898,8 +901,15 @@ def shell_update(
     deleted = epsp_new >= params.eps_max
     if np.any(deleted):
         sig_new[deleted] = 0.0
-        if extra is not None and "off" in extra:
-            extra["off"][deleted] = 0.0
+        if extra is not None:
+            if "off" in extra:
+                extra["off"][deleted] = 0.0
+            if "off60" in extra:
+                extra["off60"][deleted] = 0.0
+            if "layf" in extra:
+                extra["layf"][deleted] = 0.0
+            if "layfail" in extra:
+                extra["layfail"][deleted] = 0.0
 
     # 10. Shell sound speed
     sound_speed = np.sqrt(a1_cur / max(params.rho0, _EM20))
@@ -981,8 +991,12 @@ def consistent_solid_tangent(
         s[2] -= p
         snorm = np.sqrt(s[0] ** 2 + s[1] ** 2 + s[2] ** 2 + 2.0 * (s[3] ** 2 + s[4] ** 2 + s[5] ** 2))
         q = np.sqrt(1.5) * snorm
-
-        dep = epsp_incr[i] if epsp_incr is not None else (deps[i] if deps is not None and deps.ndim == 1 else 0.0)
+        if epsp_incr is not None:
+            dep = float(epsp_incr[i]) if hasattr(epsp_incr, "__getitem__") else float(epsp_incr)
+        elif deps is not None and deps.ndim == 1:
+            dep = float(deps[i])
+        else:
+            dep = 0.0
         if dep <= 0.0:
             continue
 
@@ -1067,7 +1081,12 @@ def consistent_shell_tangent(
                          [0.0, 0.0, g]], dtype=float)
         D[i] = c_el.copy()
 
-        dep = epsp_incr[i] if epsp_incr is not None else 0.0
+        if epsp_incr is not None:
+            dep = float(epsp_incr[i]) if hasattr(epsp_incr, "__getitem__") else float(epsp_incr)
+        elif deps is not None and deps.ndim == 1:
+            dep = float(deps[i])
+        else:
+            dep = 0.0
         if dep <= 0.0:
             continue
 
@@ -1106,6 +1125,8 @@ def build_law60(
     Extracts parameters per starter/source/materials/mat/mat060/hm_read_mat60.F.
     Maps /FUNCT curves from `functs` or from embedded table objects.
     """
+    if hasattr(mat_record, "law60_params") and functs is None and not kwargs:
+        return mat_record.law60_params
     if isinstance(mat_record, Law60Params) and len(mat_record.curve_x) > 0 and functs is None and not kwargs:
         return mat_record
 
@@ -1352,6 +1373,41 @@ def sound_speed(
     if is_solid:
         return params.sound_speed_solid(rho)
     return params.sound_speed_shell(rho)
+
+def extra_shapes(mat: Any, nip: int | None = None) -> dict[str, tuple[int, ...]]:
+    """Return dictionary of extra state variable shapes for /MAT/LAW60.
+
+    Allocates uvar array of size (5 + nfunc,) per integration point,
+    and off60 deletion flags.
+    """
+    nfunc = 5
+    if hasattr(mat, "params") and isinstance(mat.params, dict):
+        nfunc = int(mat.params.get("nfunc", mat.params.get("NFUNC", 5)))
+    elif hasattr(mat, "nfunc"):
+        nfunc = int(mat.nfunc)
+    uvar_dim = (5 + nfunc,)
+    return {
+        "uvar": (nip, *uvar_dim) if nip else uvar_dim,
+        "off60": (nip,) if nip else (),
+    }
+
+
+def resolve(mat: Any, model: Any, log: Any = None) -> None:
+    """Resolve /FUNCT references into stored numpy arrays in mat.params and build Law60Params."""
+    functs = getattr(model, "functions", {})
+    params = build_law60(mat, functs=functs)
+    mat.law60_params = params
+    if hasattr(mat, "params") and isinstance(mat.params, dict):
+        mat.params["curve_x"] = params.curve_x
+        mat.params["curve_y"] = params.curve_y
+        mat.params["curve_s"] = params.curve_s
+        mat.params["rates"] = params.rates
+        mat.params["p_curve_x"] = params.p_curve_x
+        mat.params["p_curve_y"] = params.p_curve_y
+        mat.params["p_curve_s"] = params.p_curve_s
+        mat.params["e_curve_x"] = params.e_curve_x
+        mat.params["e_curve_y"] = params.e_curve_y
+        mat.params["e_curve_s"] = params.e_curve_s
 
 
 def _register():

@@ -1445,6 +1445,10 @@ def resolve_curves(mat, model, log=None):
         _get_law43()
         if law43_hill_tab is not None and hasattr(law43_hill_tab, "resolve"):
             return law43_hill_tab.resolve(mat, model, log)
+    if getattr(mat, "law", None) in (60, "60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC") or getattr(mat, "law_name", None) in ("60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC"):
+        _get_law60()
+        if law60_plast3 is not None and hasattr(law60_plast3, "resolve"):
+            return law60_plast3.resolve(mat, model, log)
 
 
 def shell_membrane_tangent(mat):

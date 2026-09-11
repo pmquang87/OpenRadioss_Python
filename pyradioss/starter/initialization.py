@@ -463,6 +463,10 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
             from ..materials import law43_hill_tab
             if hasattr(law43_hill_tab, "resolve"):
                 law43_hill_tab.resolve(mat, model, log)
+        elif mat.law in (60, "60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC") or getattr(mat, "law_name", None) in ("60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC"):
+            from ..materials import law60_plast3
+            if hasattr(law60_plast3, "resolve"):
+                law60_plast3.resolve(mat, model, log)
 
     for mat_id, fm, source in model.raw_fails:
         mat = model.materials.get(mat_id)

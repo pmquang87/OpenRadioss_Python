@@ -70,6 +70,9 @@ class FunctTable:
             out = np.where(above, self.y[-1] + self.slope[-1] * (t - self.x[-1]), out)
         return float(out) if out.ndim == 0 else out
 
+    def __call__(self, t):
+        return self.eval(t)
+
     def __repr__(self):  # pragma: no cover - debug helper
         return f"FunctTable(id={self.id}, npoints={self.x.size}, title={self.title!r})"
 

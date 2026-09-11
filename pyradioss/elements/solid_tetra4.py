@@ -481,6 +481,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             st["off"][sl] = np.minimum(st["off"][sl], extra["off14"])
         elif "off43" in extra:
             st["off"][sl] = np.minimum(st["off"][sl], extra["off43"])
+        elif "off60" in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra["off60"])
         elif "off" in extra:
             st["off"][sl] = extra["off"]
 
@@ -522,7 +524,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     if st.get("chk_fail"):
         off = st["off"]
         for sl, mat, prop in st.get("slices", []):
-            eps_max = mat.params.get("eps_p_max", EP30)
+            eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
             if mat.fail is None and eps_max >= 1e30:
                 continue
             broken = np.zeros(sl.stop - sl.start, dtype=bool)

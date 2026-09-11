@@ -1405,7 +1405,7 @@ def check_mat_law60(
         rates = getattr(mat, "eps_rates", None)
     if rates is None and isinstance(params, dict):
         rates = params.get("rates", params.get("eps_rates", []))
-    if rates:
+    if rates is not None and len(rates) > 0:
         rates_list = []
         for r in rates:
             try:
@@ -1440,7 +1440,7 @@ def check_mat_law60(
     if hasattr(mat, "tables") and mat.tables:
         avail_curves.update(mat.tables.keys())
 
-    if avail_curves and funcs_list:
+    if avail_curves and funcs_list is not None and len(funcs_list) > 0:
         for fid in funcs_list:
             try:
                 ifid = int(fid)

@@ -354,7 +354,9 @@ def _init_material_state(group, dndx0):
     if any(mat.fail is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros(n)
     st["chk_fail"] = any(
-        mat.fail is not None or mat.params.get("eps_p_max", EP30) < 1e30
+        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 60)
+        or mat.params.get("eps_p_max", EP30) < 1e30
+        or mat.params.get("eps_max", EP30) < 1e30
         for _, mat, _ in st["slices"])
     st["mat_extra"] = {}
     for sl, mat, prop in st["slices"]:
@@ -599,6 +601,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             st["off"][sl] = np.minimum(st["off"][sl], extra["off28"])
         elif "off38" in extra:
             st["off"][sl] = np.minimum(st["off"][sl], extra["off38"])
+        elif "off60" in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra["off60"])
         elif "off" in extra:
             st["off"][sl] = extra["off"]
 
@@ -640,7 +644,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         for sl, mat, prop in st["slices"]:
             if getattr(mat, "law", 1) == 0:
                 continue
-            eps_max = mat.params.get("eps_p_max", EP30)
+            eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
             if mat.fail is None and eps_max >= 1e30:
                 continue
             broken = np.zeros(sl.stop - sl.start, dtype=bool)
