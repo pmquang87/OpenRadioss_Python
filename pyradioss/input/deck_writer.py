@@ -1966,6 +1966,39 @@ class StarterDeck:
                 srclmt = p_dict.get("srclmt", p_dict.get("LSD_SRCLMT", srclmt))
                 nrs = p_dict.get("nrs", p_dict.get("NRSFlag", nrs))
 
+        if "rho0" in kw_low and rho == 0.0: rho = kw_low["rho0"]
+        if "mat_rho" in kw_low and rho == 0.0: rho = kw_low["mat_rho"]
+        if "young" in kw_low and e == 0.0: e = kw_low["young"]
+        if "mat_e" in kw_low and e == 0.0: e = kw_low["mat_e"]
+        if "e" in kw_low and e == 0.0: e = kw_low["e"]
+        if "mat_nu" in kw_low and nu == 0.0: nu = kw_low["mat_nu"]
+        if "nu" in kw_low and nu == 0.0: nu = kw_low["nu"]
+        if "pr" in kw_low and nu == 0.0: nu = kw_low["pr"]
+        if "tsc" in kw_low and tsc == 0.0: tsc = kw_low["tsc"]
+        if "lsdyna_tsc" in kw_low and tsc == 0.0: tsc = kw_low["lsdyna_tsc"]
+        if "damp" in kw_low and damp == 0.10: damp = kw_low["damp"]
+        if "lsd_mat_damp" in kw_low and damp == 0.10: damp = kw_low["lsd_mat_damp"]
+        if "ncycle" in kw_low and ncycle == 12: ncycle = kw_low["ncycle"]
+        if "lsd_ncycle" in kw_low and ncycle == 12: ncycle = kw_low["lsd_ncycle"]
+        if "tab_id" in kw_low and tab_id == 0: tab_id = kw_low["tab_id"]
+        if "lsd_tid" in kw_low and tab_id == 0: tab_id = kw_low["lsd_tid"]
+        if "tid" in kw_low and tab_id == 0: tab_id = kw_low["tid"]
+        if "table_id" in kw_low and tab_id == 0: tab_id = kw_low["table_id"]
+        if "epsd_ref" in kw_low and epsd_ref == 0.0: epsd_ref = kw_low["epsd_ref"]
+        if "fscale" in kw_low and fscale == 1.0: fscale = kw_low["fscale"]
+        if "srclmt" in kw_low and srclmt == 1.0e20: srclmt = kw_low["srclmt"]
+        if "lsd_srclmt" in kw_low and srclmt == 1.0e20: srclmt = kw_low["lsd_srclmt"]
+        if "src_limit" in kw_low and srclmt == 1.0e20: srclmt = kw_low["src_limit"]
+        if "srclimit" in kw_low and srclmt == 1.0e20: srclmt = kw_low["srclimit"]
+        if "nrs" in kw_low and nrs == 0: nrs = kw_low["nrs"]
+        if "nrsflag" in kw_low and nrs == 0: nrs = kw_low["nrsflag"]
+        if "fixed_format" in kw_low:
+            fixed_format = bool(kw_low["fixed_format"])
+        if "fixed" in kw_low:
+            fixed_format = bool(kw_low["fixed"])
+        if "free" in kw_low and bool(kw_low["free"]):
+            fixed_format = False
+
         rho_val = float(rho)
         e_val = float(e)
         nu_val = float(nu)
@@ -2004,9 +2037,10 @@ class StarterDeck:
                 + fmt_int(nrs_val, 10)
             )
         else:
+            delim = kw_low.get("delimiter", ", " if (kw_low.get("comma") or kw_low.get("comma_delimited")) else " ")
             self.lines.append(f"{rho_val}")
-            self.lines.append(f"{e_val} {nu_val} {tsc_val} {damp_val} {ncycle_val}")
-            self.lines.append(f"{tab_id_val} {epsd_ref_val} {fscale_val} {srclmt_val} {nrs_val}")
+            self.lines.append(f"{e_val}{delim}{nu_val}{delim}{tsc_val}{delim}{damp_val}{delim}{ncycle_val}")
+            self.lines.append(f"{tab_id_val}{delim}{epsd_ref_val}{delim}{fscale_val}{delim}{srclmt_val}{delim}{nrs_val}")
 
         return self
 

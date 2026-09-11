@@ -461,6 +461,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             extra["vol"] = vol[sl]
             extra["vol0"] = st["vol0"][sl]
             extra["deltax"] = lc[sl]
+            extra["le"] = lc[sl]
+            extra["aldt"] = lc[sl]
             if hasattr(group, "_model") and hasattr(group._model, "t"):
                 extra["time"] = group._model.t
         _, _, c_new = materials.solid_update(

@@ -3355,6 +3355,12 @@ def check_mat_law163(
 
     def _extract(keys: list[str], default: float = 0.0) -> float:
         for k in keys:
+            if k in kwargs and kwargs[k] is not None:
+                try:
+                    return float(kwargs[k])
+                except (TypeError, ValueError):
+                    pass
+        for k in keys:
             if hasattr(mat, k):
                 val = getattr(mat, k)
                 if val is not None:
@@ -3369,26 +3375,31 @@ def check_mat_law163(
                         return float(val)
                     except (TypeError, ValueError):
                         pass
-            if k in kwargs:
-                val = kwargs[k]
-                if val is not None:
-                    try:
-                        return float(val)
-                    except (TypeError, ValueError):
-                        pass
         return default
 
     # 1. Density rho > 0
-    rho = getattr(mat, "rho", None)
+    rho = None
+    for k in ("rho", "rho0", "MAT_RHO", "RHO", "RHO0", "rho_i"):
+        if k in kwargs and kwargs[k] is not None:
+            try:
+                rho = float(kwargs[k])
+                break
+            except (TypeError, ValueError):
+                pass
     if rho is None:
-        rho = getattr(mat, "rho0", None)
+        if hasattr(mat, "rho") and getattr(mat, "rho") is not None:
+            try:
+                rho = float(getattr(mat, "rho"))
+            except (TypeError, ValueError):
+                pass
+    if rho is None:
+        if hasattr(mat, "rho0") and getattr(mat, "rho0") is not None:
+            try:
+                rho = float(getattr(mat, "rho0"))
+            except (TypeError, ValueError):
+                pass
     if rho is None:
         rho = _extract(["rho", "rho0", "MAT_RHO", "RHO", "RHO0", "rho_i"], default=0.0)
-    else:
-        try:
-            rho = float(rho)
-        except (TypeError, ValueError):
-            rho = 0.0
 
     if rho <= 0.0:
         log.error(f"/MAT/LAW163/{mid}: initial density RHO must be > 0 (got {rho:g})", "MAT CHECK")
@@ -3440,7 +3451,7 @@ def check_mat_law163(
                         if m_id is not None:
                             mids_in_group.add(m_id)
                 if actual_mid in mids_in_group:
-                    if name in ("shells", "shells_qbat", "shells_qeph", "sh3n", "quads"):
+                    if name in ("shells", "shells_qbat", "shells_qeph", "sh3n", "quads", "quad4_2d", "tria3_2d", "elements_2d", "plane_strain", "plane_stress"):
                         log.error(
                             f"/MAT/LAW163/{actual_mid} (/MAT/CRUSHABLE_FOAM) is not supported for shell elements ({name}) (ANCMSG 305)",
                             "MAT CHECK",

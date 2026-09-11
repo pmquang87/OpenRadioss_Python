@@ -34572,17 +34572,78 @@ def read_mat_law95(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law163(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW163/id`` or ``/MAT/CRUSHABLE_FOAM/id`` (M183, M560): Crushable foam."""
-    from ..model.entities import MatLaw163
+    """``/MAT/LAW163/id`` or ``/MAT/CRUSHABLE_FOAM/id`` or ``/MAT/CRUSH_FOAM/id`` (M183, M560): Crushable foam."""
+    from ..model.entities import MatLaw163, Material
     mat_id = block.user_id or 0
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank]
+
+    def _card_tokens(c: Any) -> list[str]:
+        raw = getattr(c, "raw", str(c)).strip()
+        for ch in ("#", "$"):
+            if ch in raw:
+                raw = raw.split(ch)[0].strip()
+        if not raw:
+            return []
+        if "," in raw:
+            parts = [p.strip() for p in raw.split(",")]
+            while parts and parts[-1] == "":
+                parts.pop()
+            return parts
+        return raw.split()
+
+    def _fval_safe(v: Any, default: float = 0.0) -> float:
+        if v is None:
+            return default
+        s = str(v).strip().replace("D", "E").replace("d", "e")
+        if not s:
+            return default
+        try:
+            return float(s)
+        except (ValueError, TypeError):
+            return default
+
+    def _ival_safe(v: Any, default: int = 0) -> int:
+        if v is None:
+            return default
+        s = str(v).strip()
+        if not s:
+            return default
+        try:
+            return int(float(s))
+        except (ValueError, TypeError):
+            return default
+
+    has_comma = any("," in getattr(c, "raw", str(c)) for c in block.cards)
+    is_fixed = block.fixed and not has_comma
+    if is_fixed:
+        for c in block.cards:
+            c_raw = getattr(c, "raw", str(c))
+            raw_s = c_raw.strip()
+            if not raw_s or raw_s.startswith(("#", "$")):
+                continue
+            if "\t" in c_raw:
+                is_fixed = False
+                break
+            toks = raw_s.split()
+            if len(toks) > 1 and len(c_raw[:20].split()) > 1:
+                is_fixed = False
+                break
+            if len(toks) > 1 and len(c_raw.rstrip()) <= 20:
+                is_fixed = False
+                break
+
+    title, cards = _fixed_data(block) if is_fixed else _title_and_data(block)
+    if is_fixed:
+        valid_cards = [c for c in cards if not getattr(c, "raw", str(c)).strip().startswith(("#", "$"))]
+    else:
+        valid_cards = [c for c in cards if not getattr(c, "is_blank", False) and not getattr(c, "raw", str(c)).strip().startswith(("#", "$"))]
+
     if not valid_cards:
         log.error(f"/MAT/LAW163/{mat_id}: missing data cards", block.source)
         return
 
     rho = 0.0
-    e, nu, tsc, damp = 0.0, 0.0, 0.0, 0.10
+    e, nu, tsc = 0.0, 0.0, 0.0
+    damp = 0.10
     ncycle = 12
     tab_id = 0
     epsd_ref = 0.0
@@ -34590,62 +34651,80 @@ def read_mat_law163(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     srclmt = 1.0e20
     nrs = 0
 
-    if block.fixed:
-        f1 = valid_cards[0].cut("MAT_LAW163_1")
-        rho = _fval(f1[0]) if len(f1) > 0 else 0.0
+    if is_fixed:
+        # Card 1: RHO (%20lg)
+        if len(valid_cards) > 0:
+            f1 = valid_cards[0].cut("MAT_LAW163_1")
+            rho = _fval_safe(f1[0]) if len(f1) > 0 else 0.0
 
+        # Card 2: E, NU, TSC, DAMP, [blank], NCYCLE (%20lg%20lg%20lg%20lg%10s%10d)
         if len(valid_cards) > 1:
             f2 = valid_cards[1].cut("MAT_LAW163_2")
-            e = _fval(f2[0]) if len(f2) > 0 else 0.0
-            nu = _fval(f2[1]) if len(f2) > 1 else 0.0
-            tsc = _fval(f2[2]) if len(f2) > 2 else 0.0
-            damp_val = _fval(f2[3]) if len(f2) > 3 and f2[3].strip() else 0.0
-            damp = damp_val if damp_val > 0.0 else 0.10
-            ncycle_val = _ival(f2[5]) if len(f2) > 5 and f2[5].strip() else 0
+            e = _fval_safe(f2[0]) if len(f2) > 0 else 0.0
+            nu = _fval_safe(f2[1]) if len(f2) > 1 else 0.0
+            tsc = _fval_safe(f2[2]) if len(f2) > 2 else 0.0
+            damp_s = f2[3].strip() if len(f2) > 3 else ""
+            damp = _fval_safe(damp_s, 0.10) if damp_s else 0.10
+            damp = damp if damp != 0.0 else 0.10
+            ncycle_s = f2[5].strip() if len(f2) > 5 else ""
+            ncycle_val = _ival_safe(ncycle_s, 12) if ncycle_s else 12
             ncycle = ncycle_val if ncycle_val > 0 else 12
 
+        # Card 3: [blank], TAB_ID, EPSD_REF, FSCALE, SRCLMT, [blank], NRS (%10s%10d%20lg%20lg%20lg%10s%10d)
         if len(valid_cards) > 2:
             f3 = valid_cards[2].cut("MAT_LAW163_3")
-            tab_id = _ival(f3[1]) if len(f3) > 1 else 0
-            epsd_ref = _fval(f3[2]) if len(f3) > 2 else 0.0
-            fscale_val = _fval(f3[3], 1.0) if len(f3) > 3 and f3[3].strip() else 1.0
+            tab_id = _ival_safe(f3[1]) if len(f3) > 1 else 0
+            epsd_ref = _fval_safe(f3[2]) if len(f3) > 2 else 0.0
+            fscale_s = f3[3].strip() if len(f3) > 3 else ""
+            fscale_val = _fval_safe(fscale_s, 1.0) if fscale_s else 1.0
             fscale = fscale_val if fscale_val != 0.0 else 1.0
-            srclmt_val = _fval(f3[4]) if len(f3) > 4 and f3[4].strip() else 0.0
+            srclmt_s = f3[4].strip() if len(f3) > 4 else ""
+            srclmt_val = _fval_safe(srclmt_s, 1.0e20) if srclmt_s else 1.0e20
             srclmt = srclmt_val if srclmt_val > 0.0 else 1.0e20
-            nrs = _ival(f3[6]) if len(f3) > 6 else 0
+            nrs = _ival_safe(f3[6]) if len(f3) > 6 else 0
     else:
-        toks1 = valid_cards[0].tokens()
-        rho = float(toks1[0]) if len(toks1) > 0 else 0.0
+        # Card 1: rho
+        if len(valid_cards) > 0:
+            toks1 = _card_tokens(valid_cards[0])
+            rho = _fval_safe(toks1[0]) if len(toks1) > 0 else 0.0
 
+        # Card 2: e, nu, tsc, damp, ncycle
         if len(valid_cards) > 1:
-            toks2 = valid_cards[1].tokens()
-            e = float(toks2[0]) if len(toks2) > 0 else 0.0
-            nu = float(toks2[1]) if len(toks2) > 1 else 0.0
-            tsc = float(toks2[2]) if len(toks2) > 2 else 0.0
-            damp_val = float(toks2[3]) if len(toks2) > 3 else 0.0
-            damp = damp_val if damp_val > 0.0 else 0.10
+            toks2 = _card_tokens(valid_cards[1])
+            e = _fval_safe(toks2[0]) if len(toks2) > 0 else 0.0
+            nu = _fval_safe(toks2[1]) if len(toks2) > 1 else 0.0
+            tsc = _fval_safe(toks2[2]) if len(toks2) > 2 else 0.0
+            damp_s = toks2[3].strip() if len(toks2) > 3 else ""
+            damp = _fval_safe(damp_s, 0.10) if damp_s else 0.10
+            damp = damp if damp != 0.0 else 0.10
             if len(toks2) >= 6:
-                ncycle_val = int(float(toks2[5]))
+                ncycle_s = toks2[5].strip()
             elif len(toks2) >= 5:
-                ncycle_val = int(float(toks2[4]))
+                ncycle_s = toks2[4].strip()
             else:
-                ncycle_val = 0
+                ncycle_s = ""
+            ncycle_val = _ival_safe(ncycle_s, 12) if ncycle_s else 12
             ncycle = ncycle_val if ncycle_val > 0 else 12
 
+        # Card 3: tab_id, epsd_ref, fscale, srclmt, nrs (or with blanks: 7 tokens)
         if len(valid_cards) > 2:
-            toks3 = valid_cards[2].tokens()
+            toks3 = _card_tokens(valid_cards[2])
             if len(toks3) >= 7:
-                tab_id = int(float(toks3[1]))
-                epsd_ref = float(toks3[2])
-                fscale_val = float(toks3[3]) if len(toks3) > 3 else 1.0
-                srclmt_val = float(toks3[4]) if len(toks3) > 4 else 0.0
-                nrs = int(float(toks3[6])) if len(toks3) > 6 else 0
+                tab_id = _ival_safe(toks3[1])
+                epsd_ref = _fval_safe(toks3[2])
+                fscale_s = toks3[3].strip() if len(toks3) > 3 else ""
+                fscale_val = _fval_safe(fscale_s, 1.0) if fscale_s else 1.0
+                srclmt_s = toks3[4].strip() if len(toks3) > 4 else ""
+                srclmt_val = _fval_safe(srclmt_s, 1.0e20) if srclmt_s else 1.0e20
+                nrs = _ival_safe(toks3[6]) if len(toks3) > 6 else 0
             else:
-                tab_id = int(float(toks3[0])) if len(toks3) > 0 else 0
-                epsd_ref = float(toks3[1]) if len(toks3) > 1 else 0.0
-                fscale_val = float(toks3[2]) if len(toks3) > 2 else 1.0
-                srclmt_val = float(toks3[3]) if len(toks3) > 3 else 0.0
-                nrs = int(float(toks3[4])) if len(toks3) > 4 else 0
+                tab_id = _ival_safe(toks3[0]) if len(toks3) > 0 else 0
+                epsd_ref = _fval_safe(toks3[1]) if len(toks3) > 1 else 0.0
+                fscale_s = toks3[2].strip() if len(toks3) > 2 else ""
+                fscale_val = _fval_safe(fscale_s, 1.0) if fscale_s else 1.0
+                srclmt_s = toks3[3].strip() if len(toks3) > 3 else ""
+                srclmt_val = _fval_safe(srclmt_s, 1.0e20) if srclmt_s else 1.0e20
+                nrs = _ival_safe(toks3[4]) if len(toks3) > 4 else 0
             fscale = fscale_val if fscale_val != 0.0 else 1.0
             srclmt = srclmt_val if srclmt_val > 0.0 else 1.0e20
 

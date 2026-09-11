@@ -359,21 +359,7 @@ def _lookup_yield(
         dsdgam_val = np.zeros(n, dtype=gama.dtype)
         return -np.abs(sigy_val) * fscale, np.maximum(dsdgam_val * fscale, 0.0)
 
-    # 3. Callable function: f(gama, dgamdt) or f(gama)
-    if callable(table):
-        try:
-            res = table(gama, dgamdt)
-        except TypeError:
-            res = table(gama)
-        if isinstance(res, tuple) and len(res) == 2:
-            sigy_val = np.asarray(res[0], dtype=gama.dtype)
-            dsdgam_val = np.asarray(res[1], dtype=gama.dtype)
-        else:
-            sigy_val = np.asarray(res, dtype=gama.dtype)
-            dsdgam_val = np.zeros(n, dtype=gama.dtype)
-        return -np.abs(sigy_val) * fscale, np.maximum(dsdgam_val * fscale, 0.0)
-
-    # 4. FunctTable or object with x, y, slope attributes (1D curve)
+    # 3. FunctTable or object with x, y, slope attributes (1D curve)
     if isinstance(table, (FunctTable, SmoothFunctTable)) or (hasattr(table, "x") and hasattr(table, "y")):
         xs = np.asarray(table.x, dtype=float)
         ys = np.asarray(table.y, dtype=float)
@@ -388,7 +374,7 @@ def _lookup_yield(
         sigy_val = ys[idx - 1] + dsdgam_val * (gama - xs[idx - 1])
         return -np.abs(sigy_val) * fscale, np.maximum(dsdgam_val * fscale, 0.0)
 
-    # 5. 2-tuple (x, y)
+    # 4. 2-tuple (x, y)
     if isinstance(table, (tuple, list)) and len(table) == 2 and isinstance(table[0], (np.ndarray, list, tuple)):
         xs = np.asarray(table[0], dtype=float)
         ys = np.asarray(table[1], dtype=float)
@@ -398,7 +384,7 @@ def _lookup_yield(
         sigy_val = ys[idx - 1] + dsdgam_val * (gama - xs[idx - 1])
         return -np.abs(sigy_val) * fscale, np.maximum(dsdgam_val * fscale, 0.0)
 
-    # 6. 3-tuple (xg, rates, Y) -> 2D table lookup (strain x strain rate)
+    # 5. 3-tuple (xg, rates, Y) -> 2D table lookup (strain x strain rate)
     if isinstance(table, (tuple, list)) and len(table) == 3:
         xg = np.asarray(table[0], dtype=float)
         rates = np.asarray(table[1], dtype=float)
@@ -434,12 +420,26 @@ def _lookup_yield(
 
         return -np.abs(sigy_val) * fscale, np.maximum(dsdgam_val * fscale, 0.0)
 
-    # 7. Dict with table keys (e.g. {'xg': ..., 'rates': ..., 'Y': ...})
+    # 6. Dict with table keys (e.g. {'xg': ..., 'rates': ..., 'Y': ...})
     if isinstance(table, dict):
         if "xg" in table and "rates" in table and "Y" in table:
             return _lookup_yield((table["xg"], table["rates"], table["Y"]), gama, dgamdt, fscale=fscale)
         if "x" in table and "y" in table:
             return _lookup_yield((table["x"], table["y"]), gama, dgamdt, fscale=fscale)
+
+    # 7. Callable function: f(gama, dgamdt) or f(gama)
+    if callable(table):
+        try:
+            res = table(gama, dgamdt)
+        except TypeError:
+            res = table(gama)
+        if isinstance(res, tuple) and len(res) == 2:
+            sigy_val = np.asarray(res[0], dtype=gama.dtype)
+            dsdgam_val = np.asarray(res[1], dtype=gama.dtype)
+        else:
+            sigy_val = np.asarray(res, dtype=gama.dtype)
+            dsdgam_val = np.zeros(n, dtype=gama.dtype)
+        return -np.abs(sigy_val) * fscale, np.maximum(dsdgam_val * fscale, 0.0)
 
     # Fallback
     sigy_val = np.full(n, 1.0e20, dtype=gama.dtype)
@@ -529,6 +529,10 @@ def solid_update(
         le = np.atleast_1d(np.asarray(extra["le"], dtype=sig.dtype))
     elif extra is not None and "aldt" in extra:
         le = np.atleast_1d(np.asarray(extra["aldt"], dtype=sig.dtype))
+    elif extra is not None and "deltax" in extra:
+        le = np.atleast_1d(np.asarray(extra["deltax"], dtype=sig.dtype))
+    elif extra is not None and "lc" in extra:
+        le = np.atleast_1d(np.asarray(extra["lc"], dtype=sig.dtype))
     elif extra is not None and "char_len" in extra:
         le = np.atleast_1d(np.asarray(extra["char_len"], dtype=sig.dtype))
     else:
@@ -543,6 +547,10 @@ def solid_update(
             uvar = extra["uvar163"]
         elif "uvar" in extra:
             uvar = extra["uvar"]
+        elif "uvar1" in extra:
+            uvar = np.zeros((n, 2), dtype=sig.dtype)
+            uvar[:, 0] = np.atleast_1d(np.asarray(extra["uvar1"], dtype=sig.dtype))
+            uvar[:, 1] = le
 
     if uvar is None:
         uvar = np.zeros((n, 2), dtype=sig.dtype)
@@ -566,6 +574,18 @@ def solid_update(
         epsd_old = np.full(n, epsd_ref, dtype=sig.dtype)
     if epsd_old.size == 1 and n > 1:
         epsd_old = np.full(n, float(epsd_old[0]), dtype=sig.dtype)
+
+    # Optional explicit strain rate tensor (epsp) from extra
+    rates = None
+    if extra is not None:
+        if "rates" in extra and extra["rates"] is not None:
+            rates = np.atleast_2d(np.asarray(extra["rates"], dtype=sig.dtype))
+        elif "strain_rate" in extra and extra["strain_rate"] is not None:
+            rates = np.atleast_2d(np.asarray(extra["strain_rate"], dtype=sig.dtype))
+        elif "epsp" in extra and extra["epsp"] is not None:
+            arr = np.asarray(extra["epsp"], dtype=sig.dtype)
+            if arr.ndim == 2 and arr.shape[-1] == 6:
+                rates = arr
 
     # =========================================================================
     # 1. Computation of trial stress tensor (sigeps163.F90 lines 169-176)
@@ -605,7 +625,10 @@ def solid_update(
         dgamdt = (gama - uvar1_old) / dt_safe
     else:
         # True strain rate
-        dgamdt = -(deps[:, 0] + deps[:, 1] + deps[:, 2]) / dt_safe
+        if rates is not None:
+            dgamdt = -(rates[:, 0] + rates[:, 1] + rates[:, 2])
+        else:
+            dgamdt = -(deps[:, 0] + deps[:, 1] + deps[:, 2]) / dt_safe
 
     # Volumetric strain rate filtering
     alpha = _TWO_PI / (_TWO_PI + float(ncycle))
@@ -629,6 +652,8 @@ def solid_update(
         extra["epsd163"] = epsd_new
         extra["epsd"] = epsd_new
         extra["uvar163"] = uvar
+        extra["uvar"] = uvar
+        extra["uvar1"] = uvar[:, 0]
         extra["plas"] = plas
 
     # =========================================================================
@@ -662,12 +687,31 @@ def solid_update(
     # =========================================================================
     # 7. Viscous damping (sigeps163.F90 lines 279-307)
     # =========================================================================
+    # Fortran sigeps163.F90 lines 267-271: sound speed denominator is rho0 if rho <= em20
+    rho_ssp = np.where(rho_curr > _EM20, rho_curr, rho0)
     denom = np.copysign(np.maximum(np.abs(1.0 + gama), _EM20), 1.0 + gama)
     mod_eff = np.maximum(bulk, dsdgam) + _FOUR_THIRD * g
-    ssp0 = np.sqrt(mod_eff / rho_safe)
+    ssp0 = np.sqrt(mod_eff / rho_ssp)
     a = ssp0 * rho_safe * damp * le / denom
 
-    if dt > 0.0:
+    if rates is not None:
+        epsp_xx = rates[:, 0]
+        epsp_yy = rates[:, 1]
+        epsp_zz = rates[:, 2]
+        epsp_xy = rates[:, 3]
+        epsp_yz = rates[:, 4]
+        epsp_zx = rates[:, 5]
+        ldav = (epsp_xx + epsp_yy + epsp_zz) / 3.0
+
+        one_p_nu = 1.0 + nu
+        one_m_2nu = 1.0 - 2.0 * nu
+        sigv_xx = a * ((epsp_xx - ldav) / one_p_nu + ldav / one_m_2nu)
+        sigv_yy = a * ((epsp_yy - ldav) / one_p_nu + ldav / one_m_2nu)
+        sigv_zz = a * ((epsp_zz - ldav) / one_p_nu + ldav / one_m_2nu)
+        sigv_xy = a * epsp_xy / (2.0 * one_p_nu)
+        sigv_yz = a * epsp_yz / (2.0 * one_p_nu)
+        sigv_zx = a * epsp_zx / (2.0 * one_p_nu)
+    elif dt > 0.0:
         epsp_xx = deps[:, 0] / dt
         epsp_yy = deps[:, 1] / dt
         epsp_zz = deps[:, 2] / dt
@@ -694,6 +738,8 @@ def solid_update(
 
     if extra is not None:
         extra["sigv"] = np.column_stack([sigv_xx, sigv_yy, sigv_zz, sigv_xy, sigv_yz, sigv_zx])
+        extra["a"] = a
+        extra["dsdgam"] = dsdgam
 
     # Total stress tensor = reconstructed inviscid stress + viscous stress
     sig_tot = np.column_stack([
@@ -709,9 +755,9 @@ def solid_update(
     # 8. Sound speed computation (sigeps163.F90 lines 292-307)
     # =========================================================================
     if dt > 0.0:
-        c = np.sqrt((mod_eff + np.abs(a) / dt_safe) / rho_safe)
+        c = np.sqrt((mod_eff + np.abs(a) / dt_safe) / rho_ssp)
     else:
-        c = np.sqrt(mod_eff / rho_safe)
+        c = np.sqrt(mod_eff / rho_ssp)
 
     # Return processing
     epsp_out = plas
@@ -750,8 +796,28 @@ def sound_speed_solid(mat: Any, rho: Any = None, extra: dict | None = None, dt: 
     if rho is not None:
         r = np.asarray(rho, dtype=float)
         r_eff = np.where(r > _EM20, r, rho0)
-        c = np.sqrt(np.maximum(mod_base, 0.0) / r_eff)
+        mod_eff = np.full_like(r_eff, mod_base)
+
+        if dt > 0.0 and extra is not None:
+            if "a" in extra and extra["a"] is not None:
+                a_val = np.asarray(extra["a"], dtype=float)
+                mod_eff = mod_eff + np.abs(a_val) / max(float(dt), _EM20)
+            elif "damp" in extra or p.damp > 0.0:
+                damp = float(extra.get("damp", p.damp))
+                le = np.asarray(extra.get("le", extra.get("aldt", 1.0)), dtype=float)
+                gama = np.asarray(extra.get("gama", 0.0), dtype=float)
+                ssp0 = np.sqrt(np.maximum(mod_base, 0.0) / r_eff)
+                denom = np.copysign(np.maximum(np.abs(1.0 + gama), _EM20), 1.0 + gama)
+                r_safe = np.maximum(r, _EM20)
+                a_val = ssp0 * r_safe * damp * le / denom
+                mod_eff = mod_eff + np.abs(a_val) / max(float(dt), _EM20)
+
+        c = np.sqrt(np.maximum(mod_eff, 0.0) / r_eff)
         return float(c) if np.ndim(rho) == 0 else c
+
+    if dt > 0.0 and extra is not None and "a" in extra and extra["a"] is not None:
+        a_val = float(np.max(np.abs(extra["a"])))
+        mod_base = mod_base + a_val / max(float(dt), _EM20)
 
     return math.sqrt(max(mod_base, 0.0) / max(rho0, _EM20))
 
@@ -803,6 +869,7 @@ def extra_shapes(mat: Any = None, nip: int | None = None) -> dict[str, tuple[int
     return {
         "uvar163": (2,),
         "epsd163": (),
+        "sigv": (6,),
     }
 
 

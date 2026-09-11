@@ -1106,6 +1106,10 @@ MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
     "VISC_HONEY": solid_update_law50, "HYP_FOAM": solid_update_law50,
     "MAT_LAW50": solid_update_law50, "MAT_VISC_HONEY": solid_update_law50,
     "MAT_HYP_FOAM": solid_update_law50,
+    163: solid_update_law163, "163": solid_update_law163, "LAW163": solid_update_law163,
+    "CRUSHABLE_FOAM": solid_update_law163, "CRUSH_FOAM": solid_update_law163,
+    "MAT_LAW163": solid_update_law163, "MAT_CRUSHABLE_FOAM": solid_update_law163,
+    "MAT_CRUSH_FOAM": solid_update_law163, "LAW163_CRUSHABLE_FOAM": solid_update_law163,
 }
 
 MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
@@ -1141,6 +1145,10 @@ MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
     "VISC_HONEY": shell_update_law50, "HYP_FOAM": shell_update_law50,
     "MAT_LAW50": shell_update_law50, "MAT_VISC_HONEY": shell_update_law50,
     "MAT_HYP_FOAM": shell_update_law50,
+    163: shell_update_law163, "163": shell_update_law163, "LAW163": shell_update_law163,
+    "CRUSHABLE_FOAM": shell_update_law163, "CRUSH_FOAM": shell_update_law163,
+    "MAT_LAW163": shell_update_law163, "MAT_CRUSHABLE_FOAM": shell_update_law163,
+    "MAT_CRUSH_FOAM": shell_update_law163, "LAW163_CRUSHABLE_FOAM": shell_update_law163,
 }
 
 
