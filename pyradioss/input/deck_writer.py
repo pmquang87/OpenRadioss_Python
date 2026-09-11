@@ -4981,6 +4981,264 @@ class StarterDeck:
         kwargs.setdefault("law_name", "BARLAT2000")
         return self.mat_law73(*args, **kwargs)
 
+    def mat_law74(
+        self,
+        mid: int = 0,
+        title: str = "",
+        rho: float = 0.0,
+        rhor: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        eps_max: float = 1.0e30,
+        epsr1: float = 1.0e30,
+        epsr2: float = 2.0e30,
+        ifunce: int = 0,
+        einf: float = 0.0,
+        ce: float = 0.0,
+        fsmooth: int = 0,
+        chard: float = 0.0,
+        fcut: float = 0.0,
+        s11y: float = 1.0,
+        s22y: float = 1.0,
+        s33y: float = 1.0,
+        s12y: float = 1.0,
+        s23y: float = 1.0,
+        s31y: float = 1.0,
+        table_id: int = 0,
+        fscale: float = 1.0,
+        pscale: float = 1.0,
+        t0: float = 293.0,
+        rhocp: float = 0.0,
+        law_name: str = "LAW74",
+        unit_id: Optional[int] = None,
+        fixed_format: bool = True,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW74`` (/MAT/HILL_3D, /MAT/ORTH_PLAS, /MAT/THERM_HILL) (M563)
+        Tabulated Hill orthotropic plasticity for solids.
+
+        Reference:
+          - radioss120/MAT/matl74_74.cfg
+          - starter/source/materials/mat/mat074/hm_read_mat74.F
+
+        Cards:
+          Card 1: RHO, [Refer_Rho] (MAT_LAW74_1: [20] or [20, 20])
+          Card 2: E, NU, EPS_MAX, EPSR1, EPSR2 (MAT_LAW74_2: [20, 20, 20, 20, 20])
+          Card 3: Yr_fun, blank(10), EINF, CE (MAT_LAW74_3: [10, 10, 20, 20])
+          Card 4: blank(10), Fsmooth, C_HARD, FCUT (MAT_LAW74_4: [10, 10, 20, 20])
+          Card 5: S11Y, S22Y, S33Y (MAT_LAW74_5: [20, 20, 20])
+          Card 6: S12Y, S23Y, S31Y (MAT_LAW74_6: [20, 20, 20])
+          Card 7: FUN_A1, blank(10), FSCALE, PSCALE (MAT_LAW74_7: [10, 10, 20, 20])
+          Card 8: T0, RHOCP (MAT_LAW74_8: [20, 20])
+        """
+        if len(kwargs) == 0 and isinstance(mid, int) and isinstance(title, str) and isinstance(rho, (list, tuple)):
+            # Raw cards fallback: (mid, title, data_cards)
+            data_cards = rho
+            self._header("MAT", law_name, mid)
+            self._title(title)
+            self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+            return self
+
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+        if "fixed_format" in kw_low:
+            fixed_format = bool(kw_low["fixed_format"])
+        if "fixed" in kw_low:
+            fixed_format = bool(kw_low["fixed"])
+        if "free" in kw_low and bool(kw_low["free"]):
+            fixed_format = False
+        if "law_name" in kw_low:
+            law_name = str(kw_low["law_name"])
+
+        mat_obj = None
+        if hasattr(mid, "s11y") and (hasattr(mid, "rho") or hasattr(mid, "rho0")):
+            mat_obj = mid
+        elif hasattr(mid, "params") and ("s11y" in getattr(mid, "params", {}) or "S11Y" in getattr(mid, "params", {}) or getattr(mid, "law", None) in (74, "74", "LAW74")):
+            mat_obj = mid
+        elif "mat" in kw_low:
+            mat_obj = kw_low["mat"]
+        elif "material" in kw_low:
+            mat_obj = kw_low["material"]
+        elif "mat74" in kw_low:
+            mat_obj = kw_low["mat74"]
+        elif "mat_law74" in kw_low:
+            mat_obj = kw_low["mat_law74"]
+        elif "mat_hill_3d" in kw_low:
+            mat_obj = kw_low["mat_hill_3d"]
+        elif "mat_orth_plas" in kw_low:
+            mat_obj = kw_low["mat_orth_plas"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            if not title:
+                title = getattr(mat_obj, "title", "")
+            p = getattr(mat_obj, "params", {}) or {}
+            if not isinstance(p, dict):
+                p = {}
+            if rho == 0.0:
+                rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", p.get("rho", p.get("rho0", 0.0))))
+            if rhor == 0.0:
+                rhor = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", p.get("refer_rho", p.get("rhor", 0.0))))
+            if e == 0.0:
+                e = getattr(mat_obj, "e", getattr(mat_obj, "E", p.get("e", p.get("E", 0.0))))
+            if nu == 0.0:
+                nu = getattr(mat_obj, "nu", getattr(mat_obj, "Nu", p.get("nu", p.get("Nu", 0.0))))
+            if eps_max == 1.0e30:
+                eps_max = getattr(mat_obj, "eps_max", getattr(mat_obj, "epsp_max", p.get("eps_max", p.get("epsp_max", 1.0e30))))
+            if epsr1 == 1.0e30:
+                epsr1 = getattr(mat_obj, "epsr1", getattr(mat_obj, "epst1", p.get("epsr1", p.get("epst1", 1.0e30))))
+            if epsr2 == 2.0e30:
+                epsr2 = getattr(mat_obj, "epsr2", getattr(mat_obj, "epst2", p.get("epsr2", p.get("epst2", 2.0e30))))
+            if ifunce == 0:
+                ifunce = getattr(mat_obj, "ifunce", getattr(mat_obj, "yr_fun", p.get("ifunce", p.get("yr_fun", 0))))
+            if einf == 0.0:
+                einf = getattr(mat_obj, "einf", getattr(mat_obj, "efib", p.get("einf", p.get("efib", 0.0))))
+            if ce == 0.0:
+                ce = getattr(mat_obj, "ce", getattr(mat_obj, "c", p.get("ce", p.get("c", 0.0))))
+            if fsmooth == 0:
+                fsmooth = getattr(mat_obj, "fsmooth", p.get("fsmooth", 0))
+            if chard == 0.0:
+                chard = getattr(mat_obj, "chard", getattr(mat_obj, "c_hard", getattr(mat_obj, "fisokin", p.get("chard", p.get("c_hard", p.get("fisokin", 0.0))))))
+            if fcut == 0.0:
+                fcut = getattr(mat_obj, "fcut", p.get("fcut", 0.0))
+            if s11y == 1.0:
+                s11y = getattr(mat_obj, "s11y", getattr(mat_obj, "sig11y", p.get("s11y", p.get("sig11y", 1.0))))
+            if s22y == 1.0:
+                s22y = getattr(mat_obj, "s22y", getattr(mat_obj, "sig22y", p.get("s22y", p.get("sig22y", 1.0))))
+            if s33y == 1.0:
+                s33y = getattr(mat_obj, "s33y", getattr(mat_obj, "sig33y", p.get("s33y", p.get("sig33y", 1.0))))
+            if s12y == 1.0:
+                s12y = getattr(mat_obj, "s12y", getattr(mat_obj, "sig12y", p.get("s12y", p.get("sig12y", 1.0))))
+            if s23y == 1.0:
+                s23y = getattr(mat_obj, "s23y", getattr(mat_obj, "sig23y", p.get("s23y", p.get("sig23y", 1.0))))
+            if s31y == 1.0:
+                s31y = getattr(mat_obj, "s31y", getattr(mat_obj, "sig31y", p.get("s31y", p.get("sig31y", 1.0))))
+            if table_id == 0:
+                table_id = getattr(mat_obj, "table_id", getattr(mat_obj, "fun_a1", p.get("table_id", p.get("fun_a1", 0))))
+            if fscale == 1.0:
+                fscale = getattr(mat_obj, "fscale", getattr(mat_obj, "sigma_scale", p.get("fscale", p.get("sigma_scale", 1.0))))
+            if pscale == 1.0:
+                pscale = getattr(mat_obj, "pscale", getattr(mat_obj, "epspt_scale", p.get("pscale", p.get("epspt_scale", 1.0))))
+            if t0 == 293.0:
+                t0 = getattr(mat_obj, "t0", getattr(mat_obj, "t_initial", p.get("t0", p.get("t_initial", 293.0))))
+            if rhocp == 0.0:
+                rhocp = getattr(mat_obj, "rhocp", getattr(mat_obj, "spheat", p.get("rhocp", p.get("spheat", 0.0))))
+
+        if "id" in kwargs and mid == 0:
+            mid = kwargs["id"]
+        elif "mat_id" in kwargs and mid == 0:
+            mid = kwargs["mat_id"]
+        if "rho0" in kwargs and rho == 0.0:
+            rho = kwargs["rho0"]
+        if "refer_rho" in kwargs and rhor == 0.0:
+            rhor = kwargs["refer_rho"]
+        if "rhor" in kwargs and rhor == 0.0:
+            rhor = kwargs["rhor"]
+        if "E" in kwargs and e == 0.0:
+            e = kwargs["E"]
+        if "Nu" in kwargs and nu == 0.0:
+            nu = kwargs["Nu"]
+        if "epsp_max" in kwargs and eps_max == 1.0e30:
+            eps_max = kwargs["epsp_max"]
+        if "eps_p_max" in kwargs and eps_max == 1.0e30:
+            eps_max = kwargs["eps_p_max"]
+        if "epst1" in kwargs and epsr1 == 1.0e30:
+            epsr1 = kwargs["epst1"]
+        if "eps_t" in kwargs and epsr1 == 1.0e30:
+            epsr1 = kwargs["eps_t"]
+        if "epst2" in kwargs and epsr2 == 2.0e30:
+            epsr2 = kwargs["epst2"]
+        if "eps_m" in kwargs and epsr2 == 2.0e30:
+            epsr2 = kwargs["eps_m"]
+        if "yr_fun" in kwargs and ifunce == 0:
+            ifunce = kwargs["yr_fun"]
+        if "efib" in kwargs and einf == 0.0:
+            einf = kwargs["efib"]
+        if "c" in kwargs and ce == 0.0:
+            ce = kwargs["c"]
+        if "c_hard" in kwargs and chard == 0.0:
+            chard = kwargs["c_hard"]
+        if "fisokin" in kwargs and chard == 0.0:
+            chard = kwargs["fisokin"]
+        if "sig11y" in kwargs and s11y == 1.0:
+            s11y = kwargs["sig11y"]
+        if "sig22y" in kwargs and s22y == 1.0:
+            s22y = kwargs["sig22y"]
+        if "sig33y" in kwargs and s33y == 1.0:
+            s33y = kwargs["sig33y"]
+        if "sig12y" in kwargs and s12y == 1.0:
+            s12y = kwargs["sig12y"]
+        if "sig23y" in kwargs and s23y == 1.0:
+            s23y = kwargs["sig23y"]
+        if "sig31y" in kwargs and s31y == 1.0:
+            s31y = kwargs["sig31y"]
+        if "fun_a1" in kwargs and table_id == 0:
+            table_id = kwargs["fun_a1"]
+        if "tab_id" in kwargs and table_id == 0:
+            table_id = kwargs["tab_id"]
+        if "t_initial" in kwargs and t0 == 293.0:
+            t0 = kwargs["t_initial"]
+        if "spheat" in kwargs and rhocp == 0.0:
+            rhocp = kwargs["spheat"]
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        if fixed_format:
+            # Card 1: RHO [Refer_Rho]
+            if rhor is not None and float(rhor) != 0.0 and float(rhor) != float(rho):
+                self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(rhor, 20)}")
+            else:
+                self.lines.append(fmt_float(rho, 20))
+
+            # Card 2: E, NU, EPS_MAX, EPSR1, EPSR2
+            self.lines.append(
+                f"{fmt_float(e, 20)}{fmt_float(nu, 20)}{fmt_float(eps_max, 20)}{fmt_float(epsr1, 20)}{fmt_float(epsr2, 20)}"
+            )
+
+            # Card 3: Yr_fun (10), blank(10), Einf (20), C (20)
+            self.lines.append(f"{fmt_int(ifunce, 10)}{' ' * 10}{fmt_float(einf, 20)}{fmt_float(ce, 20)}")
+
+            # Card 4: blank(10), Fsmooth (10), CHard (20), Fcut (20)
+            self.lines.append(f"{' ' * 10}{fmt_int(fsmooth, 10)}{fmt_float(chard, 20)}{fmt_float(fcut, 20)}")
+
+            # Card 5: S11Y, S22Y, S33Y
+            self.lines.append(f"{fmt_float(s11y, 20)}{fmt_float(s22y, 20)}{fmt_float(s33y, 20)}")
+
+            # Card 6: S12Y, S23Y, S31Y
+            self.lines.append(f"{fmt_float(s12y, 20)}{fmt_float(s23y, 20)}{fmt_float(s31y, 20)}")
+
+            # Card 7: Table_ID (10), blank(10), Fscale (20), Pscale (20)
+            self.lines.append(f"{fmt_int(table_id, 10)}{' ' * 10}{fmt_float(fscale, 20)}{fmt_float(pscale, 20)}")
+
+            # Card 8: T0 (20), Rho_Cp (20)
+            self.lines.append(f"{fmt_float(t0, 20)}{fmt_float(rhocp, 20)}")
+        else:
+            delim = kw_low.get("delimiter", ", " if (kw_low.get("comma") or kw_low.get("comma_delimited")) else " ")
+            if rhor is not None and float(rhor) != 0.0 and float(rhor) != float(rho):
+                self.lines.append(f"{float(rho)}{delim}{float(rhor)}")
+            else:
+                self.lines.append(f"{float(rho)}")
+            self.lines.append(f"{float(e)}{delim}{float(nu)}{delim}{float(eps_max)}{delim}{float(epsr1)}{delim}{float(epsr2)}")
+            self.lines.append(f"{int(ifunce)}{delim}{float(einf)}{delim}{float(ce)}")
+            self.lines.append(f"{int(fsmooth)}{delim}{float(chard)}{delim}{float(fcut)}")
+            self.lines.append(f"{float(s11y)}{delim}{float(s22y)}{delim}{float(s33y)}")
+            self.lines.append(f"{float(s12y)}{delim}{float(s23y)}{delim}{float(s31y)}")
+            self.lines.append(f"{int(table_id)}{delim}{float(fscale)}{delim}{float(pscale)}")
+            self.lines.append(f"{float(t0)}{delim}{float(rhocp)}")
+
+        return self
+
+    def mat_hill_3d(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "HILL_3D")
+        return self.mat_law74(*args, **kwargs)
+
+    def mat_orth_plas(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "ORTH_PLAS")
+        return self.mat_law74(*args, **kwargs)
+
     def mat_law92(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/LAW92``."""
         self._header("MAT", "LAW92", mid)

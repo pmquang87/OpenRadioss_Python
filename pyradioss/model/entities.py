@@ -14222,30 +14222,625 @@ class MatLaw54:
 
 @dataclass
 class MatLaw74:
-    """``/MAT/LAW74`` & ``/MAT/HILL_THERM``: Thermal Hill orthotropic plasticity."""
+    """``/MAT/LAW74`` (/MAT/HILL_3D, /MAT/ORTH_PLAS, /MAT/THERM_HILL):
+    Tabulated Hill Orthotropic Plasticity for Solids (M563).
+
+    Upstream reference:
+      - ``starter/source/materials/mat/mat074/hm_read_mat74.F``
+      - ``hm_cfg_files/config/CFG/radioss120/MAT/matl74_74.cfg``
+    """
     id: int = 0
     rho: float = 0.0
-    ref_rho: float = 0.0
     e: float = 0.0
     nu: float = 0.0
-    eps_p_max: float = 0.0
-    eps_t: float = 0.0
-    eps_m: float = 0.0
+    eps_max: float = 1e30
+    epsr1: float = 1e30
+    epsr2: float = 2e30
+    ifunce: int = 0
+    einf: float = 0.0
+    ce: float = 0.0
     fsmooth: int = 0
-    c_hard: float = 0.0
+    chard: float = 0.0
     fcut: float = 0.0
-    sig11y: float = 0.0
-    sig22y: float = 0.0
-    sig33y: float = 0.0
-    sig12y: float = 0.0
-    sig23y: float = 0.0
-    sig31y: float = 0.0
-    tab_id: int = 0
-    sigma_scale: float = 1.0
-    epspt_scale: float = 1.0
-    ti: float = 0.0
-    rho0_cp: float = 0.0
+    s11y: float = 1.0
+    s22y: float = 1.0
+    s33y: float = 1.0
+    s12y: float = 1.0
+    s23y: float = 1.0
+    s31y: float = 1.0
+    table_id: int = 0
+    fscale: float = 1.0
+    pscale: float = 1.0
+    t0: float = 293.0
+    rhocp: float = 0.0
     title: str = ""
+    law: int = 74
+    law_name: str = "LAW74"
+    refer_rho: float = 0.0
+    fail: Optional[Any] = None
+    eos: Optional[Any] = None
+    params: dict = field(default_factory=dict)
+
+    def __init__(
+        self,
+        id: int = 0,
+        rho: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        eps_max: float = 1e30,
+        epsr1: float = 1e30,
+        epsr2: float = 2e30,
+        ifunce: int = 0,
+        einf: float = 0.0,
+        ce: float = 0.0,
+        fsmooth: int = 0,
+        chard: float = 0.0,
+        fcut: float = 0.0,
+        s11y: float = 1.0,
+        s22y: float = 1.0,
+        s33y: float = 1.0,
+        s12y: float = 1.0,
+        s23y: float = 1.0,
+        s31y: float = 1.0,
+        table_id: int = 0,
+        fscale: float = 1.0,
+        pscale: float = 1.0,
+        t0: float = 293.0,
+        rhocp: float = 0.0,
+        title: str = "",
+        law: int = 74,
+        law_name: str = "LAW74",
+        refer_rho: float = 0.0,
+        fail: Optional[Any] = None,
+        eos: Optional[Any] = None,
+        params: Optional[dict] = None,
+        **kwargs: Any,
+    ):
+        self.id = id
+        self.rho = kwargs.get("rho0", kwargs.get("MAT_RHO", rho))
+        self.refer_rho = kwargs.get("rhor", kwargs.get("ref_rho", kwargs.get("Refer_Rho", refer_rho)))
+        self.e = kwargs.get("E", kwargs.get("MAT_E", e))
+        self.nu = kwargs.get("Nu", kwargs.get("MAT_NU", nu))
+        self.eps_max = kwargs.get("eps_p_max", kwargs.get("epsp_max", kwargs.get("MAT_EPS", eps_max)))
+        self.epsr1 = kwargs.get("epst1", kwargs.get("MAT_EPST1", kwargs.get("eps_t", epsr1)))
+        self.epsr2 = kwargs.get("epst2", kwargs.get("MAT_EPST2", kwargs.get("eps_m", epsr2)))
+        self.ifunce = kwargs.get("yr_fun", kwargs.get("Yr_fun", ifunce))
+        self.einf = kwargs.get("efib", kwargs.get("MAT_EFIB", einf))
+        self.ce = kwargs.get("c", kwargs.get("MAT_C", ce))
+        self.fsmooth = kwargs.get("Fsmooth", fsmooth)
+        self.chard = kwargs.get("c_hard", kwargs.get("MAT_HARD", kwargs.get("fisokin", chard)))
+        self.fcut = kwargs.get("Fcut", fcut)
+        self.s11y = kwargs.get("MAT_SIGT1", kwargs.get("sig11y", kwargs.get("sigma11y", s11y)))
+        self.s22y = kwargs.get("MAT_SIGT2", kwargs.get("sig22y", kwargs.get("sigma22y", s22y)))
+        self.s33y = kwargs.get("MAT_SIGT3", kwargs.get("sig33y", kwargs.get("sigma33y", s33y)))
+        self.s12y = kwargs.get("MAT_SIGYT1", kwargs.get("sig12y", kwargs.get("sigma12y", s12y)))
+        self.s23y = kwargs.get("MAT_SIGYT2", kwargs.get("sig23y", kwargs.get("sigma23y", s23y)))
+        self.s31y = kwargs.get("MAT_SIGYT3", kwargs.get("sig31y", kwargs.get("sigma31y", s31y)))
+        self.table_id = kwargs.get("fun_a1", kwargs.get("FUN_A1", kwargs.get("tab_id", table_id)))
+        self.fscale = kwargs.get("MAT_FScale", kwargs.get("sigma_scale", fscale))
+        self.pscale = kwargs.get("MAT_PScale", kwargs.get("epspt_scale", pscale))
+        self.t0 = kwargs.get("t_initial", kwargs.get("T_Initial", kwargs.get("ti", t0)))
+        self.rhocp = kwargs.get("spheat", kwargs.get("MAT_SPHEAT", kwargs.get("rho0_cp", rhocp)))
+        self.title = title
+        self.law = law
+        self.law_name = law_name
+        self.fail = fail
+        self.eos = eos
+        self._extra_params = dict(params) if params is not None else {}
+
+    # Property helpers
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @rho0.setter
+    def rho0(self, val: float) -> None:
+        self.rho = val
+
+    @property
+    def rhor(self) -> float:
+        return self.refer_rho if self.refer_rho != 0.0 else self.rho
+
+    @rhor.setter
+    def rhor(self, val: float) -> None:
+        self.refer_rho = val
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @E.setter
+    def E(self, val: float) -> None:
+        self.e = val
+
+    @property
+    def Nu(self) -> float:
+        return self.nu
+
+    @Nu.setter
+    def Nu(self, val: float) -> None:
+        self.nu = val
+
+    @property
+    def G(self) -> float:
+        """Elastic shear modulus: G = 0.5 * E / (1 + nu)."""
+        denom = 2.0 * (1.0 + self.nu)
+        return self.e / denom if abs(denom) > 1e-12 else 0.0
+
+    @property
+    def bulk(self) -> float:
+        """Elastic bulk modulus: K = E / 3(1 - 2*nu)."""
+        denom = 3.0 * (1.0 - 2.0 * self.nu)
+        return self.e / denom if abs(denom) > 1e-12 else 0.0
+
+    @property
+    def K(self) -> float:
+        return self.bulk
+
+    @property
+    def sound_speed(self) -> CallableFloat:
+        """Acoustic sound speed: c = sqrt(E / rho0)."""
+        import math
+        c = math.sqrt(self.e / self.rho) if self.rho > 0.0 and self.e > 0.0 else 0.0
+        return CallableFloat(c)
+
+    @property
+    def sound_speed_solid(self) -> CallableFloat:
+        """3-D dilatational wave speed: c = sqrt((K + 4G/3) / rho0)."""
+        import math
+        c2 = (self.K + 4.0 * self.G / 3.0) / self.rho if self.rho > 0.0 else 0.0
+        return CallableFloat(math.sqrt(max(c2, 0.0)))
+
+    # Hill property helpers (hm_read_mat74.F)
+    @property
+    def FF(self) -> float:
+        if self.s11y == 0.0 or self.s22y == 0.0 or self.s33y == 0.0:
+            return 0.0
+        return 0.5 * (1.0 / (self.s22y ** 2) + 1.0 / (self.s33y ** 2) - 1.0 / (self.s11y ** 2))
+
+    @property
+    def GG(self) -> float:
+        if self.s11y == 0.0 or self.s22y == 0.0 or self.s33y == 0.0:
+            return 0.0
+        return 0.5 * (1.0 / (self.s11y ** 2) + 1.0 / (self.s33y ** 2) - 1.0 / (self.s22y ** 2))
+
+    @property
+    def HH(self) -> float:
+        if self.s11y == 0.0 or self.s22y == 0.0 or self.s33y == 0.0:
+            return 0.0
+        return 0.5 * (1.0 / (self.s11y ** 2) + 1.0 / (self.s22y ** 2) - 1.0 / (self.s33y ** 2))
+
+    @property
+    def LL(self) -> float:
+        if self.s23y == 0.0:
+            return 0.0
+        return 0.5 / (self.s23y ** 2)
+
+    @property
+    def MM(self) -> float:
+        if self.s31y == 0.0:
+            return 0.0
+        return 0.5 / (self.s31y ** 2)
+
+    @property
+    def NN(self) -> float:
+        if self.s12y == 0.0:
+            return 0.0
+        return 0.5 / (self.s12y ** 2)
+
+    # Lowercase Hill aliases
+    @property
+    def ff(self) -> float:
+        return self.FF
+
+    @property
+    def gg(self) -> float:
+        return self.GG
+
+    @property
+    def hh(self) -> float:
+        return self.HH
+
+    @property
+    def ll(self) -> float:
+        return self.LL
+
+    @property
+    def mm(self) -> float:
+        return self.MM
+
+    @property
+    def nn(self) -> float:
+        return self.NN
+
+    # CFG & legacy attribute aliases
+    @property
+    def ref_rho(self) -> float:
+        return self.refer_rho
+
+    @ref_rho.setter
+    def ref_rho(self, val: float) -> None:
+        self.refer_rho = val
+
+    @property
+    def eps_p_max(self) -> float:
+        return self.eps_max
+
+    @eps_p_max.setter
+    def eps_p_max(self, val: float) -> None:
+        self.eps_max = val
+
+    @property
+    def epsp_max(self) -> float:
+        return self.eps_max
+
+    @epsp_max.setter
+    def epsp_max(self, val: float) -> None:
+        self.eps_max = val
+
+    @property
+    def eps_t(self) -> float:
+        return self.epsr1
+
+    @eps_t.setter
+    def eps_t(self, val: float) -> None:
+        self.epsr1 = val
+
+    @property
+    def epst1(self) -> float:
+        return self.epsr1
+
+    @epst1.setter
+    def epst1(self, val: float) -> None:
+        self.epsr1 = val
+
+    @property
+    def eps_m(self) -> float:
+        return self.epsr2
+
+    @eps_m.setter
+    def eps_m(self, val: float) -> None:
+        self.epsr2 = val
+
+    @property
+    def epst2(self) -> float:
+        return self.epsr2
+
+    @epst2.setter
+    def epst2(self, val: float) -> None:
+        self.epsr2 = val
+
+    @property
+    def c_hard(self) -> float:
+        return self.chard
+
+    @c_hard.setter
+    def c_hard(self, val: float) -> None:
+        self.chard = val
+
+    @property
+    def fisokin(self) -> float:
+        return self.chard
+
+    @fisokin.setter
+    def fisokin(self, val: float) -> None:
+        self.chard = val
+
+    @property
+    def yr_fun(self) -> int:
+        return self.ifunce
+
+    @yr_fun.setter
+    def yr_fun(self, val: int) -> None:
+        self.ifunce = val
+
+    @property
+    def efib(self) -> float:
+        return self.einf
+
+    @efib.setter
+    def efib(self, val: float) -> None:
+        self.einf = val
+
+    @property
+    def c(self) -> float:
+        return self.ce
+
+    @c.setter
+    def c(self, val: float) -> None:
+        self.ce = val
+
+    @property
+    def sig11y(self) -> float:
+        return self.s11y
+
+    @sig11y.setter
+    def sig11y(self, val: float) -> None:
+        self.s11y = val
+
+    @property
+    def sig22y(self) -> float:
+        return self.s22y
+
+    @sig22y.setter
+    def sig22y(self, val: float) -> None:
+        self.s22y = val
+
+    @property
+    def sig33y(self) -> float:
+        return self.s33y
+
+    @sig33y.setter
+    def sig33y(self, val: float) -> None:
+        self.s33y = val
+
+    @property
+    def sig12y(self) -> float:
+        return self.s12y
+
+    @sig12y.setter
+    def sig12y(self, val: float) -> None:
+        self.s12y = val
+
+    @property
+    def sig23y(self) -> float:
+        return self.s23y
+
+    @sig23y.setter
+    def sig23y(self, val: float) -> None:
+        self.s23y = val
+
+    @property
+    def sig31y(self) -> float:
+        return self.s31y
+
+    @sig31y.setter
+    def sig31y(self, val: float) -> None:
+        self.s31y = val
+
+    @property
+    def sigt1(self) -> float:
+        return self.s11y
+
+    @sigt1.setter
+    def sigt1(self, val: float) -> None:
+        self.s11y = val
+
+    @property
+    def sigt2(self) -> float:
+        return self.s22y
+
+    @sigt2.setter
+    def sigt2(self, val: float) -> None:
+        self.s22y = val
+
+    @property
+    def sigt3(self) -> float:
+        return self.s33y
+
+    @sigt3.setter
+    def sigt3(self, val: float) -> None:
+        self.s33y = val
+
+    @property
+    def sigyt1(self) -> float:
+        return self.s12y
+
+    @sigyt1.setter
+    def sigyt1(self, val: float) -> None:
+        self.s12y = val
+
+    @property
+    def sigyt2(self) -> float:
+        return self.s23y
+
+    @sigyt2.setter
+    def sigyt2(self, val: float) -> None:
+        self.s23y = val
+
+    @property
+    def sigyt3(self) -> float:
+        return self.s31y
+
+    @sigyt3.setter
+    def sigyt3(self, val: float) -> None:
+        self.s31y = val
+
+    @property
+    def tab_id(self) -> int:
+        return self.table_id
+
+    @tab_id.setter
+    def tab_id(self, val: int) -> None:
+        self.table_id = val
+
+    @property
+    def fun_a1(self) -> int:
+        return self.table_id
+
+    @fun_a1.setter
+    def fun_a1(self, val: int) -> None:
+        self.table_id = val
+
+    @property
+    def sigma_scale(self) -> float:
+        return self.fscale
+
+    @sigma_scale.setter
+    def sigma_scale(self, val: float) -> None:
+        self.fscale = val
+
+    @property
+    def epspt_scale(self) -> float:
+        return self.pscale
+
+    @epspt_scale.setter
+    def epspt_scale(self, val: float) -> None:
+        self.pscale = val
+
+    @property
+    def ti(self) -> float:
+        return self.t0
+
+    @ti.setter
+    def ti(self, val: float) -> None:
+        self.t0 = val
+
+    @property
+    def t_initial(self) -> float:
+        return self.t0
+
+    @t_initial.setter
+    def t_initial(self, val: float) -> None:
+        self.t0 = val
+
+    @property
+    def rho0_cp(self) -> float:
+        return self.rhocp
+
+    @rho0_cp.setter
+    def rho0_cp(self, val: float) -> None:
+        self.rhocp = val
+
+    @property
+    def spheat(self) -> float:
+        return self.rhocp
+
+    @spheat.setter
+    def spheat(self, val: float) -> None:
+        self.rhocp = val
+
+    @property
+    def params(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "rho": self.rho,
+            "rho0": self.rho,
+            "refer_rho": self.refer_rho,
+            "ref_rho": self.refer_rho,
+            "rhor": self.rhor,
+            "e": self.e,
+            "E": self.e,
+            "nu": self.nu,
+            "Nu": self.nu,
+            "eps_max": self.eps_max,
+            "epsp_max": self.eps_max,
+            "eps_p_max": self.eps_max,
+            "epsr1": self.epsr1,
+            "epst1": self.epsr1,
+            "eps_t": self.epsr1,
+            "epsr2": self.epsr2,
+            "epst2": self.epsr2,
+            "eps_m": self.epsr2,
+            "ifunce": self.ifunce,
+            "yr_fun": self.ifunce,
+            "einf": self.einf,
+            "efib": self.einf,
+            "ce": self.ce,
+            "c": self.ce,
+            "fsmooth": self.fsmooth,
+            "Fsmooth": self.fsmooth,
+            "chard": self.chard,
+            "c_hard": self.chard,
+            "fisokin": self.chard,
+            "fcut": self.fcut,
+            "Fcut": self.fcut,
+            "s11y": self.s11y,
+            "sig11y": self.s11y,
+            "sigma11y": self.s11y,
+            "s22y": self.s22y,
+            "sig22y": self.s22y,
+            "sigma22y": self.s22y,
+            "s33y": self.s33y,
+            "sig33y": self.s33y,
+            "sigma33y": self.s33y,
+            "s12y": self.s12y,
+            "sig12y": self.s12y,
+            "sigma12y": self.s12y,
+            "s23y": self.s23y,
+            "sig23y": self.s23y,
+            "sigma23y": self.s23y,
+            "s31y": self.s31y,
+            "sig31y": self.s31y,
+            "sigma31y": self.s31y,
+            "table_id": self.table_id,
+            "tab_id": self.table_id,
+            "fun_a1": self.table_id,
+            "fscale": self.fscale,
+            "sigma_scale": self.fscale,
+            "pscale": self.pscale,
+            "epspt_scale": self.pscale,
+            "t0": self.t0,
+            "ti": self.t0,
+            "t_initial": self.t0,
+            "rhocp": self.rhocp,
+            "rho0_cp": self.rhocp,
+            "spheat": self.rhocp,
+            "title": self.title,
+            "law": self.law,
+            "law_name": self.law_name,
+            "FF": self.FF,
+            "GG": self.GG,
+            "HH": self.HH,
+            "LL": self.LL,
+            "MM": self.MM,
+            "NN": self.NN,
+        }
+        if hasattr(self, "_extra_params") and self._extra_params:
+            p.update(self._extra_params)
+        return p
+
+    @params.setter
+    def params(self, val: dict[str, Any]) -> None:
+        self._extra_params = dict(val) if val is not None else {}
+
+    # Mapping protocol
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        p = self.params
+        if key in p:
+            return p[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            raise KeyError(f"Cannot set unknown attribute {key!r} on MatLaw74")
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or key in self.params
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self) -> list[str]:
+        import dataclasses
+        k = [f.name for f in dataclasses.fields(self)]
+        k.extend([
+            "rho0", "rhor", "E", "nu", "Nu", "G", "bulk", "K", "sound_speed", "sound_speed_solid",
+            "FF", "GG", "HH", "LL", "MM", "NN", "ff", "gg", "hh", "ll", "mm", "nn",
+            "ref_rho", "eps_p_max", "epsp_max", "eps_t", "epst1", "eps_m", "epst2",
+            "c_hard", "fisokin", "yr_fun", "efib", "c",
+            "sig11y", "sig22y", "sig33y", "sig12y", "sig23y", "sig31y",
+            "tab_id", "fun_a1", "sigma_scale", "epspt_scale", "ti", "t_initial", "rho0_cp", "spheat"
+        ])
+        return list(dict.fromkeys(k))
+
+    def values(self) -> list[Any]:
+        return [self[k] for k in self.keys()]
+
+    def items(self) -> list[tuple[str, Any]]:
+        return [(k, self[k]) for k in self.keys()]
+
+
+MatHill3D = MatLaw74
+MatOrthPlas = MatLaw74
+MaterialLaw74 = MatLaw74
 
 
 @dataclass

@@ -80,6 +80,14 @@ _LAW66_KEYS = {66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "MAT_LAW66",
 for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells", "shells_qbat", "shells_qeph", "sh3n"):
     _ALLOWED_LAWS[_fam].update(_LAW66_KEYS)
 
+_LAW74_KEYS = {
+    74, "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "HILL_THERM",
+    "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "MAT_HILL_THERM",
+    "LAW74_HILL_3D", "LAW74_ORTH_PLAS", "LAW74_THERM_HILL", "LAW74_HILL_THERM",
+}
+for _fam in ("bricks", "tetras", "penta6", "pyra5"):
+    _ALLOWED_LAWS[_fam].update(_LAW74_KEYS)
+
 _ALLOWED_LAWS["quads"] = _ALLOWED_LAWS["shells"]
 _ALLOWED_LAWS["solids"] = _ALLOWED_LAWS["bricks"]
 _ALLOWED_LAWS["solids_heph"] = _ALLOWED_LAWS["bricks"]
@@ -3832,6 +3840,234 @@ def check_mat_law66(
 _check_mat_law66 = check_mat_law66
 
 
+def check_mat_law74(
+    model: Any = None,
+    mat_id: Any = None,
+    mat: Any = None,
+    log: Any = None,
+    **kwargs: Any,
+) -> None:
+    """Validate /MAT/LAW74 (/MAT/HILL_3D, /MAT/ORTH_PLAS, /MAT/THERM_HILL) parameter bounds (M563).
+
+    Citing hm_read_mat74.F and radioss120/MAT/matl74_74.cfg:
+      - rho0 > 0
+      - e > 0
+      - 0 <= nu < 0.5 (ANCMSG 1514)
+      - S11Y > 0, S22Y > 0, S33Y > 0, S12Y > 0, S23Y > 0, S31Y > 0 (ANCMSG 822)
+      - epsr1 < epsr2: if epsr1 >= epsr2, error (ANCMSG 1044)
+      - Reject 2D analysis: N2D > 0 (ANCMSG 305)
+      - Compatible elements: solids only; reject shell elements (ANCMSG 305) and 1D elements (ANCMSG 306).
+    """
+    actual_log = log
+    actual_model = model
+    actual_mat = mat
+    actual_mid = mat_id
+
+    candidates = [c for c in (model, mat_id, mat, log) if c is not None]
+    if hasattr(model, "params") and not isinstance(model, Model):
+        actual_mat = model
+        actual_model = None
+        actual_log = mat_id if isinstance(mat_id, MessageLog) else log
+        actual_mid = getattr(actual_mat, "id", kwargs.get("mat_id", 0))
+    elif hasattr(mat_id, "params") and isinstance(mat, MessageLog):
+        actual_mat = mat_id
+        actual_log = mat
+        actual_mid = getattr(actual_mat, "id", kwargs.get("mat_id", 0))
+    else:
+        for c in candidates:
+            if isinstance(c, MessageLog):
+                actual_log = c
+            elif isinstance(c, Model):
+                actual_model = c
+            elif hasattr(c, "params") or hasattr(c, "rho") or hasattr(c, "rho0") or hasattr(c, "s11y"):
+                actual_mat = c
+            elif isinstance(c, int) and not isinstance(c, bool):
+                actual_mid = c
+
+    if actual_mat is None:
+        if "mat" in kwargs:
+            actual_mat = kwargs["mat"]
+        elif "material" in kwargs:
+            actual_mat = kwargs["material"]
+        elif "mat74" in kwargs:
+            actual_mat = kwargs["mat74"]
+        elif "mat_law74" in kwargs:
+            actual_mat = kwargs["mat_law74"]
+        elif "mat_hill_3d" in kwargs:
+            actual_mat = kwargs["mat_hill_3d"]
+        elif "mat_orth_plas" in kwargs:
+            actual_mat = kwargs["mat_orth_plas"]
+
+    if actual_log is None:
+        if "log" in kwargs:
+            actual_log = kwargs["log"]
+        elif "logger" in kwargs:
+            actual_log = kwargs["logger"]
+        else:
+            actual_log = MessageLog()
+
+    mid_kw = kwargs.get("mat_id", kwargs.get("mid", actual_mid))
+    if actual_mat is None and actual_model is not None:
+        if mid_kw is not None:
+            actual_mat = actual_model.materials.get(mid_kw) or getattr(actual_model, "mat_law74s", {}).get(mid_kw)
+        else:
+            for m_id, m_obj in list(getattr(actual_model, "mat_law74s", {}).items()):
+                check_mat_law74(model=actual_model, mat_id=m_id, mat=m_obj, log=actual_log)
+            for m_id, m_obj in list(getattr(actual_model, "materials", {}).items()):
+                if getattr(m_obj, "law", None) in (74, "74", "LAW74", "HILL_3D", "ORTH_PLAS") or getattr(m_obj, "law_name", None) in ("74", "LAW74", "HILL_3D", "ORTH_PLAS", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS"):
+                    if m_id not in getattr(actual_model, "mat_law74s", {}):
+                        check_mat_law74(model=actual_model, mat_id=m_id, mat=m_obj, log=actual_log)
+            return
+
+    if actual_mat is None:
+        return
+
+    mat = actual_mat
+    log = actual_log
+    model = actual_model
+    mid = getattr(mat, "id", mid_kw if mid_kw is not None else 0)
+    params = getattr(mat, "params", {}) or {}
+
+    def _extract(keys: list[str], default: float = 0.0) -> float:
+        for k in keys:
+            if hasattr(mat, k):
+                val = getattr(mat, k)
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (TypeError, ValueError):
+                        pass
+            if isinstance(params, dict) and k in params:
+                val = params[k]
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (TypeError, ValueError):
+                        pass
+            if k in kwargs and kwargs[k] is not None:
+                try:
+                    return float(kwargs[k])
+                except (TypeError, ValueError):
+                    pass
+        return default
+
+    # 1. Density rho0 > 0
+    rho0 = _extract(["rho", "rho0", "MAT_RHO", "RHO", "RHO0"], default=0.0)
+    if rho0 <= 0.0:
+        log.error(f"/MAT/LAW74/{mid}: initial density RHO must be > 0 (got {rho0:g})", "MAT CHECK")
+
+    # 2. Young's modulus E > 0
+    e = _extract(["e", "E", "MAT_E", "young"], default=0.0)
+    if e <= 0.0:
+        log.error(f"/MAT/LAW74/{mid}: Young's modulus E must be > 0 (got {e:g})", "MAT CHECK")
+
+    # 3. Poisson's ratio: 0.0 <= nu < 0.5 (ANCMSG 1514)
+    nu = _extract(["nu", "Nu", "NU", "MAT_NU"], default=0.0)
+    if nu < 0.0 or nu >= 0.5:
+        log.error(f"/MAT/LAW74/{mid}: Poisson's ratio nu must satisfy 0 <= nu < 0.5 (got {nu:g}) (ANCMSG 1514)", "MAT CHECK")
+
+    # 4. Yield stresses: S11Y > 0, S22Y > 0, S33Y > 0, S12Y > 0, S23Y > 0, S31Y > 0 (ANCMSG 822)
+    s11y = _extract(["s11y", "S11Y", "MAT_SIGT1", "sig11y"], default=0.0)
+    if s11y <= 0.0:
+        log.error(f"/MAT/LAW74/{mid}: yield stress parameter S11Y must be > 0 (got {s11y:g}) (ANCMSG 822)", "MAT CHECK")
+    s22y = _extract(["s22y", "S22Y", "MAT_SIGT2", "sig22y"], default=0.0)
+    if s22y <= 0.0:
+        log.error(f"/MAT/LAW74/{mid}: yield stress parameter S22Y must be > 0 (got {s22y:g}) (ANCMSG 822)", "MAT CHECK")
+    s33y = _extract(["s33y", "S33Y", "MAT_SIGT3", "sig33y"], default=0.0)
+    if s33y <= 0.0:
+        log.error(f"/MAT/LAW74/{mid}: yield stress parameter S33Y must be > 0 (got {s33y:g}) (ANCMSG 822)", "MAT CHECK")
+    s12y = _extract(["s12y", "S12Y", "MAT_SIGYT1", "sig12y"], default=0.0)
+    if s12y <= 0.0:
+        log.error(f"/MAT/LAW74/{mid}: yield stress parameter S12Y must be > 0 (got {s12y:g}) (ANCMSG 822)", "MAT CHECK")
+    s23y = _extract(["s23y", "S23Y", "MAT_SIGYT2", "sig23y"], default=0.0)
+    if s23y <= 0.0:
+        log.error(f"/MAT/LAW74/{mid}: yield stress parameter S23Y must be > 0 (got {s23y:g}) (ANCMSG 822)", "MAT CHECK")
+    s31y = _extract(["s31y", "S31Y", "MAT_SIGYT3", "sig31y"], default=0.0)
+    if s31y <= 0.0:
+        log.error(f"/MAT/LAW74/{mid}: yield stress parameter S31Y must be > 0 (got {s31y:g}) (ANCMSG 822)", "MAT CHECK")
+
+    # 5. Failure strains: epsr1 < epsr2 (ANCMSG 1044)
+    epsr1 = _extract(["epsr1", "epst1", "MAT_EPST1"], default=1.0e30)
+    epsr2 = _extract(["epsr2", "epst2", "MAT_EPST2"], default=2.0e30)
+    if epsr1 >= epsr2:
+        log.error(
+            f"/MAT/LAW74/{mid}: tensile failure strain 1 ({epsr1:g}) must be less than tensile failure strain 2 ({epsr2:g}) (ANCMSG 1044)",
+            "MAT CHECK",
+        )
+
+    # 6. 2D analysis check (ANCMSG 305)
+    if model is not None and getattr(model, "n2d", 0) > 0:
+        log.error(f"/MAT/LAW74/{mid}: LAW74 is not supported for 2D analysis (N2D > 0) (ANCMSG 305)", "MAT CHECK")
+
+    # 7. Compatible elements check (ANCMSG 305 for shells, ANCMSG 306 for 1D elements)
+    if model is not None:
+        actual_mid = mid
+        if hasattr(model, "element_groups") and callable(model.element_groups):
+            try:
+                grps = list(model.element_groups())
+            except TypeError:
+                grps = []
+            for item in grps:
+                if isinstance(item, tuple) and len(item) == 2:
+                    name, el_group = item
+                else:
+                    continue
+                mids_in_group = set()
+                if hasattr(el_group, "values") and callable(el_group.values):
+                    for el in el_group.values():
+                        el_mid = getattr(el, "mat_id", getattr(el, "mid", None))
+                        if el_mid is not None:
+                            mids_in_group.add(el_mid)
+                if hasattr(el_group, "state") and isinstance(el_group.state, dict) and "slices" in el_group.state:
+                    for _, m_part, _ in el_group.state["slices"]:
+                        m_id = getattr(m_part, "id", None)
+                        if m_id is not None:
+                            mids_in_group.add(m_id)
+                if actual_mid in mids_in_group:
+                    if name in ("shells", "shells_qbat", "shells_qeph", "sh3n", "quads", "quad4_2d", "tria3_2d", "elements_2d", "plane_strain", "plane_stress"):
+                        log.error(
+                            f"/MAT/LAW74/{actual_mid} (/MAT/HILL_3D) is not supported for shell elements ({name}) (ANCMSG 305)",
+                            "MAT CHECK",
+                        )
+                    elif name in ("trusses", "beams", "springs"):
+                        log.error(
+                            f"/MAT/LAW74/{actual_mid} (/MAT/HILL_3D) is not supported for 1D elements ({name}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
+        if hasattr(model, "parts") and isinstance(model.parts, dict):
+            for pid, part in model.parts.items():
+                p_mid = getattr(part, "mat_id", getattr(part, "mid", None))
+                if p_mid == actual_mid:
+                    etype = str(getattr(part, "elem_type", getattr(part, "type", ""))).upper()
+                    prop_id = getattr(part, "prop_id", None)
+                    if not etype or etype in ("NONE", ""):
+                        if prop_id is not None:
+                            props = getattr(model, "properties", {}) or getattr(model, "props", {})
+                            prop = props.get(prop_id) if isinstance(props, dict) else None
+                            if prop is None and hasattr(model, "prop_shells") and isinstance(model.prop_shells, dict) and prop_id in model.prop_shells:
+                                etype = "SHELL"
+                            elif prop is not None:
+                                ptype = str(getattr(prop, "type", getattr(prop, "card_name", ""))).upper()
+                                if any(s in ptype for s in ("SHELL", "TYPE1", "TYPE2")):
+                                    etype = "SHELL"
+                                elif any(s in ptype for s in ("BEAM", "TRUSS", "SPRING", "TYPE3", "TYPE4", "TYPE12")):
+                                    etype = "BEAM"
+                    if any(s in etype for s in ("SHELL", "QUAD", "TRIA")):
+                        log.error(
+                            f"/MAT/LAW74/{actual_mid} (/MAT/HILL_3D) is not supported for shell elements ({etype.lower()}) (ANCMSG 305)",
+                            "MAT CHECK",
+                        )
+                    elif any(s in etype for s in ("BEAM", "TRUSS", "SPRING", "1D")):
+                        log.error(
+                            f"/MAT/LAW74/{actual_mid} (/MAT/HILL_3D) is not supported for 1D elements ({etype.lower()}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
+
+_check_mat_law74 = check_mat_law74
+
+
 
 def check_materials(model: Model, log: MessageLog) -> None:
     """Validate all material parameters across model."""
@@ -4042,9 +4278,25 @@ def check_materials(model: Model, log: MessageLog) -> None:
         if mid not in getattr(model, "materials", {}):
             check_mat_law66(model=model, mat_id=mid, mat=mat66, log=log)
 
+    # M563: Material LAW74 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in (74, "74", "LAW74", "HILL_3D", "ORTH_PLAS") or getattr(mat, "law_name", None) in ("74", "LAW74", "HILL_3D", "ORTH_PLAS", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS"):
+            check_mat_law74(model=model, mat_id=mid, mat=mat, log=log)
+    for mid, mat74 in getattr(model, "mat_law74s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law74(model=model, mat_id=mid, mat=mat74, log=log)
+
 
 
 _MAT_CHECKS: dict[Any, Any] = {
+    74: check_mat_law74,
+    "74": check_mat_law74,
+    "LAW74": check_mat_law74,
+    "HILL_3D": check_mat_law74,
+    "ORTH_PLAS": check_mat_law74,
+    "MAT_LAW74": check_mat_law74,
+    "MAT_HILL_3D": check_mat_law74,
+    "MAT_ORTH_PLAS": check_mat_law74,
     66: check_mat_law66,
     "66": check_mat_law66,
     "LAW66": check_mat_law66,
@@ -4295,6 +4547,15 @@ def check_model(model: Model, log: MessageLog) -> None:
             if mid not in getattr(model, "materials", {}):
                 log.error(f"/MAT/LAW163/{mid}: LAW163 is not supported for 2D analysis (N2D > 0) (ANCMSG 305)", "MAT CHECK")
 
+    # M563: LAW74 is 3D solid only, invalid for 2D formulations (hm_read_mat74.F)
+    if getattr(model, "n2d", 0) > 0:
+        for mid, mat in getattr(model, "materials", {}).items():
+            if getattr(mat, "law", None) in (74, "74", "LAW74", "HILL_3D", "ORTH_PLAS") or getattr(mat, "law_name", None) in ("74", "LAW74", "HILL_3D", "ORTH_PLAS", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS"):
+                log.error(f"/MAT/LAW74/{mid}: LAW74 is not supported for 2D analysis (N2D > 0) (ANCMSG 305)", "MAT CHECK")
+        for mid, mat74 in getattr(model, "mat_law74s", {}).items():
+            if mid not in getattr(model, "materials", {}):
+                log.error(f"/MAT/LAW74/{mid}: LAW74 is not supported for 2D analysis (N2D > 0) (ANCMSG 305)", "MAT CHECK")
+
     # material law vs element family compatibility (fail in the Starter
     # with a clear message instead of a NotImplementedError mid-run)
     for name, group in model.element_groups():
@@ -4515,6 +4776,20 @@ def check_model(model: Model, log: MessageLog) -> None:
                 if name in ("trusses", "beams", "springs"):
                     log.error(
                         f"/MAT/LAW73/{mat.id} (/MAT/BARLAT2000) is not supported for 1D elements ({name}) (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    continue
+            if (mat.law in (74, "74", "LAW74", "HILL_3D", "ORTH_PLAS", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS")
+                    or getattr(mat, "law_name", None) in ("74", "LAW74", "HILL_3D", "ORTH_PLAS", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS")):
+                if name in ("shells", "shells_qbat", "shells_qeph", "sh3n", "quads"):
+                    log.error(
+                        f"/MAT/LAW74/{mat.id} (/MAT/HILL_3D) is not supported for shell elements ({name}) (ANCMSG 305)",
+                        "MAT CHECK",
+                    )
+                    continue
+                if name in ("trusses", "beams", "springs"):
+                    log.error(
+                        f"/MAT/LAW74/{mat.id} (/MAT/HILL_3D) is not supported for 1D elements ({name}) (ANCMSG 306)",
                         "MAT CHECK",
                     )
                     continue

@@ -1198,7 +1198,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW54", "PREDIT", "MAT_PREDIT", "LAW54_PREDIT"):
         read_mat_law54(block, model, log)
         return
-    if lawname in ("LAW74", "LAW74_HILL_THERM"):
+    if lawname in ("74", "LAW74", "HILL_3D", "ORTH_PLAS", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "LAW74_HILL_THERM", "LAW74_HILL_3D", "LAW74_ORTH_PLAS", "MAT_74"):
         read_mat_law74(block, model, log)
         return
     if lawname in ("HILL_THERM", "MAT_HILL_THERM"):
@@ -48075,115 +48075,334 @@ def read_mat_law54(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law74(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW74`` or ``/MAT/HILL_THERM`` (M193): Thermal Hill orthotropic material model."""
+    """``/MAT/LAW74``, ``/MAT/HILL_3D``, ``/MAT/ORTH_PLAS``, or ``/MAT/THERM_HILL`` (M193, M563):
+    Tabulated Hill orthotropic plasticity for solids.
+    Upstream reference: hm_read_mat74.F and CFG radioss120/MAT/matl74_74.cfg.
+    """
     from ..model.entities import MatLaw74, Material
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
-    rho, refer_rho = 0.0, 0.0
-    e, nu, eps_p_max, eps_t, eps_m = 0.0, 0.0, 0.0, 0.0, 0.0
-    fsmooth = 0
-    c_hard, fcut = 0.0, 0.0
-    sig11y, sig22y, sig33y = 0.0, 0.0, 0.0
-    sig12y, sig23y, sig31y = 0.0, 0.0, 0.0
-    tab_id = 0
-    sigma_scale, epspt_scale = 1.0, 1.0
-    ti, rho0_cp = 0.0, 0.0
 
-    if block.fixed:
-        if len(valid_cards) > 0:
-            c0 = valid_cards[0].cut("MAT_LAW74_1")
-            rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
-            refer_rho = _safe_float(c0[1]) if len(c0) > 1 else 0.0
-        if len(valid_cards) > 1:
-            c1 = valid_cards[1].cut("MAT_LAW74_2")
-            e = _safe_float(c1[0]) if len(c1) > 0 else 0.0
-            nu = _safe_float(c1[1]) if len(c1) > 1 else 0.0
-            eps_p_max = _safe_float(c1[2]) if len(c1) > 2 else 0.0
-            eps_t = _safe_float(c1[3]) if len(c1) > 3 else 0.0
-            eps_m = _safe_float(c1[4]) if len(c1) > 4 else 0.0
-        if len(valid_cards) > 2:
-            c2 = valid_cards[2].cut("MAT_LAW74_3")
-            fsmooth = _safe_int(c2[1]) if len(c2) > 1 else 0
-            c_hard = _safe_float(c2[2]) if len(c2) > 2 else 0.0
-            fcut = _safe_float(c2[3]) if len(c2) > 3 else 0.0
-        if len(valid_cards) > 3:
-            c3 = valid_cards[3].cut("MAT_LAW74_4")
-            sig11y = _safe_float(c3[0]) if len(c3) > 0 else 0.0
-            sig22y = _safe_float(c3[1]) if len(c3) > 1 else 0.0
-            sig33y = _safe_float(c3[2]) if len(c3) > 2 else 0.0
-        if len(valid_cards) > 4:
-            c4 = valid_cards[4].cut("MAT_LAW74_5")
-            sig12y = _safe_float(c4[0]) if len(c4) > 0 else 0.0
-            sig23y = _safe_float(c4[1]) if len(c4) > 1 else 0.0
-            sig31y = _safe_float(c4[2]) if len(c4) > 2 else 0.0
-        if len(valid_cards) > 5:
+    rho, refer_rho = 0.0, 0.0
+    e, nu = 0.0, 0.0
+    eps_max, epsr1, epsr2 = 1.0e30, 1.0e30, 2.0e30
+    ifunce, einf, ce = 0, 0.0, 0.0
+    fsmooth = 0
+    chard, fcut = 0.0, 0.0
+    s11y, s22y, s33y = 1.0, 1.0, 1.0
+    s12y, s23y, s31y = 1.0, 1.0, 1.0
+    table_id = 0
+    fscale, pscale = 1.0, 1.0
+    t0, rhocp = 293.0, 0.0
+
+    is_fixed = block.fixed
+    if is_fixed:
+        for vc in valid_cards[:4]:
+            if "," in vc.raw or (len(vc.tokens()) > 1 and len(vc.raw[:20].split()) > 1):
+                is_fixed = False
+                break
+
+    def _card_tokens(card: Any) -> List[str]:
+        return [t.strip().rstrip(",") for t in card.raw.replace(",", " ").split() if t.strip().rstrip(",")]
+
+    is_legacy_7card = False
+    if len(valid_cards) <= 6:
+        is_legacy_7card = True
+    elif len(valid_cards) == 7:
+        if is_fixed:
             c5 = valid_cards[5].cut("MAT_LAW74_6")
-            tab_id = _safe_int(c5[0]) if len(c5) > 0 else 0
-            sigma_scale = _safe_float(c5[2], 1.0) if len(c5) > 2 and c5[2].strip() else 1.0
-            epspt_scale = _safe_float(c5[3], 1.0) if len(c5) > 3 and c5[3].strip() else 1.0
-        if len(valid_cards) > 6:
-            c6 = valid_cards[6].cut("MAT_LAW74_7")
-            ti = _safe_float(c6[0]) if len(c6) > 0 else 0.0
-            rho0_cp = _safe_float(c6[1]) if len(c6) > 1 else 0.0
+            has_3_stresses_at_5 = (
+                len(c5) >= 3 and bool(c5[0].strip()) and bool(c5[1].strip()) and bool(c5[2].strip())
+            )
+            if not has_3_stresses_at_5:
+                is_legacy_7card = True
+        else:
+            t6 = _card_tokens(valid_cards[6])
+            t5 = _card_tokens(valid_cards[5])
+            if len(t6) <= 2 and len(t5) == 3:
+                try:
+                    ti_cand = float(t6[0])
+                    tab_cand = int(float(t5[0]))
+                    if ti_cand > 100.0 and tab_cand < 10000:
+                        is_legacy_7card = True
+                except (ValueError, IndexError):
+                    pass
+
+    if is_legacy_7card:
+        # Legacy 7-card layout (radioss110 without Yr_fun / Einf / Ce)
+        if is_fixed:
+            if len(valid_cards) > 0:
+                c0 = valid_cards[0].cut("MAT_LAW74_1")
+                rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
+                refer_rho = _safe_float(c0[1]) if len(c0) > 1 and c0[1].strip() else 0.0
+            if len(valid_cards) > 1:
+                c1 = valid_cards[1].cut("MAT_LAW74_2")
+                e = _safe_float(c1[0]) if len(c1) > 0 else 0.0
+                nu = _safe_float(c1[1]) if len(c1) > 1 else 0.0
+                eps_max = _safe_float(c1[2], 1.0e30) if len(c1) > 2 and c1[2].strip() else 1.0e30
+                epsr1 = _safe_float(c1[3], 1.0e30) if len(c1) > 3 and c1[3].strip() else 1.0e30
+                epsr2 = _safe_float(c1[4], 2.0e30) if len(c1) > 4 and c1[4].strip() else 2.0e30
+            if len(valid_cards) > 2:
+                c2 = valid_cards[2].cut("MAT_LAW74_4")
+                if len(c2) > 1 and c2[1].strip():
+                    fsmooth = _safe_int(c2[1])
+                elif len(c2) > 0 and c2[0].strip():
+                    fsmooth = _safe_int(c2[0])
+                chard = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+                fcut = _safe_float(c2[3]) if len(c2) > 3 and c2[3].strip() else 0.0
+            if len(valid_cards) > 3:
+                c3 = valid_cards[3].cut("MAT_LAW74_5")
+                s11y = _safe_float(c3[0], 1.0) if len(c3) > 0 and c3[0].strip() else 1.0
+                s22y = _safe_float(c3[1], 1.0) if len(c3) > 1 and c3[1].strip() else 1.0
+                s33y = _safe_float(c3[2], 1.0) if len(c3) > 2 and c3[2].strip() else 1.0
+            if len(valid_cards) > 4:
+                c4 = valid_cards[4].cut("MAT_LAW74_6")
+                s12y = _safe_float(c4[0], 1.0) if len(c4) > 0 and c4[0].strip() else 1.0
+                s23y = _safe_float(c4[1], 1.0) if len(c4) > 1 and c4[1].strip() else 1.0
+                s31y = _safe_float(c4[2], 1.0) if len(c4) > 2 and c4[2].strip() else 1.0
+            if len(valid_cards) > 5:
+                c5 = valid_cards[5].cut("MAT_LAW74_7")
+                if len(c5) > 0 and c5[0].strip():
+                    table_id = _safe_int(c5[0])
+                elif len(c5) > 1 and c5[1].strip():
+                    table_id = _safe_int(c5[1])
+                fscale = _safe_float(c5[2], 1.0) if len(c5) > 2 and c5[2].strip() else 1.0
+                pscale = _safe_float(c5[3], 1.0) if len(c5) > 3 and c5[3].strip() else 1.0
+            if len(valid_cards) > 6:
+                c6 = valid_cards[6].cut("MAT_LAW74_8")
+                t0 = _safe_float(c6[0], 293.0) if len(c6) > 0 and c6[0].strip() else 293.0
+                rhocp = _safe_float(c6[1]) if len(c6) > 1 else 0.0
+        else:
+            if len(valid_cards) > 0:
+                t0_tok = _card_tokens(valid_cards[0])
+                rho = _safe_float(t0_tok[0]) if len(t0_tok) > 0 else 0.0
+                refer_rho = _safe_float(t0_tok[1]) if len(t0_tok) > 1 else 0.0
+            if len(valid_cards) > 1:
+                t1 = _card_tokens(valid_cards[1])
+                e = _safe_float(t1[0]) if len(t1) > 0 else 0.0
+                nu = _safe_float(t1[1]) if len(t1) > 1 else 0.0
+                eps_max = _safe_float(t1[2], 1.0e30) if len(t1) > 2 else 1.0e30
+                epsr1 = _safe_float(t1[3], 1.0e30) if len(t1) > 3 else 1.0e30
+                epsr2 = _safe_float(t1[4], 2.0e30) if len(t1) > 4 else 2.0e30
+            if len(valid_cards) > 2:
+                t2 = _card_tokens(valid_cards[2])
+                if len(t2) == 1:
+                    fsmooth = _safe_int(t2[0])
+                elif len(t2) == 2:
+                    fsmooth = _safe_int(t2[0])
+                    chard = _safe_float(t2[1])
+                elif len(t2) == 3:
+                    fsmooth = _safe_int(t2[0])
+                    chard = _safe_float(t2[1])
+                    fcut = _safe_float(t2[2])
+                elif len(t2) >= 4:
+                    fsmooth = _safe_int(t2[0]) if _safe_int(t2[0]) != 0 else _safe_int(t2[1])
+                    chard = _safe_float(t2[2])
+                    fcut = _safe_float(t2[3])
+            if len(valid_cards) > 3:
+                t3 = _card_tokens(valid_cards[3])
+                s11y = _safe_float(t3[0], 1.0) if len(t3) > 0 else 1.0
+                s22y = _safe_float(t3[1], 1.0) if len(t3) > 1 else 1.0
+                s33y = _safe_float(t3[2], 1.0) if len(t3) > 2 else 1.0
+            if len(valid_cards) > 4:
+                t4 = _card_tokens(valid_cards[4])
+                s12y = _safe_float(t4[0], 1.0) if len(t4) > 0 else 1.0
+                s23y = _safe_float(t4[1], 1.0) if len(t4) > 1 else 1.0
+                s31y = _safe_float(t4[2], 1.0) if len(t4) > 2 else 1.0
+            if len(valid_cards) > 5:
+                t5 = _card_tokens(valid_cards[5])
+                if len(t5) == 1:
+                    table_id = _safe_int(t5[0])
+                elif len(t5) == 2:
+                    table_id = _safe_int(t5[0])
+                    fscale = _safe_float(t5[1], 1.0)
+                elif len(t5) == 3:
+                    table_id = _safe_int(t5[0])
+                    fscale = _safe_float(t5[1], 1.0)
+                    pscale = _safe_float(t5[2], 1.0)
+                elif len(t5) >= 4:
+                    table_id = _safe_int(t5[0]) if _safe_int(t5[0]) != 0 else _safe_int(t5[1])
+                    fscale = _safe_float(t5[2], 1.0)
+                    pscale = _safe_float(t5[3], 1.0)
+            if len(valid_cards) > 6:
+                t6 = _card_tokens(valid_cards[6])
+                t0 = _safe_float(t6[0], 293.0) if len(t6) > 0 else 293.0
+                rhocp = _safe_float(t6[1]) if len(t6) > 1 else 0.0
     else:
-        if len(valid_cards) > 0:
-            t0 = valid_cards[0].tokens()
-            rho = _safe_float(t0[0]) if len(t0) > 0 else 0.0
-            refer_rho = _safe_float(t0[1]) if len(t0) > 1 else 0.0
-        if len(valid_cards) > 1:
-            t1 = valid_cards[1].tokens()
-            e = _safe_float(t1[0]) if len(t1) > 0 else 0.0
-            nu = _safe_float(t1[1]) if len(t1) > 1 else 0.0
-            eps_p_max = _safe_float(t1[2]) if len(t1) > 2 else 0.0
-            eps_t = _safe_float(t1[3]) if len(t1) > 3 else 0.0
-            eps_m = _safe_float(t1[4]) if len(t1) > 4 else 0.0
-        if len(valid_cards) > 2:
-            t2 = valid_cards[2].tokens()
-            fsmooth = _safe_int(t2[0]) if len(t2) > 0 else 0
-            c_hard = _safe_float(t2[1]) if len(t2) > 1 else 0.0
-            fcut = _safe_float(t2[2]) if len(t2) > 2 else 0.0
-        if len(valid_cards) > 3:
-            t3 = valid_cards[3].tokens()
-            sig11y = _safe_float(t3[0]) if len(t3) > 0 else 0.0
-            sig22y = _safe_float(t3[1]) if len(t3) > 1 else 0.0
-            sig33y = _safe_float(t3[2]) if len(t3) > 2 else 0.0
-        if len(valid_cards) > 4:
-            t4 = valid_cards[4].tokens()
-            sig12y = _safe_float(t4[0]) if len(t4) > 0 else 0.0
-            sig23y = _safe_float(t4[1]) if len(t4) > 1 else 0.0
-            sig31y = _safe_float(t4[2]) if len(t4) > 2 else 0.0
-        if len(valid_cards) > 5:
-            t5 = valid_cards[5].tokens()
-            tab_id = _safe_int(t5[0]) if len(t5) > 0 else 0
-            sigma_scale = _safe_float(t5[1], 1.0) if len(t5) > 1 else 1.0
-            epspt_scale = _safe_float(t5[2], 1.0) if len(t5) > 2 else 1.0
-        if len(valid_cards) > 6:
-            t6 = valid_cards[6].tokens()
-            ti = _safe_float(t6[0]) if len(t6) > 0 else 0.0
-            rho0_cp = _safe_float(t6[1]) if len(t6) > 1 else 0.0
+        # Standard 8-card layout (radioss120 / CFG matl74_74.cfg / hm_read_mat74.F)
+        if is_fixed:
+            # Card 1: RHO, [Refer_Rho] (MAT_LAW74_1: [20, 20])
+            if len(valid_cards) > 0:
+                c0 = valid_cards[0].cut("MAT_LAW74_1")
+                rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
+                refer_rho = _safe_float(c0[1]) if len(c0) > 1 and c0[1].strip() else 0.0
+            # Card 2: E, NU, EPS_MAX, EPSR1, EPSR2 (MAT_LAW74_2: [20, 20, 20, 20, 20])
+            if len(valid_cards) > 1:
+                c1 = valid_cards[1].cut("MAT_LAW74_2")
+                e = _safe_float(c1[0]) if len(c1) > 0 else 0.0
+                nu = _safe_float(c1[1]) if len(c1) > 1 else 0.0
+                eps_max = _safe_float(c1[2], 1.0e30) if len(c1) > 2 and c1[2].strip() else 1.0e30
+                epsr1 = _safe_float(c1[3], 1.0e30) if len(c1) > 3 and c1[3].strip() else 1.0e30
+                epsr2 = _safe_float(c1[4], 2.0e30) if len(c1) > 4 and c1[4].strip() else 2.0e30
+            # Card 3: Yr_fun, blank(10), EINF, CE (MAT_LAW74_3: [10, 10, 20, 20])
+            if len(valid_cards) > 2:
+                c2 = valid_cards[2].cut("MAT_LAW74_3")
+                if len(c2) > 0 and c2[0].strip():
+                    ifunce = _safe_int(c2[0])
+                elif len(c2) > 1 and c2[1].strip():
+                    ifunce = _safe_int(c2[1])
+                einf = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+                ce = _safe_float(c2[3]) if len(c2) > 3 else 0.0
+            # Card 4: blank(10), Fsmooth, C_HARD, FCUT (MAT_LAW74_4: [10, 10, 20, 20])
+            if len(valid_cards) > 3:
+                c3 = valid_cards[3].cut("MAT_LAW74_4")
+                if len(c3) > 1 and c3[1].strip():
+                    fsmooth = _safe_int(c3[1])
+                elif len(c3) > 0 and c3[0].strip():
+                    fsmooth = _safe_int(c3[0])
+                chard = _safe_float(c3[2]) if len(c3) > 2 else 0.0
+                fcut = _safe_float(c3[3]) if len(c3) > 3 and c3[3].strip() else 0.0
+            # Card 5: S11Y, S22Y, S33Y (MAT_LAW74_5: [20, 20, 20])
+            if len(valid_cards) > 4:
+                c4 = valid_cards[4].cut("MAT_LAW74_5")
+                s11y = _safe_float(c4[0], 1.0) if len(c4) > 0 and c4[0].strip() else 1.0
+                s22y = _safe_float(c4[1], 1.0) if len(c4) > 1 and c4[1].strip() else 1.0
+                s33y = _safe_float(c4[2], 1.0) if len(c4) > 2 and c4[2].strip() else 1.0
+            # Card 6: S12Y, S23Y, S31Y (MAT_LAW74_6: [20, 20, 20])
+            if len(valid_cards) > 5:
+                c5 = valid_cards[5].cut("MAT_LAW74_6")
+                s12y = _safe_float(c5[0], 1.0) if len(c5) > 0 and c5[0].strip() else 1.0
+                s23y = _safe_float(c5[1], 1.0) if len(c5) > 1 and c5[1].strip() else 1.0
+                s31y = _safe_float(c5[2], 1.0) if len(c5) > 2 and c5[2].strip() else 1.0
+            # Card 7: FUN_A1, blank(10), FSCALE, PSCALE (MAT_LAW74_7: [10, 10, 20, 20])
+            if len(valid_cards) > 6:
+                c6 = valid_cards[6].cut("MAT_LAW74_7")
+                if len(c6) > 0 and c6[0].strip():
+                    table_id = _safe_int(c6[0])
+                elif len(c6) > 1 and c6[1].strip():
+                    table_id = _safe_int(c6[1])
+                fscale = _safe_float(c6[2], 1.0) if len(c6) > 2 and c6[2].strip() else 1.0
+                pscale = _safe_float(c6[3], 1.0) if len(c6) > 3 and c6[3].strip() else 1.0
+            # Card 8: T0, RHOCP (MAT_LAW74_8: [20, 20])
+            if len(valid_cards) > 7:
+                c7 = valid_cards[7].cut("MAT_LAW74_8")
+                t0 = _safe_float(c7[0], 293.0) if len(c7) > 0 and c7[0].strip() else 293.0
+                rhocp = _safe_float(c7[1]) if len(c7) > 1 else 0.0
+        else:
+            # Free format 8 cards
+            if len(valid_cards) > 0:
+                t0_tok = _card_tokens(valid_cards[0])
+                rho = _safe_float(t0_tok[0]) if len(t0_tok) > 0 else 0.0
+                refer_rho = _safe_float(t0_tok[1]) if len(t0_tok) > 1 else 0.0
+            if len(valid_cards) > 1:
+                t1 = _card_tokens(valid_cards[1])
+                e = _safe_float(t1[0]) if len(t1) > 0 else 0.0
+                nu = _safe_float(t1[1]) if len(t1) > 1 else 0.0
+                eps_max = _safe_float(t1[2], 1.0e30) if len(t1) > 2 else 1.0e30
+                epsr1 = _safe_float(t1[3], 1.0e30) if len(t1) > 3 else 1.0e30
+                epsr2 = _safe_float(t1[4], 2.0e30) if len(t1) > 4 else 2.0e30
+            if len(valid_cards) > 2:
+                t2 = _card_tokens(valid_cards[2])
+                if len(t2) == 2:
+                    einf = _safe_float(t2[0])
+                    ce = _safe_float(t2[1])
+                elif len(t2) == 3:
+                    ifunce = _safe_int(t2[0])
+                    einf = _safe_float(t2[1])
+                    ce = _safe_float(t2[2])
+                elif len(t2) >= 4:
+                    ifunce = _safe_int(t2[0]) if _safe_int(t2[0]) != 0 else _safe_int(t2[1])
+                    einf = _safe_float(t2[2])
+                    ce = _safe_float(t2[3])
+            if len(valid_cards) > 3:
+                t3 = _card_tokens(valid_cards[3])
+                if len(t3) == 1:
+                    fsmooth = _safe_int(t3[0])
+                elif len(t3) == 2:
+                    fsmooth = _safe_int(t3[0])
+                    chard = _safe_float(t3[1])
+                elif len(t3) == 3:
+                    fsmooth = _safe_int(t3[0])
+                    chard = _safe_float(t3[1])
+                    fcut = _safe_float(t3[2])
+                elif len(t3) >= 4:
+                    fsmooth = _safe_int(t3[0]) if _safe_int(t3[0]) != 0 else _safe_int(t3[1])
+                    chard = _safe_float(t3[2])
+                    fcut = _safe_float(t3[3])
+            if len(valid_cards) > 4:
+                t4 = _card_tokens(valid_cards[4])
+                s11y = _safe_float(t4[0], 1.0) if len(t4) > 0 else 1.0
+                s22y = _safe_float(t4[1], 1.0) if len(t4) > 1 else 1.0
+                s33y = _safe_float(t4[2], 1.0) if len(t4) > 2 else 1.0
+            if len(valid_cards) > 5:
+                t5 = _card_tokens(valid_cards[5])
+                s12y = _safe_float(t5[0], 1.0) if len(t5) > 0 else 1.0
+                s23y = _safe_float(t5[1], 1.0) if len(t5) > 1 else 1.0
+                s31y = _safe_float(t5[2], 1.0) if len(t5) > 2 else 1.0
+            if len(valid_cards) > 6:
+                t6 = _card_tokens(valid_cards[6])
+                if len(t6) == 1:
+                    table_id = _safe_int(t6[0])
+                elif len(t6) == 2:
+                    table_id = _safe_int(t6[0])
+                    fscale = _safe_float(t6[1], 1.0)
+                elif len(t6) == 3:
+                    table_id = _safe_int(t6[0])
+                    fscale = _safe_float(t6[1], 1.0)
+                    pscale = _safe_float(t6[2], 1.0)
+                elif len(t6) >= 4:
+                    table_id = _safe_int(t6[0]) if _safe_int(t6[0]) != 0 else _safe_int(t6[1])
+                    fscale = _safe_float(t6[2], 1.0)
+                    pscale = _safe_float(t6[3], 1.0)
+            if len(valid_cards) > 7:
+                t7 = _card_tokens(valid_cards[7])
+                t0 = _safe_float(t7[0], 293.0) if len(t7) > 0 else 293.0
+                rhocp = _safe_float(t7[1]) if len(t7) > 1 else 0.0
+
+    # Upstream defaults from hm_read_mat74.F & matl74_74.cfg
+    if eps_max == 0.0:
+        eps_max = 1.0e30
+    if epsr1 == 0.0:
+        epsr1 = 1.0e30
+    if epsr2 == 0.0:
+        epsr2 = 2.0e30
+    if fscale == 0.0:
+        fscale = 1.0
+    if pscale == 0.0:
+        pscale = 1.0
+    if t0 == 0.0:
+        t0 = 293.0
+    if refer_rho == 0.0:
+        refer_rho = rho
+    if s11y == 0.0:
+        s11y = 1.0
+    if s22y == 0.0:
+        s22y = 1.0
+    if s33y == 0.0:
+        s33y = 1.0
+    if s12y == 0.0:
+        s12y = 1.0
+    if s23y == 0.0:
+        s23y = 1.0
+    if s31y == 0.0:
+        s31y = 1.0
 
     mat = MatLaw74(
-        id=mat_id, rho=rho, ref_rho=refer_rho, e=e, nu=nu,
-        eps_p_max=eps_p_max, eps_t=eps_t, eps_m=eps_m, fsmooth=fsmooth,
-        c_hard=c_hard, fcut=fcut, sig11y=sig11y, sig22y=sig22y, sig33y=sig33y,
-        sig12y=sig12y, sig23y=sig23y, sig31y=sig31y, tab_id=tab_id,
-        sigma_scale=sigma_scale, epspt_scale=epspt_scale, ti=ti, rho0_cp=rho0_cp,
-        title=title,
+        id=mat_id, rho=rho, refer_rho=refer_rho, e=e, nu=nu,
+        eps_max=eps_max, epsr1=epsr1, epsr2=epsr2,
+        ifunce=ifunce, einf=einf, ce=ce,
+        fsmooth=fsmooth, chard=chard, fcut=fcut,
+        s11y=s11y, s22y=s22y, s33y=s33y,
+        s12y=s12y, s23y=s23y, s31y=s31y,
+        table_id=table_id, fscale=fscale, pscale=pscale,
+        t0=t0, rhocp=rhocp,
+        title=title, law=74, law_name="LAW74",
     )
     model.mat_law74s[mat_id] = mat
     model.materials[mat_id] = Material(
         id=mat_id, law=74, rho0=rho, title=title,
-        params={
-            "MAT_RHO": rho, "rho": rho, "rho0": rho, "refer_rho": refer_rho,
-            "MAT_E": e, "e": e, "MAT_NU": nu, "nu": nu,
-            "MAT_EPS": eps_p_max, "MAT_EPST1": eps_t, "MAT_EPST2": eps_m,
-            "Fsmooth": fsmooth, "MAT_HARD": c_hard, "Fcut": fcut,
-            "MAT_SIGT1": sig11y, "MAT_SIGT2": sig22y, "MAT_SIGT3": sig33y,
-            "MAT_SIGYT1": sig12y, "MAT_SIGYT2": sig23y, "MAT_SIGYT3": sig31y,
-            "FUN_A1": tab_id, "MAT_FScale": sigma_scale, "MAT_PScale": epspt_scale,
-            "T_Initial": ti, "MAT_SPHEAT": rho0_cp,
-        }
+        params=mat.params,
     )
 
 

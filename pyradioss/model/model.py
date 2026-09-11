@@ -112,7 +112,7 @@ from .entities import (
     FailLemaitre, FailComposite, FailTab2, FailAlter, FailVisual, FailOrthstrain,
     EbcsPropellant, EbcsCyclic, Preload,
     FailEMC, FailNXT, FailTButcher, FailMullins, FailCockcroft, FailGene1, FailXFEM,
-    MatLaw53, MatLaw54, MatLaw74, MatLaw82, PropIntBeamIP, PropType18,
+    MatLaw53, MatLaw54, MatLaw74, MatHill3D, MatOrthPlas, MatLaw82, PropIntBeamIP, PropType18,
     DefInterType11, DefInterType19, DefInterType25, StateDirective,
     SphFlow, MidDirective, PidDirective, SphParticle, FailTab1,
     MatLaw40, MatLaw80, MatLaw102, MatNLocal, PropType12, PropType13,
@@ -1299,7 +1299,9 @@ class Model:
         self.mat_tsai_tabs = self.mat_law53s
         self.mat_law54s: Dict[int, MatLaw54] = {}                   # /MAT/LAW54, /MAT/PREDIT (M193)
         self.mat_predits = self.mat_law54s
-        self.mat_law74s: Dict[int, MatLaw74] = {}                   # /MAT/LAW74, /MAT/HILL_THERM (M193)
+        self.mat_law74s: Dict[int, MatLaw74] = {}                   # /MAT/LAW74, /MAT/HILL_3D, /MAT/ORTH_PLAS, /MAT/THERM_HILL (M193, M563)
+        self.mat_hill_3ds = self.mat_law74s
+        self.mat_orth_plass = self.mat_law74s
         self.mat_hill_therms = self.mat_law74s
         self.mat_law82s: Dict[int, MatLaw82] = {}                   # /MAT/LAW82, /MAT/OGDEN (M193)
         self.mat_ogdens = self.mat_law82s

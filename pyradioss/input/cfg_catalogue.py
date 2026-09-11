@@ -184,6 +184,12 @@ LAW_MAP: Dict[str, int] = {
     "MAT_BARLAT2000": 73,
     "MAT_HILL_THERM": 73,
     "MAT_THERM_HILL": 73,
+    "LAW74": 74,
+    "HILL_3D": 74,
+    "ORTH_PLAS": 74,
+    "MAT_LAW74": 74,
+    "MAT_HILL_3D": 74,
+    "MAT_ORTH_PLAS": 74,
 }
 
 LAW_SYNONYMS: Dict[str, str] = {
@@ -318,6 +324,12 @@ LAW_SYNONYMS: Dict[str, str] = {
     "MAT_BARLAT2000": "LAW73",
     "MAT_HILL_THERM": "LAW73",
     "MAT_THERM_HILL": "LAW73",
+    "LAW74": "LAW74",
+    "HILL_3D": "LAW74",
+    "ORTH_PLAS": "LAW74",
+    "MAT_LAW74": "LAW74",
+    "MAT_HILL_3D": "LAW74",
+    "MAT_ORTH_PLAS": "LAW74",
 }
 
 KEYWORD_NAME_MAP = LAW_MAP
