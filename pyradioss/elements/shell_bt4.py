@@ -546,8 +546,8 @@ def _init_material_state(group, nip_max):
     if any(mat.fail is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros((n, nip_max))
     st["chk_fail"] = any(
-        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43, 48, 52, 60, 69)
-        or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS")
+        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43, 48, 52, 57, 60, 69)
+        or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3")
         or mat.params.get("eps_p_max", EP30) < 1e30
         or mat.params.get("eps_max", EP30) < 1e30
         or mat.params.get("EPSMAX", EP30) < 1e30
@@ -603,7 +603,9 @@ def _layer_failure(st, sl, mat, k, sig_k, epsp_old, deps_k, dt):
                 layf[broken] = 0.0
     if "off52" in st["mat_extra"]:
         layf[st["mat_extra"]["off52"][sl, k] == 0.0] = 0.0
-    elif "off" in st["mat_extra"] and getattr(mat, "law", 1) in (52, "52", "LAW52", "GURSON", "PLAS_GURS"):
+    elif "off57" in st["mat_extra"]:
+        layf[st["mat_extra"]["off57"][sl, k] == 0.0] = 0.0
+    elif "off" in st["mat_extra"] and getattr(mat, "law", 1) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3"):
         layf[st["mat_extra"]["off"][sl, k] == 0.0] = 0.0
     if getattr(mat, "law", 1) != 43:
         eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
@@ -625,8 +627,8 @@ def _element_deletion(st, nip_of):
     layfail = st["layfail"]
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         law = getattr(mat, "law", 1)
-        if not (mat.fail is not None or law in (15, 22, 25, 27, 43, 48, 52, 60, 69)
-                or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS")
+        if not (mat.fail is not None or law in (15, 22, 25, 27, 43, 48, 52, 57, 60, 69)
+                or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3")
                 or mat.params.get("eps_p_max", EP30) < 1e30
                 or mat.params.get("eps_max", EP30) < 1e30
                 or mat.params.get("EPSMAX", EP30) < 1e30

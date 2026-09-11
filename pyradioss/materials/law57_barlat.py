@@ -484,6 +484,8 @@ def shell_update_law57(
     if not isinstance(deps, np.ndarray):
         deps = np.array(deps, dtype=float)
 
+    sig_orig = sig
+
     orig_shape = sig.shape
     is_1d = (sig.ndim == 1)
     if is_1d:
@@ -521,6 +523,8 @@ def shell_update_law57(
         extra = kwargs["extra"]
     if "epsp" in kwargs and kwargs["epsp"] is not None:
         epsp = kwargs["epsp"]
+
+    epsp_orig = epsp
 
     # History variables extraction
     # 1. Equivalent plastic strain (pla)
@@ -868,14 +872,29 @@ def shell_update_law57(
     thkly = np.ones(n, dtype=float)
     if extra is not None and "thkly" in extra and extra["thkly"] is not None:
         thkly = np.asarray(extra["thkly"], dtype=float).flatten()
+    elif extra is not None and "thklyl" in extra and extra["thklyl"] is not None:
+        thkly = np.asarray(extra["thklyl"], dtype=float).flatten()
     elif extra is not None and "thk0" in extra and extra["thk0"] is not None:
         thkly = np.asarray(extra["thk0"], dtype=float).flatten()
-
-    thk_val = np.ones(n, dtype=float)
-    if extra is not None and "thk57" in extra and extra["thk57"] is not None:
-        thk_val = np.asarray(extra["thk57"], dtype=float).flatten()
+    elif extra is not None and "thkn" in extra and extra["thkn"] is not None:
+        thkly = np.asarray(extra["thkn"], dtype=float).flatten()
     elif extra is not None and "thk" in extra and extra["thk"] is not None:
-        thk_val = np.asarray(extra["thk"], dtype=float).flatten()
+        thkly = np.asarray(extra["thk"], dtype=float).flatten()
+
+    thk_val = thkly.copy()
+    if extra is not None and "thk57" in extra and extra["thk57"] is not None:
+        t_arr = np.asarray(extra["thk57"], dtype=float).flatten()
+        if np.any(t_arr > 0.0):
+            thk_val = t_arr.copy()
+    elif extra is not None and "thk" in extra and extra["thk"] is not None:
+        t_arr = np.asarray(extra["thk"], dtype=float).flatten()
+        if np.any(t_arr > 0.0):
+            thk_val = t_arr.copy()
+
+    if len(thkly) == 1 and n > 1:
+        thkly = np.full(n, float(thkly[0]), dtype=float)
+    if len(thk_val) == 1 and n > 1:
+        thk_val = np.full(n, float(thk_val[0]), dtype=float)
 
     thk_val = thk_val + depszz * thkly * off
 
@@ -920,12 +939,20 @@ def shell_update_law57(
                 extra[k].flat = pla
             elif k in extra:
                 extra[k] = pla[0] if is_1d else pla
+        if not any(k in extra for k in ("pla57", "pla")):
+            extra["pla57"] = pla[0] if is_1d else pla.copy()
+
         for k in ("sigb57", "sigb"):
             if k in extra and isinstance(extra[k], np.ndarray):
                 if extra[k].ndim == 1:
                     extra[k][:3] = sigb[0, :3]
                 else:
                     extra[k][:] = sigb
+            elif k in extra:
+                extra[k] = sigb[0, :3] if is_1d else sigb
+        if not any(k in extra for k in ("sigb57", "sigb")):
+            extra["sigb57"] = sigb[0, :3] if is_1d else sigb.copy()
+
         found_off = False
         for k in ("off57", "off", "layfail"):
             if k in extra and isinstance(extra[k], np.ndarray):
@@ -936,28 +963,50 @@ def shell_update_law57(
                 found_off = True
         if not found_off:
             extra["off57"] = off[0] if is_1d else off
+
         for k in ("dmg57", "dmg"):
             if k in extra and isinstance(extra[k], np.ndarray):
                 if extra[k].ndim == 1:
                     extra[k][:3] = dmg[0, :3]
                 else:
                     extra[k][:] = dmg
+            elif k in extra:
+                extra[k] = dmg[0, :3] if is_1d else dmg
+        if not any(k in extra for k in ("dmg57", "dmg")):
+            extra["dmg57"] = dmg[0, :3] if is_1d else dmg.copy()
+
         for k in ("eps57", "eps"):
             if k in extra and isinstance(extra[k], np.ndarray):
                 if extra[k].ndim == 1:
                     extra[k][:3] = eps_tot[0, :3]
                 else:
                     extra[k][:, :3] = eps_tot[:, :3]
-        for k in ("thk57", "thk"):
-            if k in extra and isinstance(extra[k], np.ndarray):
-                extra[k].flat = thk_val
             elif k in extra:
-                extra[k] = thk_val[0] if is_1d else thk_val
+                extra[k] = eps_tot[0, :3] if is_1d else eps_tot
+        if not any(k in extra for k in ("eps57", "eps")):
+            extra["eps57"] = eps_tot[0, :3] if is_1d else eps_tot.copy()
+
+        if "thk57" in extra:
+            if isinstance(extra["thk57"], np.ndarray):
+                extra["thk57"].flat = thk_val
+            else:
+                extra["thk57"] = thk_val[0] if is_1d else thk_val
+        elif "thk" in extra:
+            if isinstance(extra["thk"], np.ndarray):
+                extra["thk"].flat = thk_val
+            else:
+                extra["thk"] = thk_val[0] if is_1d else thk_val
+        else:
+            extra["thk57"] = thk_val[0] if is_1d else thk_val.copy()
+
         for k in ("epsd57", "epsd"):
             if k in extra and isinstance(extra[k], np.ndarray):
                 extra[k].flat = epsd
             elif k in extra:
                 extra[k] = epsd[0] if is_1d else epsd
+        if not any(k in extra for k in ("epsd57", "epsd")):
+            extra["epsd57"] = epsd[0] if is_1d else epsd.copy()
+
         extra["depszz"] = depszz[0] if is_1d else depszz
         extra["seq"] = seq[0] if is_1d else seq
 
@@ -1316,13 +1365,13 @@ def build_law57(rec: Any = None, **kwargs: Any) -> Law57Params:
     if m <= 0.0:
         m = 6.0
 
-    epsmax = _get(["MAT_EPS", "epsmax", "EPSMAX", "eps_max"], _INF)
+    epsmax = _get(["MAT_EPS", "epsmax", "EPSMAX", "eps_max", "epsp_max"], _INF)
     if epsmax <= 0.0:
         epsmax = _INF
-    epsr1 = _get(["MAT_EPST1", "epsr1", "EPSR1", "epst1"], _INF)
+    epsr1 = _get(["MAT_EPST1", "epsr1", "EPSR1", "epst1", "eps_t1"], _INF)
     if epsr1 <= 0.0:
         epsr1 = _INF
-    epsr2 = _get(["MAT_EPST2", "epsr2", "EPSR2", "epst2"], 2.0 * _INF)
+    epsr2 = _get(["MAT_EPST2", "epsr2", "EPSR2", "epst2", "eps_t2"], 2.0 * _INF)
     if epsr2 <= 0.0:
         epsr2 = 2.0 * _INF
 
