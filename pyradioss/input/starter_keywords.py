@@ -1209,8 +1209,8 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         data_valid = [c for c in data_c if not c.is_blank and not c.raw.strip().startswith("#")]
         is_law82 = False
         if len(data_valid) > 1:
-            toks = data_valid[1].tokens() if not block.fixed else [data_valid[1].raw[:10].strip()]
-            first_val = toks[0] if toks else ""
+            raw_field = (data_valid[1].raw[:10] if block.fixed else data_valid[1].raw).replace(",", " ").split()
+            first_val = raw_field[0].strip() if raw_field else ""
             if first_val.isdigit() and 1 <= int(first_val) <= 10:
                 is_law82 = True
         if is_law82:
