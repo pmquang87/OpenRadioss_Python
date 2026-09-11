@@ -85,6 +85,7 @@ from .law69_hyperelastic import (
     sound_speed as law69_sound_speed,
     sound_speed_shell as law69_sound_speed_shell,
     consistent_solid_tangent as law69_solid_tangent,
+    consistent_shell_tangent as law69_shell_tangent,
 )
 from .law82_ogden import (
     OgdenParams,
@@ -1361,6 +1362,17 @@ def shell_membrane_tangent(mat):
         ])
     if getattr(mat, "law", None) in (22, "22", "LAW22", "DAMA", "PLAS_DAMA") or getattr(mat, "law_name", None) in ("22", "LAW22", "DAMA", "PLAS_DAMA"):
         return law22_dama.shell_membrane_tangent(mat)
+    if getattr(mat, "law", None) in (69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC") or getattr(mat, "law_name", None) in ("69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC"):
+        import numpy as np
+        nu = float(getattr(mat, "nu", 0.495))
+        e = float(getattr(mat, "E", 0.0) or getattr(mat, "gmax", 10.0) * (1.0 + nu))
+        c = e / max(1.0 - nu * nu, 1e-15)
+        g = float(getattr(mat, "G", getattr(mat, "g0", 0.0)) or e / (2.0 * (1.0 + nu)))
+        return np.array([
+            [c, nu * c, 0.0],
+            [nu * c, c, 0.0],
+            [0.0, 0.0, g],
+        ])
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic, "
         f"LAW3 plas_bost, LAW19 fabric, LAW34 Boltzmann, LAW32 Hill and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")
@@ -1380,6 +1392,12 @@ def shell_layer_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
     closed / broken); LAW19 (M524) the orthotropic fabric tangent with
     RCOMP and beta compression scaling; LAW32 (M542) consistent Hill tangent."""
     n = sig.shape[0]
+    if getattr(mat, "law", None) in (69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC") or getattr(mat, "law_name", None) in ("69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC"):
+        import numpy as np
+        eps = extra.get("eps") if extra else None
+        if eps is None:
+            eps = np.zeros((n, 3), dtype=np.float64)
+        return law69_shell_tangent(mat, eps)
     if getattr(mat, "law", None) in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG") or getattr(mat, "law_name", None) in ("15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG"):
         return law15_chang.consistent_shell_tangent(
             mat, sig, epsp, epsp_incr, extra)

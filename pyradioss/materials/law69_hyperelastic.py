@@ -103,6 +103,8 @@ class Law69Params:
     """
 
     id: int = 1
+    law: int = 69
+    law_name: str = "LAW69"
     rho0: float = 1.0
     rhor: float = 0.0
     law_id: int = 1
@@ -120,6 +122,8 @@ class Law69Params:
     g0: float = 0.0
     E: float = 0.0
     title: str = ""
+    fail: Any = None
+    eos: Any = None
 
     def __post_init__(self) -> None:
         if self.rhor == 0.0 or self.rhor is None:
@@ -193,7 +197,19 @@ class Law69Params:
             "K": self.rbulk,
             "G": self.g0,
             "title": self.title,
+            "law": self.law,
+            "law_name": self.law_name,
+            "MAT_NU": self.nu,
+            "MAT_RHO": self.rho0,
         }
+
+    def sound_speed_solid(self, rho: Any = None, eps: Any = None) -> float:
+        """Ground-state / nonlinear solid sound speed."""
+        return float(solid_sound_speed(self, rho=rho, eps=eps))
+
+    def sound_speed_shell(self, rho: Any = None, eps: Any = None) -> float:
+        """Ground-state / nonlinear shell sound speed."""
+        return float(shell_sound_speed(self, rho=rho, eps=eps))
 
 
 def fit_law69_curve(

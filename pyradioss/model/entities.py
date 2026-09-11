@@ -252,6 +252,12 @@ class Material:
                 return float(law82_ogden.sound_speed(self, rho=self.rho0))
             except Exception:
                 pass
+        if self.law in (69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC"):
+            try:
+                from ..materials import law69_hyperelastic
+                return float(law69_hyperelastic.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
         return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
 
     def sound_speed_shell(self) -> float:
@@ -276,6 +282,12 @@ class Material:
             try:
                 from ..materials import law82_ogden
                 return float(law82_ogden.sound_speed_shell(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC"):
+            try:
+                from ..materials import law69_hyperelastic
+                return float(law69_hyperelastic.sound_speed_shell(self, rho=self.rho0))
             except Exception:
                 pass
         return float(np.sqrt(self.E / (self.rho0 * (1.0 - self.nu ** 2))))
