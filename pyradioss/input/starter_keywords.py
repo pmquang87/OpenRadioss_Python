@@ -972,7 +972,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW113", "SPR_BEAM", "SPRING_BEAM", "LAW113_SPR_BEAM"):
         read_mat_law113(block, model, log)
         return
-    if lawname in ("LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "LAW79_JOHN_HOLM"):
+    if lawname in ("79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "LAW79_JOHN_HOLM", "MAT_JOHN_HOLM", "MAT_JH2", "MAT_JOHNSON_HOLMQUIST", "MAT_LAW79"):
         read_mat_law79(block, model, log)
         return
     if lawname in ("VISC_LPRONY", "LPRONY", "VISCO_LPRONY"):
@@ -31847,113 +31847,219 @@ def read_mat_law113(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law79(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW79/id`` or ``/MAT/JOHN_HOLM/id`` (M179): Johnson-Holmquist ceramic material model."""
-    from ..model.entities import MatLaw79
+    """``/MAT/LAW79/id`` or ``/MAT/JOHN_HOLM/id`` (M179/M558): Johnson-Holmquist ceramic material model."""
+    from ..model.entities import MatLaw79, Material
     mat_id = block.user_id or 0
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank]
+
+    def _card_tokens(c: Any) -> list[str]:
+        raw = getattr(c, "raw", str(c)).strip()
+        for ch in ("#", "$"):
+            if ch in raw:
+                raw = raw.split(ch)[0].strip()
+        if not raw:
+            return []
+        if "," in raw:
+            parts = [p.strip() for p in raw.split(",")]
+            while parts and parts[-1] == "":
+                parts.pop()
+            return parts
+        return raw.split()
+
+    def _fval_safe(v: Any, default: float = 0.0) -> float:
+        if v is None:
+            return default
+        s = str(v).strip().replace("D", "E").replace("d", "e")
+        if not s:
+            return default
+        try:
+            return float(s)
+        except (ValueError, TypeError):
+            return default
+
+    has_comma = any("," in getattr(c, "raw", str(c)) for c in block.cards)
+    is_fixed = block.fixed and not has_comma
+    if is_fixed:
+        for c in block.cards:
+            c_raw = getattr(c, "raw", str(c))
+            raw_s = c_raw.strip()
+            if not raw_s or raw_s.startswith(("#", "$")):
+                continue
+            if "\t" in c_raw:
+                is_fixed = False
+                break
+            toks = raw_s.split()
+            if len(toks) > 1 and len(c_raw[:20].split()) > 1:
+                is_fixed = False
+                break
+            if len(toks) > 1 and len(c_raw.rstrip()) <= 20:
+                is_fixed = False
+                break
+
+    title, cards = _fixed_data(block) if is_fixed else _title_and_data(block)
+    if is_fixed:
+        valid_cards = [c for c in cards if not getattr(c, "raw", str(c)).strip().startswith(("#", "$"))]
+    else:
+        valid_cards = [c for c in cards if not getattr(c, "is_blank", False) and not getattr(c, "raw", str(c)).strip().startswith(("#", "$"))]
+
     if not valid_cards:
         log.error(f"/MAT/LAW79/{mat_id}: missing data cards", block.source)
         return
 
     rho, refer_rho = 0.0, 0.0
-    g = 0.0
-    a, b, m, n = 0.0, 0.0, 1.0, 1.0
-    c_val, eps0, sigma_fmax, fcut = 0.0, 1.0, 1.0e30, 0.0
-    t0, hel, phel = 0.0, 0.0, 0.0
+    tau_shear = 0.0
+    a, b, m, n = 0.0, 0.0, 0.0, 0.0
+    c_val, eps0, sigfmax, fcut = 0.0, 1.0, 1.0e30, 0.0
+    t, hel, phel = 0.0, 0.0, 0.0
     d1, d2, idel, epsmax = 0.0, 0.0, 0, 0.0
     k1, k2, k3, beta = 0.0, 0.0, 0.0, 0.0
 
-    if block.fixed:
+    if is_fixed:
+        # Card 1: RHO, [Refer_Rho] (MAT_LAW79_1: [20, 20])
         if len(valid_cards) > 0:
-            f1 = cut(valid_cards[0].raw, "MAT_LAW79_1")
-            rho = _f(f1[0]) if len(f1) > 0 else 0.0
-            refer_rho = _f(f1[1]) if len(f1) > 1 else 0.0
+            f1 = valid_cards[0].cut("MAT_LAW79_1")
+            rho = _fval_safe(f1[0]) if len(f1) > 0 else 0.0
+            refer_rho = _fval_safe(f1[1]) if len(f1) > 1 else 0.0
+        # Card 2: tau_shear (MAT_LAW79_2: [20])
         if len(valid_cards) > 1:
-            f2 = cut(valid_cards[1].raw, "MAT_LAW79_2")
-            g = _f(f2[0]) if len(f2) > 0 else 0.0
+            f2 = valid_cards[1].cut("MAT_LAW79_2")
+            tau_shear = _fval_safe(f2[0]) if len(f2) > 0 else 0.0
+        # Card 3: a, b, m, n (MAT_LAW79_3: [20, 20, 20, 20])
         if len(valid_cards) > 2:
-            f3 = cut(valid_cards[2].raw, "MAT_LAW79_3")
-            a = _f(f3[0]) if len(f3) > 0 else 0.0
-            b = _f(f3[1]) if len(f3) > 1 else 0.0
-            m = _f(f3[2], 1.0) if len(f3) > 2 and f3[2].strip() else 1.0
-            n = _f(f3[3], 1.0) if len(f3) > 3 and f3[3].strip() else 1.0
+            f3 = valid_cards[2].cut("MAT_LAW79_3")
+            a = _fval_safe(f3[0]) if len(f3) > 0 else 0.0
+            b = _fval_safe(f3[1]) if len(f3) > 1 else 0.0
+            m = _fval_safe(f3[2]) if len(f3) > 2 else 0.0
+            n = _fval_safe(f3[3]) if len(f3) > 3 else 0.0
+        # Card 4: c, eps0, sigfmax, fcut (MAT_LAW79_4: [20, 20, 20, 20])
         if len(valid_cards) > 3:
-            f4 = cut(valid_cards[3].raw, "MAT_LAW79_4")
-            c_val = _f(f4[0]) if len(f4) > 0 else 0.0
-            eps0 = _f(f4[1], 1.0) if len(f4) > 1 and f4[1].strip() else 1.0
-            sigma_fmax = _f(f4[2], 1.0e30) if len(f4) > 2 and f4[2].strip() else 1.0e30
-            fcut = _f(f4[3]) if len(f4) > 3 else 0.0
+            f4 = valid_cards[3].cut("MAT_LAW79_4")
+            c_val = _fval_safe(f4[0]) if len(f4) > 0 else 0.0
+            eps0 = _fval_safe(f4[1], 1.0) if len(f4) > 1 and f4[1].strip() else 1.0
+            sigfmax = _fval_safe(f4[2], 1.0e30) if len(f4) > 2 and f4[2].strip() else 1.0e30
+            fcut = _fval_safe(f4[3]) if len(f4) > 3 else 0.0
+        # Card 5: t, hel, phel (MAT_LAW79_5: [20, 20, 20])
         if len(valid_cards) > 4:
-            f5 = cut(valid_cards[4].raw, "MAT_LAW79_5")
-            t0 = _f(f5[0]) if len(f5) > 0 else 0.0
-            hel = _f(f5[1]) if len(f5) > 1 else 0.0
-            phel = _f(f5[2]) if len(f5) > 2 else 0.0
+            f5 = valid_cards[4].cut("MAT_LAW79_5")
+            t = _fval_safe(f5[0]) if len(f5) > 0 else 0.0
+            hel = _fval_safe(f5[1]) if len(f5) > 1 else 0.0
+            phel = _fval_safe(f5[2]) if len(f5) > 2 else 0.0
+        # Card 6: d1, d2, [blank], idel, epsmax (MAT_LAW79_6: [20, 20, 10, 10, 20])
         if len(valid_cards) > 5:
-            f6 = cut(valid_cards[5].raw, "MAT_LAW79_6")
-            d1 = _f(f6[0]) if len(f6) > 0 else 0.0
-            d2 = _f(f6[1]) if len(f6) > 1 else 0.0
-            idel = _i(f6[3]) if len(f6) > 3 else 0
-            epsmax = _f(f6[4]) if len(f6) > 4 else 0.0
+            f6 = valid_cards[5].cut("MAT_LAW79_6")
+            d1 = _fval_safe(f6[0]) if len(f6) > 0 else 0.0
+            d2 = _fval_safe(f6[1]) if len(f6) > 1 else 0.0
+            idel = int(_fval_safe(f6[3])) if len(f6) > 3 else 0
+            epsmax = _fval_safe(f6[4]) if len(f6) > 4 else 0.0
+        # Card 7: k1, k2, k3, beta (MAT_LAW79_7: [20, 20, 20, 20])
         if len(valid_cards) > 6:
-            f7 = cut(valid_cards[6].raw, "MAT_LAW79_7")
-            k1 = _f(f7[0]) if len(f7) > 0 else 0.0
-            k2 = _f(f7[1]) if len(f7) > 1 else 0.0
-            k3 = _f(f7[2]) if len(f7) > 2 else 0.0
-            beta = _f(f7[3]) if len(f7) > 3 else 0.0
+            f7 = valid_cards[6].cut("MAT_LAW79_7")
+            k1 = _fval_safe(f7[0]) if len(f7) > 0 else 0.0
+            k2 = _fval_safe(f7[1]) if len(f7) > 1 else 0.0
+            k3 = _fval_safe(f7[2]) if len(f7) > 2 else 0.0
+            beta = _fval_safe(f7[3]) if len(f7) > 3 else 0.0
     else:
+        # Free format
         if len(valid_cards) > 0:
-            t1 = valid_cards[0].tokens()
-            rho = float(t1[0]) if len(t1) > 0 else 0.0
-            refer_rho = float(t1[1]) if len(t1) > 1 else 0.0
+            t1 = _card_tokens(valid_cards[0])
+            rho = _fval_safe(t1[0]) if len(t1) > 0 else 0.0
+            refer_rho = _fval_safe(t1[1]) if len(t1) > 1 else 0.0
         if len(valid_cards) > 1:
-            t2 = valid_cards[1].tokens()
-            g = float(t2[0]) if len(t2) > 0 else 0.0
+            t2 = _card_tokens(valid_cards[1])
+            tau_shear = _fval_safe(t2[0]) if len(t2) > 0 else 0.0
         if len(valid_cards) > 2:
-            t3 = valid_cards[2].tokens()
-            a = float(t3[0]) if len(t3) > 0 else 0.0
-            b = float(t3[1]) if len(t3) > 1 else 0.0
-            m = float(t3[2]) if len(t3) > 2 else 1.0
-            n = float(t3[3]) if len(t3) > 3 else 1.0
+            t3 = _card_tokens(valid_cards[2])
+            a = _fval_safe(t3[0]) if len(t3) > 0 else 0.0
+            b = _fval_safe(t3[1]) if len(t3) > 1 else 0.0
+            m = _fval_safe(t3[2]) if len(t3) > 2 else 0.0
+            n = _fval_safe(t3[3]) if len(t3) > 3 else 0.0
         if len(valid_cards) > 3:
-            t4 = valid_cards[3].tokens()
-            c_val = float(t4[0]) if len(t4) > 0 else 0.0
-            eps0 = float(t4[1]) if len(t4) > 1 else 1.0
-            sigma_fmax = float(t4[2]) if len(t4) > 2 else 1.0e30
-            fcut = float(t4[3]) if len(t4) > 3 else 0.0
+            t4 = _card_tokens(valid_cards[3])
+            c_val = _fval_safe(t4[0]) if len(t4) > 0 else 0.0
+            eps0 = _fval_safe(t4[1], 1.0) if len(t4) > 1 and t4[1].strip() else 1.0
+            sigfmax = _fval_safe(t4[2], 1.0e30) if len(t4) > 2 and t4[2].strip() else 1.0e30
+            fcut = _fval_safe(t4[3]) if len(t4) > 3 else 0.0
         if len(valid_cards) > 4:
-            t5 = valid_cards[4].tokens()
-            t0 = float(t5[0]) if len(t5) > 0 else 0.0
-            hel = float(t5[1]) if len(t5) > 1 else 0.0
-            phel = float(t5[2]) if len(t5) > 2 else 0.0
+            t5 = _card_tokens(valid_cards[4])
+            t = _fval_safe(t5[0]) if len(t5) > 0 else 0.0
+            hel = _fval_safe(t5[1]) if len(t5) > 1 else 0.0
+            phel = _fval_safe(t5[2]) if len(t5) > 2 else 0.0
         if len(valid_cards) > 5:
-            t6 = valid_cards[5].tokens()
-            d1 = float(t6[0]) if len(t6) > 0 else 0.0
-            d2 = float(t6[1]) if len(t6) > 1 else 0.0
-            idel = int(float(t6[2])) if len(t6) > 2 else 0
-            epsmax = float(t6[3]) if len(t6) > 3 else 0.0
+            t6 = _card_tokens(valid_cards[5])
+            d1 = _fval_safe(t6[0]) if len(t6) > 0 else 0.0
+            d2 = _fval_safe(t6[1]) if len(t6) > 1 else 0.0
+            if len(t6) >= 5:
+                if t6[2] == "":
+                    idel = int(_fval_safe(t6[3]))
+                    epsmax = _fval_safe(t6[4])
+                else:
+                    try:
+                        idel = int(_fval_safe(t6[3]))
+                        epsmax = _fval_safe(t6[4])
+                    except (ValueError, IndexError):
+                        idel = int(_fval_safe(t6[2]))
+                        epsmax = _fval_safe(t6[3])
+            elif len(t6) >= 4:
+                idel = int(_fval_safe(t6[2]))
+                epsmax = _fval_safe(t6[3])
+            elif len(t6) == 3:
+                idel = int(_fval_safe(t6[2]))
         if len(valid_cards) > 6:
-            t7 = valid_cards[6].tokens()
-            k1 = float(t7[0]) if len(t7) > 0 else 0.0
-            k2 = float(t7[1]) if len(t7) > 1 else 0.0
-            k3 = float(t7[2]) if len(t7) > 2 else 0.0
-            beta = float(t7[3]) if len(t7) > 3 else 0.0
+            t7 = _card_tokens(valid_cards[6])
+            k1 = _fval_safe(t7[0]) if len(t7) > 0 else 0.0
+            k2 = _fval_safe(t7[1]) if len(t7) > 1 else 0.0
+            k3 = _fval_safe(t7[2]) if len(t7) > 2 else 0.0
+            beta = _fval_safe(t7[3]) if len(t7) > 3 else 0.0
+
+    # Defaults per hm_read_mat79.F
+    if refer_rho == 0.0:
+        refer_rho = rho
+    if c_val == 0.0 and eps0 == 0.0:
+        eps0 = 1.0
+    elif eps0 == 0.0:
+        eps0 = 1.0
+    if sigfmax == 0.0:
+        sigfmax = 1.0e30
+    if epsmax == 0.0:
+        epsmax = 1.0e30
+    idel = min(max(0, idel), 3)
 
     m79 = MatLaw79(
-        id=mat_id, rho=rho, refer_rho=refer_rho, g=g,
-        a=a, b=b, m=m, n=n, c=c_val, eps0=eps0, sigma_fmax=sigma_fmax, fcut=fcut,
-        t0=t0, hel=hel, phel=phel, d1=d1, d2=d2, idel=idel, epsmax=epsmax,
+        id=mat_id, rho=rho, refer_rho=refer_rho, tau_shear=tau_shear,
+        a=a, b=b, m=m, n=n, c=c_val, eps0=eps0, sigfmax=sigfmax, fcut=fcut,
+        t=t, hel=hel, phel=phel, d1=d1, d2=d2, idel=idel, epsmax=epsmax,
         k1=k1, k2=k2, k3=k3, beta=beta, title=title,
     )
     model.mat_law79s[mat_id] = m79
+    if hasattr(model, "mat_john_holms"):
+        model.mat_john_holms[mat_id] = m79
+    if hasattr(model, "mat_jh2s"):
+        model.mat_jh2s[mat_id] = m79
+
     from .mat_reader import GenericMaterialRecord
-    e_val = (9.0 * k1 * g) / (3.0 * k1 + g) if (3.0 * k1 + g) > 0 else 2.0 * g * 1.3
-    nu_val = (3.0 * k1 - 2.0 * g) / (2.0 * (3.0 * k1 + g)) if (3.0 * k1 + g) > 0 else 0.3
+    denom_e = 3.0 * k1 + tau_shear
+    e_val = (9.0 * k1 * tau_shear) / denom_e if denom_e > 0 else 2.0 * tau_shear * 1.3
+    denom_nu = 6.0 * k1 + 2.0 * tau_shear
+    nu_val = (3.0 * k1 - 2.0 * tau_shear) / denom_nu if denom_nu > 0 else 0.3
     mat79 = Material(
         id=mat_id, law=79, rho0=rho, title=title,
         params={
-            "E": e_val, "nu": nu_val, "G": g, "MAT_RHO": rho, "K1": k1, "K2": k2, "K3": k3,
+            "E": e_val, "nu": nu_val, "G": tau_shear, "shear": tau_shear, "MAT_RHO": rho,
+            "tau_shear": tau_shear, "rho": rho, "refer_rho": refer_rho,
+            "K1": k1, "K2": k2, "K3": k3, "k1": k1, "k2": k2, "k3": k3,
             "MAT_A": a, "MAT_B": b, "MAT_M": m, "MAT_N": n, "MAT_C": c_val,
+            "a": a, "b": b, "m": m, "n": n, "c": c_val,
+            "MAT_Epsilon_F": eps0, "eps0": eps0,
+            "MAT_SIG1max_t": sigfmax, "sigfmax": sigfmax, "sigma_fmax": sigfmax,
+            "MAT_FCUT": fcut, "fcut": fcut,
+            "MAT_T0": t, "t": t, "t0": t,
+            "MAT_E": hel, "hel": hel,
+            "MAT_EPS": phel, "phel": phel,
+            "shel": 1.5 * (hel - phel),
+            "tstar": (t / phel) if phel != 0.0 else 0.0,
+            "D1": d1, "d1": d1, "D2": d2, "d2": d2,
+            "IDEL": idel, "idel": idel,
+            "EPSMAX": epsmax, "epsmax": epsmax,
+            "MAT_Beta": beta, "beta": beta,
         }
     )
     mat79.record = GenericMaterialRecord(
@@ -84707,14 +84813,24 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "LOAD_PCYL": read_load_pcyl,
     "PCYL": read_load_pcyl,
     "EBCS_MONVOL": read_ebcs_monvol,
-    # M179: DAMP_VREL, FAIL_SYAZWAN, MAT_LAW113, MAT_LAW79, MAT_VISC_LPRONY, ENG_DT_BRICK
+    # M179 / M558: DAMP_VREL, FAIL_SYAZWAN, MAT_LAW113, MAT_LAW79, MAT_VISC_LPRONY, ENG_DT_BRICK
     "DAMP_VREL": read_damp_vrel,
     "MAT_LAW113": read_mat,
     "MAT_SPR_BEAM": read_mat,
     "SPR_BEAM": read_mat,
-    "MAT_LAW79": read_mat,
-    "MAT_JOHN_HOLM": read_mat,
-    "JOHN_HOLM": read_mat,
+    "MAT_LAW79": read_mat_law79,
+    "LAW79": read_mat_law79,
+    "MAT/LAW79": read_mat_law79,
+    "MAT_JOHN_HOLM": read_mat_law79,
+    "JOHN_HOLM": read_mat_law79,
+    "MAT/JOHN_HOLM": read_mat_law79,
+    "MAT_JOHNSON_HOLMQUIST": read_mat_law79,
+    "JOHNSON_HOLMQUIST": read_mat_law79,
+    "MAT/JOHNSON_HOLMQUIST": read_mat_law79,
+    "MAT_JH2": read_mat_law79,
+    "JH2": read_mat_law79,
+    "MAT/JH2": read_mat_law79,
+    "LAW79_JOHN_HOLM": read_mat_law79,
     "MAT_VISC_LPRONY": read_mat_visc_lprony,
     "ENG_DT_BRICK": read_dt_brick,
     "DT_BRICK": read_dt_brick,
@@ -92736,6 +92852,23 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 
 
+}
+
+
+MATERIAL_DISPATCH: Dict[str, Any] = {
+    "/MAT/LAW79": read_mat_law79,
+    "/MAT/JOHN_HOLM": read_mat_law79,
+    "/MAT/JOHNSON_HOLMQUIST": read_mat_law79,
+    "/MAT/JH2": read_mat_law79,
+    "LAW79": read_mat_law79,
+    "JOHN_HOLM": read_mat_law79,
+    "JOHNSON_HOLMQUIST": read_mat_law79,
+    "JH2": read_mat_law79,
+    "MAT_LAW79": read_mat_law79,
+    "MAT_JOHN_HOLM": read_mat_law79,
+    "MAT_JOHNSON_HOLMQUIST": read_mat_law79,
+    "MAT_JH2": read_mat_law79,
+    "LAW79_JOHN_HOLM": read_mat_law79,
 }
 
 

@@ -1080,6 +1080,297 @@ class StarterDeck:
         return self.mat_law49(*args, **kwargs)
 
 
+    def mat_law79(
+        self,
+        mat_id: int = 0,
+        rho: float = 0.0,
+        tau_shear: float = 0.0,
+        a: float = 0.0,
+        b: float = 0.0,
+        m: float = 0.0,
+        n: float = 0.0,
+        c: float = 0.0,
+        eps0: float = 1.0,
+        sigfmax: float = 1.0e30,
+        fcut: float = 0.0,
+        t: float = 0.0,
+        hel: float = 0.0,
+        phel: float = 0.0,
+        d1: float = 0.0,
+        d2: float = 1.0,
+        idel: int = 0,
+        epsmax: float = 1.0e30,
+        k1: float = 0.0,
+        k2: float = 0.0,
+        k3: float = 0.0,
+        beta: float = 1.0,
+        refer_rho: float | None = None,
+        title: str = "",
+        unit_id: int | None = None,
+        law_name: str = "LAW79",
+        fixed_format: bool = True,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW79`` (/MAT/JOHN_HOLM, /MAT/JOHNSON_HOLMQUIST, /MAT/JH2) — Johnson-Holmquist brittle damage model.
+
+        Upstream reference: hm_read_mat79.F and matl79_79.cfg:
+          Card 1: MAT_RHO, [Refer_Rho] (%20lg[%20lg]) — MAT_LAW79_1: [20, 20]
+          Card 2: tau_shear (%20lg) — MAT_LAW79_2: [20]
+          Card 3: MAT_A, MAT_B, MAT_M, MAT_N (%20lg*4) — MAT_LAW79_3: [20, 20, 20, 20]
+          Card 4: MAT_C, MAT_Epsilon_F, MAT_SIG1max_t, MAT_FCUT (%20lg*4) — MAT_LAW79_4: [20, 20, 20, 20]
+          Card 5: MAT_T0, MAT_E, MAT_EPS (%20lg*3) — MAT_LAW79_5: [20, 20, 20]
+          Card 6: D1, D2, IDEL, EPSMAX (%20lg%20lg%10s%10d%20lg) — MAT_LAW79_6: [20, 20, 10, 10, 20]
+          Card 7: K1, K2, K3, MAT_Beta (%20lg*4) — MAT_LAW79_7: [20, 20, 20, 20]
+        """
+        # Allow title as 2nd positional argument if passed as string: mat_law79(1, "title", rho, tau_shear...)
+        if isinstance(rho, str):
+            actual_title = rho
+            actual_rho = float(tau_shear) if isinstance(tau_shear, (int, float, str)) and str(tau_shear).strip() else 0.0
+            actual_tau_shear = float(a) if isinstance(a, (int, float, str)) and str(a).strip() else 0.0
+            actual_a = float(b) if isinstance(b, (int, float, str)) and str(b).strip() else 0.0
+            actual_b = float(m) if isinstance(m, (int, float, str)) and str(m).strip() else 0.0
+            actual_m = float(n) if isinstance(n, (int, float, str)) and str(n).strip() else 0.0
+            actual_n = float(c) if isinstance(c, (int, float, str)) and str(c).strip() else 0.0
+            actual_c = float(eps0) if isinstance(eps0, (int, float, str)) and str(eps0).strip() else 0.0
+            actual_eps0 = float(sigfmax) if isinstance(sigfmax, (int, float, str)) and str(sigfmax).strip() else 1.0
+            actual_sigfmax = float(fcut) if isinstance(fcut, (int, float, str)) and str(fcut).strip() else 1.0e30
+            actual_fcut = float(t) if isinstance(t, (int, float, str)) and str(t).strip() else 0.0
+            actual_t = float(hel) if isinstance(hel, (int, float, str)) and str(hel).strip() else 0.0
+            actual_hel = float(phel) if isinstance(phel, (int, float, str)) and str(phel).strip() else 0.0
+            actual_phel = float(d1) if isinstance(d1, (int, float, str)) and str(d1).strip() else 0.0
+            actual_d1 = float(d2) if isinstance(d2, (int, float, str)) and str(d2).strip() else 0.0
+            actual_d2 = float(idel) if isinstance(idel, (int, float, str)) and str(idel).strip() else 1.0
+            actual_idel = int(epsmax) if isinstance(epsmax, (int, float, str)) and str(epsmax).strip() else 0
+            actual_epsmax = float(k1) if isinstance(k1, (int, float, str)) and str(k1).strip() else 1.0e30
+            actual_k1 = float(k2) if isinstance(k2, (int, float, str)) and str(k2).strip() else 0.0
+            actual_k2 = float(k3) if isinstance(k3, (int, float, str)) and str(k3).strip() else 0.0
+            actual_k3 = float(beta) if isinstance(beta, (int, float, str)) and str(beta).strip() else 0.0
+            actual_beta = float(refer_rho) if isinstance(refer_rho, (int, float, str)) and str(refer_rho).strip() else 1.0
+            actual_refer_rho = None
+            title = actual_title
+            rho = actual_rho
+            tau_shear = actual_tau_shear
+            a = actual_a
+            b = actual_b
+            m = actual_m
+            n = actual_n
+            c = actual_c
+            eps0 = actual_eps0
+            sigfmax = actual_sigfmax
+            fcut = actual_fcut
+            t = actual_t
+            hel = actual_hel
+            phel = actual_phel
+            d1 = actual_d1
+            d2 = actual_d2
+            idel = actual_idel
+            epsmax = actual_epsmax
+            k1 = actual_k1
+            k2 = actual_k2
+            k3 = actual_k3
+            beta = actual_beta
+            refer_rho = actual_refer_rho
+
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+
+        mat_obj = None
+        if hasattr(mat_id, "tau_shear") or hasattr(mat_id, "phel"):
+            mat_obj = mat_id
+        elif hasattr(mat_id, "params") and ("tau_shear" in getattr(mat_id, "params", {}) or "phel" in getattr(mat_id, "params", {})):
+            mat_obj = mat_id
+        elif "mat" in kw_low:
+            mat_obj = kw_low["mat"]
+        elif "mat79" in kw_low:
+            mat_obj = kw_low["mat79"]
+        elif "mat_law79" in kw_low:
+            mat_obj = kw_low["mat_law79"]
+        elif "mat_john_holm" in kw_low:
+            mat_obj = kw_low["mat_john_holm"]
+        elif "mat_jh2" in kw_low:
+            mat_obj = kw_low["mat_jh2"]
+
+        if mat_obj is not None:
+            mat_id = getattr(mat_obj, "id", mat_id)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", rho))
+            refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", refer_rho))
+            tau_shear = getattr(mat_obj, "tau_shear", getattr(mat_obj, "shear", getattr(mat_obj, "G", getattr(mat_obj, "g", tau_shear))))
+            a = getattr(mat_obj, "a", a)
+            b = getattr(mat_obj, "b", b)
+            m = getattr(mat_obj, "m", m)
+            n = getattr(mat_obj, "n", n)
+            c = getattr(mat_obj, "c", c)
+            eps0 = getattr(mat_obj, "eps0", eps0)
+            sigfmax = getattr(mat_obj, "sigfmax", getattr(mat_obj, "sigma_fmax", sigfmax))
+            fcut = getattr(mat_obj, "fcut", fcut)
+            t = getattr(mat_obj, "t", getattr(mat_obj, "t0", t))
+            hel = getattr(mat_obj, "hel", hel)
+            phel = getattr(mat_obj, "phel", phel)
+            d1 = getattr(mat_obj, "d1", d1)
+            d2 = getattr(mat_obj, "d2", d2)
+            idel = getattr(mat_obj, "idel", idel)
+            epsmax = getattr(mat_obj, "epsmax", epsmax)
+            k1 = getattr(mat_obj, "k1", getattr(mat_obj, "bulk", getattr(mat_obj, "K", k1)))
+            k2 = getattr(mat_obj, "k2", k2)
+            k3 = getattr(mat_obj, "k3", k3)
+            beta = getattr(mat_obj, "beta", beta)
+            p_dict = getattr(mat_obj, "params", {}) or {}
+            if isinstance(p_dict, dict):
+                rho = p_dict.get("rho0", p_dict.get("rho", rho))
+                refer_rho = p_dict.get("refer_rho", p_dict.get("rhor", refer_rho))
+                tau_shear = p_dict.get("tau_shear", p_dict.get("shear", p_dict.get("G", p_dict.get("g", tau_shear))))
+                a = p_dict.get("a", a)
+                b = p_dict.get("b", b)
+                m = p_dict.get("m", m)
+                n = p_dict.get("n", n)
+                c = p_dict.get("c", c)
+                eps0 = p_dict.get("eps0", eps0)
+                sigfmax = p_dict.get("sigfmax", p_dict.get("sigma_fmax", sigfmax))
+                fcut = p_dict.get("fcut", fcut)
+                t = p_dict.get("t", p_dict.get("t0", t))
+                hel = p_dict.get("hel", hel)
+                phel = p_dict.get("phel", phel)
+                d1 = p_dict.get("d1", d1)
+                d2 = p_dict.get("d2", d2)
+                idel = p_dict.get("idel", idel)
+                epsmax = p_dict.get("epsmax", epsmax)
+                k1 = p_dict.get("k1", p_dict.get("bulk", p_dict.get("K", k1)))
+                k2 = p_dict.get("k2", k2)
+                k3 = p_dict.get("k3", k3)
+                beta = p_dict.get("beta", beta)
+
+        explicit_rhor = (refer_rho is not None)
+        if "refer_rho" in kw_low and refer_rho is None:
+            refer_rho = float(kw_low["refer_rho"])
+            explicit_rhor = True
+        if "rhor" in kw_low and refer_rho is None:
+            refer_rho = float(kw_low["rhor"])
+            explicit_rhor = True
+        if "mat_rho" in kw_low and rho == 0.0:
+            rho = float(kw_low["mat_rho"])
+        if "shear" in kw_low and tau_shear == 0.0:
+            tau_shear = float(kw_low["shear"])
+        if "g" in kw_low and tau_shear == 0.0:
+            tau_shear = float(kw_low["g"])
+        if "mat_a" in kw_low and a == 0.0:
+            a = float(kw_low["mat_a"])
+        if "mat_b" in kw_low and b == 0.0:
+            b = float(kw_low["mat_b"])
+        if "mat_m" in kw_low and m == 0.0:
+            m = float(kw_low["mat_m"])
+        if "mat_n" in kw_low and n == 0.0:
+            n = float(kw_low["mat_n"])
+        if "mat_c" in kw_low and c == 0.0:
+            c = float(kw_low["mat_c"])
+        if "mat_epsilon_f" in kw_low and eps0 == 1.0:
+            eps0 = float(kw_low["mat_epsilon_f"])
+        if "mat_sig1max_t" in kw_low and sigfmax == 1.0e30:
+            sigfmax = float(kw_low["mat_sig1max_t"])
+        if "mat_fcut" in kw_low and fcut == 0.0:
+            fcut = float(kw_low["mat_fcut"])
+        if "mat_t0" in kw_low and t == 0.0:
+            t = float(kw_low["mat_t0"])
+        if "mat_e" in kw_low and hel == 0.0:
+            hel = float(kw_low["mat_e"])
+        if "mat_eps" in kw_low and phel == 0.0:
+            phel = float(kw_low["mat_eps"])
+        if "mat_beta" in kw_low and beta == 1.0:
+            beta = float(kw_low["mat_beta"])
+        if "title" in kw_low and not title:
+            title = str(kw_low["title"])
+        if "fixed_format" in kw_low:
+            fixed_format = bool(kw_low["fixed_format"])
+        if "fixed" in kw_low:
+            fixed_format = bool(kw_low["fixed"])
+        if "free" in kw_low and bool(kw_low["free"]):
+            fixed_format = False
+        if "law" in kw_low:
+            law_name = str(kw_low["law"])
+
+        if refer_rho is None or refer_rho == 0.0:
+            refer_rho = rho
+        if eps0 == 0.0:
+            eps0 = 1.0
+        if sigfmax == 0.0:
+            sigfmax = 1.0e30
+        if epsmax == 0.0:
+            epsmax = 1.0e30
+        idel = max(0, min(int(idel), 3))
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mat_id, unit_id)
+        else:
+            self._header("MAT", law_name, mat_id)
+        self._title(title)
+
+        if fixed_format:
+            # Card 1: rho, refer_rho (MAT_LAW79_1: [20, 20])
+            if explicit_rhor and float(refer_rho) != 0.0:
+                self.lines.append("#        Init. dens.          Ref. dens.")
+                self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(refer_rho, 20)}")
+            elif refer_rho is not None and float(refer_rho) != 0.0 and float(refer_rho) != float(rho):
+                self.lines.append("#        Init. dens.          Ref. dens.")
+                self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(refer_rho, 20)}")
+            else:
+                self.lines.append("#        Init. dens.")
+                self.lines.append(fmt_float(rho, 20))
+
+            # Card 2: tau_shear (MAT_LAW79_2: [20])
+            self.lines.append("#                  G")
+            self.lines.append(fmt_float(tau_shear, 20))
+
+            # Card 3: a, b, m, n (MAT_LAW79_3: [20, 20, 20, 20])
+            self.lines.append("#                  a                   b                   m                   n")
+            self.lines.append(f"{fmt_float(a, 20)}{fmt_float(b, 20)}{fmt_float(m, 20)}{fmt_float(n, 20)}")
+
+            # Card 4: c, eps0, sigfmax, fcut (MAT_LAW79_4: [20, 20, 20, 20])
+            self.lines.append("#                  c                EPS0          SIGMA_FMAX                FCUT")
+            self.lines.append(f"{fmt_float(c, 20)}{fmt_float(eps0, 20)}{fmt_float(sigfmax, 20)}{fmt_float(fcut, 20)}")
+
+            # Card 5: t, hel, phel (MAT_LAW79_5: [20, 20, 20])
+            self.lines.append("#                  T                 HEL                PHEL")
+            self.lines.append(f"{fmt_float(t, 20)}{fmt_float(hel, 20)}{fmt_float(phel, 20)}")
+
+            # Card 6: d1, d2, idel, epsmax (MAT_LAW79_6: [20, 20, 10, 10, 20])
+            self.lines.append("#                 D1                  D2                IDEL              EPSMAX")
+            self.lines.append(f"{fmt_float(d1, 20)}{fmt_float(d2, 20)}{' '*10}{idel:>10d}{fmt_float(epsmax, 20)}")
+
+            # Card 7: k1, k2, k3, beta (MAT_LAW79_7: [20, 20, 20, 20])
+            self.lines.append("#                 K1                  K2                  K3                BETA")
+            self.lines.append(f"{fmt_float(k1, 20)}{fmt_float(k2, 20)}{fmt_float(k3, 20)}{fmt_float(beta, 20)}")
+        else:
+            delim = kw_low.get("delimiter", ", " if (kw_low.get("comma") or kw_low.get("comma_delimited")) else " ")
+            if explicit_rhor and float(refer_rho) != 0.0:
+                self.lines.append(f"{rho}{delim}{refer_rho}")
+            elif refer_rho is not None and float(refer_rho) != 0.0 and float(refer_rho) != float(rho):
+                self.lines.append(f"{rho}{delim}{refer_rho}")
+            else:
+                self.lines.append(f"{rho}")
+            self.lines.append(f"{tau_shear}")
+            self.lines.append(f"{a}{delim}{b}{delim}{m}{delim}{n}")
+            self.lines.append(f"{c}{delim}{eps0}{delim}{sigfmax}{delim}{fcut}")
+            self.lines.append(f"{t}{delim}{hel}{delim}{phel}")
+            self.lines.append(f"{d1}{delim}{d2}{delim}{idel}{delim}{epsmax}")
+            self.lines.append(f"{k1}{delim}{k2}{delim}{k3}{delim}{beta}")
+
+        return self
+
+    def mat_john_holm(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/JOHN_HOLM`` — synonym for ``/MAT/LAW79``."""
+        kwargs.setdefault("law_name", "JOHN_HOLM")
+        return self.mat_law79(*args, **kwargs)
+
+    def mat_johnson_holmquist(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/JOHNSON_HOLMQUIST`` — synonym for ``/MAT/LAW79``."""
+        kwargs.setdefault("law_name", "JOHNSON_HOLMQUIST")
+        return self.mat_law79(*args, **kwargs)
+
+    def mat_jh2(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/JH2`` — synonym for ``/MAT/LAW79``."""
+        kwargs.setdefault("law_name", "JH2")
+        return self.mat_law79(*args, **kwargs)
+
+
 
     def mat_law28(
         self,

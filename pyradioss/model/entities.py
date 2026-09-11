@@ -7371,20 +7371,33 @@ class MatLaw113:
 
 @dataclass
 class MatLaw79:
-    """/MAT/LAW79 / /MAT/JOHN_HOLM (M179): Johnson-Holmquist ceramic material model."""
-    id: int
+    """/MAT/LAW79 / /MAT/JOHN_HOLM (M179/M558): Johnson-Holmquist JH-2 ceramic material model.
+
+    Upstream Fortran reference:
+      hm_read_mat79.F, sigeps79.F, and matl79_79.cfg (radioss2023).
+
+    Yield surfaces:
+      - Intact strength:
+          sigma*_i = a * (P* + T*)^n * (1 + c * ln(eps_dot*))
+      - Fractured strength:
+          sigma*_f = b * (P*)^m * (1 + c * ln(eps_dot*)) <= sigfmax
+      - Current strength:
+          sigma* = sigma*_i - D * (sigma*_i - sigma*_f)
+      where sigma* = sigma_eq / HEL_stress, P* = P / P_HEL, T* = T / P_HEL.
+    """
+    id: int = 0
     rho: float = 0.0
     refer_rho: float = 0.0
-    g: float = 0.0
+    tau_shear: float = 0.0
     a: float = 0.0
     b: float = 0.0
-    m: float = 1.0
-    n: float = 1.0
+    m: float = 0.0
+    n: float = 0.0
     c: float = 0.0
-    eps0: float = 1.0
-    sigma_fmax: float = 1.0e30
+    eps0: float = 0.0
+    sigfmax: float = 0.0
     fcut: float = 0.0
-    t0: float = 0.0
+    t: float = 0.0
     hel: float = 0.0
     phel: float = 0.0
     d1: float = 0.0
@@ -7396,6 +7409,221 @@ class MatLaw79:
     k3: float = 0.0
     beta: float = 0.0
     title: str = ""
+    law: int = 79
+    law_name: str = "LAW79"
+    unit_id: Optional[int] = None
+    params: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.refer_rho == 0.0:
+            self.refer_rho = self.rho
+        if self.eps0 == 0.0:
+            self.eps0 = 1.0
+        if self.sigfmax == 0.0:
+            self.sigfmax = 1.0e30
+        if self.epsmax == 0.0:
+            self.epsmax = 1.0e30
+        self.idel = min(max(0, self.idel), 3)
+
+        if not isinstance(self.params, dict):
+            self.params = {}
+        core: Dict[str, Any] = {
+            "id": self.id,
+            "rho": self.rho,
+            "rho0": self.rho,
+            "refer_rho": self.refer_rho,
+            "rhor": self.refer_rho,
+            "tau_shear": self.tau_shear,
+            "G": self.tau_shear,
+            "shear": self.tau_shear,
+            "g": self.tau_shear,
+            "a": self.a,
+            "b": self.b,
+            "m": self.m,
+            "n": self.n,
+            "c": self.c,
+            "eps0": self.eps0,
+            "sigfmax": self.sigfmax,
+            "sigma_fmax": self.sigfmax,
+            "fcut": self.fcut,
+            "t": self.t,
+            "t0": self.t,
+            "hel": self.hel,
+            "phel": self.phel,
+            "shel": self.shel,
+            "tstar": self.tstar,
+            "d1": self.d1,
+            "d2": self.d2,
+            "idel": self.idel,
+            "epsmax": self.epsmax,
+            "k1": self.k1,
+            "k2": self.k2,
+            "k3": self.k3,
+            "K": self.k1,
+            "bulk": self.k1,
+            "beta": self.beta,
+            "title": self.title,
+            "young": self.young,
+            "E": self.young,
+            "nu": self.nu,
+            "sound_speed": self.sound_speed,
+        }
+        for k, v in core.items():
+            if k not in self.params:
+                self.params[k] = v
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @rho0.setter
+    def rho0(self, val: float) -> None:
+        self.rho = float(val)
+
+    @property
+    def rhor(self) -> float:
+        return self.refer_rho if self.refer_rho != 0.0 else self.rho
+
+    @rhor.setter
+    def rhor(self, val: float) -> None:
+        self.refer_rho = float(val)
+
+    @property
+    def G(self) -> float:
+        return self.tau_shear
+
+    @G.setter
+    def G(self, val: float) -> None:
+        self.tau_shear = float(val)
+
+    @property
+    def shear(self) -> float:
+        return self.tau_shear
+
+    @shear.setter
+    def shear(self, val: float) -> None:
+        self.tau_shear = float(val)
+
+    @property
+    def g(self) -> float:
+        return self.tau_shear
+
+    @g.setter
+    def g(self, val: float) -> None:
+        self.tau_shear = float(val)
+
+    @property
+    def t0(self) -> float:
+        return self.t
+
+    @t0.setter
+    def t0(self, val: float) -> None:
+        self.t = float(val)
+
+    @property
+    def sigma_fmax(self) -> float:
+        return self.sigfmax
+
+    @sigma_fmax.setter
+    def sigma_fmax(self, val: float) -> None:
+        self.sigfmax = float(val)
+
+    @property
+    def shel(self) -> float:
+        """Equivalent strength at HEL: shel = 1.5 * (HEL - PHEL) (UPARAM(12) in hm_read_mat79.F)."""
+        return 1.5 * (self.hel - self.phel)
+
+    @property
+    def tstar(self) -> float:
+        """Normalized tensile strength: tstar = T / PHEL (UPARAM(10) in hm_read_mat79.F)."""
+        return self.t / self.phel if self.phel != 0.0 else 0.0
+
+    @property
+    def bulk(self) -> float:
+        return self.k1
+
+    @bulk.setter
+    def bulk(self, val: float) -> None:
+        self.k1 = float(val)
+
+    @property
+    def K(self) -> float:
+        return self.k1
+
+    @K.setter
+    def K(self, val: float) -> None:
+        self.k1 = float(val)
+
+    @property
+    def young(self) -> float:
+        """Young's modulus derived from bulk modulus K1 and shear modulus G:
+        YOUNG = 9 * K1 * G / (3 * K1 + G) per hm_read_mat79.F:225.
+        """
+        denom = 3.0 * self.k1 + self.tau_shear
+        return (9.0 * self.k1 * self.tau_shear) / denom if denom > 0.0 else 0.0
+
+    @property
+    def E(self) -> float:
+        return self.young
+
+    @property
+    def nu(self) -> float:
+        """Poisson's ratio derived from bulk modulus K1 and shear modulus G:
+        NU = (3 * K1 - 2 * G) / (6 * K1 + 2 * G) per hm_read_mat79.F:224.
+        """
+        denom = 6.0 * self.k1 + 2.0 * self.tau_shear
+        return (3.0 * self.k1 - 2.0 * self.tau_shear) / denom if denom > 0.0 else 0.0
+
+    @property
+    def sound_speed(self) -> float:
+        """Acoustic sound speed in solid: c = sqrt((K1 + 4/3 * G) / rho0) per sigeps79.F:292."""
+        import math
+        rho_val = self.rho0 if self.rho0 > 0.0 else self.refer_rho
+        if rho_val > 0.0:
+            c2 = (self.k1 + (4.0 / 3.0) * self.tau_shear) / rho_val
+            if c2 > 0.0:
+                return math.sqrt(c2)
+        return 0.0
+
+    @property
+    def sound_speed_solid(self) -> float:
+        return self.sound_speed
+
+    # Mapping protocol
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        if isinstance(self.params, dict) and key in self.params:
+            return self.params[key]
+        raise KeyError(key)
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or (isinstance(self.params, dict) and key in self.params)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self) -> List[str]:
+        base_keys = [
+            "id", "rho", "refer_rho", "tau_shear", "a", "b", "m", "n",
+            "c", "eps0", "sigfmax", "fcut", "t", "hel", "phel",
+            "d1", "d2", "idel", "epsmax", "k1", "k2", "k3", "beta",
+            "title", "law", "law_name", "G", "shear", "bulk", "K",
+            "shel", "tstar", "young", "E", "nu", "sound_speed",
+        ]
+        if isinstance(self.params, dict):
+            for k in self.params:
+                if k not in base_keys:
+                    base_keys.append(k)
+        return base_keys
+
+
+MatJohnHolm = MatLaw79
+MatJohnsonHolmquist = MatLaw79
+MatJH2 = MatLaw79
 
 
 @dataclass

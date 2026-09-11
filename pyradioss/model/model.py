@@ -1086,7 +1086,9 @@ class Model:
         self.bcs_cyclics: Dict[int, BcsCyclic] = {}                 # /BCS/CYCLIC (M178)
         self.pcyl_loads: Dict[int, PcylLoad] = {}                   # /LOAD/PCYL (M178)
         self.damp_vrels: Dict[int, DampVrel] = {}                   # /DAMP/VREL (M179)
-        self.mat_law79s: Dict[int, MatLaw79] = {}                   # /MAT/LAW79, /MAT/JOHN_HOLM (M179)
+        self.mat_law79s: Dict[int, Any] = {}                         # /MAT/LAW79, /MAT/JOHN_HOLM (M179/M558)
+        self.mat_john_holms = self.mat_law79s
+        self.mat_jh2s = self.mat_law79s
         self.mat_visc_lpronys: Dict[int, MatViscLprony] = {}         # /MAT/VISC_LPRONY, /VISC/LPRONY (M179)
         self.mat_law190s: Dict[int, MatLaw190] = {}                 # /MAT/LAW190, /MAT/FOAM_DUBOIS (M180)
         self.mat_law41s: Dict[int, MatLaw41] = {}                   # /MAT/LAW41, /MAT/LEE_T (M180)

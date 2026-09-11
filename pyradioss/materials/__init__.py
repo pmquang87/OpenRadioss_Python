@@ -63,12 +63,25 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                law48_zhao, law49_steinb,
                law52_gurson,
                law60_plast3,
-               law62_hypervisco, law69_hyperelastic, law70_tabfoam, law81_druckerprager,
+               law62_hypervisco, law69_hyperelastic, law70_tabfoam, law79_john_holm, law81_druckerprager,
                law82_ogden,
                law83_spotweld, law114_seatbelt, law120_advanced,
                law58_fabr_a,
                law57_barlat,
                mat_gas, mat_void)
+from .law79_john_holm import (
+    Law79Params,
+    build_law79,
+    solid_update_law79,
+    shell_update_law79,
+    sound_speed_solid_law79,
+    tangent_law79_solid,
+    solid_update as law79_solid_update,
+    shell_update as law79_shell_update,
+    sound_speed_solid as law79_sound_speed,
+    consistent_solid_tangent as law79_solid_tangent,
+    extra_shapes as law79_extra_shapes,
+)
 from .law49_steinb import (
     Law49Params,
     build_law49,
@@ -1267,6 +1280,8 @@ def extra_shapes(mat, nip=None):
             )
     if getattr(mat, "law", None) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
         shapes.update(law49_steinb.extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in (79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM") or getattr(mat, "law_name", None) in ("79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM"):
+        shapes.update(law79_john_holm.extra_shapes(mat, nip=nip))
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
         shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
     return shapes
@@ -1433,6 +1448,19 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
             except Exception:
                 pass
         return sig, epsp_out, c
+    if getattr(mat, "law", None) in (79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM") or getattr(mat, "law_name", None) in ("79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM"):
+        sign, epsp_out, c = law79_john_holm.solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra, return_tuple=True)
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = sign
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         _get_law10()
         if law10_solid_update is not None:
@@ -1582,6 +1610,8 @@ def sound_speed(mat, rho=None, extra=None):
         return law21_dprag.sound_speed(mat, rho=rho, extra=extra)
     if law in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or law_name in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
         return law49_steinb.sound_speed_solid(mat, rho=rho, extra=extra)
+    if law in (79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM") or law_name in ("79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM"):
+        return law79_john_holm.sound_speed_solid(mat, rho=rho, extra=extra)
     if law in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or law_name in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         _get_law10()
         if law10_sound_speed is not None:
@@ -1707,6 +1737,8 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         return law21_dprag.shell_update(mat, sig, deps=deps, epsp=epsp, dt=dt, extra=extra)
     if getattr(mat, "law", None) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
         return law49_steinb.shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+    if getattr(mat, "law", None) in (79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM") or getattr(mat, "law_name", None) in ("79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM"):
+        return law79_john_holm.shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         raise NotImplementedError("LAW10 (soil/Drucker-Prager) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
@@ -1868,6 +1900,8 @@ def solid_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
         return law21_dprag.consistent_solid_tangent(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
     if getattr(mat, "law", None) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
         return law49_steinb.consistent_solid_tangent(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
+    if getattr(mat, "law", None) in (79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM") or getattr(mat, "law_name", None) in ("79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM"):
+        return law79_john_holm.consistent_solid_tangent(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         _get_law10()
         if law10_solid_tangent is not None:
