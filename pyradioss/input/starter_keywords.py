@@ -45000,7 +45000,7 @@ def read_mat_law84(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law93(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW93`` or ``/MAT/ORTH_HILL`` (M191): 3D Orthotropic Hill plasticity model."""
+    """``/MAT/LAW93`` or ``/MAT/ORTH_HILL`` (M191/M568): Orthotropic Hill 1948 plasticity model."""
     from ..model.entities import MatLaw93, Material
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -45009,103 +45009,181 @@ def read_mat_law93(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     e11, e22, e33, g12, nu12 = 0.0, 0.0, 0.0, 0.0, 0.0
     g13, g23, nu13, nu23, nl = 0.0, 0.0, 0.0, 0.0, 0
     sigma_y, qr1, cr1, qr2, cr2 = 0.0, 0.0, 0.0, 0.0, 0.0
-    r11, r22, r12, r33, r13 = 1.0, 1.0, 1.0, 1.0, 1.0
-    r23, fcut = 1.0, 0.0
+    r11, r22, r12, r33, r13, r23 = 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+    fcut = 0.0
     vp = 0
     curves = []
 
-    if block.fixed:
-        if len(valid_cards) > 0:
-            c0 = valid_cards[0].cut("MAT_LAW93_1")
-            rho0 = _safe_float(c0[0]) if len(c0) > 0 else 0.0
-            rhor = _safe_float(c0[1]) if len(c0) > 1 else 0.0
-        if len(valid_cards) > 1:
-            c1 = valid_cards[1].cut("MAT_LAW93_2")
-            e11 = _safe_float(c1[0]) if len(c1) > 0 else 0.0
-            e22 = _safe_float(c1[1]) if len(c1) > 1 else 0.0
-            e33 = _safe_float(c1[2]) if len(c1) > 2 else 0.0
-            g12 = _safe_float(c1[3]) if len(c1) > 3 else 0.0
-            nu12 = _safe_float(c1[4]) if len(c1) > 4 else 0.0
-        if len(valid_cards) > 2:
+    # Format detection: standard 8-card format vs legacy 6-card format
+    # In standard format (matl93_ORTH_HILL.cfg):
+    # Card 0: rho0, rhor
+    # Card 1: e11, e22, e33, g12, nu12
+    # Card 2: g13, g23, nu13, nu23
+    # Card 3: nl, vp, fcut
+    # If nl > 0: next nl cards are curves (fct_id, fscale, eps_dot)
+    # Next card: sigma_y, qr1, cr1, qr2, cr2
+    # Next card: r11, r22, r12
+    # Next card: r33, r13, r23
+
+    # Card 0
+    if len(valid_cards) > 0:
+        c0 = valid_cards[0].cut("MAT_LAW93_1") if block.fixed else valid_cards[0].tokens()
+        rho0 = _safe_float(c0[0]) if len(c0) > 0 else 0.0
+        rhor = _safe_float(c0[1]) if len(c0) > 1 else 0.0
+
+    # Card 1
+    if len(valid_cards) > 1:
+        c1 = valid_cards[1].cut("MAT_LAW93_2") if block.fixed else valid_cards[1].tokens()
+        e11 = _safe_float(c1[0]) if len(c1) > 0 else 0.0
+        e22 = _safe_float(c1[1]) if len(c1) > 1 else 0.0
+        e33 = _safe_float(c1[2]) if len(c1) > 2 else 0.0
+        g12 = _safe_float(c1[3]) if len(c1) > 3 else 0.0
+        nu12 = _safe_float(c1[4]) if len(c1) > 4 else 0.0
+
+    # Card 2 & check format
+    is_legacy = False
+    if len(valid_cards) > 2:
+        c2_toks = valid_cards[2].tokens()
+        if len(c2_toks) >= 5 and _safe_int(c2_toks[4]) > 0 and len(valid_cards) > 3 and len(valid_cards[3].tokens()) >= 4:
+            is_legacy = True
+
+    if is_legacy:
+        # Legacy 6-card format
+        if block.fixed:
             c2 = valid_cards[2].cut("MAT_LAW93_3")
             g13 = _safe_float(c2[0]) if len(c2) > 0 else 0.0
             g23 = _safe_float(c2[1]) if len(c2) > 1 else 0.0
             nu13 = _safe_float(c2[2]) if len(c2) > 2 else 0.0
             nu23 = _safe_float(c2[3]) if len(c2) > 3 else 0.0
             nl = _safe_int(c2[4]) if len(c2) > 4 else 0
-        if len(valid_cards) > 3:
-            c3 = valid_cards[3].cut("MAT_LAW93_4")
-            sigma_y = _safe_float(c3[0]) if len(c3) > 0 else 0.0
-            qr1 = _safe_float(c3[1]) if len(c3) > 1 else 0.0
-            cr1 = _safe_float(c3[2]) if len(c3) > 2 else 0.0
-            qr2 = _safe_float(c3[3]) if len(c3) > 3 else 0.0
-            cr2 = _safe_float(c3[4]) if len(c3) > 4 else 0.0
-        if len(valid_cards) > 4:
-            c4 = valid_cards[4].cut("MAT_LAW93_5")
-            r11 = _safe_float(c4[0], 1.0) if len(c4) > 0 else 1.0
-            r22 = _safe_float(c4[1], 1.0) if len(c4) > 1 else 1.0
-            r12 = _safe_float(c4[2], 1.0) if len(c4) > 2 else 1.0
-            r33 = _safe_float(c4[3], 1.0) if len(c4) > 3 else 1.0
-            r13 = _safe_float(c4[4], 1.0) if len(c4) > 4 else 1.0
-        if len(valid_cards) > 5:
-            c5 = valid_cards[5].cut("MAT_LAW93_6")
-            r23 = _safe_float(c5[0], 1.0) if len(c5) > 0 else 1.0
-            fcut = _safe_float(c5[1]) if len(c5) > 1 else 0.0
-            vp = _safe_int(c5[2]) if len(c5) > 2 else 0
-        for i in range(nl):
-            c_idx = 6 + i
-            if c_idx < len(valid_cards):
-                cc = valid_cards[c_idx].cut("MAT_LAW93_CURVE")
-                fct_id = _safe_int(cc[0]) if len(cc) > 0 else 0
-                fscale = _safe_float(cc[1], 1.0) if len(cc) > 1 else 1.0
-                eps_dot = _safe_float(cc[2]) if len(cc) > 2 else 0.0
-                curves.append({"fct_id": fct_id, "fscale": fscale, "eps_dot": eps_dot})
-    else:
-        if len(valid_cards) > 0:
-            t0 = valid_cards[0].tokens()
-            rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
-            rhor = _safe_float(t0[1]) if len(t0) > 1 else 0.0
-        if len(valid_cards) > 1:
-            t1 = valid_cards[1].tokens()
-            e11 = _safe_float(t1[0]) if len(t1) > 0 else 0.0
-            e22 = _safe_float(t1[1]) if len(t1) > 1 else 0.0
-            e33 = _safe_float(t1[2]) if len(t1) > 2 else 0.0
-            g12 = _safe_float(t1[3]) if len(t1) > 3 else 0.0
-            nu12 = _safe_float(t1[4]) if len(t1) > 4 else 0.0
-        if len(valid_cards) > 2:
+            if len(valid_cards) > 3:
+                c3 = valid_cards[3].cut("MAT_LAW93_4")
+                sigma_y = _safe_float(c3[0]) if len(c3) > 0 else 0.0
+                qr1 = _safe_float(c3[1]) if len(c3) > 1 else 0.0
+                cr1 = _safe_float(c3[2]) if len(c3) > 2 else 0.0
+                qr2 = _safe_float(c3[3]) if len(c3) > 3 else 0.0
+                cr2 = _safe_float(c3[4]) if len(c3) > 4 else 0.0
+            if len(valid_cards) > 4:
+                c4 = valid_cards[4].cut("MAT_LAW93_5")
+                r11 = _safe_float(c4[0], 1.0) if len(c4) > 0 else 1.0
+                r22 = _safe_float(c4[1], 1.0) if len(c4) > 1 else 1.0
+                r12 = _safe_float(c4[2], 1.0) if len(c4) > 2 else 1.0
+                r33 = _safe_float(c4[3], 1.0) if len(c4) > 3 else 1.0
+                r13 = _safe_float(c4[4], 1.0) if len(c4) > 4 else 1.0
+            if len(valid_cards) > 5:
+                c5 = valid_cards[5].cut("MAT_LAW93_6")
+                r23 = _safe_float(c5[0], 1.0) if len(c5) > 0 else 1.0
+                fcut = _safe_float(c5[1]) if len(c5) > 1 else 0.0
+                vp = _safe_int(c5[2]) if len(c5) > 2 else 0
+            for i in range(nl):
+                c_idx = 6 + i
+                if c_idx < len(valid_cards):
+                    cc = valid_cards[c_idx].cut("MAT_LAW93_CURVE")
+                    fct_id = _safe_int(cc[0]) if len(cc) > 0 else 0
+                    fscale = _safe_float(cc[1], 1.0) if len(cc) > 1 else 1.0
+                    eps_dot = _safe_float(cc[2]) if len(cc) > 2 else 0.0
+                    curves.append({"fct_id": fct_id, "fscale": fscale, "eps_dot": eps_dot})
+        else:
             t2 = valid_cards[2].tokens()
             g13 = _safe_float(t2[0]) if len(t2) > 0 else 0.0
             g23 = _safe_float(t2[1]) if len(t2) > 1 else 0.0
             nu13 = _safe_float(t2[2]) if len(t2) > 2 else 0.0
             nu23 = _safe_float(t2[3]) if len(t2) > 3 else 0.0
             nl = _safe_int(t2[4]) if len(t2) > 4 else 0
-        if len(valid_cards) > 3:
-            t3 = valid_cards[3].tokens()
-            sigma_y = _safe_float(t3[0]) if len(t3) > 0 else 0.0
-            qr1 = _safe_float(t3[1]) if len(t3) > 1 else 0.0
-            cr1 = _safe_float(t3[2]) if len(t3) > 2 else 0.0
-            qr2 = _safe_float(t3[3]) if len(t3) > 3 else 0.0
-            cr2 = _safe_float(t3[4]) if len(t3) > 4 else 0.0
-        if len(valid_cards) > 4:
-            t4 = valid_cards[4].tokens()
-            r11 = _safe_float(t4[0], 1.0) if len(t4) > 0 else 1.0
-            r22 = _safe_float(t4[1], 1.0) if len(t4) > 1 else 1.0
-            r12 = _safe_float(t4[2], 1.0) if len(t4) > 2 else 1.0
-            r33 = _safe_float(t4[3], 1.0) if len(t4) > 3 else 1.0
-            r13 = _safe_float(t4[4], 1.0) if len(t4) > 4 else 1.0
-        if len(valid_cards) > 5:
-            t5 = valid_cards[5].tokens()
-            r23 = _safe_float(t5[0], 1.0) if len(t5) > 0 else 1.0
-            fcut = _safe_float(t5[1]) if len(t5) > 1 else 0.0
-            vp = _safe_int(t5[2]) if len(t5) > 2 else 0
-        for i in range(nl):
-            c_idx = 6 + i
-            if c_idx < len(valid_cards):
-                tt = valid_cards[c_idx].tokens()
-                fct_id = _safe_int(tt[0]) if len(tt) > 0 else 0
-                fscale = _safe_float(tt[1], 1.0) if len(tt) > 1 else 1.0
-                eps_dot = _safe_float(tt[2]) if len(tt) > 2 else 0.0
+            if len(valid_cards) > 3:
+                t3 = valid_cards[3].tokens()
+                sigma_y = _safe_float(t3[0]) if len(t3) > 0 else 0.0
+                qr1 = _safe_float(t3[1]) if len(t3) > 1 else 0.0
+                cr1 = _safe_float(t3[2]) if len(t3) > 2 else 0.0
+                qr2 = _safe_float(t3[3]) if len(t3) > 3 else 0.0
+                cr2 = _safe_float(t3[4]) if len(t3) > 4 else 0.0
+            if len(valid_cards) > 4:
+                t4 = valid_cards[4].tokens()
+                r11 = _safe_float(t4[0], 1.0) if len(t4) > 0 else 1.0
+                r22 = _safe_float(t4[1], 1.0) if len(t4) > 1 else 1.0
+                r12 = _safe_float(t4[2], 1.0) if len(t4) > 2 else 1.0
+                r33 = _safe_float(t4[3], 1.0) if len(t4) > 3 else 1.0
+                r13 = _safe_float(t4[4], 1.0) if len(t4) > 4 else 1.0
+            if len(valid_cards) > 5:
+                t5 = valid_cards[5].tokens()
+                r23 = _safe_float(t5[0], 1.0) if len(t5) > 0 else 1.0
+                fcut = _safe_float(t5[1]) if len(t5) > 1 else 0.0
+                vp = _safe_int(t5[2]) if len(t5) > 2 else 0
+            for i in range(nl):
+                c_idx = 6 + i
+                if c_idx < len(valid_cards):
+                    tt = valid_cards[c_idx].tokens()
+                    fct_id = _safe_int(tt[0]) if len(tt) > 0 else 0
+                    fscale = _safe_float(tt[1], 1.0) if len(tt) > 1 else 1.0
+                    eps_dot = _safe_float(tt[2]) if len(tt) > 2 else 0.0
+                    curves.append({"fct_id": fct_id, "fscale": fscale, "eps_dot": eps_dot})
+    else:
+        # Standard 8-card format (matl93_ORTH_HILL.cfg)
+        # Card 2: G13, G23, Nu13, Nu23 (%20lg%20lg%20lg%20lg)
+        c2 = valid_cards[2].cut("MAT_LAW93_3_STD") if block.fixed else valid_cards[2].tokens()
+        g13 = _safe_float(c2[0]) if len(c2) > 0 else 0.0
+        g23 = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+        nu13 = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+        nu23 = _safe_float(c2[3]) if len(c2) > 3 else 0.0
+
+        # Card 3: NL, VP, FCUT (%10d%10d%20lg)
+        cur_idx = 3
+        if len(valid_cards) > cur_idx:
+            c3 = valid_cards[cur_idx].cut("MAT_LAW93_4_STD") if block.fixed else valid_cards[cur_idx].tokens()
+            nl = _safe_int(c3[0]) if len(c3) > 0 else 0
+            vp = _safe_int(c3[1]) if len(c3) > 1 else 0
+            fcut = _safe_float(c3[2]) if len(c3) > 2 else 0.0
+            cur_idx += 1
+
+        # Curve cards (Card 4 .. 4+nl-1)
+        for _ in range(nl):
+            if cur_idx < len(valid_cards):
+                if block.fixed:
+                    cc = valid_cards[cur_idx].cut("MAT_LAW93_CURVE_STD")
+                    fct_id = _safe_int(cc[0]) if len(cc) > 0 else 0
+                    fscale = _safe_float(cc[2], 1.0) if len(cc) > 2 else 1.0
+                    eps_dot = _safe_float(cc[3], 0.0) if len(cc) > 3 else 0.0
+                else:
+                    tt = valid_cards[cur_idx].tokens()
+                    fct_id = _safe_int(tt[0]) if len(tt) > 0 else 0
+                    fscale = _safe_float(tt[1], 1.0) if len(tt) > 1 else 1.0
+                    eps_dot = _safe_float(tt[2], 0.0) if len(tt) > 2 else 0.0
                 curves.append({"fct_id": fct_id, "fscale": fscale, "eps_dot": eps_dot})
+                cur_idx += 1
+
+        # Continuous hardening Card 5: Sigma_y, QR1, CR1, QR2, CR2 (%20lg%20lg%20lg%20lg%20lg)
+        if cur_idx < len(valid_cards):
+            c_voce = valid_cards[cur_idx].cut("MAT_LAW93_6_STD") if block.fixed else valid_cards[cur_idx].tokens()
+            sigma_y = _safe_float(c_voce[0]) if len(c_voce) > 0 else 0.0
+            qr1 = _safe_float(c_voce[1]) if len(c_voce) > 1 else 0.0
+            cr1 = _safe_float(c_voce[2]) if len(c_voce) > 2 else 0.0
+            qr2 = _safe_float(c_voce[3]) if len(c_voce) > 3 else 0.0
+            cr2 = _safe_float(c_voce[4]) if len(c_voce) > 4 else 0.0
+            cur_idx += 1
+
+        # Hill Card 6: R11, R22, R12 (%20lg%20lg%20lg)
+        if cur_idx < len(valid_cards):
+            c_hill1 = valid_cards[cur_idx].cut("MAT_LAW93_7_STD") if block.fixed else valid_cards[cur_idx].tokens()
+            r11 = _safe_float(c_hill1[0], 1.0) if len(c_hill1) > 0 else 1.0
+            r22 = _safe_float(c_hill1[1], 1.0) if len(c_hill1) > 1 else 1.0
+            r12 = _safe_float(c_hill1[2], 1.0) if len(c_hill1) > 2 else 1.0
+            cur_idx += 1
+
+        # Hill Card 7: R33, R13, R23 (%20lg%20lg%20lg)
+        if cur_idx < len(valid_cards):
+            c_hill2 = valid_cards[cur_idx].cut("MAT_LAW93_8_STD") if block.fixed else valid_cards[cur_idx].tokens()
+            r33 = _safe_float(c_hill2[0], 1.0) if len(c_hill2) > 0 else 1.0
+            r13 = _safe_float(c_hill2[1], 1.0) if len(c_hill2) > 1 else 1.0
+            r23 = _safe_float(c_hill2[2], 1.0) if len(c_hill2) > 2 else 1.0
+            cur_idx += 1
+
+    # Apply OpenRadioss defaults
+    if r11 == 0.0: r11 = 1.0
+    if r22 == 0.0: r22 = 1.0
+    if r33 == 0.0: r33 = 1.0
+    if r12 == 0.0: r12 = 1.0
+    if r13 == 0.0: r13 = 1.0
+    if r23 == 0.0: r23 = 1.0
 
     mat = MatLaw93(
         id=mat_id, rho0=rho0, rhor=rhor, e11=e11, e22=e22, e33=e33, g12=g12, nu12=nu12,
@@ -45113,16 +45191,29 @@ def read_mat_law93(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         qr1=qr1, cr1=cr1, qr2=qr2, cr2=cr2, r11=r11, r22=r22, r12=r12, r33=r33, r13=r13,
         r23=r23, fcut=fcut, vp=vp, curves=curves, title=title
     )
+    e_eff = max(e11, e22, e33)
+    nu_eff = max(nu12, nu13, nu23)
+    g_eff = g12 if g12 > 0.0 else e_eff / (2.0 * (1.0 + nu_eff))
+    k_eff = e_eff / max(3.0 * (1.0 - 2.0 * nu_eff), 1.0e-12)
+    mat_params = {
+        "rho": rho0, "rho0": rho0, "rhor": rhor, "e11": e11, "e22": e22, "e33": e33, "g12": g12, "nu12": nu12,
+        "g13": g13, "g23": g23, "nu13": nu13, "nu23": nu23, "nl": nl, "sigma_y": sigma_y,
+        "qr1": qr1, "cr1": cr1, "qr2": qr2, "cr2": cr2, "r11": r11, "r22": r22, "r12": r12, "r33": r33, "r13": r13,
+        "r23": r23, "fcut": fcut, "vp": vp, "curves": curves,
+        "E": e_eff, "e": e_eff, "young": e_eff, "nu": nu_eff, "poisson": nu_eff,
+        "G": g_eff, "g": g_eff, "K": k_eff, "bulk": k_eff,
+    }
+    mat.params = mat_params
     model.mat_law93s[mat_id] = mat
-    model.materials[mat_id] = Material(
-        id=mat_id, law=93, rho0=rho0, title=title,
-        params={
-            "rho": rho0, "rhor": rhor, "e11": e11, "e22": e22, "e33": e33, "g12": g12, "nu12": nu12,
-            "g13": g13, "g23": g23, "nu13": nu13, "nu23": nu23, "nl": nl, "sigma_y": sigma_y,
-            "qr1": qr1, "cr1": cr1, "qr2": qr2, "cr2": cr2, "r11": r11, "r22": r22, "r12": r12, "r33": r33, "r13": r13,
-            "r23": r23, "fcut": fcut, "vp": vp, "curves": curves,
-        }
+    if hasattr(model, "mat_orth_hills"):
+        model.mat_orth_hills[mat_id] = mat
+    gen_mat = Material(
+        id=mat_id, law=93, rho0=rho0, title=title, params=mat_params
     )
+    for k, v in mat_params.items():
+        if not hasattr(Material, k):
+            setattr(gen_mat, k, v)
+    model.materials[mat_id] = gen_mat
 
 
 def read_mat_law133(block: KeywordBlock, model: Model, log: MessageLog) -> None:

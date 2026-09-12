@@ -74,9 +74,20 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                law87_barlat2000,
                law88_tab_hyp,
                law92_arruda_boyce,
+               law93_orth_hill,
                law94_yeoh,
                law163_crush_foam,
                mat_gas, mat_void)
+from .law93_orth_hill import (
+    OrthHillParams,
+    build_law93,
+    solid_update as law93_solid_update,
+    shell_update as law93_shell_update,
+    sound_speed as law93_sound_speed,
+    sound_speed_shell as law93_sound_speed_shell,
+    consistent_tangent as law93_consistent_tangent,
+    extra_shapes as law93_extra_shapes,
+)
 from .law94_yeoh import (
     YeohParams,
     build_law94,
@@ -1203,6 +1214,24 @@ _LAW94_KEYS = (
 )
 
 
+def _register_law93():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law93_orth_hill, "build_law93", None)
+        if builder is not None:
+            for k in (93, "93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL"):
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law93()
+
+_LAW93_KEYS = (
+    93, "93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL",
+)
+
+
 _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
     "uv15": (8,),
     "uv22": (4,),
@@ -1218,6 +1247,7 @@ _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
     "uvar87": (1,),
     "uv88": (30,),
     "uvar88": (30,),
+    "uvar93": (1,),
 }
 
 LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
@@ -1362,6 +1392,20 @@ LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
     "MAT_LAW92": {"plane_stress": True, "solid": True, "shell": True},
     "MAT_ARRUDA_BOYCE": {"plane_stress": True, "solid": True, "shell": True},
     "LAW92_ARRUDA_BOYCE": {"plane_stress": True, "solid": True, "shell": True},
+    93: {"plane_stress": True, "solid": True, "shell": True},
+    "93": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW93": {"plane_stress": True, "solid": True, "shell": True},
+    "ORTH_HILL": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_LAW93": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_ORTH_HILL": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW93_ORTH_HILL": {"plane_stress": True, "solid": True, "shell": True},
+    94: {"plane_stress": True, "solid": True, "shell": True},
+    "94": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW94": {"plane_stress": True, "solid": True, "shell": True},
+    "YEOH": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_LAW94": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_YEOH": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW94_YEOH": {"plane_stress": True, "solid": True, "shell": True},
 }
 
 MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
@@ -1432,6 +1476,12 @@ MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
     "ARRUDA_BOYCE": law92_solid_update, "ARRUDA-BOYCE": law92_solid_update,
     "MAT_LAW92": law92_solid_update, "MAT_ARRUDA_BOYCE": law92_solid_update,
     "LAW92_ARRUDA_BOYCE": law92_solid_update,
+    93: law93_solid_update, "93": law93_solid_update, "LAW93": law93_solid_update,
+    "ORTH_HILL": law93_solid_update, "MAT_LAW93": law93_solid_update,
+    "MAT_ORTH_HILL": law93_solid_update, "LAW93_ORTH_HILL": law93_solid_update,
+    94: law94_solid_update, "94": law94_solid_update, "LAW94": law94_solid_update,
+    "YEOH": law94_solid_update, "MAT_LAW94": law94_solid_update,
+    "MAT_YEOH": law94_solid_update, "LAW94_YEOH": law94_solid_update,
 }
 
 MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
@@ -1502,6 +1552,12 @@ MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
     "ARRUDA_BOYCE": law92_shell_update, "ARRUDA-BOYCE": law92_shell_update,
     "MAT_LAW92": law92_shell_update, "MAT_ARRUDA_BOYCE": law92_shell_update,
     "LAW92_ARRUDA_BOYCE": law92_shell_update,
+    93: law93_shell_update, "93": law93_shell_update, "LAW93": law93_shell_update,
+    "ORTH_HILL": law93_shell_update, "MAT_LAW93": law93_shell_update,
+    "MAT_ORTH_HILL": law93_shell_update, "LAW93_ORTH_HILL": law93_shell_update,
+    94: law94_shell_update, "94": law94_shell_update, "LAW94": law94_shell_update,
+    "YEOH": law94_shell_update, "MAT_LAW94": law94_shell_update,
+    "MAT_YEOH": law94_shell_update, "LAW94_YEOH": law94_shell_update,
 }
 
 
@@ -1773,6 +1829,8 @@ def extra_shapes(mat, nip=None):
         shapes.update(law88_extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in _LAW92_KEYS or getattr(mat, "law_name", None) in _LAW92_KEYS:
         shapes.update(law92_extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW93_KEYS or getattr(mat, "law_name", None) in _LAW93_KEYS:
+        shapes.update(law93_extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in _LAW94_KEYS or getattr(mat, "law_name", None) in _LAW94_KEYS:
         shapes.update(law94_extra_shapes(mat, nip=nip))
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
@@ -1806,10 +1864,13 @@ def needs_env(mat) -> bool:
     M562: LAW66 Asymmetric Tabulated Plasticity;
     M563: LAW74 3D Tabulated Hill Plasticity;
     M565: LAW88 Tabulated Hyperelasticity;
-    M566: LAW92 Arruda-Boyce Hyperelasticity)."""
+    M566: LAW92 Arruda-Boyce Hyperelasticity;
+    M568: LAW93 Orthotropic Hill Plasticity)."""
     if getattr(mat, "law", None) in _LAW88_KEYS or getattr(mat, "law_name", None) in _LAW88_KEYS:
         return True
     if getattr(mat, "law", None) in _LAW92_KEYS or getattr(mat, "law_name", None) in _LAW92_KEYS:
+        return True
+    if getattr(mat, "law", None) in _LAW93_KEYS or getattr(mat, "law_name", None) in _LAW93_KEYS:
         return True
     if getattr(mat, "law", None) in _LAW94_KEYS or getattr(mat, "law_name", None) in _LAW94_KEYS:
         return True
@@ -2237,6 +2298,29 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
             except Exception:
                 pass
         return sig, epsp_out, c
+    if getattr(mat, "law", None) in _LAW93_KEYS or getattr(mat, "law_name", None) in _LAW93_KEYS:
+        res = law93_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra, return_tuple=True)
+        if isinstance(res, tuple):
+            if len(res) == 3:
+                sign, epsp_out, c = res
+            elif len(res) == 2:
+                sign, epsp_out = res
+                c = law93_sound_speed(mat, rho=extra.get("rho") if extra else None)
+            else:
+                sign, epsp_out, c = res[0], epsp, None
+        else:
+            sign, epsp_out, c = res, epsp, None
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = sign
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
     raise NotImplementedError(f"material LAW{mat.law} not ported for solids")
 
 
@@ -2244,6 +2328,10 @@ def sound_speed(mat, rho=None, extra=None, is_shell: bool = False):
     """Dispatch sound speed calculation to material law."""
     law = getattr(mat, "law", None)
     law_name = getattr(mat, "law_name", None)
+    if law in _LAW93_KEYS or law_name in _LAW93_KEYS:
+        if is_shell:
+            return law93_sound_speed_shell(mat, rho=rho)
+        return law93_sound_speed(mat, rho=rho)
     if law in _LAW94_KEYS or law_name in _LAW94_KEYS:
         return law94_sound_speed(mat, rho=rho, extra=extra, is_shell=is_shell)
     if law in _LAW92_KEYS or law_name in _LAW92_KEYS:
@@ -2488,6 +2576,11 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         if isinstance(res, tuple):
             return res[0], res[1]
         return res, epsp
+    if getattr(mat, "law", None) in _LAW93_KEYS or getattr(mat, "law_name", None) in _LAW93_KEYS:
+        res = law93_shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        if isinstance(res, tuple):
+            return res[0], res[1]
+        return res, epsp
     if getattr(mat, "law", None) in _LAW94_KEYS or getattr(mat, "law_name", None) in _LAW94_KEYS:
         res = law94_shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
         if isinstance(res, tuple):
@@ -2662,6 +2755,9 @@ def solid_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
             else:
                 eps_trial = np.zeros(6, dtype=np.float64)
         return law92_consistent_tangent(mat, eps_trial, is_shell=False)
+    if getattr(mat, "law", None) in _LAW93_KEYS or getattr(mat, "law_name", None) in _LAW93_KEYS:
+        pla_val = epsp if epsp is not None else 0.0
+        return law93_consistent_tangent(mat, sig if sig is not None else np.zeros(6), pla=pla_val, plane_stress=False)
     if getattr(mat, "law", None) in _LAW94_KEYS or getattr(mat, "law_name", None) in _LAW94_KEYS:
         eps_trial = extra.get("eps") if extra else None
         if eps_trial is None:
@@ -2681,6 +2777,9 @@ consistent_solid_tangent = solid_tangent
 
 def resolve_curves(mat, model, log=None):
     """Wire curve resolution hook for /FUNCT references so model.curves can be accessed by the kernel."""
+    if getattr(mat, "law", None) in _LAW93_KEYS or getattr(mat, "law_name", None) in _LAW93_KEYS:
+        if hasattr(law93_orth_hill, "resolve"):
+            return law93_orth_hill.resolve(mat)
     if getattr(mat, "law", None) in _LAW94_KEYS or getattr(mat, "law_name", None) in _LAW94_KEYS:
         if hasattr(law94_yeoh, "resolve"):
             return law94_yeoh.resolve(mat, model, log)
@@ -2937,6 +3036,9 @@ def shell_layer_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
             else:
                 eps_trial = np.zeros(3, dtype=np.float64)
         return law92_consistent_tangent(mat, eps_trial, is_shell=True)
+    if getattr(mat, "law", None) in _LAW93_KEYS or getattr(mat, "law_name", None) in _LAW93_KEYS:
+        pla_val = epsp if epsp is not None else 0.0
+        return law93_consistent_tangent(mat, sig if sig is not None else np.zeros(3), pla=pla_val, plane_stress=True)
     if getattr(mat, "law", None) in _LAW94_KEYS or getattr(mat, "law_name", None) in _LAW94_KEYS:
         eps_trial = extra.get("eps") if extra else None
         if eps_trial is None:

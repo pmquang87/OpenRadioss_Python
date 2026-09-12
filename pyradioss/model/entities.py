@@ -329,6 +329,12 @@ class Material:
                 return float(law66_plas_tab.sound_speed_solid(self, rho=self.rho0))
             except Exception:
                 pass
+        if self.law in (93, "93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL") or getattr(self, "law_name", None) in ("93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL"):
+            try:
+                from ..materials import law93_orth_hill
+                return float(law93_orth_hill.sound_speed(self, self.rho0))
+            except Exception:
+                pass
         return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
 
     def sound_speed_shell(self) -> float:
@@ -419,6 +425,12 @@ class Material:
                     young = max(e1, e2)
                 if young > 0.0:
                     return float(np.sqrt(young / rho0))
+        if self.law in (93, "93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL") or getattr(self, "law_name", None) in ("93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL"):
+            try:
+                from ..materials import law93_orth_hill
+                return float(law93_orth_hill.sound_speed_shell(self, self.rho0))
+            except Exception:
+                pass
         return float(np.sqrt(self.E / (self.rho0 * (1.0 - self.nu ** 2))))
 
     def __getstate__(self) -> Dict[str, Any]:
@@ -14598,8 +14610,125 @@ class MatLaw93:
     vp: int = 0
     curves: List[Dict[str, Any]] = field(default_factory=list)
     title: str = ""
+    law: int = 93
+    law_name: str = "LAW93"
+    params: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def rho(self) -> float:
+        return self.rho0
+
+    @property
+    def E(self) -> float:
+        return max(self.e11, self.e22, self.e33)
+
+    @property
+    def e(self) -> float:
+        return self.E
+
+    @property
+    def young(self) -> float:
+        return self.E
+
+    @property
+    def nu(self) -> float:
+        return max(self.nu12, self.nu13, self.nu23)
+
+    @property
+    def poisson(self) -> float:
+        return self.nu
+
+    @property
+    def G(self) -> float:
+        return self.g12
+
+    @property
+    def g(self) -> float:
+        return self.g12
+
+    @property
+    def shear(self) -> float:
+        return self.g12
+
+    @property
+    def sound_speed(self) -> CallableFloat:
+        try:
+            from ..materials.law93_orth_hill import sound_speed
+            return CallableFloat(float(sound_speed(self, self.rho0)))
+        except Exception:
+            import math
+            r = self.rho0
+            if r > 0.0:
+                c2 = max(self.e11, self.e22, self.e33) / r
+                if c2 > 0.0:
+                    return CallableFloat(math.sqrt(c2))
+            return CallableFloat(0.0)
+
+    @property
+    def sound_speed_solid(self) -> CallableFloat:
+        return self.sound_speed
+
+    @property
+    def sound_speed_shell(self) -> CallableFloat:
+        try:
+            from ..materials.law93_orth_hill import sound_speed_shell
+            return CallableFloat(float(sound_speed_shell(self, self.rho0)))
+        except Exception:
+            return self.sound_speed
+
+    # Mapping protocol
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        if isinstance(self.params, dict) and key in self.params:
+            return self.params[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            if not isinstance(self.params, dict):
+                self.params = {}
+            self.params[key] = value
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or (isinstance(self.params, dict) and key in self.params)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self) -> List[str]:
+        base_keys = [
+            "id", "title", "rho0", "rhor", "e11", "e22", "e33", "g12", "nu12",
+            "g13", "g23", "nu13", "nu23", "nl", "sigma_y", "qr1", "cr1", "qr2", "cr2",
+            "r11", "r22", "r12", "r33", "r13", "r23", "fcut", "vp", "curves",
+            "law", "law_name", "rho", "E", "e", "young", "nu", "poisson", "G", "g", "shear",
+            "sound_speed", "sound_speed_solid", "sound_speed_shell",
+        ]
+        if isinstance(self.params, dict):
+            for k in self.params:
+                if k not in base_keys:
+                    base_keys.append(k)
+        return base_keys
+
+    def values(self) -> List[Any]:
+        return [self[k] for k in self.keys()]
+
+    def items(self) -> List[tuple]:
+        return [(k, self[k]) for k in self.keys()]
+
+    def __len__(self) -> int:
+        return len(self.keys())
+
+    def __iter__(self):
+        return iter(self.keys())
 
 
+MaterialLaw93 = MatLaw93
 MatOrthHill = MatLaw93
 
 

@@ -5811,6 +5811,123 @@ class StarterDeck:
         kwargs.setdefault("law_name", "YEOH")
         return self.mat_law94(*args, **kwargs)
 
+    def mat_law93(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho0: float = 0.0,
+        refer_rho: float = 0.0,
+        e11: float = 0.0,
+        e22: float = 0.0,
+        e33: float = 0.0,
+        g12: float = 0.0,
+        nu12: float = 0.0,
+        g13: float = 0.0,
+        g23: float = 0.0,
+        nu13: float = 0.0,
+        nu23: float = 0.0,
+        nl: int = 0,
+        fcut: float = 0.0,
+        vp: int = 0,
+        curves: Any = None,
+        sigma_y: float = 0.0,
+        qr1: float = 0.0,
+        cr1: float = 0.0,
+        qr2: float = 0.0,
+        cr2: float = 0.0,
+        r11: float = 1.0,
+        r22: float = 1.0,
+        r12: float = 1.0,
+        r33: float = 1.0,
+        r13: float = 1.0,
+        r23: float = 1.0,
+        unit_id: int | None = None,
+        law_name: str = "LAW93",
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW93`` or ``/MAT/ORTH_HILL`` (M191, M568): Orthotropic Hill plasticity model."""
+        if "id" in kwargs and mid == 0:
+            mid = kwargs["id"]
+        if "mat_id" in kwargs and mid == 0:
+            mid = kwargs["mat_id"]
+        mat_obj = kwargs.get("mat_law93", kwargs.get("mat_orth_hill", kwargs.get("mat", kwargs.get("material", None))))
+        if mat_obj is not None or hasattr(mid, "e11") or hasattr(mid, "r11"):
+            if mat_obj is None:
+                mat_obj = mid
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho0 = getattr(mat_obj, "rho0", rho0)
+            refer_rho = getattr(mat_obj, "rhor", getattr(mat_obj, "ref_rho", refer_rho))
+            e11 = getattr(mat_obj, "e11", e11)
+            e22 = getattr(mat_obj, "e22", e22)
+            e33 = getattr(mat_obj, "e33", e33)
+            g12 = getattr(mat_obj, "g12", g12)
+            nu12 = getattr(mat_obj, "nu12", nu12)
+            g13 = getattr(mat_obj, "g13", g13)
+            g23 = getattr(mat_obj, "g23", g23)
+            nu13 = getattr(mat_obj, "nu13", nu13)
+            nu23 = getattr(mat_obj, "nu23", nu23)
+            nl = getattr(mat_obj, "nl", nl)
+            fcut = getattr(mat_obj, "fcut", fcut)
+            vp = getattr(mat_obj, "vp", vp)
+            curves = getattr(mat_obj, "curves", curves)
+            sigma_y = getattr(mat_obj, "sigma_y", sigma_y)
+            qr1 = getattr(mat_obj, "qr1", qr1)
+            cr1 = getattr(mat_obj, "cr1", cr1)
+            qr2 = getattr(mat_obj, "qr2", qr2)
+            cr2 = getattr(mat_obj, "cr2", cr2)
+            r11 = getattr(mat_obj, "r11", r11)
+            r22 = getattr(mat_obj, "r22", r22)
+            r12 = getattr(mat_obj, "r12", r12)
+            r33 = getattr(mat_obj, "r33", r33)
+            r13 = getattr(mat_obj, "r13", r13)
+            r23 = getattr(mat_obj, "r23", r23)
+
+        if data_cards is not None and isinstance(data_cards, (list, tuple)):
+            if unit_id is not None:
+                self._header("MAT", law_name, mid, unit_id)
+            else:
+                self._header("MAT", law_name, mid)
+            self._title(title)
+            self.lines.extend(str(getattr(c, "raw", c)).rstrip("\r\n") for c in data_cards)
+            return self
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        # Card 1: Rho_i (%20lg)
+        self.lines.append(fmt_float(rho0) + (fmt_float(refer_rho) if refer_rho != 0.0 else ""))
+        # Card 2: E11, E22, E33, G12, Nu12 (%20lg%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(e11) + fmt_float(e22) + fmt_float(e33) + fmt_float(g12) + fmt_float(nu12))
+        # Card 3: G13, G23, Nu13, Nu23 (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(g13) + fmt_float(g23) + fmt_float(nu13) + fmt_float(nu23))
+        # Card 4: NL, VP, FCUT (%10d%10d%20lg)
+        curve_list = curves if isinstance(curves, list) else []
+        nl_val = len(curve_list) if curve_list else nl
+        self.lines.append(f"{nl_val:10d}{vp:10d}" + fmt_float(fcut))
+        # Curves
+        for c in curve_list:
+            fid = c.get("fct_id", 0) if isinstance(c, dict) else (c[0] if isinstance(c, (list, tuple)) else 0)
+            fsc = c.get("fscale", 1.0) if isinstance(c, dict) else (c[1] if isinstance(c, (list, tuple)) and len(c) > 1 else 1.0)
+            rat = c.get("eps_dot", 0.0) if isinstance(c, dict) else (c[2] if isinstance(c, (list, tuple)) and len(c) > 2 else 0.0)
+            self.lines.append(f"{fid:10d}          " + fmt_float(fsc) + fmt_float(rat))
+        # Card 5: Sigma_y, QR1, CR1, QR2, CR2 (%20lg%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(sigma_y) + fmt_float(qr1) + fmt_float(cr1) + fmt_float(qr2) + fmt_float(cr2))
+        # Card 6: R11, R22, R12 (%20lg%20lg%20lg)
+        self.lines.append(fmt_float(r11) + fmt_float(r22) + fmt_float(r12))
+        # Card 7: R33, R13, R23 (%20lg%20lg%20lg)
+        self.lines.append(fmt_float(r33) + fmt_float(r13) + fmt_float(r23))
+        return self
+
+    def mat_orth_hill(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/ORTH_HILL`` — synonym for ``/MAT/LAW93``."""
+        kwargs.setdefault("law_name", "ORTH_HILL")
+        return self.mat_law93(*args, **kwargs)
+
 
     def mat_law82(
         self,
@@ -8980,6 +9097,8 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law69(mid, title, cards)
     elif law in ("LAW94", "YEOH", "LAW94_YEOH"):
         d.mat_law94(mid, title, cards)
+    elif law in ("LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL", 93):
+        d.mat_law93(mid, title, cards)
     elif law == "HILL_TAB":
         d.mat_hill_tab(mid, title, cards)
     elif law in ("LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "LAW92_ARRUDA_BOYCE"):

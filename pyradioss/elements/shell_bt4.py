@@ -366,6 +366,9 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
         elif getattr(mat, "law", 1) in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE") or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE"):
             from ..materials import law92_arruda_boyce
             c = law92_arruda_boyce.sound_speed_shell(mat, getattr(mat, "rho0", None))
+        elif getattr(mat, "law", 1) in (93, "93", "LAW93", "ORTH_HILL") or getattr(mat, "law_name", None) in ("93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL"):
+            from ..materials import law93_orth_hill
+            c = law93_orth_hill.sound_speed_shell(mat, getattr(mat, "rho0", None))
         elif getattr(mat, "law", 1) in (94, "94", "LAW94", "YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH"):
             from ..materials import law94_yeoh
             c = law94_yeoh.sound_speed_shell(mat, getattr(mat, "rho0", None))
@@ -950,6 +953,9 @@ def forces(group, x, v, vr, dt, fint, mint):
             elif getattr(mat, "law", 1) in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE") or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE"):
                 from ..materials import law92_arruda_boyce
                 c[sl] = law92_arruda_boyce.sound_speed_shell(mat, getattr(mat, "rho0", None))
+            elif getattr(mat, "law", 1) in (93, "93", "LAW93", "ORTH_HILL") or getattr(mat, "law_name", None) in ("93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL"):
+                from ..materials import law93_orth_hill
+                c[sl] = law93_orth_hill.sound_speed_shell(mat, getattr(mat, "rho0", None))
             elif getattr(mat, "law", 1) in (94, "94", "LAW94", "YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH"):
                 from ..materials import law94_yeoh
                 c[sl] = law94_yeoh.sound_speed_shell(mat, getattr(mat, "rho0", None))
@@ -1197,6 +1203,9 @@ def forces(group, x, v, vr, dt, fint, mint):
         elif getattr(mat, "law", 1) in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE") or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE"):
             from ..materials import law92_arruda_boyce
             c[sl] = law92_arruda_boyce.sound_speed_shell(mat, getattr(mat, "rho0", None))
+        elif getattr(mat, "law", 1) in (93, "93", "LAW93", "ORTH_HILL") or getattr(mat, "law_name", None) in ("93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL"):
+            from ..materials import law93_orth_hill
+            c[sl] = law93_orth_hill.sound_speed_shell(mat, getattr(mat, "rho0", None))
         elif getattr(mat, "law", 1) in (94, "94", "LAW94", "YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH"):
             from ..materials import law94_yeoh
             c[sl] = law94_yeoh.sound_speed_shell(mat, getattr(mat, "rho0", None))
