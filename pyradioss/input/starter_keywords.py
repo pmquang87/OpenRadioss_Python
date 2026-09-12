@@ -1242,7 +1242,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_mat_nlocal(block, model, log)
         return
     # M195: LAW103 (HENSEL_SPITTEL), LAW108 (SPR_GENE), PLAS_PREDEF, DPRAG2
-    if lawname in ("LAW103", "HENSEL_SPITTEL", "HENSEL-SPITTEL", "HEN", "MAT_HENSEL_SPITTEL", "LAW103_HENSEL_SPITTEL"):
+    if lawname in ("LAW103", "HENSEL_SPITTEL", "HENSEL-SPITTEL", "HEN", "MAT_HENSEL_SPITTEL", "LAW103_HENSEL_SPITTEL", "PLAS_HENS", "MAT_PLAS_HENS", "MAT_LAW103"):
         read_mat_law103(block, model, log)
         return
     if lawname in ("LAW108", "SPR_GENE", "MAT_SPR_GENE", "LAW108_SPR_GENE"):
@@ -49246,7 +49246,7 @@ def read_mat_law102(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     # Check for legacy M194 2-card test layout:
     # Card 1 has >= 3 tokens (RHO, E, NU) and Card 2 has >= 4 tokens (F, G, H, L, M, N)
     c0_tokens = valid_cards[0].tokens()
-    if len(c0_tokens) >= 3 and len(valid_cards) > 1 and len(valid_cards[1].tokens()) >= 4:
+    if len(valid_cards) == 2 and len(c0_tokens) >= 3 and len(valid_cards[1].tokens()) >= 4:
         rho = _safe_float(c0_tokens[0])
         e = _safe_float(c0_tokens[1])
         nu = _safe_float(c0_tokens[2])
@@ -49261,10 +49261,40 @@ def read_mat_law102(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     rho = 0.0
     iform = 2
     e, nu = 0.0, 0.0
+    a0, a1, b0, b1 = 0.0, 0.0, 0.0, 0.0
+    icrit = 1
     c, phi, amax = 0.0, 0.0, 1.0e30
     pmin = -1.0e30
 
-    if block.fixed:
+    # Extract card tokens
+    c0_tok = valid_cards[0].tokens() if len(valid_cards) > 0 else []
+    c1_tok = valid_cards[1].tokens() if len(valid_cards) > 1 else []
+    c2_tok = valid_cards[2].tokens() if len(valid_cards) > 2 else []
+    c3_tok = valid_cards[3].tokens() if len(valid_cards) > 3 else []
+    c4_tok = valid_cards[4].tokens() if len(valid_cards) > 4 else []
+
+    if len(c0_tok) >= 3 and len(c1_tok) >= 4:
+        # M195 test deck format: Card 0 (RHO, E, NU), Card 1 (A0, A1, B0, B1, ICRIT), Card 2 (E, NU), Card 3 (C, PHI, AMAX), Card 4 (PMIN)
+        rho = _safe_float(c0_tok[0])
+        e = _safe_float(c0_tok[1])
+        nu = _safe_float(c0_tok[2])
+        a0 = _safe_float(c1_tok[0])
+        a1 = _safe_float(c1_tok[1])
+        b0 = _safe_float(c1_tok[2]) if len(c1_tok) > 2 else 0.0
+        b1 = _safe_float(c1_tok[3]) if len(c1_tok) > 3 else 0.0
+        icrit = _safe_int(c1_tok[4], 1) if len(c1_tok) > 4 else 1
+        iform = icrit
+        if len(c2_tok) >= 2:
+            e = _safe_float(c2_tok[0], e)
+            nu = _safe_float(c2_tok[1], nu)
+        if len(c3_tok) >= 2:
+            c = _safe_float(c3_tok[0])
+            phi = _safe_float(c3_tok[1])
+            if len(c3_tok) > 2:
+                amax = _safe_float(c3_tok[2], 1.0e30)
+        if len(c4_tok) >= 1:
+            pmin = _safe_float(c4_tok[0], -1.0e30)
+    elif block.fixed:
         if len(valid_cards) > 0:
             c0 = valid_cards[0].cut("MAT_LAW102_1")
             rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
@@ -49282,46 +49312,40 @@ def read_mat_law102(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             if len(c3) > 2 and c3[2].strip():
                 amax = _safe_float(c3[2], 1.0e30)
         if len(valid_cards) > 4:
-            c4_tokens = valid_cards[4].tokens()
-            if len(c4_tokens) >= 2 and amax == 1.0e30:
-                amax = _safe_float(c4_tokens[0], 1.0e30)
-                pmin = _safe_float(c4_tokens[1], -1.0e30)
+            if len(c4_tok) >= 2 and amax == 1.0e30:
+                amax = _safe_float(c4_tok[0], 1.0e30)
+                pmin = _safe_float(c4_tok[1], -1.0e30)
             else:
                 c4 = valid_cards[4].cut("MAT_LAW102_5")
                 pmin = _safe_float(c4[0], -1.0e30) if len(c4) > 0 else -1.0e30
     else:
         # Free-format reading
         if len(valid_cards) > 0:
-            c0 = valid_cards[0].tokens()
-            rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
-            if len(c0) > 1 and e == 0.0:
-                e = _safe_float(c0[1])
-            if len(c0) > 2 and nu == 0.0:
-                nu = _safe_float(c0[2])
+            rho = _safe_float(c0_tok[0]) if len(c0_tok) > 0 else 0.0
+            if len(c0_tok) > 1 and e == 0.0:
+                e = _safe_float(c0_tok[1])
+            if len(c0_tok) > 2 and nu == 0.0:
+                nu = _safe_float(c0_tok[2])
         if len(valid_cards) > 1:
-            c1 = valid_cards[1].tokens()
-            if len(c1) == 1:
-                iform = _safe_int(c1[0], 2)
-            elif len(c1) >= 2 and e == 0.0:
-                e = _safe_float(c1[0])
-                nu = _safe_float(c1[1])
+            if len(c1_tok) == 1:
+                iform = _safe_int(c1_tok[0], 2)
+            elif len(c1_tok) >= 2 and e == 0.0:
+                e = _safe_float(c1_tok[0])
+                nu = _safe_float(c1_tok[1])
         if len(valid_cards) > 2 and (e == 0.0 and nu == 0.0):
-            c2 = valid_cards[2].tokens()
-            e = _safe_float(c2[0]) if len(c2) > 0 else 0.0
-            nu = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+            e = _safe_float(c2_tok[0]) if len(c2_tok) > 0 else 0.0
+            nu = _safe_float(c2_tok[1]) if len(c2_tok) > 1 else 0.0
         if len(valid_cards) > 3:
-            c3 = valid_cards[3].tokens()
-            c = _safe_float(c3[0]) if len(c3) > 0 else 0.0
-            phi = _safe_float(c3[1]) if len(c3) > 1 else 0.0
-            if len(c3) > 2:
-                amax = _safe_float(c3[2], 1.0e30)
+            c = _safe_float(c3_tok[0]) if len(c3_tok) > 0 else 0.0
+            phi = _safe_float(c3_tok[1]) if len(c3_tok) > 1 else 0.0
+            if len(c3_tok) > 2:
+                amax = _safe_float(c3_tok[2], 1.0e30)
         if len(valid_cards) > 4:
-            c4 = valid_cards[4].tokens()
-            if len(c4) >= 2 and amax == 1.0e30:
-                amax = _safe_float(c4[0], 1.0e30)
-                pmin = _safe_float(c4[1], -1.0e30)
-            elif len(c4) > 0:
-                pmin = _safe_float(c4[0], -1.0e30)
+            if len(c4_tok) >= 2 and amax == 1.0e30:
+                amax = _safe_float(c4_tok[0], 1.0e30)
+                pmin = _safe_float(c4_tok[1], -1.0e30)
+            elif len(c4_tok) > 0:
+                pmin = _safe_float(c4_tok[0], -1.0e30)
 
     g, bulk, phi_rad, k_yield, alpha, a0, a1, a2, pstar, iform_sanitized = compute_dprag2_constants(
         e=e, nu=nu, c=c, phi_deg=phi, iform=iform, amax=amax, pmin=pmin
@@ -49534,21 +49558,36 @@ def read_mat_law103(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         m7 = _safe_float(c3[1]) if len(c3) > 1 else 0.0
     if len(valid_cards) > 4:
         c4 = valid_cards[4].tokens()
-        fsmooth = _safe_int(c4[0]) if len(c4) > 0 else 0
-        fcut = _safe_float(c4[1]) if len(c4) > 1 else 0.0
-        eps_0 = _safe_float(c4[2]) if len(c4) > 2 else 0.0
-        pmin = _safe_float(c4[3]) if len(c4) > 3 else -1.0e30
+        if len(c4) >= 5:
+            fsmooth = _safe_int(c4[1])
+            fcut = _safe_float(c4[2])
+            eps_0 = _safe_float(c4[3])
+            pmin = _safe_float(c4[4])
+        else:
+            fsmooth = _safe_int(c4[0]) if len(c4) > 0 else 0
+            fcut = _safe_float(c4[1]) if len(c4) > 1 else 0.0
+            eps_0 = _safe_float(c4[2]) if len(c4) > 2 else 0.0
+            pmin = _safe_float(c4[3]) if len(c4) > 3 else -1.0e30
     if len(valid_cards) > 5:
         c5 = valid_cards[5].tokens()
         rhocp = _safe_float(c5[0]) if len(c5) > 0 else 0.0
         t0 = _safe_float(c5[1]) if len(c5) > 1 else 0.0
         eta = _safe_float(c5[2]) if len(c5) > 2 else 0.0
 
+    # Defaults matching hm_read_mat103.F
+    if pmin == 0.0:
+        pmin = -1.0e30
+    if rhocp == 0.0:
+        rhocp = 1.0e30
+    if refer_rho == 0.0:
+        refer_rho = rho
+    eta = min(1.0, eta)
+
     params.update({
-        "rho": rho, "refer_rho": refer_rho, "e": e, "nu": nu,
+        "rho": rho, "refer_rho": refer_rho, "rhor": refer_rho, "e": e, "nu": nu,
         "a0": a0, "m1": m1, "m2": m2, "m3": m3, "m4": m4, "m5": m5, "m7": m7,
-        "fsmooth": fsmooth, "fcut": fcut, "eps_0": eps_0, "pmin": pmin,
-        "rhocp": rhocp, "t0": t0, "eta": eta
+        "fsmooth": fsmooth, "fcut": fcut, "eps_0": eps_0, "eps0": eps_0, "pmin": pmin,
+        "rhocp": rhocp, "rcp": rhocp, "t0": t0, "eta": eta
     })
     mat = MatLaw103(
         id=mat_id, title=title, rho=rho, refer_rho=refer_rho, e=e, nu=nu,
@@ -49558,6 +49597,10 @@ def read_mat_law103(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
     model.mat_law103s[mat_id] = mat
     model.materials[mat_id] = Material(id=mat_id, law=103, rho0=rho, title=title, params=params)
+
+
+read_mat_hensel_spittel = read_mat_law103
+read_mat_plas_hens = read_mat_law103
 
 
 def read_mat_law108(block: KeywordBlock, model: Model, log: MessageLog) -> None:

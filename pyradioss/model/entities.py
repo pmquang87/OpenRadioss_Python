@@ -16637,7 +16637,7 @@ PropSprPull = PropType13
 
 @dataclass
 class MatLaw103:
-    """``/MAT/LAW103`` or ``/MAT/HENSEL_SPITTEL`` (M195): Hensel-Spittel hot-forming material law."""
+    """``/MAT/LAW103``, ``/MAT/HENSEL_SPITTEL``, or ``/MAT/PLAS_HENS`` (M195, M573): Hensel-Spittel hot metal forming model."""
     id: int
     title: str = ""
     rho: float = 0.0
@@ -16659,6 +16659,54 @@ class MatLaw103:
     t0: float = 0.0
     eta: float = 0.0
     params: dict = field(default_factory=dict)
+    law: int = 103
+    law_name: str = "LAW103"
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @property
+    def rhor(self) -> float:
+        return self.refer_rho if self.refer_rho > 0.0 else self.rho
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @property
+    def nu_val(self) -> float:
+        return self.nu
+
+    @property
+    def G(self) -> float:
+        return self.e / (2.0 * (1.0 + self.nu)) if (1.0 + self.nu) != 0.0 else 0.0
+
+    @property
+    def K(self) -> float:
+        denom = 1.0 - 2.0 * self.nu
+        return self.e / (3.0 * denom) if denom != 0.0 else 0.0
+
+    @property
+    def bulk(self) -> float:
+        return self.K
+
+    @property
+    def eps0(self) -> float:
+        return self.eps_0
+
+    @property
+    def rcp(self) -> float:
+        return self.rhocp if self.rhocp > 0.0 else 1.0e30
+
+    @property
+    def sound_speed(self) -> float:
+        rho_val = self.rho if self.rho > 0.0 else 1.0
+        return math.sqrt(max(0.0, self.K + 4.0 / 3.0 * self.G) / rho_val)
+
+
+MatPlasHens = MatLaw103
+MaterialLaw103 = MatLaw103
 
 
 @dataclass

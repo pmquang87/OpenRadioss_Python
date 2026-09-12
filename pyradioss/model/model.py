@@ -1330,8 +1330,9 @@ class Model:
         self.prop_spr_pulls: Dict[int, PropType13] = {}             # /PROP/TYPE13, /PROP/SPR_PULL (M194)
         self.prop_type13s = self.prop_spr_pulls
         self.def_inter_type2: Optional[DefInterType2] = None        # /DEF_INTER/TYPE2 (M194)
-        self.mat_law103s: Dict[int, MatLaw103] = {}                 # /MAT/LAW103, /MAT/HENSEL_SPITTEL (M195)
+        self.mat_law103s: Dict[int, MatLaw103] = {}                 # /MAT/LAW103, /MAT/HENSEL_SPITTEL (M195, M573)
         self.mat_hensel_spittels = self.mat_law103s
+        self.mat_plas_hens = self.mat_law103s
         self.mat_law108s: Dict[int, MatLaw108] = {}                 # /MAT/LAW108, /MAT/SPR_GENE (M195)
         self.mat_spr_genes = self.mat_law108s
         self.mat_plas_predefs: Dict[int, MatPlasPredef] = {}         # /MAT/PLAS_PREDEF (M195)

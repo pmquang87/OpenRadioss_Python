@@ -80,8 +80,20 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                law100_multi_network,
                law101_plas_poly,
                law102_dprag2,
+               law103_hensel_spittel,
                law163_crush_foam,
                mat_gas, mat_void)
+from .law103_hensel_spittel import (
+    HenselSpittelParams,
+    build_law103,
+    compute_hensel_spittel_flow_stress,
+    compute_hensel_spittel_hardening_modulus,
+    solid_update as law103_solid_update,
+    solid_update_single as law103_solid_update_single,
+    solid_update_array as law103_solid_update_array,
+    sound_speed as law103_sound_speed,
+    solid_tangent as law103_solid_tangent,
+)
 from .law102_dprag2 import (
     DPrag2Params,
     build_law102,
@@ -1342,6 +1354,24 @@ _LAW102_KEYS = (
 )
 
 
+def _register_law103():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law103_hensel_spittel, "build_law103", None)
+        if builder is not None:
+            for k in (103, "103", "LAW103", "HENSEL_SPITTEL", "HENSEL-SPITTEL", "PLAS_HENS", "MAT_HENSEL_SPITTEL", "MAT_PLAS_HENS", "MAT_103", "MAT_LAW103", "HEN"):
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law103()
+
+_LAW103_KEYS = (
+    103, "103", "LAW103", "HENSEL_SPITTEL", "HENSEL-SPITTEL", "PLAS_HENS", "MAT_HENSEL_SPITTEL", "MAT_PLAS_HENS", "MAT_103", "MAT_LAW103", "HEN",
+)
+
+
 
 _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
     "uv15": (8,),
@@ -2555,6 +2585,29 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
             except Exception:
                 pass
         return sig, epsp_out, c
+    if getattr(mat, "law", None) in _LAW103_KEYS or getattr(mat, "law_name", None) in _LAW103_KEYS:
+        res = law103_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra, return_tuple=True)
+        if isinstance(res, tuple):
+            if len(res) == 3:
+                sign, epsp_out, c = res
+            elif len(res) == 2:
+                sign, epsp_out = res
+                c = law103_sound_speed(mat, rho=extra.get("rho") if extra else None)
+            else:
+                sign, epsp_out, c = res[0], epsp, None
+        else:
+            sign, epsp_out, c = res, epsp, None
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = sign
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
     raise NotImplementedError(f"material LAW{mat.law} not ported for solids")
 
 
@@ -2562,6 +2615,8 @@ def sound_speed(mat, rho=None, extra=None, is_shell: bool = False):
     """Dispatch sound speed calculation to material law."""
     law = getattr(mat, "law", None)
     law_name = getattr(mat, "law_name", None)
+    if law in _LAW103_KEYS or law_name in _LAW103_KEYS:
+        return law103_sound_speed(mat, rho=rho)
     if law in _LAW102_KEYS or law_name in _LAW102_KEYS:
         return law102_sound_speed(mat, rho=rho)
     if law in _LAW101_KEYS or law_name in _LAW101_KEYS:
@@ -2835,6 +2890,8 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         raise NotImplementedError("LAW101 (/MAT/PP) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in _LAW102_KEYS or getattr(mat, "law_name", None) in _LAW102_KEYS:
         raise NotImplementedError("LAW102 (/MAT/DPRAG2) is implemented for 3D solid elements only.")
+    if getattr(mat, "law", None) in _LAW103_KEYS or getattr(mat, "law_name", None) in _LAW103_KEYS:
+        raise NotImplementedError("LAW103 (/MAT/HENSEL_SPITTEL) is implemented for 3D solid elements only.")
     raise NotImplementedError(f"material LAW{mat.law} not ported for shells")
 
 
@@ -3031,6 +3088,8 @@ def solid_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
         return law101_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     if getattr(mat, "law", None) in _LAW102_KEYS or getattr(mat, "law_name", None) in _LAW102_KEYS:
         return law102_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
+    if getattr(mat, "law", None) in _LAW103_KEYS or getattr(mat, "law_name", None) in _LAW103_KEYS:
+        return law103_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
         f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW34, LAW35, LAW36, LAW38, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
@@ -3326,6 +3385,8 @@ def shell_layer_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
         raise NotImplementedError("LAW101 (Bouvard Polymer Viscoplasticity) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in _LAW102_KEYS or getattr(mat, "law_name", None) in _LAW102_KEYS:
         raise NotImplementedError("LAW102 (Extended Drucker-Prager) is implemented for 3D solid elements only.")
+    if getattr(mat, "law", None) in _LAW103_KEYS or getattr(mat, "law_name", None) in _LAW103_KEYS:
+        raise NotImplementedError("LAW103 (Hensel-Spittel Hot Metal Forming) is implemented for 3D solid elements only.")
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 "
         f"elastic, LAW2, LAW3, LAW36 and LAW44 elastoplastic, LAW27 brittle cracking, "

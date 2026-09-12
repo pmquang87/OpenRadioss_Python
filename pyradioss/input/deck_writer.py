@@ -6468,6 +6468,161 @@ class StarterDeck:
         kwargs.setdefault("law_name", "DPRAG2")
         return self.mat_law102(*args, **kwargs)
 
+    def mat_law103(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho: float = 0.0,
+        refer_rho: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        a0: float = 0.0,
+        m1: float = 0.0,
+        m2: float = 0.0,
+        m3: float = 0.0,
+        m4: float = 0.0,
+        m5: float = 0.0,
+        m7: float = 0.0,
+        fsmooth: int = 0,
+        fcut: float = 0.0,
+        eps0: float = 0.0,
+        pmin: float = -1.0e30,
+        rcp: float = 1.0e30,
+        t0: float = 0.0,
+        eta: float = 0.0,
+        law_name: str = "LAW103",
+        unit_id: Optional[int] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW103`` (/MAT/HENSEL_SPITTEL, /MAT/PLAS_HENS) Hensel-Spittel Model (M573).
+
+        Card 1: RHO_I [, Refer_Rho] (%20lg%20lg)
+        Card 2: E, Nu (%20lg%20lg)
+        Card 3: A0, m1, m2, m3, m4 (%20lg%20lg%20lg%20lg%20lg)
+        Card 4: m5, m7 (%20lg%20lg)
+        Card 5: blank(10) + Fsmooth (%10d) + Fcut (%20lg) + EPS_0 (%20lg) + Pmin (%20lg)
+        Card 6: RhoCp (%20lg) + T0 (%20lg) + ETA (%20lg)
+        """
+        mat_obj = None
+        if hasattr(mid, "id") or hasattr(mid, "rho") or hasattr(mid, "nu"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+        elif len(args) > 0 and not isinstance(args[0], (int, float, str)):
+            mat_obj = args[0]
+        elif "mat_obj" in kwargs:
+            mat_obj = kwargs["mat_obj"]
+        elif "mat" in kwargs:
+            mat_obj = kwargs["mat"]
+        elif "material" in kwargs:
+            mat_obj = kwargs["material"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", rho))
+            refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", refer_rho))
+            e = getattr(mat_obj, "e", getattr(mat_obj, "E", e))
+            nu = getattr(mat_obj, "nu", nu)
+            a0 = getattr(mat_obj, "a0", a0)
+            m1 = getattr(mat_obj, "m1", m1)
+            m2 = getattr(mat_obj, "m2", m2)
+            m3 = getattr(mat_obj, "m3", m3)
+            m4 = getattr(mat_obj, "m4", m4)
+            m5 = getattr(mat_obj, "m5", m5)
+            m7 = getattr(mat_obj, "m7", m7)
+            fsmooth = getattr(mat_obj, "fsmooth", fsmooth)
+            fcut = getattr(mat_obj, "fcut", fcut)
+            eps0 = getattr(mat_obj, "eps0", getattr(mat_obj, "eps_0", eps0))
+            pmin = getattr(mat_obj, "pmin", pmin)
+            rcp = getattr(mat_obj, "rcp", getattr(mat_obj, "rhocp", rcp))
+            t0 = getattr(mat_obj, "t0", t0)
+            eta = getattr(mat_obj, "eta", eta)
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("material_id", "mat_id", "id", "mid"):
+                mid = int(v)
+            elif kl == "title":
+                title = str(v)
+            elif kl in ("rho", "rho0", "rho_i", "initial_density"):
+                rho = float(v)
+            elif kl in ("refer_rho", "rhor", "ref_rho"):
+                refer_rho = float(v)
+            elif kl in ("e", "young"):
+                e = float(v)
+            elif kl in ("nu", "poisson"):
+                nu = float(v)
+            elif kl in ("a0", "mat103_a0"):
+                a0 = float(v)
+            elif kl in ("m1", "mat103_m1"):
+                m1 = float(v)
+            elif kl in ("m2", "mat103_m2"):
+                m2 = float(v)
+            elif kl in ("m3", "mat103_m3"):
+                m3 = float(v)
+            elif kl in ("m4", "mat103_m4"):
+                m4 = float(v)
+            elif kl in ("m5", "mat103_m5"):
+                m5 = float(v)
+            elif kl in ("m7", "mat103_m7"):
+                m7 = float(v)
+            elif kl in ("fsmooth", "mat_fsmooth"):
+                fsmooth = int(v)
+            elif kl in ("fcut", "f_cut"):
+                fcut = float(v)
+            elif kl in ("eps0", "eps_0", "mat_srp"):
+                eps0 = float(v)
+            elif kl in ("pmin", "mat_pc", "p_min"):
+                pmin = float(v)
+            elif kl in ("rcp", "rhocp", "mat_spheat"):
+                rcp = float(v)
+            elif kl in ("t0", "mat_t0", "tini"):
+                t0 = float(v)
+            elif kl in ("eta", "mat103_eta"):
+                eta = float(v)
+
+        if data_cards is not None and len(data_cards) > 0:
+            hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+            self.lines.append(hdr)
+            self._title(title)
+            for cd in data_cards:
+                self.lines.append(cd if isinstance(cd, str) else str(cd))
+            return self
+
+        hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+        self.lines.append(hdr)
+        self._title(title)
+
+        # Card 1: RHO_I [, Refer_Rho]
+        if refer_rho > 0.0 and refer_rho != rho:
+            self.lines.append(fmt_float(rho) + fmt_float(refer_rho))
+        else:
+            self.lines.append(fmt_float(rho))
+        # Card 2: E, Nu
+        self.lines.append(fmt_float(e) + fmt_float(nu))
+        # Card 3: A0, m1, m2, m3, m4
+        self.lines.append(fmt_float(a0) + fmt_float(m1) + fmt_float(m2) + fmt_float(m3) + fmt_float(m4))
+        # Card 4: m5, m7
+        self.lines.append(fmt_float(m5) + fmt_float(m7))
+        # Card 5: blank(10) + Fsmooth (%10d) + Fcut (%20lg) + EPS_0 (%20lg) + Pmin (%20lg)
+        self.lines.append(" " * 10 + fmt_int(fsmooth) + fmt_float(fcut) + fmt_float(eps0) + fmt_float(pmin))
+        # Card 6: RhoCp (%20lg) + T0 (%20lg) + ETA (%20lg)
+        self.lines.append(fmt_float(rcp) + fmt_float(t0) + fmt_float(eta))
+
+        return self
+
+    def mat_hensel_spittel(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/HENSEL_SPITTEL`` — synonym for ``/MAT/LAW103``."""
+        kwargs.setdefault("law_name", "HENSEL_SPITTEL")
+        return self.mat_law103(*args, **kwargs)
+
+    def mat_plas_hens(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/PLAS_HENS`` — synonym for ``/MAT/LAW103``."""
+        kwargs.setdefault("law_name", "PLAS_HENS")
+        return self.mat_law103(*args, **kwargs)
+
     def mat_law93(
         self,
         mid: int = 0,
@@ -10156,6 +10311,8 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law101(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     elif law in ("102", "LAW102", "DPRAG2", "DRUCKER_PRAGER_2", "MAT_DPRAG2", "MAT_102", "MAT_LAW102", "LAW102_DPRAG2"):
         d.mat_law102(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
+    elif law in ("103", "LAW103", "HENSEL_SPITTEL", "HENSEL-SPITTEL", "PLAS_HENS", "MAT_HENSEL_SPITTEL", "MAT_103", "MAT_LAW103", "MAT_PLAS_HENS", "HEN"):
+        d.mat_law103(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")
