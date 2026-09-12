@@ -366,6 +366,9 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
         elif getattr(mat, "law", 1) in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE") or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE"):
             from ..materials import law92_arruda_boyce
             c = law92_arruda_boyce.sound_speed_shell(mat, getattr(mat, "rho0", None))
+        elif getattr(mat, "law", 1) in (94, "94", "LAW94", "YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH"):
+            from ..materials import law94_yeoh
+            c = law94_yeoh.sound_speed_shell(mat, getattr(mat, "rho0", None))
         else:
             c = mat.sound_speed_shell()
         if c <= EM20:
@@ -947,6 +950,9 @@ def forces(group, x, v, vr, dt, fint, mint):
             elif getattr(mat, "law", 1) in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE") or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE"):
                 from ..materials import law92_arruda_boyce
                 c[sl] = law92_arruda_boyce.sound_speed_shell(mat, getattr(mat, "rho0", None))
+            elif getattr(mat, "law", 1) in (94, "94", "LAW94", "YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH"):
+                from ..materials import law94_yeoh
+                c[sl] = law94_yeoh.sound_speed_shell(mat, getattr(mat, "rho0", None))
             elif getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
                 c[sl] = mat.sound_speed_shell()
             else:
@@ -1191,6 +1197,9 @@ def forces(group, x, v, vr, dt, fint, mint):
         elif getattr(mat, "law", 1) in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE") or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE"):
             from ..materials import law92_arruda_boyce
             c[sl] = law92_arruda_boyce.sound_speed_shell(mat, getattr(mat, "rho0", None))
+        elif getattr(mat, "law", 1) in (94, "94", "LAW94", "YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH"):
+            from ..materials import law94_yeoh
+            c[sl] = law94_yeoh.sound_speed_shell(mat, getattr(mat, "rho0", None))
         elif getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
             c[sl] = mat.sound_speed_shell()
             if "uvar66" in st and "uvar66" in st.get("mat_extra", {}):

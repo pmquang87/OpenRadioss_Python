@@ -1362,6 +1362,8 @@ class Model:
         self.mat_arruda_boyces = self.mat_law92s
         self.mat_arrudas = self.mat_law92s
         self.mat_hill_orths = self.mat_law92s
+        self.mat_law94s: Dict[int, Any] = {}                        # /MAT/LAW94, /MAT/YEOH (M173, M567)
+        self.mat_yeohs = self.mat_law94s
         self.prop_type26s: Dict[int, Any] = {}                      # /PROP/TYPE26, /PROP/SPR_TAB (M196)
         self.prop_spr_tabs = self.prop_type26s
         self.damp_inters: Dict[int, Any] = {}                       # /DAMP/INTER (M196)

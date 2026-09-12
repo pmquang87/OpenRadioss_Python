@@ -584,8 +584,9 @@ def init_group(group, model, log):
         is_law87 = getattr(mat, "law", None) in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000") or getattr(mat, "law_name", None) in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000")
         is_law88 = getattr(mat, "law", None) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP")
         is_law92 = getattr(mat, "law", None) in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE") or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE")
+        is_law94 = getattr(mat, "law", None) in (94, "94", "LAW94", "YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH", "LAW94_YEOH")
         is_law66 = getattr(mat, "law", None) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB")
-        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58 or is_law52 or is_law57 or is_law73 or is_law66 or is_law87 or is_law88 or is_law92
+        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58 or is_law52 or is_law57 or is_law73 or is_law66 or is_law87 or is_law88 or is_law92 or is_law94
         if getattr(mat, "rho0", 0.0) > 0.0 and has_stiff and getattr(mat, "law", 1) != 0:
             if is_law52:
                 try:
@@ -627,6 +628,12 @@ def init_group(group, model, log):
                 try:
                     from ..materials import law92_arruda_boyce
                     cspd[sl] = law92_arruda_boyce.sound_speed_shell(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    cspd[sl] = mat.sound_speed_shell()
+            elif is_law94:
+                try:
+                    from ..materials import law94_yeoh
+                    cspd[sl] = law94_yeoh.sound_speed_shell(mat, getattr(mat, "rho0", None))
                 except Exception:
                     cspd[sl] = mat.sound_speed_shell()
             elif is_law66:

@@ -491,6 +491,10 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
             from ..materials import law92_arruda_boyce
             if hasattr(law92_arruda_boyce, "resolve"):
                 law92_arruda_boyce.resolve(mat, model, log)
+        elif mat.law in (94, "94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH", "LAW94_YEOH"):
+            from ..materials import law94_yeoh
+            if hasattr(law94_yeoh, "resolve"):
+                law94_yeoh.resolve(mat, model, log)
 
     for mat_id, fm, source in model.raw_fails:
         mat = model.materials.get(mat_id)

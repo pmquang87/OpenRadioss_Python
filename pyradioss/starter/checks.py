@@ -112,6 +112,13 @@ _LAW92_KEYS = {
 for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells", "shells_qbat", "shells_qeph", "sh3n"):
     _ALLOWED_LAWS[_fam].update(_LAW92_KEYS)
 
+_LAW94_KEYS = {
+    94, "94", "LAW94", "YEOH",
+    "MAT_LAW94", "MAT_YEOH", "LAW94_YEOH",
+}
+for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells", "shells_qbat", "shells_qeph", "sh3n"):
+    _ALLOWED_LAWS[_fam].update(_LAW94_KEYS)
+
 _ALLOWED_LAWS["quads"] = _ALLOWED_LAWS["shells"]
 _ALLOWED_LAWS["solids"] = _ALLOWED_LAWS["bricks"]
 _ALLOWED_LAWS["solids_heph"] = _ALLOWED_LAWS["bricks"]
@@ -4695,6 +4702,174 @@ def check_mat_law92(
 _check_mat_law92 = check_mat_law92
 
 
+def check_mat_law94(*args: Any, **kwargs: Any) -> None:
+    """Validate /MAT/LAW94 or /MAT/YEOH parameter bounds and element compatibility (M567).
+
+    Checks:
+      1. RHO0 > 0 (ANCMSG 1514).
+      2. C10 >= 0 (warning if <= 0).
+      3. D1, D2, D3 >= 0.
+      4. 0 <= NU < 0.5 if explicitly given.
+      5. Compatible elements: 3D solids and 2D shells only. 1D elements emit ANCMSG 306.
+    """
+    actual_mat = None
+    actual_log = None
+    actual_model = None
+    actual_mid = None
+
+    if "model" in kwargs:
+        actual_model = kwargs["model"]
+    if "mat" in kwargs:
+        actual_mat = kwargs["mat"]
+    if "log" in kwargs:
+        actual_log = kwargs["log"]
+    if "mat_id" in kwargs:
+        actual_mid = kwargs["mat_id"]
+
+    for c in args:
+        if isinstance(c, MessageLog):
+            actual_log = c
+        elif isinstance(c, Model):
+            actual_model = c
+        elif hasattr(c, "params") or hasattr(c, "rho0") or hasattr(c, "c10"):
+            actual_mat = c
+        elif isinstance(c, int) and not isinstance(c, bool):
+            actual_mid = c
+
+    if actual_mat is None:
+        for k in ("mat", "material", "mat94", "mat_law94", "mat_yeoh"):
+            if k in kwargs:
+                actual_mat = kwargs[k]
+                break
+
+    if actual_log is None:
+        if "log" in kwargs:
+            actual_log = kwargs["log"]
+        elif "logger" in kwargs:
+            actual_log = kwargs["logger"]
+        else:
+            actual_log = MessageLog()
+
+    if actual_mat is None:
+        return
+
+    mid = actual_mid if actual_mid is not None else getattr(actual_mat, "id", getattr(actual_mat, "mat_id", 0))
+    params = getattr(actual_mat, "params", {}) or {}
+
+    def get_val(key: str, default: float = 0.0) -> float:
+        if isinstance(params, dict) and key in params:
+            try:
+                return float(params[key])
+            except (ValueError, TypeError):
+                pass
+        for attr in (key.lower(), key.upper(), key):
+            if hasattr(actual_mat, attr):
+                try:
+                    val = getattr(actual_mat, attr)
+                    if val is not None:
+                        return float(val)
+                except (ValueError, TypeError):
+                    pass
+        return default
+
+    # 1. Density check (ANCMSG 1514)
+    rho0 = get_val("rho0", get_val("rho_initial", get_val("RHO_I", get_val("RHO0", get_val("MAT_RHO", 0.0)))))
+    if rho0 <= 0.0:
+        actual_log.error(
+            f"/MAT/LAW94/{mid}: initial density RHO0 must be > 0, got {rho0} (ANCMSG 1514)",
+            "MAT CHECK",
+        )
+
+    # 2. Parameters check
+    c10 = get_val("c10", get_val("LAW94_C01", get_val("C10", 0.0)))
+    if c10 <= 0.0:
+        actual_log.warning(
+            f"/MAT/LAW94/{mid}: shear parameter C10 should be > 0, got {c10}",
+            "MAT CHECK",
+        )
+
+    d1 = get_val("d1", get_val("LAW94_D1", get_val("D1", 0.0)))
+    if d1 < 0.0:
+        actual_log.error(
+            f"/MAT/LAW94/{mid}: compressibility parameter D1 must be >= 0, got {d1}",
+            "MAT CHECK",
+        )
+
+    d2 = get_val("d2", get_val("LAW94_D2", get_val("D2", 0.0)))
+    if d2 < 0.0:
+        actual_log.error(
+            f"/MAT/LAW94/{mid}: compressibility parameter D2 must be >= 0, got {d2}",
+            "MAT CHECK",
+        )
+
+    d3 = get_val("d3", get_val("LAW94_D3", get_val("D3", 0.0)))
+    if d3 < 0.0:
+        actual_log.error(
+            f"/MAT/LAW94/{mid}: compressibility parameter D3 must be >= 0, got {d3}",
+            "MAT CHECK",
+        )
+
+    nu = get_val("nu", 0.495)
+    if nu < 0.0 or nu >= 0.5:
+        actual_log.error(
+            f"/MAT/LAW94/{mid}: Poisson's ratio NU must satisfy 0 <= NU < 0.5, got {nu}",
+            "MAT CHECK",
+        )
+
+    # 3. Compatible elements check
+    if actual_model is not None:
+        if hasattr(actual_model, "element_groups") and callable(actual_model.element_groups):
+            try:
+                grps = list(actual_model.element_groups())
+            except TypeError:
+                grps = []
+            for item in grps:
+                if isinstance(item, tuple) and len(item) == 2:
+                    name, el_group = item
+                else:
+                    continue
+                mids_in_group = set()
+                if hasattr(el_group, "values") and callable(el_group.values):
+                    for el in el_group.values():
+                        el_mid = getattr(el, "mat_id", getattr(el, "mid", None))
+                        if el_mid is not None:
+                            mids_in_group.add(el_mid)
+                if hasattr(el_group, "state") and isinstance(el_group.state, dict) and "slices" in el_group.state:
+                    for _, m_part, _ in el_group.state["slices"]:
+                        m_id = getattr(m_part, "id", None)
+                        if m_id is not None:
+                            mids_in_group.add(m_id)
+                if mid in mids_in_group:
+                    if name in ("trusses", "beams", "springs"):
+                        actual_log.error(
+                            f"/MAT/LAW94/{mid} is not supported for 1D elements ({name}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
+        if hasattr(actual_model, "parts") and isinstance(actual_model.parts, dict):
+            for pid, part in actual_model.parts.items():
+                p_mid = getattr(part, "mat_id", getattr(part, "mid", None))
+                if p_mid == mid:
+                    etype = str(getattr(part, "elem_type", getattr(part, "type", ""))).upper()
+                    prop_id = getattr(part, "prop_id", None)
+                    if not etype or etype in ("NONE", ""):
+                        if prop_id is not None:
+                            props = getattr(actual_model, "properties", {}) or getattr(actual_model, "props", {})
+                            prop = props.get(prop_id) if isinstance(props, dict) else None
+                            if prop is not None:
+                                ptype = str(getattr(prop, "type", getattr(prop, "card_name", ""))).upper()
+                                if any(s in ptype for s in ("BEAM", "TRUSS", "SPRING")):
+                                    etype = "1D"
+                    if any(s in etype for s in ("BEAM", "TRUSS", "SPRING", "1D")):
+                        actual_log.error(
+                            f"/MAT/LAW94/{mid} is not supported for 1D elements ({etype.lower()}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
+
+_check_mat_law94 = check_mat_law94
+
+
 
 def check_materials(model: Model, log: MessageLog) -> None:
     """Validate all material parameters across model."""
@@ -4937,9 +5112,24 @@ def check_materials(model: Model, log: MessageLog) -> None:
         if mid not in getattr(model, "materials", {}):
             check_mat_law92(model=model, mat_id=mid, mat=mat92, log=log)
 
+    # M567: Material LAW94 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in (94, "94", "LAW94", "YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH", "LAW94_YEOH"):
+            check_mat_law94(model=model, mat_id=mid, mat=mat, log=log)
+    for mid, mat94 in getattr(model, "mat_law94s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law94(model=model, mat_id=mid, mat=mat94, log=log)
+
 
 
 _MAT_CHECKS: dict[Any, Any] = {
+    94: check_mat_law94,
+    "94": check_mat_law94,
+    "LAW94": check_mat_law94,
+    "YEOH": check_mat_law94,
+    "MAT_LAW94": check_mat_law94,
+    "MAT_YEOH": check_mat_law94,
+    "LAW94_YEOH": check_mat_law94,
     92: check_mat_law92,
     "92": check_mat_law92,
     "LAW92": check_mat_law92,
@@ -5364,6 +5554,24 @@ def check_model(model: Model, log: MessageLog) -> None:
                 if name in ("trusses", "beams", "springs"):
                     log.error(
                         f"/MAT/LAW69/{mat.id} (/MAT/HYP_ELAS) is not supported for {name} elements "
+                        f"(solids and shells only: bricks, tetras, penta6, pyra5, shells, shells_qbat, shells_qeph, sh3n, quads)",
+                        "MAT CHECK",
+                    )
+                    continue
+            if (mat.law in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE")
+                    or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE", "LAW92_ARRUDA_BOYCE")):
+                if name in ("trusses", "beams", "springs"):
+                    log.error(
+                        f"/MAT/LAW92/{mat.id} (/MAT/ARRUDA_BOYCE) is not supported for {name} elements "
+                        f"(solids and shells only: bricks, tetras, penta6, pyra5, shells, shells_qbat, shells_qeph, sh3n, quads)",
+                        "MAT CHECK",
+                    )
+                    continue
+            if (mat.law in (94, "94", "LAW94", "YEOH")
+                    or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH", "LAW94_YEOH")):
+                if name in ("trusses", "beams", "springs"):
+                    log.error(
+                        f"/MAT/LAW94/{mat.id} (/MAT/YEOH) is not supported for {name} elements "
                         f"(solids and shells only: bricks, tetras, penta6, pyra5, shells, shells_qbat, shells_qeph, sh3n, quads)",
                         "MAT CHECK",
                     )

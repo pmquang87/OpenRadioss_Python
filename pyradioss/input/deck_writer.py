@@ -5731,6 +5731,87 @@ class StarterDeck:
         kwargs.setdefault("law_name", "ARRUDA_BOYCE")
         return self.mat_law92(*args, **kwargs)
 
+    def mat_law94(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho0: float = 0.0,
+        refer_rho: float = 0.0,
+        c10: float = 0.0,
+        c20: float = 0.0,
+        c30: float = 0.0,
+        d1: float = 0.0,
+        d2: float = 0.0,
+        d3: float = 0.0,
+        unit_id: int | None = None,
+        law_name: str = "LAW94",
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW94`` or ``/MAT/YEOH`` (M173, M567): Yeoh hyperelastic model."""
+        if "id" in kwargs and mid == 0:
+            mid = kwargs["id"]
+        if "mat_id" in kwargs and mid == 0:
+            mid = kwargs["mat_id"]
+        mat_obj = kwargs.get("mat_law94", kwargs.get("mat_yeoh", kwargs.get("mat", kwargs.get("material", None))))
+        if mat_obj is not None or hasattr(mid, "c10") or hasattr(mid, "d1"):
+            if mat_obj is None:
+                mat_obj = mid
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho0 = getattr(mat_obj, "rho0", rho0)
+            refer_rho = getattr(mat_obj, "ref_rho", refer_rho)
+            c10 = getattr(mat_obj, "c10", c10)
+            c20 = getattr(mat_obj, "c20", c20)
+            c30 = getattr(mat_obj, "c30", c30)
+            d1 = getattr(mat_obj, "d1_raw", getattr(mat_obj, "d1", d1))
+            d2 = getattr(mat_obj, "d2_raw", getattr(mat_obj, "d2", d2))
+            d3 = getattr(mat_obj, "d3_raw", getattr(mat_obj, "d3", d3))
+
+        if "C10" in kwargs:
+            c10 = kwargs["C10"]
+        if "C20" in kwargs:
+            c20 = kwargs["C20"]
+        if "C30" in kwargs:
+            c30 = kwargs["C30"]
+        if "D1" in kwargs:
+            d1 = kwargs["D1"]
+        if "D2" in kwargs:
+            d2 = kwargs["D2"]
+        if "D3" in kwargs:
+            d3 = kwargs["D3"]
+
+        if data_cards is not None and isinstance(data_cards, (list, tuple)):
+            if unit_id is not None:
+                self._header("MAT", law_name, mid, unit_id)
+            else:
+                self._header("MAT", law_name, mid)
+            self._title(title)
+            self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+            return self
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        # Card 1: Rho_i, Refer_rho (%20lg%20lg)
+        self.lines.append(fmt_float(rho0) + (fmt_float(refer_rho) if refer_rho != 0.0 else ""))
+        # Card 2: BLANK CARD (empty line)
+        self.lines.append("")
+        # Card 3: C10, C20, C30 (%20lg%20lg%20lg)
+        self.lines.append(fmt_float(c10) + fmt_float(c20) + fmt_float(c30))
+        # Card 4: D1, D2, D3 (%20lg%20lg%20lg)
+        self.lines.append(fmt_float(d1) + fmt_float(d2) + fmt_float(d3))
+        return self
+
+    def mat_yeoh(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/YEOH`` — synonym for ``/MAT/LAW94``."""
+        kwargs.setdefault("law_name", "YEOH")
+        return self.mat_law94(*args, **kwargs)
+
+
     def mat_law82(
         self,
         mid: int = 0,
@@ -8897,7 +8978,7 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_plas_predef(mid, title, cards)
     elif law in ("LAW69", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYP_ELAS"):
         d.mat_law69(mid, title, cards)
-    elif law == "LAW94":
+    elif law in ("LAW94", "YEOH", "LAW94_YEOH"):
         d.mat_law94(mid, title, cards)
     elif law == "HILL_TAB":
         d.mat_hill_tab(mid, title, cards)

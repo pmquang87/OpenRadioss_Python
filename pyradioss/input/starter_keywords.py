@@ -891,7 +891,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "LAW92_ARRUDA_BOYCE"):
         read_mat_law92(block, model, log)
         return
-    if lawname in ("LAW94", "YEOH", "LAW94_YEOH"):
+    if lawname in ("LAW94", "YEOH", "LAW94_YEOH", "MAT_LAW94", "MAT_YEOH"):
         read_mat_law94(block, model, log)
         return
     if lawname in ("LAW46", "HYD_VISC", "LES_FLUID", "LAW46_HYD_VISC"):
@@ -27877,25 +27877,53 @@ def read_mat_law94(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             d2 = float(t3[1]) if len(t3) > 1 else 0.0
             d3 = float(t3[2]) if len(t3) > 2 else 0.0
 
+    g0 = 2.0 * c10 if c10 > 0.0 else 0.0
+    if d1 == 0.0:
+        nu_val = 0.495
+        rbulk = (2.0 / 3.0) * g0 * (1.0 + nu_val) / max(1e-30, 1.0 - 2.0 * nu_val)
+        e_equiv = 2.0 * g0 * (1.0 + nu_val)
+    else:
+        d1_inv = 1.0 / d1
+        rbulk = 2.0 * d1_inv
+        denom = 3.0 * rbulk + g0
+        nu_val = (3.0 * rbulk - 2.0 * g0) / (2.0 * denom) if denom > 1e-30 else 0.495
+        e_equiv = 9.0 * rbulk * g0 / denom if denom > 1e-30 else 2.0 * g0 * (1.0 + nu_val)
+
     m94 = MaterialLaw94(
         id=mat_id, title=title, rho0=rho0, ref_rho=refer_rho,
         c10=c10, c20=c20, c30=c30, d1=d1, d2=d2, d3=d3,
+        nu=nu_val,
     )
+    m94.g0 = g0
+    m94.rbulk = rbulk
+    m94.e = e_equiv
+
     model.mat_law94s[mat_id] = m94
-    g0 = 2.0 * c10 if c10 > 0.0 else 0.0
-    nu_val = 0.495
-    e_equiv = 2.0 * g0 * (1.0 + nu_val) if g0 > 0.0 else 0.0
+    if hasattr(model, "mat_yeohs"):
+        model.mat_yeohs[mat_id] = m94
+
     from .mat_reader import GenericMaterialRecord
     mat94 = Material(
         id=mat_id, law=94, rho0=rho0, title=title,
         params={
-            "E": e_equiv if e_equiv > 0.0 else 1.0, "nu": nu_val,
+            "rho0": rho0, "ref_rho": refer_rho, "rho_initial": rho0, "RHO0": rho0,
+            "E": e_equiv if e_equiv > 0.0 else 1.0, "young": e_equiv, "nu": nu_val,
+            "G": g0, "G0": g0, "K": rbulk, "bulk": rbulk, "rbulk": rbulk,
             "LAW94_C01": c10, "LAW94_C02": c20, "LAW94_C03": c30,
             "LAW94_D1": d1, "LAW94_D2": d2, "LAW94_D3": d3,
             "C10": c10, "C20": c20, "C30": c30, "D1": d1, "D2": d2, "D3": d3,
             "c10": c10, "c20": c20, "c30": c30, "d1": d1, "d2": d2, "d3": d3,
         }
     )
+    mat94.c10 = c10
+    mat94.c20 = c20
+    mat94.c30 = c30
+    mat94.d1 = d1
+    mat94.d2 = d2
+    mat94.d3 = d3
+    mat94.g0 = g0
+    mat94.rho0 = rho0
+    mat94.ref_rho = refer_rho
     mat94.record = GenericMaterialRecord(
         law_name="LAW94", law_number=94, id=mat_id, title=title,
         params=mat94.params, density=rho0, unit_id=block.unit_id,
