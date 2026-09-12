@@ -1279,8 +1279,9 @@ class Model:
         self.mat_orth_hills = self.mat_law93s
         self.mat_law133s: Dict[int, MatLaw133] = {}                 # /MAT/LAW133, /MAT/GRANULAR (M191)
         self.mat_granulars = self.mat_law133s
-        self.mat_law101s: Dict[int, MatLaw101] = {}                 # /MAT/LAW101, /MAT/PLAS_POLY (M191)
+        self.mat_law101s: Dict[int, MatLaw101] = {}                 # /MAT/LAW101, /MAT/PLAS_POLY, /MAT/PP (M191/M571)
         self.mat_plas_polys = self.mat_law101s
+        self.mat_pps = self.mat_law101s
         self.mat_law43s: Dict[int, MatLaw43] = {}                   # /MAT/LAW43, /MAT/HILL_TAB (M191)
         self.mat_hill_tabs = self.mat_law43s
         self.mat_hill_plas_tabs = self.mat_law43s

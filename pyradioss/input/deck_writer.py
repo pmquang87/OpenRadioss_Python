@@ -6139,6 +6139,231 @@ class StarterDeck:
         kwargs.setdefault("law_name", "MNF")
         return self.mat_law100(*args, **kwargs)
 
+    def mat_law101(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho0: float = 0.0,
+        e_ref: float = 0.0,
+        e1: float = 0.0,
+        nu: float = 0.0,
+        ve1: float = 0.0,
+        ve2: float = 0.0,
+        edot_ref: float = 0.0,
+        gamma0: float = 0.0,
+        alpha_p: float = 0.0,
+        deltah: float = 0.0,
+        vol: float = 0.0,
+        m: float = 1.0,
+        c3: float = 0.0,
+        c4: float = 0.0,
+        alphak1: float = 0.0,
+        alphak2: float = 0.0,
+        hard: float = 0.0,
+        zeta1i: float = 0.0,
+        c5: float = 0.0,
+        c6: float = 0.0,
+        c7: float = 0.0,
+        c8: float = 0.0,
+        c9: float = 0.0,
+        c10: float = 0.0,
+        hard1: float = 0.0,
+        zeta2i: float = 0.0,
+        c11: float = 0.0,
+        c12: float = 0.0,
+        c13: float = 0.0,
+        c14: float = 0.0,
+        c1: float = 0.0,
+        c2: float = 0.0,
+        lambdal: float = 1.0,
+        rho_ref: float = 0.0,
+        cv_ref: float = 0.0,
+        tref: float = 293.15,
+        alpha_th: float = 0.0,
+        theta_glass: float = 250.0,
+        omega: float = 0.0,
+        theta_flag: float = 0.0,
+        heat_t0: float = 293.15,
+        law_name: str = "LAW101",
+        unit_id: Optional[int] = None,
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW101`` (/MAT/PP / /MAT/PLAS_POLY) Bouvard Polymer Viscoplasticity Model.
+
+        Card 1: RHO_I (%20lg)
+        Card 2: EREF, E1, Nu, VE1 (%20lg%20lg%20lg%20lg)
+        Card 3: VE2, EDOT_REF, GAMA_DOT_REF, ALPHAP (%20lg%20lg%20lg%20lg)
+        Card 4: delta_H, V, m, C3 (%20lg%20lg%20lg%20lg)
+        Card 5: C4, ALPHAK1, ALPHAK2, H0 (%20lg%20lg%20lg%20lg)
+        Card 6: ZETA1_i, C5, C6, C7 (%20lg%20lg%20lg%20lg)
+        Card 7: C8, C9, C10, h1 (%20lg%20lg%20lg%20lg)
+        Card 8: ZETA2_i, C11, C12, C13 (%20lg%20lg%20lg%20lg)
+        Card 9: C14, C1, C2, LAMBDA_L (%20lg%20lg%20lg%20lg)
+        Card 10: RHO_theta_0, CV_theta_0, THETA0, ALPHA_TH (%20lg%20lg%20lg%20lg)
+        Card 11: THETA_GLASS, TEMP_FACTOR, THETA_FLAG, THETAi (%20lg%20lg%20lg%20lg)
+        """
+        mat_obj = kwargs.get(
+            "mat_law101",
+            kwargs.get(
+                "mat_pp",
+                kwargs.get(
+                    "mat_plas_poly",
+                    kwargs.get("mat", kwargs.get("material", None)),
+                ),
+            ),
+        )
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho0 = getattr(mat_obj, "rho0", getattr(mat_obj, "rho", rho0))
+            e_ref = getattr(mat_obj, "e", getattr(mat_obj, "e_ref", e_ref))
+            e1 = getattr(mat_obj, "alpha1", getattr(mat_obj, "e1", e1))
+            nu = getattr(mat_obj, "nu", nu)
+            ve1 = getattr(mat_obj, "ve1", ve1)
+            ve2 = getattr(mat_obj, "ve2", ve2)
+            edot_ref = getattr(mat_obj, "epsilonref", getattr(mat_obj, "edot_ref", edot_ref))
+            gamma0 = getattr(mat_obj, "gamma0", getattr(mat_obj, "gamma0_ref", gamma0))
+            alpha_p = getattr(mat_obj, "alpha_p", alpha_p)
+            deltah = getattr(mat_obj, "deltah", deltah)
+            vol = getattr(mat_obj, "vol", vol)
+            m = getattr(mat_obj, "m", m)
+            c3 = getattr(mat_obj, "c3", c3)
+            c4 = getattr(mat_obj, "c4", c4)
+            alphak1 = getattr(mat_obj, "alphak1", alphak1)
+            alphak2 = getattr(mat_obj, "alphak2", alphak2)
+            hard = getattr(mat_obj, "hard", hard)
+            zeta1i = getattr(mat_obj, "zeta1i", zeta1i)
+            c5 = getattr(mat_obj, "c5", c5)
+            c6 = getattr(mat_obj, "c6", c6)
+            c7 = getattr(mat_obj, "c7", c7)
+            c8 = getattr(mat_obj, "c8", c8)
+            c9 = getattr(mat_obj, "c9", c9)
+            c10 = getattr(mat_obj, "c10", c10)
+            hard1 = getattr(mat_obj, "hard1", hard1)
+            zeta2i = getattr(mat_obj, "zeta2i", zeta2i)
+            c11 = getattr(mat_obj, "c11", c11)
+            c12 = getattr(mat_obj, "c12", c12)
+            c13 = getattr(mat_obj, "c13", c13)
+            c14 = getattr(mat_obj, "c14", c14)
+            c1 = getattr(mat_obj, "c1", c1)
+            c2 = getattr(mat_obj, "c2", c2)
+            lambdal = getattr(mat_obj, "lambdal", lambdal)
+            rho_ref = getattr(mat_obj, "rho_ref", getattr(mat_obj, "rho_p", rho_ref))
+            cv_ref = getattr(mat_obj, "cv_ref", getattr(mat_obj, "cv", cv_ref))
+            tref = getattr(mat_obj, "tref", getattr(mat_obj, "theta0", tref))
+            alpha_th = getattr(mat_obj, "alpha_th", getattr(mat_obj, "beta0", alpha_th))
+            theta_glass = getattr(mat_obj, "theta_glass", getattr(mat_obj, "theta_g", theta_glass))
+            omega = getattr(mat_obj, "omega", getattr(mat_obj, "factor", omega))
+            theta_flag = getattr(mat_obj, "theta_flag", getattr(mat_obj, "temp_opt", theta_flag))
+            heat_t0 = getattr(mat_obj, "heat_t0", getattr(mat_obj, "theta_i", heat_t0))
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("mid", "mat_id", "id", "material_id"): mid = int(v)
+            elif kl in ("title", "name"): title = str(v)
+            elif kl in ("rho", "rho0", "rho_i", "mat_rho"): rho0 = float(v)
+            elif kl in ("e", "e_ref", "eref", "mat_e"): e_ref = float(v)
+            elif kl in ("e1", "alpha1", "mat_alpha1"): e1 = float(v)
+            elif kl in ("nu", "mat_nu"): nu = float(v)
+            elif kl == "ve1": ve1 = float(v)
+            elif kl == "ve2": ve2 = float(v)
+            elif kl in ("edot_ref", "epsilonref"): edot_ref = float(v)
+            elif kl in ("gamma0", "gamma0_ref", "gama_dot_ref"): gamma0 = float(v)
+            elif kl in ("alpha_p", "alphap"): alpha_p = float(v)
+            elif kl in ("deltah", "delta_h"): deltah = float(v)
+            elif kl in ("vol", "v", "mat_vol"): vol = float(v)
+            elif kl in ("m", "mat_m"): m = float(v)
+            elif kl in ("c3", "mat_c3"): c3 = float(v)
+            elif kl in ("c4", "mat_c4"): c4 = float(v)
+            elif kl in ("alphak1", "calphak1"): alphak1 = float(v)
+            elif kl in ("alphak2", "calphak2"): alphak2 = float(v)
+            elif kl in ("hard", "h0", "mat_hard"): hard = float(v)
+            elif kl in ("zeta1i", "zeta1_0", "des1_0"): zeta1i = float(v)
+            elif kl in ("c5", "mat_c5"): c5 = float(v)
+            elif kl in ("c6", "mat_c6"): c6 = float(v)
+            elif kl in ("c7", "mat_c7"): c7 = float(v)
+            elif kl in ("c8", "mat_c8"): c8 = float(v)
+            elif kl in ("c9", "mat_c9"): c9 = float(v)
+            elif kl in ("c10", "c_10", "mat_c_10"): c10 = float(v)
+            elif kl in ("hard1", "h1", "mat_hard1"): hard1 = float(v)
+            elif kl in ("zeta2i", "zeta2_0", "des2_0"): zeta2i = float(v)
+            elif kl in ("c11", "c_11", "mat_c_11"): c11 = float(v)
+            elif kl in ("c12", "c_12", "mat_c_12"): c12 = float(v)
+            elif kl in ("c13", "mat_c13"): c13 = float(v)
+            elif kl in ("c14", "mat_c14"): c14 = float(v)
+            elif kl in ("c1", "mat_c1"): c1 = float(v)
+            elif kl in ("c2", "mat_c2"): c2 = float(v)
+            elif kl in ("lambdal", "lambda_l"): lambdal = float(v)
+            elif kl in ("rho_ref", "rho_theta_0", "rho_p"): rho_ref = float(v)
+            elif kl in ("cv_ref", "cv_theta_0", "cv"): cv_ref = float(v)
+            elif kl in ("tref", "theta0", "mat_tref"): tref = float(v)
+            elif kl in ("alpha_th", "beta0"): alpha_th = float(v)
+            elif kl in ("theta_glass", "theta_g"): theta_glass = float(v)
+            elif kl in ("omega", "factor", "temp_factor"): omega = float(v)
+            elif kl in ("theta_flag", "temp_opt"): theta_flag = float(v)
+            elif kl in ("heat_t0", "theta_i", "thetai"): heat_t0 = float(v)
+
+        if data_cards is not None and isinstance(data_cards, (list, tuple)):
+            if unit_id is not None:
+                self._header("MAT", law_name, mid, unit_id)
+            else:
+                self._header("MAT", law_name, mid)
+            self._title(title)
+            self.lines.extend(str(card).rstrip("\r\n") for card in data_cards)
+            return self
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        # Card 1: RHO_I (%20lg)
+        self.lines.append(fmt_float(rho0))
+
+        # Card 2: EREF, E1, Nu, VE1 (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(e_ref) + fmt_float(e1) + fmt_float(nu) + fmt_float(ve1))
+
+        # Card 3: VE2, EDOT_REF, GAMA_DOT_REF, ALPHAP (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(ve2) + fmt_float(edot_ref) + fmt_float(gamma0) + fmt_float(alpha_p))
+
+        # Card 4: delta_H, V, m, C3 (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(deltah) + fmt_float(vol) + fmt_float(m) + fmt_float(c3))
+
+        # Card 5: C4, ALPHAK1, ALPHAK2, H0 (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(c4) + fmt_float(alphak1) + fmt_float(alphak2) + fmt_float(hard))
+
+        # Card 6: ZETA1_i, C5, C6, C7 (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(zeta1i) + fmt_float(c5) + fmt_float(c6) + fmt_float(c7))
+
+        # Card 7: C8, C9, C10, h1 (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(c8) + fmt_float(c9) + fmt_float(c10) + fmt_float(hard1))
+
+        # Card 8: ZETA2_i, C11, C12, C13 (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(zeta2i) + fmt_float(c11) + fmt_float(c12) + fmt_float(c13))
+
+        # Card 9: C14, C1, C2, LAMBDA_L (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(c14) + fmt_float(c1) + fmt_float(c2) + fmt_float(lambdal))
+
+        # Card 10: RHO_theta_0, CV_theta_0, THETA0, ALPHA_TH (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(rho_ref) + fmt_float(cv_ref) + fmt_float(tref) + fmt_float(alpha_th))
+
+        # Card 11: THETA_GLASS, TEMP_FACTOR, THETA_FLAG, THETAi (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(theta_glass) + fmt_float(omega) + fmt_float(theta_flag) + fmt_float(heat_t0))
+
+        return self
+
+    def mat_pp(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/PP`` — synonym for ``/MAT/LAW101``."""
+        kwargs.setdefault("law_name", "PP")
+        return self.mat_law101(*args, **kwargs)
+
+    def mat_plas_poly(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/PLAS_POLY`` — synonym for ``/MAT/LAW101``."""
+        kwargs.setdefault("law_name", "PLAS_POLY")
+        return self.mat_law101(*args, **kwargs)
+
     def mat_law93(
         self,
         mid: int = 0,
@@ -9823,6 +10048,8 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law25(mid, rho_ref=rho_ref, title=title, unit_id=b.unit_id, law_name=law, **kw)
     elif law in ("LAW100", "VISC_HYP", "MNF", "MAT_100", "MAT_LAW100", "MAT_VISC_HYP", "MAT_MNF", "LAW100_VISC_HYP", "LAW100_MNF"):
         d.mat_law100(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
+    elif law in ("101", "LAW101", "PP", "MAT_PP", "PLAS_POLY", "MAT_PLAS_POLY", "MAT_101", "MAT_LAW101", "LAW101_PLAS_POLY", "LAW101_PP"):
+        d.mat_law101(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")

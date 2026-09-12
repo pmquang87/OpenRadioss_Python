@@ -15023,7 +15023,7 @@ MatGranular = MatLaw133
 
 @dataclass
 class MatLaw101:
-    """``/MAT/LAW101`` or ``/MAT/PLAS_POLY``: Polymer viscoplasticity model."""
+    """``/MAT/LAW101`` or ``/MAT/PP`` / ``/MAT/PLAS_POLY``: Bouvard Polymer Viscoplasticity Model."""
     id: int = 0
     rho0: float = 0.0
     rhor: float = 0.0
@@ -15037,7 +15037,7 @@ class MatLaw101:
     alpha_p: float = 0.0
     deltah: float = 0.0
     vol: float = 0.0
-    m: float = 0.0
+    m: float = 1.0
     c3: float = 0.0
     c4: float = 0.0
     alphak1: float = 0.0
@@ -15050,10 +15050,63 @@ class MatLaw101:
     c8: float = 0.0
     c9: float = 0.0
     c10: float = 0.0
+    hard1: float = 0.0
+    zeta2i: float = 0.0
+    c11: float = 0.0
+    c12: float = 0.0
+    c13: float = 0.0
+    c14: float = 0.0
+    c1: float = 0.0
+    c2: float = 0.0
+    lambdal: float = 1.0
+    rho_ref: float = 0.0
+    cv_ref: float = 0.0
+    tref: float = 293.15
+    alpha_th: float = 0.0
+    theta_glass: float = 250.0
+    omega: float = 0.0
+    theta_flag: float = 0.0
+    heat_t0: float = 293.15
     title: str = ""
+    e_ref: float = 0.0
+
+    law: int = 101
+
+    def __post_init__(self) -> None:
+        if self.e == 0.0 and self.e_ref != 0.0:
+            self.e = self.e_ref
+        elif self.e_ref == 0.0 and self.e != 0.0:
+            self.e_ref = self.e
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @property
+    def G(self) -> float:
+        if (1.0 + self.nu) != 0.0:
+            return self.e / (2.0 * (1.0 + self.nu))
+        return 0.0
+
+    @property
+    def K(self) -> float:
+        denom = 1.0 - 2.0 * self.nu
+        if abs(denom) > 1e-6:
+            return self.e / (3.0 * denom)
+        return 0.0
+
+    @property
+    def sound_speed(self) -> float:
+        import math
+        if self.rho0 <= 0.0:
+            return 0.0
+        c2 = (self.K + (4.0 / 3.0) * self.G) / self.rho0
+        return math.sqrt(max(0.0, c2))
 
 
 MatPlasPoly = MatLaw101
+MatPP = MatLaw101
+MaterialLaw101 = MatLaw101
 
 
 @dataclass

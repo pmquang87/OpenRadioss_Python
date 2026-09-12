@@ -1189,7 +1189,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW133", "GRANULAR", "MAT_GRANULAR", "LAW133_GRANULAR"):
         read_mat_law133(block, model, log)
         return
-    if lawname in ("LAW101", "PLAS_POLY", "MAT_PLAS_POLY", "LAW101_PLAS_POLY"):
+    if lawname in ("101", "LAW101", "PP", "MAT_PP", "PLAS_POLY", "MAT_PLAS_POLY", "LAW101_PLAS_POLY", "LAW101_PP", "MAT_LAW101"):
         read_mat_law101(block, model, log)
         return
     if lawname in ("LAW43", "HILL_TAB", "MAT_HILL_TAB", "LAW43_HILL_TAB", "HILL_PLAS_TAB", "MAT_HILL_PLAS_TAB"):
@@ -45484,18 +45484,37 @@ def read_mat_law133(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law101(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW101`` or ``/MAT/PLAS_POLY`` (M191): Polymer viscoplasticity model."""
+    """``/MAT/LAW101`` or ``/MAT/PP`` / ``/MAT/PLAS_POLY`` (M571): Bouvard polymer viscoplasticity model.
+
+    Citing starter/source/materials/mat/mat101/hm_read_mat101.F and radioss2021/MAT/mat_l101.cfg:
+      Card 1: RHO_I (%20lg or %20lg%20lg)
+      Card 2: EREF, E1, Nu, VE1 (%20lg%20lg%20lg%20lg)
+      Card 3: VE2, EDOT_REF, GAMA_DOT_REF, ALPHAP (%20lg%20lg%20lg%20lg)
+      Card 4: delta_H, V, m, C3 (%20lg%20lg%20lg%20lg)
+      Card 5: C4, ALPHAK1, ALPHAK2, H0 (%20lg%20lg%20lg%20lg)
+      Card 6: ZETA1_i, C5, C6, C7 (%20lg%20lg%20lg%20lg)
+      Card 7: C8, C9, C10, h1 (%20lg%20lg%20lg%20lg)
+      Card 8: ZETA2_i, C11, C12, C13 (%20lg%20lg%20lg%20lg)
+      Card 9: C14, C1, C2, LAMBDA_L (%20lg%20lg%20lg%20lg)
+      Card 10: RHO_theta_0, CV_theta_0, THETA0, ALPHA_TH (%20lg%20lg%20lg%20lg)
+      Card 11: THETA_GLASS, TEMP_FACTOR, THETA_FLAG, THETAi (%20lg%20lg%20lg%20lg)
+    """
     from ..model.entities import MatLaw101, Material
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+
     rho0, rhor = 0.0, 0.0
     e, alpha1, nu, ve1 = 0.0, 0.0, 0.0, 0.0
     ve2, epsilonref, gamma0, alpha_p = 0.0, 0.0, 0.0, 0.0
-    deltah, vol, m, c3 = 0.0, 0.0, 0.0, 0.0
+    deltah, vol, m, c3 = 0.0, 0.0, 1.0, 0.0
     c4, alphak1, alphak2, hard = 0.0, 0.0, 0.0, 0.0
     zeta1i, c5, c6, c7 = 0.0, 0.0, 0.0, 0.0
-    c8, c9, c10 = 0.0, 0.0, 0.0
+    c8, c9, c10, hard1 = 0.0, 0.0, 0.0, 0.0
+    zeta2i, c11, c12, c13 = 0.0, 0.0, 0.0, 0.0
+    c14, c1, c2, lambdal = 0.0, 0.0, 0.0, 1.0
+    rho_ref, cv_ref, tref, alpha_th = 0.0, 0.0, 293.15, 0.0
+    theta_glass, omega, theta_flag, heat_t0 = 250.0, 0.0, 0.0, 293.15
 
     if block.fixed:
         if len(valid_cards) > 0:
@@ -45503,41 +45522,65 @@ def read_mat_law101(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             rho0 = _safe_float(c0[0]) if len(c0) > 0 else 0.0
             rhor = _safe_float(c0[1]) if len(c0) > 1 else 0.0
         if len(valid_cards) > 1:
-            c1 = valid_cards[1].cut("MAT_LAW101_2")
-            e = _safe_float(c1[0]) if len(c1) > 0 else 0.0
-            alpha1 = _safe_float(c1[1]) if len(c1) > 1 else 0.0
-            nu = _safe_float(c1[2]) if len(c1) > 2 else 0.0
-            ve1 = _safe_float(c1[3]) if len(c1) > 3 else 0.0
+            c1_cut = valid_cards[1].cut("MAT_LAW101_2")
+            e = _safe_float(c1_cut[0]) if len(c1_cut) > 0 else 0.0
+            alpha1 = _safe_float(c1_cut[1]) if len(c1_cut) > 1 else 0.0
+            nu = _safe_float(c1_cut[2]) if len(c1_cut) > 2 else 0.0
+            ve1 = _safe_float(c1_cut[3]) if len(c1_cut) > 3 else 0.0
         if len(valid_cards) > 2:
-            c2 = valid_cards[2].cut("MAT_LAW101_3")
-            ve2 = _safe_float(c2[0]) if len(c2) > 0 else 0.0
-            epsilonref = _safe_float(c2[1]) if len(c2) > 1 else 0.0
-            gamma0 = _safe_float(c2[2]) if len(c2) > 2 else 0.0
-            alpha_p = _safe_float(c2[3]) if len(c2) > 3 else 0.0
+            c2_cut = valid_cards[2].cut("MAT_LAW101_3")
+            ve2 = _safe_float(c2_cut[0]) if len(c2_cut) > 0 else 0.0
+            epsilonref = _safe_float(c2_cut[1]) if len(c2_cut) > 1 else 0.0
+            gamma0 = _safe_float(c2_cut[2]) if len(c2_cut) > 2 else 0.0
+            alpha_p = _safe_float(c2_cut[3]) if len(c2_cut) > 3 else 0.0
         if len(valid_cards) > 3:
-            c3 = valid_cards[3].cut("MAT_LAW101_4")
-            deltah = _safe_float(c3[0]) if len(c3) > 0 else 0.0
-            vol = _safe_float(c3[1]) if len(c3) > 1 else 0.0
-            m = _safe_float(c3[2]) if len(c3) > 2 else 0.0
-            c3_val = _safe_float(c3[3]) if len(c3) > 3 else 0.0
-            c3 = c3_val
+            c3_cut = valid_cards[3].cut("MAT_LAW101_4")
+            deltah = _safe_float(c3_cut[0]) if len(c3_cut) > 0 else 0.0
+            vol = _safe_float(c3_cut[1]) if len(c3_cut) > 1 else 0.0
+            m = _safe_float(c3_cut[2]) if len(c3_cut) > 2 else 1.0
+            c3 = _safe_float(c3_cut[3]) if len(c3_cut) > 3 else 0.0
         if len(valid_cards) > 4:
-            c4_card = valid_cards[4].cut("MAT_LAW101_5")
-            c4 = _safe_float(c4_card[0]) if len(c4_card) > 0 else 0.0
-            alphak1 = _safe_float(c4_card[1]) if len(c4_card) > 1 else 0.0
-            alphak2 = _safe_float(c4_card[2]) if len(c4_card) > 2 else 0.0
-            hard = _safe_float(c4_card[3]) if len(c4_card) > 3 else 0.0
+            c4_cut = valid_cards[4].cut("MAT_LAW101_5")
+            c4 = _safe_float(c4_cut[0]) if len(c4_cut) > 0 else 0.0
+            alphak1 = _safe_float(c4_cut[1]) if len(c4_cut) > 1 else 0.0
+            alphak2 = _safe_float(c4_cut[2]) if len(c4_cut) > 2 else 0.0
+            hard = _safe_float(c4_cut[3]) if len(c4_cut) > 3 else 0.0
         if len(valid_cards) > 5:
-            c5_card = valid_cards[5].cut("MAT_LAW101_6")
-            zeta1i = _safe_float(c5_card[0]) if len(c5_card) > 0 else 0.0
-            c5 = _safe_float(c5_card[1]) if len(c5_card) > 1 else 0.0
-            c6 = _safe_float(c5_card[2]) if len(c5_card) > 2 else 0.0
-            c7 = _safe_float(c5_card[3]) if len(c5_card) > 3 else 0.0
+            c5_cut = valid_cards[5].cut("MAT_LAW101_6")
+            zeta1i = _safe_float(c5_cut[0]) if len(c5_cut) > 0 else 0.0
+            c5 = _safe_float(c5_cut[1]) if len(c5_cut) > 1 else 0.0
+            c6 = _safe_float(c5_cut[2]) if len(c5_cut) > 2 else 0.0
+            c7 = _safe_float(c5_cut[3]) if len(c5_cut) > 3 else 0.0
         if len(valid_cards) > 6:
-            c6_card = valid_cards[6].cut("MAT_LAW101_7")
-            c8 = _safe_float(c6_card[0]) if len(c6_card) > 0 else 0.0
-            c9 = _safe_float(c6_card[1]) if len(c6_card) > 1 else 0.0
-            c10 = _safe_float(c6_card[2]) if len(c6_card) > 2 else 0.0
+            c6_cut = valid_cards[6].cut("MAT_LAW101_7")
+            c8 = _safe_float(c6_cut[0]) if len(c6_cut) > 0 else 0.0
+            c9 = _safe_float(c6_cut[1]) if len(c6_cut) > 1 else 0.0
+            c10 = _safe_float(c6_cut[2]) if len(c6_cut) > 2 else 0.0
+            hard1 = _safe_float(c6_cut[3]) if len(c6_cut) > 3 else 0.0
+        if len(valid_cards) > 7:
+            c7_cut = valid_cards[7].cut("MAT_LAW101_8")
+            zeta2i = _safe_float(c7_cut[0]) if len(c7_cut) > 0 else 0.0
+            c11 = _safe_float(c7_cut[1]) if len(c7_cut) > 1 else 0.0
+            c12 = _safe_float(c7_cut[2]) if len(c7_cut) > 2 else 0.0
+            c13 = _safe_float(c7_cut[3]) if len(c7_cut) > 3 else 0.0
+        if len(valid_cards) > 8:
+            c8_cut = valid_cards[8].cut("MAT_LAW101_9")
+            c14 = _safe_float(c8_cut[0]) if len(c8_cut) > 0 else 0.0
+            c1 = _safe_float(c8_cut[1]) if len(c8_cut) > 1 else 0.0
+            c2 = _safe_float(c8_cut[2]) if len(c8_cut) > 2 else 0.0
+            lambdal = _safe_float(c8_cut[3]) if len(c8_cut) > 3 else 1.0
+        if len(valid_cards) > 9:
+            c9_cut = valid_cards[9].cut("MAT_LAW101_10")
+            rho_ref = _safe_float(c9_cut[0]) if len(c9_cut) > 0 else 0.0
+            cv_ref = _safe_float(c9_cut[1]) if len(c9_cut) > 1 else 0.0
+            tref = _safe_float(c9_cut[2]) if len(c9_cut) > 2 else 293.15
+            alpha_th = _safe_float(c9_cut[3]) if len(c9_cut) > 3 else 0.0
+        if len(valid_cards) > 10:
+            c10_cut = valid_cards[10].cut("MAT_LAW101_11")
+            theta_glass = _safe_float(c10_cut[0]) if len(c10_cut) > 0 else 250.0
+            omega = _safe_float(c10_cut[1]) if len(c10_cut) > 1 else 0.0
+            theta_flag = _safe_float(c10_cut[2]) if len(c10_cut) > 2 else 0.0
+            heat_t0 = _safe_float(c10_cut[3]) if len(c10_cut) > 3 else 293.15
     else:
         if len(valid_cards) > 0:
             t0 = valid_cards[0].tokens()
@@ -45559,7 +45602,7 @@ def read_mat_law101(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             t3 = valid_cards[3].tokens()
             deltah = _safe_float(t3[0]) if len(t3) > 0 else 0.0
             vol = _safe_float(t3[1]) if len(t3) > 1 else 0.0
-            m = _safe_float(t3[2]) if len(t3) > 2 else 0.0
+            m = _safe_float(t3[2]) if len(t3) > 2 else 1.0
             c3 = _safe_float(t3[3]) if len(t3) > 3 else 0.0
         if len(valid_cards) > 4:
             t4 = valid_cards[4].tokens()
@@ -45578,12 +45621,41 @@ def read_mat_law101(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             c8 = _safe_float(t6[0]) if len(t6) > 0 else 0.0
             c9 = _safe_float(t6[1]) if len(t6) > 1 else 0.0
             c10 = _safe_float(t6[2]) if len(t6) > 2 else 0.0
+            hard1 = _safe_float(t6[3]) if len(t6) > 3 else 0.0
+        if len(valid_cards) > 7:
+            t7 = valid_cards[7].tokens()
+            zeta2i = _safe_float(t7[0]) if len(t7) > 0 else 0.0
+            c11 = _safe_float(t7[1]) if len(t7) > 1 else 0.0
+            c12 = _safe_float(t7[2]) if len(t7) > 2 else 0.0
+            c13 = _safe_float(t7[3]) if len(t7) > 3 else 0.0
+        if len(valid_cards) > 8:
+            t8 = valid_cards[8].tokens()
+            c14 = _safe_float(t8[0]) if len(t8) > 0 else 0.0
+            c1 = _safe_float(t8[1]) if len(t8) > 1 else 0.0
+            c2 = _safe_float(t8[2]) if len(t8) > 2 else 0.0
+            lambdal = _safe_float(t8[3]) if len(t8) > 3 else 1.0
+        if len(valid_cards) > 9:
+            t9 = valid_cards[9].tokens()
+            rho_ref = _safe_float(t9[0]) if len(t9) > 0 else 0.0
+            cv_ref = _safe_float(t9[1]) if len(t9) > 1 else 0.0
+            tref = _safe_float(t9[2]) if len(t9) > 2 else 293.15
+            alpha_th = _safe_float(t9[3]) if len(t9) > 3 else 0.0
+        if len(valid_cards) > 10:
+            t10 = valid_cards[10].tokens()
+            theta_glass = _safe_float(t10[0]) if len(t10) > 0 else 250.0
+            omega = _safe_float(t10[1]) if len(t10) > 1 else 0.0
+            theta_flag = _safe_float(t10[2]) if len(t10) > 2 else 0.0
+            heat_t0 = _safe_float(t10[3]) if len(t10) > 3 else 293.15
 
     mat = MatLaw101(
         id=mat_id, rho0=rho0, rhor=rhor, e=e, alpha1=alpha1, nu=nu, ve1=ve1,
         ve2=ve2, epsilonref=epsilonref, gamma0=gamma0, alpha_p=alpha_p,
         deltah=deltah, vol=vol, m=m, c3=c3, c4=c4, alphak1=alphak1, alphak2=alphak2, hard=hard,
-        zeta1i=zeta1i, c5=c5, c6=c6, c7=c7, c8=c8, c9=c9, c10=c10, title=title
+        zeta1i=zeta1i, c5=c5, c6=c6, c7=c7, c8=c8, c9=c9, c10=c10,
+        hard1=hard1, zeta2i=zeta2i, c11=c11, c12=c12, c13=c13, c14=c14,
+        c1=c1, c2=c2, lambdal=lambdal, rho_ref=rho_ref, cv_ref=cv_ref,
+        tref=tref, alpha_th=alpha_th, theta_glass=theta_glass, omega=omega,
+        theta_flag=theta_flag, heat_t0=heat_t0, title=title
     )
     model.mat_law101s[mat_id] = mat
     model.materials[mat_id] = Material(
@@ -45593,6 +45665,10 @@ def read_mat_law101(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "ve2": ve2, "epsilonref": epsilonref, "gamma0": gamma0, "alpha_p": alpha_p,
             "deltah": deltah, "vol": vol, "m": m, "c3": c3, "c4": c4, "alphak1": alphak1, "alphak2": alphak2, "hard": hard,
             "zeta1i": zeta1i, "c5": c5, "c6": c6, "c7": c7, "c8": c8, "c9": c9, "c10": c10,
+            "hard1": hard1, "zeta2i": zeta2i, "c11": c11, "c12": c12, "c13": c13, "c14": c14,
+            "c1": c1, "c2": c2, "lambdal": lambdal, "rho_ref": rho_ref, "cv_ref": cv_ref,
+            "tref": tref, "alpha_th": alpha_th, "theta_glass": theta_glass, "omega": omega,
+            "theta_flag": theta_flag, "heat_t0": heat_t0,
         }
     )
 
@@ -86694,6 +86770,8 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_PLAS_POLY": read_mat,
     "PLAS_POLY": read_mat,
     "LAW101": read_mat,
+    "MAT_PP": read_mat,
+    "PP": read_mat,
     "MAT_LAW43": read_mat_law43,
     "LAW43": read_mat_law43,
     "MAT_HILL_TAB": read_mat_law43,
