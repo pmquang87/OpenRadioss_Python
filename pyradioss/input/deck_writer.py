@@ -5079,102 +5079,102 @@ class StarterDeck:
             mid = getattr(mat_obj, "id", mid)
             if not title:
                 title = getattr(mat_obj, "title", "")
-            p = getattr(mat_obj, "params", {}) or {}
-            if not isinstance(p, dict):
-                p = {}
+            mat_params = getattr(mat_obj, "params", {}) or {}
+            if not isinstance(mat_params, dict):
+                mat_params = {}
             if rho == 0.0:
-                rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", p.get("rho", p.get("rho0", 0.0))))
+                rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", mat_params.get("rho", mat_params.get("rho0", 0.0))))
             if rhor == 0.0:
-                rhor = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", p.get("refer_rho", p.get("rhor", 0.0))))
+                rhor = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", mat_params.get("refer_rho", mat_params.get("rhor", 0.0))))
             if e == 0.0:
-                e = getattr(mat_obj, "e", getattr(mat_obj, "E", p.get("e", p.get("E", 0.0))))
+                e = getattr(mat_obj, "e", getattr(mat_obj, "E", mat_params.get("e", mat_params.get("E", 0.0))))
             if nu == 0.0:
-                nu = getattr(mat_obj, "nu", getattr(mat_obj, "Nu", p.get("nu", p.get("Nu", 0.0))))
+                nu = getattr(mat_obj, "nu", getattr(mat_obj, "Nu", mat_params.get("nu", mat_params.get("Nu", 0.0))))
             if iflag == 0:
-                iflag = getattr(mat_obj, "iflag", p.get("iflag", 0))
+                iflag = getattr(mat_obj, "iflag", mat_params.get("iflag", 0))
             if vp == 0:
-                vp = getattr(mat_obj, "iflagsr", getattr(mat_obj, "vp", p.get("iflagsr", p.get("vp", p.get("vflag", 0)))))
+                vp = getattr(mat_obj, "iflagsr", getattr(mat_obj, "vp", mat_params.get("iflagsr", mat_params.get("vp", mat_params.get("vflag", 0)))))
             if c == 0.0:
-                c = getattr(mat_obj, "invc", p.get("invc", p.get("c", p.get("strain1", 0.0))))
+                c = getattr(mat_obj, "invc", mat_params.get("invc", mat_params.get("c", mat_params.get("strain1", 0.0))))
             if p == 0.0:
-                p = getattr(mat_obj, "invp", p.get("invp", p.get("p", p.get("exp1", 0.0))))
+                p = getattr(mat_obj, "invp", mat_params.get("invp", mat_params.get("p", mat_params.get("exp1", 0.0))))
             if ifit == 0:
-                ifit = getattr(mat_obj, "flag_fit", getattr(mat_obj, "ifit", p.get("flag_fit", p.get("ifit", 0))))
+                ifit = getattr(mat_obj, "flag_fit", getattr(mat_obj, "ifit", mat_params.get("flag_fit", mat_params.get("ifit", 0))))
             if alpha is None:
                 if hasattr(mat_obj, "al1") and hasattr(mat_obj, "al8"):
                     alpha = [getattr(mat_obj, f"al{i}", 1.0) for i in range(1, 9)]
-                elif "alpha" in p:
-                    alpha = p["alpha"]
-                elif "alphas" in p:
-                    alpha = p["alphas"]
+                elif "alpha" in mat_params:
+                    alpha = mat_params["alpha"]
+                elif "alphas" in mat_params:
+                    alpha = mat_params["alphas"]
             if sigma_00 == 0.0:
-                sigma_00 = getattr(mat_obj, "sigma_00", p.get("sigma_00", 0.0))
+                sigma_00 = getattr(mat_obj, "sigma_00", mat_params.get("sigma_00", 0.0))
             if sigma_45 == 0.0:
-                sigma_45 = getattr(mat_obj, "sigma_45", p.get("sigma_45", 0.0))
+                sigma_45 = getattr(mat_obj, "sigma_45", mat_params.get("sigma_45", 0.0))
             if sigma_90 == 0.0:
-                sigma_90 = getattr(mat_obj, "sigma_90", p.get("sigma_90", 0.0))
+                sigma_90 = getattr(mat_obj, "sigma_90", mat_params.get("sigma_90", 0.0))
             if sigma_b == 0.0:
-                sigma_b = getattr(mat_obj, "sigma_b", p.get("sigma_b", 0.0))
+                sigma_b = getattr(mat_obj, "sigma_b", mat_params.get("sigma_b", 0.0))
             if r_00 == 1.0:
-                r_00 = getattr(mat_obj, "r_00", getattr(mat_obj, "r00", p.get("r_00", p.get("r00", 1.0))))
+                r_00 = getattr(mat_obj, "r_00", getattr(mat_obj, "r00", mat_params.get("r_00", mat_params.get("r00", 1.0))))
             if r_45 == 1.0:
-                r_45 = getattr(mat_obj, "r_45", getattr(mat_obj, "r45", p.get("r_45", p.get("r45", 1.0))))
+                r_45 = getattr(mat_obj, "r_45", getattr(mat_obj, "r45", mat_params.get("r_45", mat_params.get("r45", 1.0))))
             if r_90 == 1.0:
-                r_90 = getattr(mat_obj, "r_90", getattr(mat_obj, "r90", p.get("r_90", p.get("r90", 1.0))))
+                r_90 = getattr(mat_obj, "r_90", getattr(mat_obj, "r90", mat_params.get("r_90", mat_params.get("r90", 1.0))))
             if r_b == 1.0:
-                r_b = getattr(mat_obj, "r_b", getattr(mat_obj, "rb", p.get("r_b", p.get("rb", 1.0))))
+                r_b = getattr(mat_obj, "r_b", getattr(mat_obj, "rb", mat_params.get("r_b", mat_params.get("rb", 1.0))))
             if chard == 0.0:
-                chard = getattr(mat_obj, "fisokin", getattr(mat_obj, "chard", p.get("fisokin", p.get("chard", 0.0))))
+                chard = getattr(mat_obj, "fisokin", getattr(mat_obj, "chard", mat_params.get("fisokin", mat_params.get("chard", 0.0))))
             if ikin == 1:
-                ikin = getattr(mat_obj, "ikin", p.get("ikin", 1))
+                ikin = getattr(mat_obj, "ikin", mat_params.get("ikin", 1))
             if exp_a == 6.0:
-                exp_a = getattr(mat_obj, "expa", getattr(mat_obj, "exp_a", p.get("expa", p.get("exp_a", p.get("a", 6.0)))))
+                exp_a = getattr(mat_obj, "expa", getattr(mat_obj, "exp_a", mat_params.get("expa", mat_params.get("exp_a", mat_params.get("a", 6.0)))))
             if alpha_vol == 1.0:
-                alpha_vol = getattr(mat_obj, "alpha", getattr(mat_obj, "alpha_vol", p.get("alpha_vol", 1.0)))
+                alpha_vol = getattr(mat_obj, "alpha", getattr(mat_obj, "alpha_vol", mat_params.get("alpha_vol", 1.0)))
                 if isinstance(alpha_vol, (list, tuple)):
                     alpha_vol = 1.0
             if n_hard == 0.0:
-                n_hard = getattr(mat_obj, "nexp", getattr(mat_obj, "n_hard", p.get("nexp", p.get("n_hard", p.get("n", 0.0)))))
+                n_hard = getattr(mat_obj, "nexp", getattr(mat_obj, "n_hard", mat_params.get("nexp", mat_params.get("n_hard", mat_params.get("n", 0.0)))))
             if fcut == 0.0:
-                fcut = getattr(mat_obj, "fcut", p.get("fcut", p.get("f_cut", 0.0)))
+                fcut = getattr(mat_obj, "fcut", mat_params.get("fcut", mat_params.get("f_cut", 0.0)))
             if fsmooth == 0:
-                fsmooth = getattr(mat_obj, "fsmooth", p.get("fsmooth", p.get("f_smooth", 0)))
+                fsmooth = getattr(mat_obj, "fsmooth", mat_params.get("fsmooth", mat_params.get("f_smooth", 0)))
             if nrate == 0:
-                nrate = getattr(mat_obj, "nrate", p.get("nrate", 0))
+                nrate = getattr(mat_obj, "nrate", mat_params.get("nrate", 0))
             if aswift == 0.0:
-                aswift = getattr(mat_obj, "aswift", p.get("aswift", p.get("a_swift", 0.0)))
+                aswift = getattr(mat_obj, "aswift", mat_params.get("aswift", mat_params.get("a_swift", 0.0)))
             if eps0 == 0.0:
-                eps0 = getattr(mat_obj, "epso", getattr(mat_obj, "eps0", p.get("epso", p.get("eps0", 0.0))))
+                eps0 = getattr(mat_obj, "epso", getattr(mat_obj, "eps0", mat_params.get("epso", mat_params.get("eps0", 0.0))))
             if qvoce == 0.0:
-                qvoce = getattr(mat_obj, "qvoce", p.get("qvoce", p.get("q_voce", 0.0)))
+                qvoce = getattr(mat_obj, "qvoce", mat_params.get("qvoce", mat_params.get("q_voce", 0.0)))
             if beta == 0.0:
-                beta = getattr(mat_obj, "beta", p.get("beta", 0.0))
+                beta = getattr(mat_obj, "beta", mat_params.get("beta", 0.0))
             if k0 == 0.0:
-                k0 = getattr(mat_obj, "ko", getattr(mat_obj, "k0", p.get("ko", p.get("k0", 0.0))))
+                k0 = getattr(mat_obj, "ko", getattr(mat_obj, "k0", mat_params.get("ko", mat_params.get("k0", 0.0))))
             if curves is None:
-                curves = getattr(mat_obj, "curves", p.get("curves", []))
+                curves = getattr(mat_obj, "curves", mat_params.get("curves", []))
             if tab_id0 == 0:
-                tab_id0 = getattr(mat_obj, "tab_id0", p.get("tab_id0", 0))
+                tab_id0 = getattr(mat_obj, "tab_id0", mat_params.get("tab_id0", 0))
             if fscale0 == 1.0:
-                fscale0 = getattr(mat_obj, "fscale0", p.get("fscale0", 1.0))
+                fscale0 = getattr(mat_obj, "fscale0", mat_params.get("fscale0", 1.0))
             if epsd0 == 0.0:
-                epsd0 = getattr(mat_obj, "epsd0", p.get("epsd0", 0.0))
+                epsd0 = getattr(mat_obj, "epsd0", mat_params.get("epsd0", 0.0))
             if tab_id45 == 0:
-                tab_id45 = getattr(mat_obj, "tab_id45", p.get("tab_id45", 0))
+                tab_id45 = getattr(mat_obj, "tab_id45", mat_params.get("tab_id45", 0))
             if fscale45 == 1.0:
-                fscale45 = getattr(mat_obj, "fscale45", p.get("fscale45", 1.0))
+                fscale45 = getattr(mat_obj, "fscale45", mat_params.get("fscale45", 1.0))
             if epsd45 == 0.0:
-                epsd45 = getattr(mat_obj, "epsd45", p.get("epsd45", 0.0))
+                epsd45 = getattr(mat_obj, "epsd45", mat_params.get("epsd45", 0.0))
             if tab_id90 == 0:
-                tab_id90 = getattr(mat_obj, "tab_id90", p.get("tab_id90", 0))
+                tab_id90 = getattr(mat_obj, "tab_id90", mat_params.get("tab_id90", 0))
             if fscale90 == 1.0:
-                fscale90 = getattr(mat_obj, "fscale90", p.get("fscale90", 1.0))
+                fscale90 = getattr(mat_obj, "fscale90", mat_params.get("fscale90", 1.0))
             if epsd90 == 0.0:
-                epsd90 = getattr(mat_obj, "epsd90", p.get("epsd90", 0.0))
+                epsd90 = getattr(mat_obj, "epsd90", mat_params.get("epsd90", 0.0))
             if ckh is None:
-                ckh = getattr(mat_obj, "ckh", p.get("ckh", None))
+                ckh = getattr(mat_obj, "ckh", mat_params.get("ckh", None))
             if akh is None:
-                akh = getattr(mat_obj, "akh", p.get("akh", None))
+                akh = getattr(mat_obj, "akh", mat_params.get("akh", None))
 
         # Handle kwargs overrides
         if "id" in kwargs and mid == 0:

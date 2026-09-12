@@ -102,6 +102,8 @@ _ALLOWED_LAWS["quads"] = _ALLOWED_LAWS["shells"]
 _ALLOWED_LAWS["solids"] = _ALLOWED_LAWS["bricks"]
 _ALLOWED_LAWS["solids_heph"] = _ALLOWED_LAWS["bricks"]
 _ALLOWED_LAWS["solids_tetra4"] = _ALLOWED_LAWS["tetras"]
+_ALLOWED_LAWS["shells_bt4"] = _ALLOWED_LAWS["shells"]
+_ALLOWED_LAWS["tria3"] = _ALLOWED_LAWS["shells"]
 
 
 

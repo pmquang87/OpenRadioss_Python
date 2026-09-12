@@ -9019,7 +9019,15 @@ class MatLaw87:
         return self.invc
 
     @property
+    def c(self) -> float:
+        return self.invc
+
+    @property
     def exp1(self) -> float:
+        return self.invp
+
+    @property
+    def p(self) -> float:
         return self.invp
 
     @property

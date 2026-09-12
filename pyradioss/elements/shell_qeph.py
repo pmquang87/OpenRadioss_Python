@@ -1147,6 +1147,9 @@ def forces(group, x, v, vr, dt, fint, mint):
             "nk,nk->n", 0.5 * (qold + st["qshear"][sl]), gsr2[sl] * dt)
         if "uvar66" in st and "uvar66" in st.get("mat_extra", {}):
             st["uvar66"][sl] = st["mat_extra"]["uvar66"][sl, 0]
+        if "uvar87" in st and "uvar87" in st.get("mat_extra", {}):
+            u87 = st["mat_extra"]["uvar87"]
+            st["uvar87"][sl] = u87[sl, 0] if u87.ndim == 3 else u87[sl]
 
     if st["chk_fail"]:
         alive = _element_deletion(st, nip_of)

@@ -581,6 +581,17 @@ def _init_material_state(group, nip_max=None, n=None):
                 st["uvar87"] = np.zeros((n, 7))
             if "uvar87" not in st["mat_extra"]:
                 st["mat_extra"]["uvar87"] = np.zeros((n, nip_max, 7))
+            if "sigb87" not in st["mat_extra"]:
+                st["mat_extra"]["sigb87"] = np.zeros((n, nip_max, 12))
+            if "thk87" not in st["mat_extra"]:
+                thk_arr = st.get("thick")
+                if thk_arr is None:
+                    thk_arr = np.full(n, getattr(prop, "thick", 1.0))
+                st["mat_extra"]["thk87"] = np.ones((n, nip_max)) * thk_arr.reshape((n, 1))
+            if "pla87" not in st["mat_extra"]:
+                st["mat_extra"]["pla87"] = np.zeros((n, nip_max))
+            if "off87" not in st["mat_extra"]:
+                st["mat_extra"]["off87"] = np.ones((n, nip_max))
         if (getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB")
                 or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB")):
             if "uvar66" not in st:
@@ -1140,7 +1151,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             from ..materials import law87_barlat2000
             c[sl] = law87_barlat2000.sound_speed(mat, getattr(mat, "rho0", None))
             if "uvar87" in st and "uvar87" in st.get("mat_extra", {}):
-                st["uvar87"][sl] = st["mat_extra"]["uvar87"][sl, 0]
+                u87 = st["mat_extra"]["uvar87"]
+                st["uvar87"][sl] = u87[sl, 0] if u87.ndim == 3 else u87[sl]
         elif getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
             c[sl] = mat.sound_speed_shell()
             if "uvar66" in st and "uvar66" in st.get("mat_extra", {}):

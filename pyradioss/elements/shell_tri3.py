@@ -441,6 +441,9 @@ def forces(group, x, v, vr, dt, fint, mint):
                     st["uvar66"][sl] = st["mat_extra"]["uvar66"][sl, 0]
             else:
                 c[sl] = mat.sound_speed_shell()
+        if "uvar87" in st and "uvar87" in st.get("mat_extra", {}):
+            u87 = st["mat_extra"]["uvar87"]
+            st["uvar87"][sl] = u87[sl, 0] if u87.ndim == 3 else u87[sl]
         # elastic transverse shear resultant stress (with 5/6 factor)
         qold = st["qshear"][sl].copy()
         g_val = getattr(mat, "G", 0.0) or getattr(mat, "g5", 0.0) or getattr(mat, "g0", 0.0)

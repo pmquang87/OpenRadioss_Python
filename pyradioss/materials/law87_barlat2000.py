@@ -897,11 +897,25 @@ def shell_update(
                 dsigbyydp += p.ckh[j] * sigb[:, 3 * j + 1]
                 dsigbxydp += p.ckh[j] * sigb[:, 3 * j + 2]
 
-        niter = 25
+        niter_val = kwargs.get("niter", None)
+        if niter_val is not None:
+            niter = int(niter_val)
+            tol = float(kwargs.get("tol", 0.0))
+        elif kwargs.get("fortran_parity", False):
+            niter = 3
+            tol = 0.0
+        else:
+            niter = 25
+            tol = 1e-5
+
         for _iter in range(niter):
-            active = yielding[np.abs(phi[yielding]) >= 1e-5]
-            if _iter > 0 and len(active) == 0:
-                break
+            if tol > 0.0:
+                active = yielding[np.abs(phi[yielding]) >= tol]
+                if _iter > 0 and len(active) == 0:
+                    break
+            else:
+                active = yielding
+
             for i in active:
                 # Derivatives of X' principal values
                 mr_p = max(r_p[i], _EM20)
@@ -1173,7 +1187,27 @@ def shell_update(
         if p.iflagsr == 1:
             dpdt = dpla / max(dt, _EM20)
             uvar[:, 0] = dpdt
-        extra["uvar87"] = uvar[0] if is_1d else uvar
+        elif dt > 0.0:
+            uvar[:, 0] = epsd
+
+        for k_uvar in ("uvar87", "uvar"):
+            if k_uvar in extra and isinstance(extra[k_uvar], np.ndarray):
+                if extra[k_uvar].ndim == 1:
+                    n_copy = min(len(extra[k_uvar]), uvar.shape[1] if uvar.ndim > 1 else len(uvar))
+                    if uvar.ndim > 1:
+                        extra[k_uvar][:n_copy] = uvar[0, :n_copy]
+                    else:
+                        extra[k_uvar][:n_copy] = uvar[:n_copy]
+                else:
+                    ncols = min(extra[k_uvar].shape[1], uvar.shape[1] if uvar.ndim > 1 else 1)
+                    if uvar.ndim > 1:
+                        extra[k_uvar][:, :ncols] = uvar[:, :ncols]
+                    else:
+                        extra[k_uvar][:, 0] = uvar.flatten()
+            elif k_uvar in extra:
+                extra[k_uvar] = uvar[0] if is_1d else uvar
+        if not any(k_uvar in extra for k_uvar in ("uvar87", "uvar")):
+            extra["uvar87"] = uvar[0] if is_1d else uvar
         extra["depszz"] = depszz[0] if is_1d else depszz
         extra["seq"] = seq[0] if is_1d else seq
         extra["etse"] = etse[0] if is_1d else etse

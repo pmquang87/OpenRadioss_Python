@@ -67,6 +67,7 @@ from ..model.skew import SkewFrame
 from . import mat_reader
 from .card_layouts import LAYOUTS
 from .card_layouts import CARD_LAYOUTS
+from .card_layouts import split_fixed
 from .deck_reader import Card, KeywordBlock, _to_float
 
 
@@ -34555,13 +34556,38 @@ def read_mat_law87(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             card_idx += 1
             if iflag == 0:
                 if card_idx < len(valid_cards):
+                    card6_raw = valid_cards[card_idx].raw
                     toks6 = _card_tokens(valid_cards[card_idx])
-                    exp_a = _fval(toks6[0], 6.0) if len(toks6) > 0 else 6.0
-                    alpha_vol = _fval(toks6[1], 1.0) if len(toks6) > 1 else 1.0
-                    n_hard = _fval(toks6[2]) if len(toks6) > 2 else 0.0
-                    fcut = _fval(toks6[3]) if len(toks6) > 3 else 0.0
-                    fsmooth = _ival(toks6[4]) if len(toks6) > 4 else 0
-                    nrate = _ival(toks6[5]) if len(toks6) > 5 else 0
+                    is_fixed_c6 = (
+                        len(card6_raw) >= 60
+                        and not card6_raw[20:60].strip()
+                        and len(card6_raw[:20].split()) <= 1
+                    )
+                    if is_fixed_c6:
+                        f6 = split_fixed(card6_raw, [20, 20, 20, 20, 10, 10])
+                        exp_a = _fval(f6[0], 6.0)
+                        alpha_vol = _fval(f6[1], 1.0)
+                        n_hard = _fval(f6[2], 0.0)
+                        fcut = _fval(f6[3], 0.0)
+                        fsmooth = _ival(f6[4], 0)
+                        nrate = _ival(f6[5], 0)
+                    elif len(toks6) == 4:
+                        exp_a = _fval(toks6[0], 6.0)
+                        fcut = _fval(toks6[1], 0.0)
+                        fsmooth = _ival(toks6[2], 0)
+                        nrate = _ival(toks6[3], 0)
+                    elif len(toks6) >= 6:
+                        exp_a = _fval(toks6[0], 6.0)
+                        alpha_vol = _fval(toks6[1], 1.0)
+                        n_hard = _fval(toks6[2], 0.0)
+                        fcut = _fval(toks6[3], 0.0)
+                        fsmooth = _ival(toks6[4], 0)
+                        nrate = _ival(toks6[5], 0)
+                    else:
+                        exp_a = _fval(toks6[0], 6.0) if len(toks6) > 0 else 6.0
+                        fcut = _fval(toks6[1], 0.0) if len(toks6) > 1 else 0.0
+                        fsmooth = _ival(toks6[2], 0) if len(toks6) > 2 else 0
+                        nrate = _ival(toks6[3], 0) if len(toks6) > 3 else 0
                     card_idx += 1
                 while card_idx < len(valid_cards):
                     tc = _card_tokens(valid_cards[card_idx])
