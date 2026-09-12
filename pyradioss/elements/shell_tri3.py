@@ -195,6 +195,7 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
         is_law73 = getattr(mat, "law", None) in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL")
         is_law87 = getattr(mat, "law", None) in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000") or getattr(mat, "law_name", None) in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000")
         is_law88 = getattr(mat, "law", None) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP")
+        is_law92 = getattr(mat, "law", None) in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE") or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE")
         is_law66 = getattr(mat, "law", None) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB")
         if is_law57:
             try:
@@ -218,6 +219,12 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
             try:
                 from ..materials import law88_tab_hyp
                 c = law88_tab_hyp.sound_speed_shell(mat, rho0_val)
+            except Exception:
+                c = 0.0
+        elif is_law92:
+            try:
+                from ..materials import law92_arruda_boyce
+                c = law92_arruda_boyce.sound_speed_shell(mat, rho0_val)
             except Exception:
                 c = 0.0
         elif is_law66:
@@ -447,6 +454,12 @@ def forces(group, x, v, vr, dt, fint, mint):
                 try:
                     from ..materials import law88_tab_hyp
                     c[sl] = law88_tab_hyp.sound_speed_shell(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    c[sl] = mat.sound_speed_shell()
+            elif is_law92:
+                try:
+                    from ..materials import law92_arruda_boyce
+                    c[sl] = law92_arruda_boyce.sound_speed_shell(mat, getattr(mat, "rho0", None))
                 except Exception:
                     c[sl] = mat.sound_speed_shell()
             elif is_law66:

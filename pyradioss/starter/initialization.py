@@ -487,6 +487,10 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
             from ..materials import law88_tab_hyp
             if hasattr(law88_tab_hyp, "resolve"):
                 law88_tab_hyp.resolve(mat, model, log)
+        elif mat.law in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE") or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE"):
+            from ..materials import law92_arruda_boyce
+            if hasattr(law92_arruda_boyce, "resolve"):
+                law92_arruda_boyce.resolve(mat, model, log)
 
     for mat_id, fm, source in model.raw_fails:
         mat = model.materials.get(mat_id)

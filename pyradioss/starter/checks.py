@@ -105,6 +105,13 @@ _LAW88_KEYS = {
 for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells", "shells_qbat", "shells_qeph", "sh3n"):
     _ALLOWED_LAWS[_fam].update(_LAW88_KEYS)
 
+_LAW92_KEYS = {
+    92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE",
+    "MAT_LAW92", "MAT_ARRUDA_BOYCE", "LAW92_ARRUDA_BOYCE",
+}
+for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells", "shells_qbat", "shells_qeph", "sh3n"):
+    _ALLOWED_LAWS[_fam].update(_LAW92_KEYS)
+
 _ALLOWED_LAWS["quads"] = _ALLOWED_LAWS["shells"]
 _ALLOWED_LAWS["solids"] = _ALLOWED_LAWS["bricks"]
 _ALLOWED_LAWS["solids_heph"] = _ALLOWED_LAWS["bricks"]
@@ -4493,6 +4500,201 @@ def check_mat_law88(
 _check_mat_law88 = check_mat_law88
 
 
+def check_mat_law92(
+    model: Any = None,
+    mat_id: Any = None,
+    mat: Any = None,
+    log: Any = None,
+    **kwargs: Any,
+) -> None:
+    """Validate /MAT/LAW92 (/MAT/ARRUDA_BOYCE, /MAT/ARRUDA-BOYCE) parameter bounds (M566).
+
+    Citing hm_read_mat92.F:
+      - RHO0 > 0 (ANCMSG 1514)
+      - Direct formulation:
+        - MU > 0 (warning if <= 0: ANCMSG 3109)
+        - D >= 0 (error if < 0)
+        - LAM > 0 (warning if <= 0)
+        - 0 <= NU < 0.5 (warning/error if invalid)
+      - Tabulated/fitted formulation (IFUNC > 0):
+        - ITEST in (1, 2, 3) (or default 1)
+        - SCALEFAC > 0
+        - 0 <= NU < 0.5
+      - Compatible elements: solids (bricks, tetras, penta6, pyra5) and shells (quads, sh3n);
+        reject 1D elements (trusses, beams, springs) (ANCMSG 306).
+    """
+    actual_log = log
+    actual_model = model
+    actual_mat = mat
+    actual_mid = mat_id
+
+    candidates = [c for c in (model, mat_id, mat, log) if c is not None]
+    if hasattr(model, "params") and not isinstance(model, Model):
+        actual_mat = model
+        actual_model = None
+        actual_log = mat_id if isinstance(mat_id, MessageLog) else log
+        actual_mid = getattr(actual_mat, "id", kwargs.get("mat_id", 0))
+    elif hasattr(mat_id, "params") and isinstance(mat, MessageLog):
+        actual_mat = mat_id
+        actual_log = mat
+        actual_mid = getattr(actual_mat, "id", kwargs.get("mat_id", 0))
+    else:
+        for c in candidates:
+            if isinstance(c, MessageLog):
+                actual_log = c
+            elif isinstance(c, Model):
+                actual_model = c
+            elif hasattr(c, "params") or hasattr(c, "rho0") or hasattr(c, "mu") or hasattr(c, "lam"):
+                actual_mat = c
+            elif isinstance(c, int) and not isinstance(c, bool):
+                actual_mid = c
+
+    if actual_mat is None:
+        for k in ("mat", "material", "mat92", "mat_law92"):
+            if k in kwargs:
+                actual_mat = kwargs[k]
+                break
+
+    if actual_log is None:
+        if "log" in kwargs:
+            actual_log = kwargs["log"]
+        elif "logger" in kwargs:
+            actual_log = kwargs["logger"]
+        else:
+            actual_log = MessageLog()
+
+    if actual_mat is None:
+        return
+
+    mid = actual_mid if actual_mid is not None else getattr(actual_mat, "id", getattr(actual_mat, "mat_id", 0))
+    params = getattr(actual_mat, "params", {}) or {}
+
+    def get_val(key: str, default: float = 0.0) -> float:
+        if isinstance(params, dict) and key in params:
+            try:
+                return float(params[key])
+            except (ValueError, TypeError):
+                pass
+        for attr in (key.lower(), key.upper(), key):
+            if hasattr(actual_mat, attr):
+                try:
+                    val = getattr(actual_mat, attr)
+                    if val is not None:
+                        return float(val)
+                except (ValueError, TypeError):
+                    pass
+        return default
+
+    # 1. Density check (ANCMSG 1514)
+    rho0 = get_val("rho0", get_val("rho_initial", get_val("RHO_I", get_val("RHO0", get_val("MAT_RHO", 0.0)))))
+    if rho0 <= 0.0:
+        actual_log.error(
+            f"/MAT/LAW92/{mid}: initial density RHO0 must be > 0, got {rho0} (ANCMSG 1514)",
+            "MAT CHECK",
+        )
+
+    # 2. Check if curve-driven or direct
+    fct_id = int(get_val("fct_id", get_val("fct_idi", get_val("func_id", get_val("IFUNC", 0.0)))))
+    if fct_id > 0:
+        itest = int(get_val("itest", get_val("itype", 1.0)))
+        if itest not in (1, 2, 3):
+            actual_log.warning(
+                f"/MAT/LAW92/{mid}: unknown test type Itype={itest}, defaulting to 1 (uniaxial)",
+                "MAT CHECK",
+            )
+        scalefac = get_val("fscale", get_val("scalefac", 1.0))
+        if scalefac <= 0.0:
+            actual_log.error(
+                f"/MAT/LAW92/{mid}: scale factor Fscale must be > 0, got {scalefac}",
+                "MAT CHECK",
+            )
+        nu = get_val("nu", 0.495)
+        if nu < 0.0 or nu >= 0.5:
+            actual_log.error(
+                f"/MAT/LAW92/{mid}: Poisson's ratio NU must satisfy 0 <= NU < 0.5, got {nu}",
+                "MAT CHECK",
+            )
+    else:
+        # Direct formulation: MU, D, LAM
+        mu = get_val("mu", get_val("mue1", get_val("MAT_MUE1", 0.0)))
+        if mu <= 0.0:
+            actual_log.warning(
+                f"/MAT/LAW92/{mid}: shear modulus MU should be > 0, got {mu} (ANCMSG 3109)",
+                "MAT CHECK",
+            )
+        d = get_val("d", get_val("MAT_D", 0.0))
+        if d < 0.0:
+            actual_log.error(
+                f"/MAT/LAW92/{mid}: compressibility parameter D must be >= 0, got {d}",
+                "MAT CHECK",
+            )
+        lam = get_val("lam", get_val("lamda", get_val("lambda_m", 7.0)))
+        if lam <= 0.0:
+            actual_log.warning(
+                f"/MAT/LAW92/{mid}: limit stretch LAMDA should be > 0, got {lam}",
+                "MAT CHECK",
+            )
+        nu = get_val("nu", 0.495)
+        if nu < 0.0 or nu >= 0.5:
+            actual_log.error(
+                f"/MAT/LAW92/{mid}: Poisson's ratio NU must satisfy 0 <= NU < 0.5, got {nu}",
+                "MAT CHECK",
+            )
+
+    # 3. Compatible elements check
+    if actual_model is not None:
+        if hasattr(actual_model, "element_groups") and callable(actual_model.element_groups):
+            try:
+                grps = list(actual_model.element_groups())
+            except TypeError:
+                grps = []
+            for item in grps:
+                if isinstance(item, tuple) and len(item) == 2:
+                    name, el_group = item
+                else:
+                    continue
+                mids_in_group = set()
+                if hasattr(el_group, "values") and callable(el_group.values):
+                    for el in el_group.values():
+                        el_mid = getattr(el, "mat_id", getattr(el, "mid", None))
+                        if el_mid is not None:
+                            mids_in_group.add(el_mid)
+                if hasattr(el_group, "state") and isinstance(el_group.state, dict) and "slices" in el_group.state:
+                    for _, m_part, _ in el_group.state["slices"]:
+                        m_id = getattr(m_part, "id", None)
+                        if m_id is not None:
+                            mids_in_group.add(m_id)
+                if mid in mids_in_group:
+                    if name in ("trusses", "beams", "springs"):
+                        actual_log.error(
+                            f"/MAT/LAW92/{mid} is not supported for 1D elements ({name}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
+        if hasattr(actual_model, "parts") and isinstance(actual_model.parts, dict):
+            for pid, part in actual_model.parts.items():
+                p_mid = getattr(part, "mat_id", getattr(part, "mid", None))
+                if p_mid == mid:
+                    etype = str(getattr(part, "elem_type", getattr(part, "type", ""))).upper()
+                    prop_id = getattr(part, "prop_id", None)
+                    if not etype or etype in ("NONE", ""):
+                        if prop_id is not None:
+                            props = getattr(actual_model, "properties", {}) or getattr(actual_model, "props", {})
+                            prop = props.get(prop_id) if isinstance(props, dict) else None
+                            if prop is not None:
+                                ptype = str(getattr(prop, "type", getattr(prop, "card_name", ""))).upper()
+                                if any(s in ptype for s in ("BEAM", "TRUSS", "SPRING")):
+                                    etype = "1D"
+                    if any(s in etype for s in ("BEAM", "TRUSS", "SPRING", "1D")):
+                        actual_log.error(
+                            f"/MAT/LAW92/{mid} is not supported for 1D elements ({etype.lower()}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
+
+_check_mat_law92 = check_mat_law92
+
+
 
 def check_materials(model: Model, log: MessageLog) -> None:
     """Validate all material parameters across model."""
@@ -4727,9 +4929,26 @@ def check_materials(model: Model, log: MessageLog) -> None:
         if mid not in getattr(model, "materials", {}):
             check_mat_law88(model=model, mat_id=mid, mat=mat88, log=log)
 
+    # M566: Material LAW92 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "ARRUDA") or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "ARRUDA", "MAT_LAW92", "MAT_ARRUDA_BOYCE", "MAT_ARRUDA-BOYCE"):
+            check_mat_law92(model=model, mat_id=mid, mat=mat, log=log)
+    for mid, mat92 in getattr(model, "mat_law92s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law92(model=model, mat_id=mid, mat=mat92, log=log)
+
 
 
 _MAT_CHECKS: dict[Any, Any] = {
+    92: check_mat_law92,
+    "92": check_mat_law92,
+    "LAW92": check_mat_law92,
+    "ARRUDA_BOYCE": check_mat_law92,
+    "ARRUDA-BOYCE": check_mat_law92,
+    "ARRUDA": check_mat_law92,
+    "MAT_LAW92": check_mat_law92,
+    "MAT_ARRUDA_BOYCE": check_mat_law92,
+    "MAT_ARRUDA-BOYCE": check_mat_law92,
     88: check_mat_law88,
     "88": check_mat_law88,
     "LAW88": check_mat_law88,

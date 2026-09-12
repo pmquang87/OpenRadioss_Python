@@ -6384,7 +6384,7 @@ MatTabHyp = MaterialLaw88
 
 @dataclass
 class MaterialLaw92:
-    """/MAT/LAW92 or /MAT/ARRUDA_BOYCE (M173): Arruda-Boyce 8-chain hyperelastic polymer model.
+    """/MAT/LAW92 or /MAT/ARRUDA_BOYCE (M173, M566): Arruda-Boyce 8-chain hyperelastic polymer model.
 
     Fortran origin: ``starter/source/materials/mat/mat092/hm_read_mat92.F``.
     """
@@ -6399,6 +6399,141 @@ class MaterialLaw92:
     fct_id: int = 0
     nu: float = 0.0
     fscale: float = 1.0
+    law: int = 92
+    law_name: str = "LAW92"
+    params: dict = field(default_factory=dict)
+
+    @property
+    def rho(self) -> float:
+        return self.ref_rho if self.ref_rho > 0.0 else self.rho0
+
+    @property
+    def G0(self) -> float:
+        mu_val = self.mu
+        if mu_val <= 0.0:
+            return 0.0
+        lam_val = self.lam if self.lam > 0.0 else 7.0
+        beta = 1.0 / (lam_val * lam_val)
+        return mu_val * (
+            1.0
+            + 0.6 * beta
+            + (99.0 / 175.0) * (beta ** 2)
+            + (513.0 / 875.0) * (beta ** 3)
+            + (42039.0 / 67375.0) * (beta ** 4)
+        )
+
+    @property
+    def G(self) -> float:
+        return self.G0
+
+    @property
+    def K(self) -> float:
+        if self.d > 0.0:
+            return 2.0 / self.d
+        nu_val = self.nu if self.nu > 0.0 else 0.495
+        if nu_val < 0.5:
+            g0 = self.G0
+            return (2.0 / 3.0) * (1.0 + nu_val) * g0 / (1.0 - 2.0 * nu_val)
+        return 0.0
+
+    @property
+    def bulk(self) -> float:
+        return self.K
+
+    @property
+    def E(self) -> float:
+        k_val = self.K
+        g_val = self.G0
+        denom = 3.0 * k_val + g_val
+        if denom > 1e-20:
+            return (9.0 * k_val * g_val) / denom
+        nu_val = self.nu if self.nu > 0.0 else 0.495
+        return 2.0 * g_val * (1.0 + nu_val)
+
+    @property
+    def young(self) -> float:
+        return self.E
+
+    @property
+    def sound_speed(self) -> CallableFloat:
+        import math
+        r = self.rho
+        if r > 0.0:
+            c2 = (self.K + (4.0 / 3.0) * self.G0) / r
+            if c2 > 0.0:
+                return CallableFloat(math.sqrt(c2))
+        return CallableFloat(0.0)
+
+    @property
+    def sound_speed_solid(self) -> CallableFloat:
+        return self.sound_speed
+
+    @property
+    def sound_speed_shell(self) -> CallableFloat:
+        import math
+        r = self.rho
+        if r > 0.0:
+            nu_val = self.nu if self.nu > 0.0 else 0.495
+            denom = (1.0 - nu_val * nu_val) * r
+            e_val = self.E
+            if denom > 0.0 and e_val > 0.0:
+                return CallableFloat(math.sqrt(e_val / denom))
+        return self.sound_speed
+
+    # Mapping protocol
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        if isinstance(self.params, dict) and key in self.params:
+            return self.params[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            if not isinstance(self.params, dict):
+                self.params = {}
+            self.params[key] = value
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or (isinstance(self.params, dict) and key in self.params)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self) -> List[str]:
+        base_keys = [
+            "id", "title", "rho0", "ref_rho", "mu", "d", "lam", "itype",
+            "fct_id", "nu", "fscale", "law", "law_name", "rho", "G0", "G",
+            "K", "bulk", "E", "young", "sound_speed", "sound_speed_solid",
+            "sound_speed_shell",
+        ]
+        if isinstance(self.params, dict):
+            for k in self.params:
+                if k not in base_keys:
+                    base_keys.append(k)
+        return base_keys
+
+    def values(self) -> List[Any]:
+        return [self[k] for k in self.keys()]
+
+    def items(self) -> List[tuple]:
+        return [(k, self[k]) for k in self.keys()]
+
+    def __len__(self) -> int:
+        return len(self.keys())
+
+    def __iter__(self):
+        return iter(self.keys())
+
+
+MatLaw92 = MaterialLaw92
+MatArrudaBoyce = MaterialLaw92
+MatArruda = MaterialLaw92
 
 
 @dataclass

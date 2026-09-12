@@ -5660,11 +5660,76 @@ class StarterDeck:
         kwargs.setdefault("law_name", "ORTH_PLAS")
         return self.mat_law74(*args, **kwargs)
 
-    def mat_law92(self, mid: int, title: str, data_cards) -> None:
-        """``/MAT/LAW92``."""
-        self._header("MAT", "LAW92", mid)
+    def mat_law92(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho0: float = 0.0,
+        refer_rho: float = 0.0,
+        mu: float = 0.0,
+        d: float = 0.0,
+        lam: float = 7.0,
+        itype: int = 1,
+        fct_id: int = 0,
+        nu: float = 0.495,
+        fscale: float = 1.0,
+        unit_id: int | None = None,
+        law_name: str = "LAW92",
+        **kwargs: Any,
+    ) -> StarterDeck:
+        if "id" in kwargs and mid == 0:
+            mid = kwargs["id"]
+        if "mat_id" in kwargs and mid == 0:
+            mid = kwargs["mat_id"]
+        mat_obj = kwargs.get("mat_law92", kwargs.get("mat", kwargs.get("material", None)))
+        if mat_obj is not None or hasattr(mid, "mu") or hasattr(mid, "lam") or hasattr(mid, "itype"):
+            if mat_obj is None:
+                mat_obj = mid
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho0 = getattr(mat_obj, "rho0", rho0)
+            refer_rho = getattr(mat_obj, "ref_rho", refer_rho)
+            mu = getattr(mat_obj, "mu", mu)
+            d = getattr(mat_obj, "d", d)
+            lam = getattr(mat_obj, "lam", lam)
+            itype = getattr(mat_obj, "itype", itype)
+            fct_id = getattr(mat_obj, "fct_id", fct_id)
+            nu = getattr(mat_obj, "nu", nu)
+            fscale = getattr(mat_obj, "fscale", fscale)
+
+        if data_cards is not None and isinstance(data_cards, (list, tuple)):
+            if unit_id is not None:
+                self._header("MAT", law_name, mid, unit_id)
+            else:
+                self._header("MAT", law_name, mid)
+            self._title(title)
+            self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+            return self
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
         self._title(title)
-        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+        # Card 1: RHO_I, refer_rho (%20lg%20lg)
+        self.lines.append(fmt_float(rho0) + (fmt_float(refer_rho) if refer_rho != 0.0 else ""))
+        # Card 2: mu, D, LAM (%20lg%20lg%20lg)
+        self.lines.append(fmt_float(mu) + fmt_float(d) + fmt_float(lam))
+        # Card 3: IType, fct_ID, NU, Fscale (%10d%10d%20lg%20lg)
+        self.lines.append(
+            fmt_int(itype, 10)
+            + (fmt_int(fct_id, 10) if fct_id != 0 else " " * 10)
+            + fmt_float(nu, 20)
+            + fmt_float(fscale, 20)
+        )
+        return self
+
+    def mat_arruda_boyce(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/ARRUDA_BOYCE`` — synonym for ``/MAT/LAW92``."""
+        kwargs.setdefault("law_name", "ARRUDA_BOYCE")
+        return self.mat_law92(*args, **kwargs)
 
     def mat_law82(
         self,
@@ -8836,7 +8901,7 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law94(mid, title, cards)
     elif law == "HILL_TAB":
         d.mat_hill_tab(mid, title, cards)
-    elif law == "LAW92":
+    elif law in ("LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "LAW92_ARRUDA_BOYCE"):
         d.mat_law92(mid, title, cards)
     elif law in ("LAW82", "OGDEN", "LAW82_OGDEN"):
         d.mat_law82(mid, title, cards)

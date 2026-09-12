@@ -27782,6 +27782,7 @@ def read_mat_law92(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     mat92 = Material(
         id=mat_id, law=92, rho0=rho0, title=title,
         params={
+            "rho0": rho0, "ref_rho": refer_rho, "rho_initial": rho0, "RHO0": rho0,
             "E": e_equiv if e_equiv > 0.0 else 1.0, "nu": nu if nu > 0.0 else 0.495,
             "MAT_MUE1": mu, "MAT_D": d, "MAT_Lamda": lam,
             "Itype": itype, "MAT_FCT_IDI": fct_id, "MAT_NU": nu,
@@ -27790,6 +27791,12 @@ def read_mat_law92(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "fct_id": fct_id, "fscale": fscale,
         }
     )
+    mat92.mu = mu
+    mat92.d = d
+    mat92.lam = lam
+    mat92.itype = itype
+    mat92.fct_id = fct_id
+    mat92.fscale = fscale
     mat92.record = GenericMaterialRecord(
         law_name="LAW92", law_number=92, id=mat_id, title=title,
         params=mat92.params, density=rho0, unit_id=block.unit_id,

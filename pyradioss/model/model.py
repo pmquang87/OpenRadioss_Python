@@ -1358,7 +1358,9 @@ class Model:
         self.mat_ogden_hypos = self.mat_law77s
         self.mat_law63s: Dict[int, Any] = {}                        # /MAT/LAW63, /MAT/SOIL_DISC (M196)
         self.mat_soil_discs = self.mat_law63s
-        self.mat_law92s: Dict[int, Any] = {}                        # /MAT/LAW92, /MAT/HILL_ORTH (M196)
+        self.mat_law92s: Dict[int, Any] = {}                        # /MAT/LAW92, /MAT/ARRUDA_BOYCE (M173, M566)
+        self.mat_arruda_boyces = self.mat_law92s
+        self.mat_arrudas = self.mat_law92s
         self.mat_hill_orths = self.mat_law92s
         self.prop_type26s: Dict[int, Any] = {}                      # /PROP/TYPE26, /PROP/SPR_TAB (M196)
         self.prop_spr_tabs = self.prop_type26s
