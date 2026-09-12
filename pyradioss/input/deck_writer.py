@@ -5229,10 +5229,19 @@ class StarterDeck:
         for i in range(1, 9):
             k_a = f"a{i}"
             k_al = f"alpha{i}"
+            k_ali = f"al{i}"
             if k_a in kwargs:
                 a_vals[i - 1] = float(kwargs[k_a])
             elif k_al in kwargs:
                 a_vals[i - 1] = float(kwargs[k_al])
+            elif k_ali in kwargs:
+                a_vals[i - 1] = float(kwargs[k_ali])
+            elif k_a in kw_low:
+                a_vals[i - 1] = float(kw_low[k_a])
+            elif k_al in kw_low:
+                a_vals[i - 1] = float(kw_low[k_al])
+            elif k_ali in kw_low:
+                a_vals[i - 1] = float(kw_low[k_ali])
 
         if curves is None:
             curves = []
@@ -5314,10 +5323,10 @@ class StarterDeck:
 
             if ikin == 1 and chard > 0.0 and ckh is not None and akh is not None:
                 self.lines.append(
-                    f"{fmt_float(ckh[0], 20)}{fmt_float(akh[0], 20)}{fmt_float(ckh[1], 20)}{fmt_float(akh[1], 20)}"
+                    f"{fmt_float(ckh[0], 20)}{fmt_float(ckh[1], 20)}{fmt_float(ckh[2], 20)}{fmt_float(ckh[3], 20)}"
                 )
                 self.lines.append(
-                    f"{fmt_float(ckh[2], 20)}{fmt_float(akh[2], 20)}{fmt_float(ckh[3], 20)}{fmt_float(akh[3], 20)}"
+                    f"{fmt_float(akh[0], 20)}{fmt_float(akh[1], 20)}{fmt_float(akh[2], 20)}{fmt_float(akh[3], 20)}"
                 )
         else:
             delim = kw_low.get("delimiter", ", " if (kw_low.get("comma") or kw_low.get("comma_delimited")) else " ")
@@ -5376,8 +5385,8 @@ class StarterDeck:
                 self.lines.append(f"{int(tab_id90)}{delim}{float(fscale90)}{delim}{float(epsd90)}")
 
             if ikin == 1 and chard > 0.0 and ckh is not None and akh is not None:
-                self.lines.append(f"{float(ckh[0])}{delim}{float(akh[0])}{delim}{float(ckh[1])}{delim}{float(akh[1])}")
-                self.lines.append(f"{float(ckh[2])}{delim}{float(akh[2])}{delim}{float(ckh[3])}{delim}{float(akh[3])}")
+                self.lines.append(f"{float(ckh[0])}{delim}{float(ckh[1])}{delim}{float(ckh[2])}{delim}{float(ckh[3])}")
+                self.lines.append(f"{float(akh[0])}{delim}{float(akh[1])}{delim}{float(akh[2])}{delim}{float(akh[3])}")
 
         return self
 

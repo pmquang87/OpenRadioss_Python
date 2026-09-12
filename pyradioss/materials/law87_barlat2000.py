@@ -1425,7 +1425,7 @@ shell_membrane_tangent = consistent_shell_tangent
 
 def extra_shapes(mat: Any = None, nip: Optional[int] = 1) -> Dict[str, Tuple[int, ...]]:
     """Per-element persistent state shapes required by LAW87."""
-    nuvar = 1
+    nuvar = 7 if isinstance(mat, MatLaw87) else 1
     if nip is not None and nip > 1:
         return {"uvar87": (nip, nuvar)}
     return {"uvar87": (nuvar,)}

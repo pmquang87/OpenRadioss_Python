@@ -9,6 +9,8 @@ Engine can index blindly.
 
 from __future__ import annotations
 
+import numpy as np
+
 from ..common.messages import MessageLog
 from ..model.model import Model
 
@@ -4195,7 +4197,7 @@ def check_mat_law87(
     # 3. Poisson's ratio: 0.0 <= nu < 0.5 (ANCMSG 1514)
     nu = _extract(["nu", "Nu", "NU", "MAT_NU"], default=0.0)
     if nu < 0.0 or nu >= 0.5:
-        log.error(f"/MAT/LAW87/{mid}: Poisson's ratio nu must satisfy 0 <= nu < 0.5 (got {nu:g}) (ANCMSG 1514)", "MAT CHECK")
+        log.error(f"/MAT/LAW87/{mid}: Poisson's ratio NU must satisfy 0 <= nu < 0.5 (got {nu:g}) (ANCMSG 1514)", "MAT CHECK")
 
     # 4. Convexity check when flag_fit == 0 (ANCMSG 3095 for Lp, ANCMSG 3102 for Lpp)
     flag_fit = int(_extract(["flag_fit", "ifit", "Ifit"], default=0.0))

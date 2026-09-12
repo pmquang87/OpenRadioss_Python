@@ -34401,284 +34401,254 @@ def read_mat_law87(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     alpha_vol = 1.0
     n_hard = 0.0
     card_idx = 0
-    if block.fixed:
-        f1 = valid_cards[0].cut("MAT_LAW87_1")
-        rho = _fval(f1[0]) if len(f1) > 0 else 0.0
-        refer_rho = _fval(f1[1]) if len(f1) > 1 else 0.0
-        card_idx = 1
+    def _card_tokens(c: Card) -> List[str]:
+        raw = c.raw.strip()
+        if "," in raw:
+            parts = [p.strip() for p in raw.replace(",", " ").split()]
+        else:
+            parts = c.tokens()
+        return [p.rstrip(",") for p in parts if p]
 
+    # Card 1: RHO, RHOR
+    toks1 = _card_tokens(valid_cards[0])
+    rho = _fval(toks1[0]) if len(toks1) > 0 else 0.0
+    refer_rho = _fval(toks1[1]) if len(toks1) > 1 else 0.0
+    card_idx = 1
+
+    # Card 2: E, Nu, Iflag, VP, c, P
+    if card_idx < len(valid_cards):
+        toks2 = _card_tokens(valid_cards[card_idx])
+        e = _fval(toks2[0]) if len(toks2) > 0 else 0.0
+        nu = _fval(toks2[1]) if len(toks2) > 1 else 0.0
+        iflag = _ival(toks2[2]) if len(toks2) > 2 else 0
+        vp = _ival(toks2[3]) if len(toks2) > 3 else 0
+        strain1 = _fval(toks2[4]) if len(toks2) > 4 else 0.0
+        exp1 = _fval(toks2[5]) if len(toks2) > 5 else 0.0
+        card_idx += 1
+
+    # Cards 3 & 4: (flag_fit, alphas or yield stresses/Lankford)
+    if card_idx < len(valid_cards):
+        raw3 = valid_cards[card_idx].raw
+        toks3 = _card_tokens(valid_cards[card_idx])
+        if len(toks3) >= 5 and toks3[0] in ("0", "1", "0.0", "1.0"):
+            # Format 1: flag_fit is the first token
+            ifit = _ival(toks3[0])
+            v1, v2, v3, v4 = _fval(toks3[1]), _fval(toks3[2]), _fval(toks3[3]), _fval(toks3[4])
+        elif len(toks3) >= 5 and toks3[4] in ("0", "1", "0.0", "1.0"):
+            # Format 2: ifit is in col 81-90 (5th token)
+            ifit = _ival(toks3[4])
+            v1, v2, v3, v4 = _fval(toks3[0]), _fval(toks3[1]), _fval(toks3[2]), _fval(toks3[3])
+        elif len(toks3) >= 4:
+            ifit = 0
+            v1, v2, v3, v4 = _fval(toks3[0]), _fval(toks3[1]), _fval(toks3[2]), _fval(toks3[3])
+        else:
+            ifit = 0
+            v1 = _fval(toks3[0]) if len(toks3) > 0 else 0.0
+            v2 = _fval(toks3[1]) if len(toks3) > 1 else 0.0
+            v3 = _fval(toks3[2]) if len(toks3) > 2 else 0.0
+            v4 = _fval(toks3[3]) if len(toks3) > 3 else 0.0
+        card_idx += 1
+
+        v5, v6, v7, v8 = 1.0, 1.0, 1.0, 1.0
         if card_idx < len(valid_cards):
-            f2 = valid_cards[card_idx].cut("MAT_LAW87_2")
-            e = _fval(f2[0]) if len(f2) > 0 else 0.0
-            nu = _fval(f2[1]) if len(f2) > 1 else 0.0
-            iflag = _ival(f2[2]) if len(f2) > 2 else 0
-            vp = _ival(f2[3]) if len(f2) > 3 else 0
-            strain1 = _fval(f2[4]) if len(f2) > 4 else 0.0
-            exp1 = _fval(f2[5]) if len(f2) > 5 else 0.0
+            toks4 = _card_tokens(valid_cards[card_idx])
+            v5 = _fval(toks4[0], 1.0) if len(toks4) > 0 else 1.0
+            v6 = _fval(toks4[1], 1.0) if len(toks4) > 1 else 1.0
+            v7 = _fval(toks4[2], 1.0) if len(toks4) > 2 else 1.0
+            v8 = _fval(toks4[3], 1.0) if len(toks4) > 3 else 1.0
             card_idx += 1
 
-        if card_idx < len(valid_cards):
-            line_check = valid_cards[card_idx].raw
-            if len(line_check) >= 81 and line_check[80:90].strip():
-                ifit = _ival(line_check[80:90])
+        if ifit == 1:
+            sigma_00, sigma_45, sigma_90, sigma_b = v1, v2, v3, v4
+            r_00, r_45, r_90, r_b = v5, v6, v7, v8
+        else:
+            alpha[0], alpha[1], alpha[2], alpha[3] = v1, v2, v3, v4
+            alpha[4], alpha[5], alpha[6], alpha[7] = v5, v6, v7, v8
 
-            if ifit == 1:
-                f3b = valid_cards[card_idx].cut("MAT_LAW87_3B")
-                sigma_00 = _fval(f3b[0]) if len(f3b) > 0 else 0.0
-                sigma_45 = _fval(f3b[1]) if len(f3b) > 1 else 0.0
-                sigma_90 = _fval(f3b[2]) if len(f3b) > 2 else 0.0
-                sigma_b = _fval(f3b[3]) if len(f3b) > 3 else 0.0
-                card_idx += 1
-                if card_idx < len(valid_cards):
-                    f4b = valid_cards[card_idx].cut("MAT_LAW87_4B")
-                    r_00 = _fval(f4b[0], 1.0) if len(f4b) > 0 and f4b[0].strip() else 1.0
-                    r_45 = _fval(f4b[1], 1.0) if len(f4b) > 1 and f4b[1].strip() else 1.0
-                    r_90 = _fval(f4b[2], 1.0) if len(f4b) > 2 and f4b[2].strip() else 1.0
-                    r_b = _fval(f4b[3], 1.0) if len(f4b) > 3 and f4b[3].strip() else 1.0
-                    card_idx += 1
-            else:
-                f3a = valid_cards[card_idx].cut("MAT_LAW87_3A")
-                alpha[0] = _fval(f3a[0], 1.0) if len(f3a) > 0 and f3a[0].strip() else 1.0
-                alpha[1] = _fval(f3a[1], 1.0) if len(f3a) > 1 and f3a[1].strip() else 1.0
-                alpha[2] = _fval(f3a[2], 1.0) if len(f3a) > 2 and f3a[2].strip() else 1.0
-                alpha[3] = _fval(f3a[3], 1.0) if len(f3a) > 3 and f3a[3].strip() else 1.0
-                card_idx += 1
-                if card_idx < len(valid_cards):
-                    f4a = valid_cards[card_idx].cut("MAT_LAW87_4A")
-                    alpha[4] = _fval(f4a[0], 1.0) if len(f4a) > 0 and f4a[0].strip() else 1.0
-                    alpha[5] = _fval(f4a[1], 1.0) if len(f4a) > 1 and f4a[1].strip() else 1.0
-                    alpha[6] = _fval(f4a[2], 1.0) if len(f4a) > 2 and f4a[2].strip() else 1.0
-                    alpha[7] = _fval(f4a[3], 1.0) if len(f4a) > 3 and f4a[3].strip() else 1.0
-                    card_idx += 1
-
-        if card_idx < len(valid_cards):
-            f5 = valid_cards[card_idx].cut("MAT_LAW87_5")
-            chard = _fval(f5[0]) if len(f5) > 0 else 0.0
-            ikin = _ival(f5[1]) if len(f5) > 1 else 0
+    # Card 5 and subsequent cards
+    if card_idx < len(valid_cards):
+        toks5 = _card_tokens(valid_cards[card_idx])
+        if len(toks5) >= 3:
+            chard = _fval(toks5[0])
+            ikin = _ival(toks5[1])
+            exp_a = _fval(toks5[2], 6.0)
+            fcut = _fval(toks5[3]) if len(toks5) > 3 else 0.0
+            fsmooth = _ival(toks5[4]) if len(toks5) > 4 else 0
             card_idx += 1
-
-        if iflag == 0:
-            if card_idx < len(valid_cards):
-                f6_0 = valid_cards[card_idx].cut("MAT_LAW87_6_0")
-                exp_a = _fval(f6_0[0], 6.0) if len(f6_0) > 0 and f6_0[0].strip() else 6.0
-                alpha_vol = _fval(f6_0[1], 1.0) if len(f6_0) > 1 and f6_0[1].strip() else 1.0
-                n_hard = _fval(f6_0[2], 0.0) if len(f6_0) > 2 and f6_0[2].strip() else 0.0
-                fcut = _fval(f6_0[3]) if len(f6_0) > 3 and f6_0[3].strip() else 0.0
-                fsmooth = _ival(f6_0[4]) if len(f6_0) > 4 and f6_0[4].strip() else 0
-                nrate = _ival(f6_0[5]) if len(f6_0) > 5 and f6_0[5].strip() else 0
-                card_idx += 1
-            while card_idx < len(valid_cards):
-                c = valid_cards[card_idx]
-                fc = c.cut("MAT_LAW87_CURVE")
-                if fc and fc[0].strip() and len(curves) < (nrate if nrate > 0 else 9999):
-                    fid = _ival(fc[0])
-                    fsc = _fval(fc[1], 1.0) if len(fc) > 1 and fc[1].strip() else 1.0
-                    ep = _fval(fc[2]) if len(fc) > 2 else 0.0
-                    curves.append(MatLaw87Curve(fct_id=fid, fscale=fsc, epsp=ep))
-                    card_idx += 1
-                else:
-                    break
-        elif iflag == 1:
-            if card_idx < len(valid_cards):
-                f6_1 = valid_cards[card_idx].cut("MAT_LAW87_6_1")
-                exp_a = _fval(f6_1[0], 6.0) if len(f6_1) > 0 and f6_1[0].strip() else 6.0
-                alpha_vol = _fval(f6_1[1], 1.0) if len(f6_1) > 1 and f6_1[1].strip() else 1.0
-                n_hard = _fval(f6_1[2], 0.0) if len(f6_1) > 2 and f6_1[2].strip() else 0.0
-                fcut = _fval(f6_1[3]) if len(f6_1) > 3 and f6_1[3].strip() else 0.0
-                fsmooth = _ival(f6_1[4]) if len(f6_1) > 4 and f6_1[4].strip() else 0
-                nrate = _ival(f6_1[5]) if len(f6_1) > 5 and f6_1[5].strip() else 0
-                card_idx += 1
-            if card_idx < len(valid_cards):
-                f7_1 = valid_cards[card_idx].cut("MAT_LAW87_7_1")
-                aswift = _fval(f7_1[0]) if len(f7_1) > 0 else 0.0
-                eps0 = _fval(f7_1[1]) if len(f7_1) > 1 else 0.0
-                qvoce = _fval(f7_1[2]) if len(f7_1) > 2 else 0.0
-                beta = _fval(f7_1[3]) if len(f7_1) > 3 else 0.0
-                k0 = _fval(f7_1[4]) if len(f7_1) > 4 else 0.0
-                card_idx += 1
-        elif iflag == 3:
-            if card_idx < len(valid_cards):
-                f6_3 = valid_cards[card_idx].cut("MAT_LAW87_6_0")
-                exp_a = _fval(f6_3[0], 6.0) if len(f6_3) > 0 and f6_3[0].strip() else 6.0
-                fcut = _fval(f6_3[3]) if len(f6_3) > 3 and f6_3[3].strip() else 0.0
-                fsmooth = _ival(f6_3[4]) if len(f6_3) > 4 and f6_3[4].strip() else 0
-                card_idx += 1
-            if card_idx < len(valid_cards):
-                f_tab0 = valid_cards[card_idx].cut("MAT_LAW87_8")
-                tab_id0 = _ival(f_tab0[1]) if len(f_tab0) > 1 else 0
-                fscale0 = _fval(f_tab0[2], 1.0) if len(f_tab0) > 2 and f_tab0[2].strip() else 1.0
-                epsd0 = _fval(f_tab0[3]) if len(f_tab0) > 3 else 0.0
-                card_idx += 1
-            if card_idx < len(valid_cards):
-                f_tab45 = valid_cards[card_idx].cut("MAT_LAW87_8")
-                tab_id45 = _ival(f_tab45[1]) if len(f_tab45) > 1 else 0
-                fscale45 = _fval(f_tab45[2], 1.0) if len(f_tab45) > 2 and f_tab45[2].strip() else 1.0
-                epsd45 = _fval(f_tab45[3]) if len(f_tab45) > 3 else 0.0
-                card_idx += 1
-            if card_idx < len(valid_cards):
-                f_tab90 = valid_cards[card_idx].cut("MAT_LAW87_8")
-                tab_id90 = _ival(f_tab90[1]) if len(f_tab90) > 1 else 0
-                fscale90 = _fval(f_tab90[2], 1.0) if len(f_tab90) > 2 and f_tab90[2].strip() else 1.0
-                epsd90 = _fval(f_tab90[3]) if len(f_tab90) > 3 else 0.0
-                card_idx += 1
-
-        if card_idx < len(valid_cards) and (ikin == 1 and chard > 0.0):
-            f_kin1 = valid_cards[card_idx].cut([20, 20, 20, 20])
-            if len(f_kin1) >= 4:
-                ckh[0] = _fval(f_kin1[0])
-                akh[0] = _fval(f_kin1[1])
-                ckh[1] = _fval(f_kin1[2])
-                akh[1] = _fval(f_kin1[3])
-                card_idx += 1
-            if card_idx < len(valid_cards):
-                f_kin2 = valid_cards[card_idx].cut([20, 20, 20, 20])
-                if len(f_kin2) >= 4:
-                    ckh[2] = _fval(f_kin2[0])
-                    akh[2] = _fval(f_kin2[1])
-                    ckh[3] = _fval(f_kin2[2])
-                    akh[3] = _fval(f_kin2[3])
-                    card_idx += 1
-    else:
-        toks1 = valid_cards[0].tokens()
-        rho = float(toks1[0]) if len(toks1) > 0 else 0.0
-        refer_rho = float(toks1[1]) if len(toks1) > 1 else 0.0
-        card_idx = 1
-
-        if card_idx < len(valid_cards):
-            toks2 = valid_cards[card_idx].tokens()
-            e = float(toks2[0]) if len(toks2) > 0 else 0.0
-            nu = float(toks2[1]) if len(toks2) > 1 else 0.0
-            iflag = int(float(toks2[2])) if len(toks2) > 2 else 0
-            vp = int(float(toks2[3])) if len(toks2) > 3 else 0
-            strain1 = float(toks2[4]) if len(toks2) > 4 else 0.0
-            exp1 = float(toks2[5]) if len(toks2) > 5 else 0.0
-            card_idx += 1
-
-        if card_idx < len(valid_cards):
-            toks3 = valid_cards[card_idx].tokens()
-            if len(toks3) >= 5 and int(float(toks3[4])) == 1:
-                ifit = 1
-                sigma_00 = float(toks3[0])
-                sigma_45 = float(toks3[1]) if len(toks3) > 1 else 0.0
-                sigma_90 = float(toks3[2]) if len(toks3) > 2 else 0.0
-                sigma_b = float(toks3[3]) if len(toks3) > 3 else 0.0
-                card_idx += 1
+            if iflag == 0:
                 if card_idx < len(valid_cards):
-                    toks4 = valid_cards[card_idx].tokens()
-                    r_00 = float(toks4[0]) if len(toks4) > 0 else 1.0
-                    r_45 = float(toks4[1]) if len(toks4) > 1 else 1.0
-                    r_90 = float(toks4[2]) if len(toks4) > 2 else 1.0
-                    r_b = float(toks4[3]) if len(toks4) > 3 else 1.0
-                    card_idx += 1
-            else:
-                for i in range(min(4, len(toks3))):
-                    alpha[i] = float(toks3[i])
-                card_idx += 1
+                    t_next = _card_tokens(valid_cards[card_idx])
+                    if ikin == 1 and chard > 0.0 and len(t_next) >= 4:
+                        ckh[0] = _fval(t_next[0])
+                        ckh[1] = _fval(t_next[1])
+                        ckh[2] = _fval(t_next[2])
+                        ckh[3] = _fval(t_next[3])
+                        card_idx += 1
+                        if card_idx < len(valid_cards):
+                            t_akh = _card_tokens(valid_cards[card_idx])
+                            akh[0] = _fval(t_akh[0])
+                            akh[1] = _fval(t_akh[1])
+                            akh[2] = _fval(t_akh[2])
+                            akh[3] = _fval(t_akh[3])
+                            card_idx += 1
                 if card_idx < len(valid_cards):
-                    toks4 = valid_cards[card_idx].tokens()
-                    for i in range(min(4, len(toks4))):
-                        alpha[4 + i] = float(toks4[i])
+                    t_rate = _card_tokens(valid_cards[card_idx])
+                    if len(t_rate) == 1:
+                        nrate = _ival(t_rate[0])
+                        card_idx += 1
+                while card_idx < len(valid_cards):
+                    tc = _card_tokens(valid_cards[card_idx])
+                    if tc and len(curves) < (nrate if nrate > 0 else 9999):
+                        if len(tc) >= 4:
+                            fid = _ival(tc[1])
+                            ep = _fval(tc[2])
+                            fsc = _fval(tc[3], 1.0)
+                        elif len(tc) == 3:
+                            fid = _ival(tc[0])
+                            fsc = _fval(tc[1], 1.0)
+                            ep = _fval(tc[2])
+                        elif len(tc) == 2:
+                            fid = _ival(tc[0])
+                            fsc = _fval(tc[1], 1.0)
+                            ep = 0.0
+                        else:
+                            fid = _ival(tc[0])
+                            fsc = 1.0
+                            ep = 0.0
+                        curves.append(MatLaw87Curve(fct_id=fid, fscale=fsc, epsp=ep))
+                        card_idx += 1
+                    else:
+                        break
+            elif iflag == 1:
+                if card_idx < len(valid_cards):
+                    toks6 = _card_tokens(valid_cards[card_idx])
+                    nrate = _ival(toks6[0]) if len(toks6) > 0 else 0
+                    aswift = _fval(toks6[1]) if len(toks6) > 1 else 0.0
+                    n_hard = _fval(toks6[2]) if len(toks6) > 2 else 0.0
+                    alpha_vol = _fval(toks6[3], 1.0) if len(toks6) > 3 else 1.0
+                    eps0 = _fval(toks6[4]) if len(toks6) > 4 else 0.0
                     card_idx += 1
-
-        if card_idx < len(valid_cards):
-            toks5 = valid_cards[card_idx].tokens()
-            chard = float(toks5[0]) if len(toks5) > 0 else 0.0
-            ikin = int(float(toks5[1])) if len(toks5) > 1 else 0
+                if card_idx < len(valid_cards):
+                    toks7 = _card_tokens(valid_cards[card_idx])
+                    qvoce = _fval(toks7[0]) if len(toks7) > 0 else 0.0
+                    beta = _fval(toks7[1]) if len(toks7) > 1 else 0.0
+                    k0 = _fval(toks7[2]) if len(toks7) > 2 else 0.0
+                    card_idx += 1
+                if card_idx < len(valid_cards) and ikin == 1 and chard > 0.0:
+                    toks_k1 = _card_tokens(valid_cards[card_idx])
+                    if len(toks_k1) >= 4:
+                        ckh[0] = _fval(toks_k1[0])
+                        ckh[1] = _fval(toks_k1[1])
+                        ckh[2] = _fval(toks_k1[2])
+                        ckh[3] = _fval(toks_k1[3])
+                        card_idx += 1
+                        if card_idx < len(valid_cards):
+                            toks_k2 = _card_tokens(valid_cards[card_idx])
+                            akh[0] = _fval(toks_k2[0])
+                            akh[1] = _fval(toks_k2[1])
+                            akh[2] = _fval(toks_k2[2])
+                            akh[3] = _fval(toks_k2[3])
+                            card_idx += 1
+        else:
+            chard = _fval(toks5[0]) if len(toks5) > 0 else 0.0
+            ikin = _ival(toks5[1]) if len(toks5) > 1 else 0
             card_idx += 1
-
-        if iflag == 0:
-            if card_idx < len(valid_cards):
-                toks6 = valid_cards[card_idx].tokens()
-                if len(toks6) >= 5:
-                    exp_a = float(toks6[0])
-                    alpha_vol = float(toks6[1])
-                    n_hard = float(toks6[2])
-                    fcut = float(toks6[3])
-                    fsmooth = int(float(toks6[4]))
-                    nrate = int(float(toks6[5])) if len(toks6) > 5 else 0
-                else:
-                    exp_a = float(toks6[0]) if len(toks6) > 0 else 6.0
-                    fcut = float(toks6[1]) if len(toks6) > 1 else 0.0
-                    fsmooth = int(float(toks6[2])) if len(toks6) > 2 else 0
-                    nrate = int(float(toks6[3])) if len(toks6) > 3 else 0
-                card_idx += 1
-            while card_idx < len(valid_cards):
-                c = valid_cards[card_idx]
-                toksc = c.tokens()
-                if toksc and len(curves) < (nrate if nrate > 0 else 9999):
-                    fid = int(float(toksc[0]))
-                    fsc = float(toksc[1]) if len(toksc) > 1 else 1.0
-                    ep = float(toksc[2]) if len(toksc) > 2 else 0.0
-                    curves.append(MatLaw87Curve(fct_id=fid, fscale=fsc, epsp=ep))
+            if iflag == 0:
+                if card_idx < len(valid_cards):
+                    toks6 = _card_tokens(valid_cards[card_idx])
+                    exp_a = _fval(toks6[0], 6.0) if len(toks6) > 0 else 6.0
+                    alpha_vol = _fval(toks6[1], 1.0) if len(toks6) > 1 else 1.0
+                    n_hard = _fval(toks6[2]) if len(toks6) > 2 else 0.0
+                    fcut = _fval(toks6[3]) if len(toks6) > 3 else 0.0
+                    fsmooth = _ival(toks6[4]) if len(toks6) > 4 else 0
+                    nrate = _ival(toks6[5]) if len(toks6) > 5 else 0
                     card_idx += 1
-                else:
-                    break
-        elif iflag == 1:
-            if card_idx < len(valid_cards):
-                toks6 = valid_cards[card_idx].tokens()
-                if len(toks6) >= 5:
-                    exp_a = float(toks6[0])
-                    alpha_vol = float(toks6[1])
-                    n_hard = float(toks6[2])
-                    fcut = float(toks6[3])
-                    fsmooth = int(float(toks6[4]))
-                    nrate = int(float(toks6[5])) if len(toks6) > 5 else 0
-                else:
-                    exp_a = float(toks6[0]) if len(toks6) > 0 else 6.0
-                    fcut = float(toks6[1]) if len(toks6) > 1 else 0.0
-                    fsmooth = int(float(toks6[2])) if len(toks6) > 2 else 0
-                    nrate = int(float(toks6[3])) if len(toks6) > 3 else 0
-                card_idx += 1
-            if card_idx < len(valid_cards):
-                toks7 = valid_cards[card_idx].tokens()
-                aswift = float(toks7[0]) if len(toks7) > 0 else 0.0
-                eps0 = float(toks7[1]) if len(toks7) > 1 else 0.0
-                qvoce = float(toks7[2]) if len(toks7) > 2 else 0.0
-                beta = float(toks7[3]) if len(toks7) > 3 else 0.0
-                k0 = float(toks7[4]) if len(toks7) > 4 else 0.0
-                card_idx += 1
-        elif iflag == 3:
-            if card_idx < len(valid_cards):
-                toks6 = valid_cards[card_idx].tokens()
-                exp_a = float(toks6[0]) if len(toks6) > 0 else 6.0
-                fcut = float(toks6[1]) if len(toks6) > 1 else 0.0
-                fsmooth = int(float(toks6[2])) if len(toks6) > 2 else 0
-                card_idx += 1
-            if card_idx < len(valid_cards):
-                toks_tab0 = valid_cards[card_idx].tokens()
-                tab_id0 = int(float(toks_tab0[0])) if len(toks_tab0) > 0 else 0
-                fscale0 = float(toks_tab0[1]) if len(toks_tab0) > 1 else 1.0
-                epsd0 = float(toks_tab0[2]) if len(toks_tab0) > 2 else 0.0
-                card_idx += 1
-            if card_idx < len(valid_cards):
-                toks_tab45 = valid_cards[card_idx].tokens()
-                tab_id45 = int(float(toks_tab45[0])) if len(toks_tab45) > 0 else 0
-                fscale45 = float(toks_tab45[1]) if len(toks_tab45) > 1 else 1.0
-                epsd45 = float(toks_tab45[2]) if len(toks_tab45) > 2 else 0.0
-                card_idx += 1
-            if card_idx < len(valid_cards):
-                toks_tab90 = valid_cards[card_idx].tokens()
-                tab_id90 = int(float(toks_tab90[0])) if len(toks_tab90) > 0 else 0
-                fscale90 = float(toks_tab90[1]) if len(toks_tab90) > 1 else 1.0
-                epsd90 = float(toks_tab90[2]) if len(toks_tab90) > 2 else 0.0
-                card_idx += 1
-
-        if card_idx < len(valid_cards) and (ikin == 1 and chard > 0.0):
-            toks_k1 = valid_cards[card_idx].tokens()
-            if len(toks_k1) >= 4:
-                ckh[0] = float(toks_k1[0])
-                akh[0] = float(toks_k1[1])
-                ckh[1] = float(toks_k1[2])
-                akh[1] = float(toks_k1[3])
-                card_idx += 1
-            if card_idx < len(valid_cards):
-                toks_k2 = valid_cards[card_idx].tokens()
-                if len(toks_k2) >= 4:
-                    ckh[2] = float(toks_k2[0])
-                    akh[2] = float(toks_k2[1])
-                    ckh[3] = float(toks_k2[2])
-                    akh[3] = float(toks_k2[3])
+                while card_idx < len(valid_cards):
+                    tc = _card_tokens(valid_cards[card_idx])
+                    if tc and len(curves) < (nrate if nrate > 0 else 9999):
+                        if len(tc) >= 4:
+                            fid = _ival(tc[1])
+                            ep = _fval(tc[2])
+                            fsc = _fval(tc[3], 1.0)
+                        elif len(tc) == 3:
+                            fid = _ival(tc[0])
+                            fsc = _fval(tc[1], 1.0)
+                            ep = _fval(tc[2])
+                        elif len(tc) == 2:
+                            fid = _ival(tc[0])
+                            fsc = _fval(tc[1], 1.0)
+                            ep = 0.0
+                        else:
+                            fid = _ival(tc[0])
+                            fsc = 1.0
+                            ep = 0.0
+                        curves.append(MatLaw87Curve(fct_id=fid, fscale=fsc, epsp=ep))
+                        card_idx += 1
+                    else:
+                        break
+            elif iflag == 1:
+                if card_idx < len(valid_cards):
+                    toks6 = _card_tokens(valid_cards[card_idx])
+                    exp_a = _fval(toks6[0], 6.0) if len(toks6) > 0 else 6.0
+                    alpha_vol = _fval(toks6[1], 1.0) if len(toks6) > 1 else 1.0
+                    n_hard = _fval(toks6[2]) if len(toks6) > 2 else 0.0
+                    fcut = _fval(toks6[3]) if len(toks6) > 3 else 0.0
+                    fsmooth = _ival(toks6[4]) if len(toks6) > 4 else 0
+                    nrate = _ival(toks6[5]) if len(toks6) > 5 else 0
                     card_idx += 1
+                if card_idx < len(valid_cards):
+                    toks7 = _card_tokens(valid_cards[card_idx])
+                    aswift = _fval(toks7[0]) if len(toks7) > 0 else 0.0
+                    eps0 = _fval(toks7[1]) if len(toks7) > 1 else 0.0
+                    qvoce = _fval(toks7[2]) if len(toks7) > 2 else 0.0
+                    beta = _fval(toks7[3]) if len(toks7) > 3 else 0.0
+                    k0 = _fval(toks7[4]) if len(toks7) > 4 else 0.0
+                    card_idx += 1
+            elif iflag == 3:
+                if card_idx < len(valid_cards):
+                    toks6 = _card_tokens(valid_cards[card_idx])
+                    exp_a = _fval(toks6[0], 6.0) if len(toks6) > 0 else 6.0
+                    fcut = _fval(toks6[1]) if len(toks6) > 1 else 0.0
+                    fsmooth = _ival(toks6[2]) if len(toks6) > 2 else 0
+                    card_idx += 1
+                if card_idx < len(valid_cards):
+                    toks_tab0 = _card_tokens(valid_cards[card_idx])
+                    idx_t = 1 if len(toks_tab0) > 3 else 0
+                    tab_id0 = _ival(toks_tab0[idx_t]) if len(toks_tab0) > idx_t else 0
+                    fscale0 = _fval(toks_tab0[idx_t + 1], 1.0) if len(toks_tab0) > idx_t + 1 else 1.0
+                    epsd0 = _fval(toks_tab0[idx_t + 2]) if len(toks_tab0) > idx_t + 2 else 0.0
+                    card_idx += 1
+                if card_idx < len(valid_cards):
+                    toks_tab45 = _card_tokens(valid_cards[card_idx])
+                    idx_t = 1 if len(toks_tab45) > 3 else 0
+                    tab_id45 = _ival(toks_tab45[idx_t]) if len(toks_tab45) > idx_t else 0
+                    fscale45 = _fval(toks_tab45[idx_t + 1], 1.0) if len(toks_tab45) > idx_t + 1 else 1.0
+                    epsd45 = _fval(toks_tab45[idx_t + 2]) if len(toks_tab45) > idx_t + 2 else 0.0
+                    card_idx += 1
+                if card_idx < len(valid_cards):
+                    toks_tab90 = _card_tokens(valid_cards[card_idx])
+                    idx_t = 1 if len(toks_tab90) > 3 else 0
+                    tab_id90 = _ival(toks_tab90[idx_t]) if len(toks_tab90) > idx_t else 0
+                    fscale90 = _fval(toks_tab90[idx_t + 1], 1.0) if len(toks_tab90) > idx_t + 1 else 1.0
+                    epsd90 = _fval(toks_tab90[idx_t + 2]) if len(toks_tab90) > idx_t + 2 else 0.0
+                    card_idx += 1
+
+            if card_idx < len(valid_cards) and ikin == 1 and chard > 0.0:
+                toks_k1 = _card_tokens(valid_cards[card_idx])
+                if len(toks_k1) >= 4:
+                    ckh[0] = _fval(toks_k1[0])
+                    ckh[1] = _fval(toks_k1[1])
+                    ckh[2] = _fval(toks_k1[2])
+                    ckh[3] = _fval(toks_k1[3])
+                    card_idx += 1
+                    if card_idx < len(valid_cards):
+                        toks_k2 = _card_tokens(valid_cards[card_idx])
+                        akh[0] = _fval(toks_k2[0])
+                        akh[1] = _fval(toks_k2[1])
+                        akh[2] = _fval(toks_k2[2])
+                        akh[3] = _fval(toks_k2[3])
+                        card_idx += 1
+
 
     m87 = MatLaw87(
         id=mat_id, rho=rho, refer_rho=refer_rho, e=e, nu=nu,

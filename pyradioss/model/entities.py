@@ -9039,6 +9039,18 @@ class MatLaw87:
         return self.nexp
 
     @property
+    def funct_ids(self) -> list[int]:
+        return [getattr(c, "fct_id", getattr(c, "fid", 0)) for c in self.curves]
+
+    @property
+    def rates(self) -> list[float]:
+        return [getattr(c, "epsp", getattr(c, "rate", 0.0)) for c in self.curves]
+
+    @property
+    def yfac(self) -> list[float]:
+        return [getattr(c, "fscale", getattr(c, "scale", 1.0)) for c in self.curves]
+
+    @property
     def params(self) -> Dict[str, Any]:
         p = {
             "rho": self.rho,
@@ -9158,6 +9170,12 @@ class MatLaw87:
 
     def items(self) -> list[tuple[str, Any]]:
         return [(k, self[k]) for k in self.keys()]
+
+    def __len__(self) -> int:
+        return len(self.keys())
+
+    def __iter__(self):
+        return iter(self.keys())
 
 
 MatBarlatYld2000 = MatLaw87
