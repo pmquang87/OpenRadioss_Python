@@ -335,6 +335,12 @@ class Material:
                 return float(law93_orth_hill.sound_speed(self, self.rho0))
             except Exception:
                 pass
+        if self.law in (95, "95", "LAW95", "BERGSTROM_BOYCE", "BERGSTROM-BOYCE", "MAT_LAW95", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE") or getattr(self, "law_name", None) in ("95", "LAW95", "BERGSTROM_BOYCE", "BERGSTROM-BOYCE", "MAT_LAW95", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE"):
+            try:
+                from ..materials import law95_bergstrom_boyce
+                return float(law95_bergstrom_boyce.sound_speed(self, self.rho0))
+            except Exception:
+                pass
         return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
 
     def sound_speed_shell(self) -> float:
@@ -9651,41 +9657,7 @@ MatBarlat20002D = MatLaw87
 MaterialLaw87 = MatLaw87
 
 
-@dataclass
-class MatLaw95:
-    """/MAT/LAW95 or /MAT/BERGSTROM_BOYCE (M183): Bergstrom-Boyce hyperelastic viscoplastic polymer model."""
-    id: int
-    rho: float = 0.0
-    c10: float = 0.0
-    c01: float = 0.0
-    c20: float = 0.0
-    c11: float = 0.0
-    c02: float = 0.0
-    c30: float = 0.0
-    c21: float = 0.0
-    c12: float = 0.0
-    c03: float = 0.0
-    sb: float = 1.0
-    d1: float = 0.0
-    d2: float = 0.0
-    d3: float = 0.0
-    nu: float = 0.49
-    iform: int = 0
-    a: float = 0.0
-    c: float = 0.0
-    m: float = 1.0
-    ksi: float = 0.0
-    tau_ref: float = 0.0
-    title: str = ""
-
-    @property
-    def rho0(self) -> float:
-        return self.rho
-
-
-MatBergstromBoyce = MatLaw95
-MatHypViscPlas = MatLaw95
-MatFoamTab = MatLaw95
+# M569: /MAT/LAW95 (/MAT/BERGSTROM_BOYCE) defined below (see MatLaw95)
 
 
 @dataclass
@@ -14730,6 +14702,200 @@ class MatLaw93:
 
 MaterialLaw93 = MatLaw93
 MatOrthHill = MatLaw93
+
+
+@dataclass
+class MatLaw95:
+    """``/MAT/LAW95`` or ``/MAT/BERGSTROM_BOYCE``: Bergstrom-Boyce visco-hyperelastic polymer model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    c10: float = 0.0
+    c01: float = 0.0
+    c20: float = 0.0
+    c11: float = 0.0
+    c02: float = 0.0
+    c30: float = 0.0
+    c21: float = 0.0
+    c12: float = 0.0
+    c03: float = 0.0
+    sb: float = 0.0
+    d1: float = 0.0
+    d2: float = 0.0
+    d3: float = 0.0
+    nu_val: float = 0.0
+    iform: int = 1
+    a: float = 0.0
+    expc: float = -0.7
+    c: float = 0.0
+    expm: float = 1.0
+    m: float = 0.0
+    ksi: float = 0.01
+    tauref: float = 1.0
+    tau_ref: float = 0.0
+    title: str = ""
+    law: int = 95
+    law_name: str = "LAW95"
+    params: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.c != 0.0 and self.expc == -0.7:
+            self.expc = self.c
+        elif self.c == 0.0 and self.expc != 0.0:
+            self.c = self.expc
+        if self.m != 0.0 and self.expm == 1.0:
+            self.expm = self.m
+        elif self.m == 0.0 and self.expm != 0.0:
+            self.m = self.expm
+        if self.tau_ref != 0.0 and self.tauref == 1.0:
+            self.tauref = self.tau_ref
+        elif self.tau_ref == 0.0 and self.tauref != 0.0:
+            self.tau_ref = self.tauref
+
+    @property
+    def rho(self) -> float:
+        return self.rhor if self.rhor > 0.0 else self.rho0
+
+    @rho.setter
+    def rho(self, val: float) -> None:
+        self.rho0 = float(val)
+
+    @property
+    def G(self) -> float:
+        g0 = 2.0 * (self.c10 + self.c01) * (self.sb + 1.0)
+        return float(self.params.get("G", g0))
+
+    @property
+    def g(self) -> float:
+        return self.G
+
+    @property
+    def shear(self) -> float:
+        return self.G
+
+    @property
+    def K(self) -> float:
+        if "K" in self.params:
+            return float(self.params["K"])
+        if self.d1 > 0.0:
+            d1_inv = (1.0 / self.d1) if self.d1 < 1.0 else self.d1
+            return float(2.0 * d1_inv * (1.0 + self.sb))
+        g0 = self.G
+        nu = self.nu
+        return float((2.0 / 3.0) * g0 * (1.0 + nu) / max(1e-30, (1.0 - 2.0 * nu)))
+
+    @property
+    def k(self) -> float:
+        return self.K
+
+    @property
+    def bulk(self) -> float:
+        return self.K
+
+    @property
+    def nu(self) -> float:
+        if "nu" in self.params:
+            return float(self.params["nu"])
+        return self.nu_val if self.nu_val > 0.0 else 0.495
+
+    @nu.setter
+    def nu(self, val: float) -> None:
+        self.nu_val = float(val)
+
+    @property
+    def poisson(self) -> float:
+        return self.nu
+
+    @property
+    def E(self) -> float:
+        if "E" in self.params:
+            return float(self.params["E"])
+        k = self.K
+        g = self.G
+        denom = 3.0 * k + g
+        if denom > 0.0:
+            return float(9.0 * k * g / denom)
+        return float(2.0 * g * (1.0 + self.nu))
+
+    @property
+    def e(self) -> float:
+        return self.E
+
+    @property
+    def young(self) -> float:
+        return self.E
+
+    @property
+    def sound_speed(self) -> CallableFloat:
+        try:
+            from ..materials.law95_bergstrom_boyce import sound_speed
+            return CallableFloat(float(sound_speed(self, self.rho0)))
+        except Exception:
+            import math
+            stiff = (4.0 / 3.0) * self.G + self.K
+            r = self.rho0
+            if r > 0.0 and stiff > 0.0:
+                return CallableFloat(math.sqrt(stiff / r))
+            return CallableFloat(0.0)
+
+    @property
+    def sound_speed_solid(self) -> CallableFloat:
+        return self.sound_speed
+
+    # Mapping protocol
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        if isinstance(self.params, dict) and key in self.params:
+            return self.params[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            if not isinstance(self.params, dict):
+                self.params = {}
+            self.params[key] = value
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or (isinstance(self.params, dict) and key in self.params)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self) -> List[str]:
+        base_keys = [
+            "id", "title", "rho0", "rhor", "c10", "c01", "c20", "c11", "c02",
+            "c30", "c21", "c12", "c03", "sb", "d1", "d2", "d3", "nu_val", "iform",
+            "a", "expc", "expm", "ksi", "tauref", "law", "law_name", "rho",
+            "E", "e", "young", "nu", "poisson", "G", "g", "shear", "K", "k", "bulk",
+            "sound_speed", "sound_speed_solid",
+        ]
+        if isinstance(self.params, dict):
+            for k in self.params:
+                if k not in base_keys:
+                    base_keys.append(k)
+        return base_keys
+
+    def values(self) -> List[Any]:
+        return [self[k] for k in self.keys()]
+
+    def items(self) -> List[tuple]:
+        return [(k, self[k]) for k in self.keys()]
+
+    def __len__(self) -> int:
+        return len(self.keys())
+
+    def __iter__(self):
+        return iter(self.keys())
+
+
+MaterialLaw95 = MatLaw95
+MatBergstromBoyce = MatLaw95
 
 
 @dataclass

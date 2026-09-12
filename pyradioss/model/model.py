@@ -81,7 +81,7 @@ from .entities import (
     MaterialConc, MaterialBarlat, MaterialLaw83, MaterialLaw80,
     MaterialLaw117, MaterialLaw90, MaterialLaw33, MatHeatModifier, MatNonlocalModifier,
     MaterialLaw66, MatLaw66, MatPlasTabCosser, MatPlasCosser, MaterialLaw35, MaterialLaw62, MaterialLaw28, MaterialLaw44,
-    MaterialLaw88, MaterialLaw92, MaterialLaw94, MaterialLaw46, MaterialLaw69,
+    MaterialLaw88, MaterialLaw92, MaterialLaw94, MaterialLaw95, MatBergstromBoyce, MaterialLaw46, MaterialLaw69,
     MaterialLaw124, MaterialLaw126, MaterialLaw125, MaterialLaw127, MaterialLaw130,
     MaterialLaw128, MaterialLaw129, MaterialLaw123, MaterialLaw132, MaterialLaw134,
     MaterialLaw104, MaterialLaw105, MaterialLaw106, MaterialLaw107, MaterialLaw110, MaterialLaw115,
@@ -1364,6 +1364,8 @@ class Model:
         self.mat_hill_orths = self.mat_law92s
         self.mat_law94s: Dict[int, Any] = {}                        # /MAT/LAW94, /MAT/YEOH (M173, M567)
         self.mat_yeohs = self.mat_law94s
+        self.mat_law95s: Dict[int, Any] = {}                        # /MAT/LAW95, /MAT/BERGSTROM_BOYCE (M569)
+        self.mat_bergstrom_boyces = self.mat_law95s
         self.prop_type26s: Dict[int, Any] = {}                      # /PROP/TYPE26, /PROP/SPR_TAB (M196)
         self.prop_spr_tabs = self.prop_type26s
         self.damp_inters: Dict[int, Any] = {}                       # /DAMP/INTER (M196)

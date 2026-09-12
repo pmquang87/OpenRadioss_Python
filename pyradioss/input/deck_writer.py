@@ -5811,6 +5811,128 @@ class StarterDeck:
         kwargs.setdefault("law_name", "YEOH")
         return self.mat_law94(*args, **kwargs)
 
+    def mat_law95(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho0: float = 0.0,
+        refer_rho: float = 0.0,
+        c10: float = 0.0,
+        c01: float = 0.0,
+        c20: float = 0.0,
+        c11: float = 0.0,
+        c02: float = 0.0,
+        c30: float = 0.0,
+        c21: float = 0.0,
+        c12: float = 0.0,
+        c03: float = 0.0,
+        sb: float = 0.0,
+        d1: float = 0.0,
+        d2: float = 0.0,
+        d3: float = 0.0,
+        nu: float = 0.0,
+        iform: int = 1,
+        a: float = 0.0,
+        c: float = -0.7,
+        m: float = 1.0,
+        ksi: float = 0.01,
+        tau_ref: float = 1.0,
+        unit_id: int | None = None,
+        law_name: str = "LAW95",
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW95`` or ``/MAT/BERGSTROM_BOYCE`` (M569): Bergstrom-Boyce visco-hyperelastic polymer."""
+        if "id" in kwargs and mid == 0:
+            mid = kwargs["id"]
+        if "mat_id" in kwargs and mid == 0:
+            mid = kwargs["mat_id"]
+        mat_obj = kwargs.get("mat_law95", kwargs.get("mat_bergstrom_boyce", kwargs.get("mat", kwargs.get("material", None))))
+        if mat_obj is not None or hasattr(mid, "c10") or hasattr(mid, "sb"):
+            if mat_obj is None:
+                mat_obj = mid
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho0 = getattr(mat_obj, "rho0", rho0)
+            refer_rho = getattr(mat_obj, "ref_rho", getattr(mat_obj, "refer_rho", refer_rho))
+            c10 = getattr(mat_obj, "c10", c10)
+            c01 = getattr(mat_obj, "c01", c01)
+            c20 = getattr(mat_obj, "c20", c20)
+            c11 = getattr(mat_obj, "c11", c11)
+            c02 = getattr(mat_obj, "c02", c02)
+            c30 = getattr(mat_obj, "c30", c30)
+            c21 = getattr(mat_obj, "c21", c21)
+            c12 = getattr(mat_obj, "c12", c12)
+            c03 = getattr(mat_obj, "c03", c03)
+            sb = getattr(mat_obj, "sb", sb)
+            d1 = getattr(mat_obj, "d1_raw", getattr(mat_obj, "d1", d1))
+            d2 = getattr(mat_obj, "d2_raw", getattr(mat_obj, "d2", d2))
+            d3 = getattr(mat_obj, "d3_raw", getattr(mat_obj, "d3", d3))
+            nu = getattr(mat_obj, "nu_input", getattr(mat_obj, "nu", nu))
+            iform = getattr(mat_obj, "iform", iform)
+            a = getattr(mat_obj, "a", a)
+            c = getattr(mat_obj, "c", getattr(mat_obj, "expc", c))
+            m = getattr(mat_obj, "m", getattr(mat_obj, "expm", m))
+            ksi = getattr(mat_obj, "ksi", ksi)
+            tau_ref = getattr(mat_obj, "tau_ref", getattr(mat_obj, "tauref", tau_ref))
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("rho", "rho_i", "mat_rho"): rho0 = v
+            elif kl == "refer_rho": refer_rho = v
+            elif kl in ("c10", "mat_c_10"): c10 = v
+            elif kl in ("c01", "mat_c_01"): c01 = v
+            elif kl in ("c20", "mat_c_20"): c20 = v
+            elif kl in ("c11", "mat_c_11"): c11 = v
+            elif kl in ("c02", "mat_c_02"): c02 = v
+            elif kl in ("c30", "mat_c_30"): c30 = v
+            elif kl in ("c21", "mat_c_21"): c21 = v
+            elif kl in ("c12", "mat_c_12"): c12 = v
+            elif kl in ("c03", "mat_c_03"): c03 = v
+            elif kl in ("sb", "mat_sb"): sb = v
+            elif kl in ("d1", "mat_d_1"): d1 = v
+            elif kl in ("d2", "mat_d_2"): d2 = v
+            elif kl in ("d3", "mat_d_3"): d3 = v
+            elif kl in ("nu", "mat_nu"): nu = v
+            elif kl == "iform": iform = int(v)
+            elif kl in ("a", "mlaw95_a"): a = v
+            elif kl in ("c", "expc", "mlaw95_c"): c = v
+            elif kl in ("m", "expm", "mlaw95_m"): m = v
+            elif kl in ("ksi", "mlaw95_ksi"): ksi = v
+            elif kl in ("tau_ref", "tauref", "mat_tau_ref"): tau_ref = v
+
+        if data_cards is not None and isinstance(data_cards, (list, tuple)):
+            if unit_id is not None:
+                self._header("MAT", law_name, mid, unit_id)
+            else:
+                self._header("MAT", law_name, mid)
+            self._title(title)
+            self.lines.extend(str(card).rstrip("\r\n") for card in data_cards)
+            return self
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        # Card 1: Rho_I (%20lg)
+        self.lines.append(fmt_float(rho0))
+        # Card 2: C10 C01 C20 C11 C02 (%20lg%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(c10) + fmt_float(c01) + fmt_float(c20) + fmt_float(c11) + fmt_float(c02))
+        # Card 3: C30 C21 C12 C03 Sb (%20lg%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(c30) + fmt_float(c21) + fmt_float(c12) + fmt_float(c03) + fmt_float(sb))
+        # Card 4: D1 D2 D3 NU IFORM (%20lg%20lg%20lg%20lg%10d)
+        self.lines.append(fmt_float(d1) + fmt_float(d2) + fmt_float(d3) + fmt_float(nu) + fmt_int(iform, 10))
+        # Card 5: A C M KSI TAU_REF (%20lg%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(a) + fmt_float(c) + fmt_float(m) + fmt_float(ksi) + fmt_float(tau_ref))
+        return self
+
+    def mat_bergstrom_boyce(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/BERGSTROM_BOYCE`` — synonym for ``/MAT/LAW95``."""
+        kwargs.setdefault("law_name", "BERGSTROM_BOYCE")
+        return self.mat_law95(*args, **kwargs)
+
     def mat_law93(
         self,
         mid: int = 0,
@@ -9097,6 +9219,8 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law69(mid, title, cards)
     elif law in ("LAW94", "YEOH", "LAW94_YEOH"):
         d.mat_law94(mid, title, cards)
+    elif law in ("LAW95", "BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE", 95, "95"):
+        d.mat_law95(mid, title, cards)
     elif law in ("LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL", 93):
         d.mat_law93(mid, title, cards)
     elif law == "HILL_TAB":

@@ -1012,7 +1012,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_87", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000", "LAW87_BARLAT", "LAW87_BARLAT2000", "LAW87_BARLAT_2000"):
         read_mat_law87(block, model, log)
         return
-    if lawname in ("LAW95", "BERGSTROM_BOYCE", "HYP_VISC_PLAS", "FOAM_TAB", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE"):
+    if lawname in ("95", "LAW95", "MAT_95", "MAT_LAW95", "BERGSTROM_BOYCE", "HYP_VISC_PLAS", "FOAM_TAB", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE"):
         read_mat_law95(block, model, log)
         return
     if lawname in ("163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM", "LAW163_CRUSHABLE_FOAM", "LAW163_CRUSH_FOAM"):
@@ -34855,22 +34855,22 @@ def read_mat_law87(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law95(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW95/id`` or ``/MAT/BERGSTROM_BOYCE/id`` (M183): Bergstrom-Boyce polymer."""
-    from ..model.entities import MatLaw95
+    """``/MAT/LAW95/id`` or ``/MAT/BERGSTROM_BOYCE/id`` (M569): Bergstrom-Boyce visco-hyperelastic polymer."""
+    from ..model.entities import MatLaw95, Material
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank]
+    valid_cards = [c for c in cards if not c.is_blank and not str(c).strip().startswith("#") and not str(c).strip().startswith("$")]
     if not valid_cards:
         log.error(f"/MAT/LAW95/{mat_id}: missing data cards", block.source)
         return
 
     rho = 0.0
     c10, c01, c20, c11, c02 = 0.0, 0.0, 0.0, 0.0, 0.0
-    c30, c21, c12, c03, sb = 0.0, 0.0, 0.0, 0.0, 1.0
+    c30, c21, c12, c03, sb = 0.0, 0.0, 0.0, 0.0, 0.0
     d1, d2, d3 = 0.0, 0.0, 0.0
-    nu = 0.49
-    iform = 0
-    a, c, m, ksi, tau_ref = 0.0, 0.0, 1.0, 0.0, 0.0
+    nu = 0.0
+    iform = 1
+    a, c, m, ksi, tau_ref = 0.0, -0.7, 1.0, 0.01, 1.0
 
     if block.fixed:
         f1 = valid_cards[0].cut("MAT_LAW95_1")
@@ -34890,23 +34890,29 @@ def read_mat_law95(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             c21 = _fval(f3[1]) if len(f3) > 1 else 0.0
             c12 = _fval(f3[2]) if len(f3) > 2 else 0.0
             c03 = _fval(f3[3]) if len(f3) > 3 else 0.0
-            sb = _fval(f3[4], 1.0) if len(f3) > 4 and f3[4].strip() else 1.0
+            sb = _fval(f3[4]) if len(f3) > 4 and f3[4].strip() else 0.0
 
         if len(valid_cards) > 3:
-            f4 = valid_cards[3].cut("MAT_LAW95_4")
+            raw_c4 = valid_cards[3].raw if hasattr(valid_cards[3], "raw") else str(valid_cards[3])
+            layout4 = "MAT_LAW95_4_2020" if len(raw_c4.rstrip()) <= 60 else "MAT_LAW95_4"
+            f4 = valid_cards[3].cut(layout4)
             d1 = _fval(f4[0]) if len(f4) > 0 else 0.0
             d2 = _fval(f4[1]) if len(f4) > 1 else 0.0
             d3 = _fval(f4[2]) if len(f4) > 2 else 0.0
-            nu = _fval(f4[3], 0.49) if len(f4) > 3 and f4[3].strip() else 0.49
-            iform = _ival(f4[4]) if len(f4) > 4 else 0
+            if len(f4) > 3 and f4[3].strip():
+                nu = _fval(f4[3])
+            if len(f4) > 4 and f4[4].strip():
+                iform = _ival(f4[4])
 
         if len(valid_cards) > 4:
-            f5 = valid_cards[4].cut("MAT_LAW95_5")
+            raw_c5 = valid_cards[4].raw if hasattr(valid_cards[4], "raw") else str(valid_cards[4])
+            layout5 = "MAT_LAW95_5_2018" if len(raw_c5.rstrip()) <= 80 else "MAT_LAW95_5"
+            f5 = valid_cards[4].cut(layout5)
             a = _fval(f5[0]) if len(f5) > 0 else 0.0
-            c = _fval(f5[1]) if len(f5) > 1 else 0.0
+            c = _fval(f5[1], -0.7) if len(f5) > 1 and f5[1].strip() else -0.7
             m = _fval(f5[2], 1.0) if len(f5) > 2 and f5[2].strip() else 1.0
-            ksi = _fval(f5[3]) if len(f5) > 3 else 0.0
-            tau_ref = _fval(f5[4]) if len(f5) > 4 else 0.0
+            ksi = _fval(f5[3], 0.01) if len(f5) > 3 and f5[3].strip() else 0.01
+            tau_ref = _fval(f5[4], 1.0) if len(f5) > 4 and f5[4].strip() else 1.0
     else:
         toks1 = valid_cards[0].tokens()
         rho = float(toks1[0]) if len(toks1) > 0 else 0.0
@@ -34925,39 +34931,79 @@ def read_mat_law95(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             c21 = float(toks3[1]) if len(toks3) > 1 else 0.0
             c12 = float(toks3[2]) if len(toks3) > 2 else 0.0
             c03 = float(toks3[3]) if len(toks3) > 3 else 0.0
-            sb = float(toks3[4]) if len(toks3) > 4 else 1.0
+            sb = float(toks3[4]) if len(toks3) > 4 else 0.0
 
         if len(valid_cards) > 3:
             toks4 = valid_cards[3].tokens()
             d1 = float(toks4[0]) if len(toks4) > 0 else 0.0
             d2 = float(toks4[1]) if len(toks4) > 1 else 0.0
             d3 = float(toks4[2]) if len(toks4) > 2 else 0.0
-            nu = float(toks4[3]) if len(toks4) > 3 else 0.49
-            iform = int(float(toks4[4])) if len(toks4) > 4 else 0
+            nu = float(toks4[3]) if len(toks4) > 3 else 0.0
+            iform = int(float(toks4[4])) if len(toks4) > 4 else 1
 
         if len(valid_cards) > 4:
             toks5 = valid_cards[4].tokens()
             a = float(toks5[0]) if len(toks5) > 0 else 0.0
-            c = float(toks5[1]) if len(toks5) > 1 else 0.0
+            c = float(toks5[1]) if len(toks5) > 1 else -0.7
             m = float(toks5[2]) if len(toks5) > 2 else 1.0
-            ksi = float(toks5[3]) if len(toks5) > 3 else 0.0
-            tau_ref = float(toks5[4]) if len(toks5) > 4 else 0.0
+            ksi = float(toks5[3]) if len(toks5) > 3 else 0.01
+            tau_ref = float(toks5[4]) if len(toks5) > 4 else 1.0
+
+    # Fortran defaults (hm_read_mat95.F:168-173, 200-202)
+    if iform == 0:
+        iform = 1
+    if tau_ref == 0.0:
+        tau_ref = 1.0
+    if m == 0.0:
+        m = 1.0
+    if c == 0.0:
+        c = -0.7
+    if ksi == 0.0:
+        ksi = 0.01
+
+    # Linear elasticity derivation (hm_read_mat95.F:176-195)
+    g0 = 2.0 * (c10 + c01) * (sb + 1.0)
+    if d1 != 0.0:
+        d1_inv = 1.0 / d1
+        rbulk = 2.0 * d1_inv * (1.0 + sb)
+        denom = 3.0 * rbulk + g0
+        nu_calc = (3.0 * rbulk - 2.0 * g0) / (2.0 * denom) if denom != 0.0 else 0.495
+        e_calc = 9.0 * rbulk * g0 / denom if denom != 0.0 else 2.0 * g0 * (1.0 + nu_calc)
+    elif nu != 0.0:
+        d2 = 0.0
+        d3 = 0.0
+        nu_calc = nu
+        e_calc = 2.0 * g0 * (1.0 + nu)
+        rbulk = (2.0 / 3.0) * g0 * (1.0 + nu) / (1.0 - 2.0 * nu) if (1.0 - 2.0 * nu) != 0.0 else 100.0 * g0
+    else:
+        d2 = 0.0
+        d3 = 0.0
+        nu_calc = 0.495
+        rbulk = (2.0 / 3.0) * g0 * (1.0 + nu_calc) / (1.0 - 2.0 * nu_calc)
+        e_calc = 2.0 * g0 * (1.0 + nu_calc)
 
     m95 = MatLaw95(
-        id=mat_id, rho=rho, c10=c10, c01=c01, c20=c20, c11=c11, c02=c02,
+        id=mat_id, rho0=rho, rhor=rho, c10=c10, c01=c01, c20=c20, c11=c11, c02=c02,
         c30=c30, c21=c21, c12=c12, c03=c03, sb=sb, d1=d1, d2=d2, d3=d3,
-        nu=nu, iform=iform, a=a, c=c, m=m, ksi=ksi, tau_ref=tau_ref,
+        nu_val=nu_calc, iform=iform, a=a, expc=c, expm=m, ksi=ksi, tauref=tau_ref,
         title=title,
     )
+    if not hasattr(model, "mat_law95s") or model.mat_law95s is None:
+        model.mat_law95s = {}
     model.mat_law95s[mat_id] = m95
+    if hasattr(model, "mat_bergstrom_boyces"):
+        model.mat_bergstrom_boyces[mat_id] = m95
+
     model.materials[mat_id] = Material(
         id=mat_id, law=95, rho0=rho, title=title,
         params={
             "rho": rho, "rho0": rho,
             "c10": c10, "c01": c01, "c20": c20, "c11": c11, "c02": c02,
             "c30": c30, "c21": c21, "c12": c12, "c03": c03, "sb": sb,
-            "d1": d1, "d2": d2, "d3": d3, "nu": nu, "iform": iform,
+            "d1": d1, "d2": d2, "d3": d3, "nu": nu_calc, "iform": iform,
             "a": a, "c": c, "m": m, "ksi": ksi, "tau_ref": tau_ref,
+            "g0": g0, "G": g0, "rbulk": rbulk, "bulk": rbulk, "K": rbulk,
+            "E": e_calc,
         }
     )
 

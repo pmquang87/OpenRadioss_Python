@@ -126,6 +126,13 @@ _LAW94_KEYS = {
 for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells", "shells_qbat", "shells_qeph", "sh3n"):
     _ALLOWED_LAWS[_fam].update(_LAW94_KEYS)
 
+_LAW95_KEYS = {
+    95, "95", "LAW95", "BERGSTROM_BOYCE",
+    "MAT_LAW95", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE",
+}
+for _fam in ("bricks", "tetras", "penta6", "pyra5"):
+    _ALLOWED_LAWS[_fam].update(_LAW95_KEYS)
+
 _ALLOWED_LAWS["quads"] = _ALLOWED_LAWS["shells"]
 _ALLOWED_LAWS["solids"] = _ALLOWED_LAWS["bricks"]
 _ALLOWED_LAWS["solids_heph"] = _ALLOWED_LAWS["bricks"]
@@ -4877,6 +4884,230 @@ def check_mat_law94(*args: Any, **kwargs: Any) -> None:
 _check_mat_law94 = check_mat_law94
 
 
+def check_mat_law95(*args: Any, **kwargs: Any) -> None:
+    """Validate /MAT/LAW95 or /MAT/BERGSTROM_BOYCE parameter bounds and element compatibility (M569).
+
+    Checks:
+      1. RHO0 > 0 (ANCMSG 1514).
+      2. Initial shear modulus G0 = 2*(C10 + C01)*(1 + Sb) > 0 (warning if <= 0).
+      3. D1, D2, D3 >= 0.
+      4. 0 <= NU < 0.5 if explicitly given.
+      5. Creep rate parameter A >= 0; if A > 0: -1 < C < 0, M >= 1.0, KSI >= 0, TAU_REF > 0.
+      6. Compatible elements: 3D solids only (SOLID_ISOTROPIC).
+         - Rejects 2D shells: shells, shells_qbat, shells_qeph, sh3n, quads (ANCMSG 305).
+         - Rejects 1D elements: trusses, beams, springs (ANCMSG 306).
+    """
+    actual_mat = None
+    actual_log = None
+    actual_model = None
+    actual_mid = None
+
+    if "model" in kwargs:
+        actual_model = kwargs["model"]
+    if "mat" in kwargs:
+        actual_mat = kwargs["mat"]
+    if "log" in kwargs:
+        actual_log = kwargs["log"]
+    if "mat_id" in kwargs:
+        actual_mid = kwargs["mat_id"]
+
+    for c in args:
+        if isinstance(c, MessageLog):
+            actual_log = c
+        elif isinstance(c, Model):
+            actual_model = c
+        elif hasattr(c, "params") or hasattr(c, "rho0") or hasattr(c, "c10"):
+            actual_mat = c
+        elif isinstance(c, int) and not isinstance(c, bool):
+            actual_mid = c
+
+    if actual_mat is None:
+        for k in ("mat", "material", "mat95", "mat_law95", "mat_bergstrom_boyce"):
+            if k in kwargs:
+                actual_mat = kwargs[k]
+                break
+
+    if actual_log is None:
+        if "log" in kwargs:
+            actual_log = kwargs["log"]
+        elif "logger" in kwargs:
+            actual_log = kwargs["logger"]
+        else:
+            actual_log = MessageLog()
+
+    if actual_mat is None:
+        return
+
+    mid = actual_mid if actual_mid is not None else getattr(actual_mat, "id", getattr(actual_mat, "mat_id", 0))
+    params = getattr(actual_mat, "params", {}) or {}
+
+    def get_val(key: str, default: float = 0.0) -> float:
+        if isinstance(params, dict) and key in params:
+            try:
+                return float(params[key])
+            except (ValueError, TypeError):
+                pass
+        for attr in (key.lower(), key.upper(), key):
+            if hasattr(actual_mat, attr):
+                try:
+                    val = getattr(actual_mat, attr)
+                    if val is not None:
+                        return float(val)
+                except (ValueError, TypeError):
+                    pass
+        return default
+
+    # 1. Density check (ANCMSG 1514)
+    rho0 = get_val("rho0", get_val("rho_initial", get_val("RHO_I", get_val("RHO0", get_val("MAT_RHO", 0.0)))))
+    if rho0 <= 0.0:
+        actual_log.error(
+            f"/MAT/LAW95/{mid}: initial density RHO0 must be > 0, got {rho0} (ANCMSG 1514)",
+            "MAT CHECK",
+        )
+
+    # 2. Hyperelastic parameters & initial shear modulus
+    c10 = get_val("c10", get_val("C10", 0.0))
+    c01 = get_val("c01", get_val("C01", 0.0))
+    sb = get_val("sb", get_val("Sb", 0.0))
+    if sb < 0.0:
+        actual_log.error(
+            f"/MAT/LAW95/{mid}: network B scale factor Sb must be >= 0, got {sb}",
+            "MAT CHECK",
+        )
+
+    g0 = 2.0 * (c10 + c01) * (1.0 + sb)
+    if g0 <= 0.0:
+        actual_log.warning(
+            f"/MAT/LAW95/{mid}: initial shear modulus G0 = 2*(C10+C01)*(1+Sb) should be > 0, got {g0}",
+            "MAT CHECK",
+        )
+
+    # 3. Compressibility parameters
+    d1 = get_val("d1", get_val("D1", 0.0))
+    if d1 < 0.0:
+        actual_log.error(
+            f"/MAT/LAW95/{mid}: compressibility parameter D1 must be >= 0, got {d1}",
+            "MAT CHECK",
+        )
+    d2 = get_val("d2", get_val("D2", 0.0))
+    if d2 < 0.0:
+        actual_log.error(
+            f"/MAT/LAW95/{mid}: compressibility parameter D2 must be >= 0, got {d2}",
+            "MAT CHECK",
+        )
+    d3 = get_val("d3", get_val("D3", 0.0))
+    if d3 < 0.0:
+        actual_log.error(
+            f"/MAT/LAW95/{mid}: compressibility parameter D3 must be >= 0, got {d3}",
+            "MAT CHECK",
+        )
+
+    nu = get_val("nu", 0.0)
+    if nu != 0.0 and (nu < 0.0 or nu >= 0.5):
+        actual_log.error(
+            f"/MAT/LAW95/{mid}: Poisson's ratio NU must satisfy 0 <= NU < 0.5, got {nu}",
+            "MAT CHECK",
+        )
+
+    # 4. Creep parameters (CFG CHECK: MLAW95_A >= 0, MLAW95_C > -1 and < 0, MLAW95_M >= 1.0)
+    a = get_val("a", get_val("A", 0.0))
+    if a < 0.0:
+        actual_log.error(
+            f"/MAT/LAW95/{mid}: effective creep rate parameter A must be >= 0, got {a}",
+            "MAT CHECK",
+        )
+    if a > 0.0:
+        c_exp = get_val("c", get_val("C", get_val("expc", -0.7)))
+        if c_exp <= -1.0 or c_exp >= 0.0:
+            actual_log.error(
+                f"/MAT/LAW95/{mid}: creep strain exponent C must satisfy -1 < C < 0, got {c_exp}",
+                "MAT CHECK",
+            )
+        m_exp = get_val("m", get_val("M", get_val("expm", 1.0)))
+        if m_exp < 1.0:
+            actual_log.error(
+                f"/MAT/LAW95/{mid}: stress exponent M must satisfy M >= 1.0, got {m_exp}",
+                "MAT CHECK",
+            )
+        ksi = get_val("ksi", get_val("KSI", 0.01))
+        if ksi < 0.0:
+            actual_log.error(
+                f"/MAT/LAW95/{mid}: cut-off strain parameter KSI must be >= 0, got {ksi}",
+                "MAT CHECK",
+            )
+        tau_ref = get_val("tau_ref", get_val("TAU_REF", get_val("tauref", 1.0)))
+        if tau_ref <= 0.0:
+            actual_log.error(
+                f"/MAT/LAW95/{mid}: reference stress TAU_REF must be > 0, got {tau_ref}",
+                "MAT CHECK",
+            )
+
+    # 5. Compatible elements check (3D continuum solids only, reject shells ANCMSG 305 and 1D ANCMSG 306)
+    if actual_model is not None:
+        if hasattr(actual_model, "element_groups") and callable(actual_model.element_groups):
+            try:
+                grps = list(actual_model.element_groups())
+            except TypeError:
+                grps = []
+            for item in grps:
+                if isinstance(item, tuple) and len(item) == 2:
+                    name, el_group = item
+                else:
+                    continue
+                mids_in_group = set()
+                if hasattr(el_group, "values") and callable(el_group.values):
+                    for el in el_group.values():
+                        el_mid = getattr(el, "mat_id", getattr(el, "mid", None))
+                        if el_mid is not None:
+                            mids_in_group.add(el_mid)
+                if hasattr(el_group, "state") and isinstance(el_group.state, dict) and "slices" in el_group.state:
+                    for _, m_part, _ in el_group.state["slices"]:
+                        m_id = getattr(m_part, "id", None)
+                        if m_id is not None:
+                            mids_in_group.add(m_id)
+                if mid in mids_in_group:
+                    if name in ("trusses", "beams", "springs"):
+                        actual_log.error(
+                            f"/MAT/LAW95/{mid} is not supported for 1D elements ({name}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+                    elif name in ("shells", "shells_qbat", "shells_qeph", "sh3n", "quads"):
+                        actual_log.error(
+                            f"/MAT/LAW95/{mid} is not supported for 2D shell elements ({name}) (ANCMSG 305)",
+                            "MAT CHECK",
+                        )
+
+        if hasattr(actual_model, "parts") and isinstance(actual_model.parts, dict):
+            for pid, part in actual_model.parts.items():
+                p_mid = getattr(part, "mat_id", getattr(part, "mid", None))
+                if p_mid == mid:
+                    etype = str(getattr(part, "elem_type", getattr(part, "type", ""))).upper()
+                    prop_id = getattr(part, "prop_id", None)
+                    if not etype or etype in ("NONE", ""):
+                        if prop_id is not None:
+                            props = getattr(actual_model, "properties", {}) or getattr(actual_model, "props", {})
+                            prop = props.get(prop_id) if isinstance(props, dict) else None
+                            if prop is not None:
+                                ptype = str(getattr(prop, "type", getattr(prop, "card_name", ""))).upper()
+                                if any(s in ptype for s in ("BEAM", "TRUSS", "SPRING")):
+                                    etype = "1D"
+                                elif any(s in ptype for s in ("SHELL", "SH3N", "QUAD")):
+                                    etype = "2D"
+                    if any(s in etype for s in ("BEAM", "TRUSS", "SPRING", "1D")):
+                        actual_log.error(
+                            f"/MAT/LAW95/{mid} is not supported for 1D elements ({etype.lower()}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+                    elif any(s in etype for s in ("SHELL", "SH3N", "QUAD", "2D")):
+                        actual_log.error(
+                            f"/MAT/LAW95/{mid} is not supported for 2D shell elements ({etype.lower()}) (ANCMSG 305)",
+                            "MAT CHECK",
+                        )
+
+
+_check_mat_law95 = check_mat_law95
+
+
 def check_mat_law93(*args: Any, **kwargs: Any) -> None:
     """Validate /MAT/LAW93 or /MAT/ORTH_HILL parameter bounds and element compatibility (M568).
 
@@ -5334,6 +5565,15 @@ def check_materials(model: Model, log: MessageLog) -> None:
         if mid not in getattr(model, "materials", {}):
             check_mat_law93(model=model, mat_id=mid, mat=mat93, log=log)
 
+    # M569: Material LAW95 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in (95, "95", "LAW95", "BERGSTROM_BOYCE") or getattr(mat, "law_name", None) in ("95", "LAW95", "BERGSTROM_BOYCE", "MAT_LAW95", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE"):
+            check_mat_law95(model=model, mat_id=mid, mat=mat, log=log)
+    for mid, mat95 in getattr(model, "mat_law95s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law95(model=model, mat_id=mid, mat=mat95, log=log)
+
+
 
 
 _MAT_CHECKS: dict[Any, Any] = {
@@ -5568,6 +5808,13 @@ _MAT_CHECKS: dict[Any, Any] = {
     "MAT_LAW79": check_mat_law79,
     "MAT_JOHN_HOLM": check_mat_law79,
     "LAW79_JOHN_HOLM": check_mat_law79,
+    95: check_mat_law95,
+    "95": check_mat_law95,
+    "LAW95": check_mat_law95,
+    "BERGSTROM_BOYCE": check_mat_law95,
+    "MAT_LAW95": check_mat_law95,
+    "MAT_BERGSTROM_BOYCE": check_mat_law95,
+    "LAW95_BERGSTROM_BOYCE": check_mat_law95,
 }
 
 
@@ -5652,6 +5899,15 @@ def check_model(model: Model, log: MessageLog) -> None:
         for mid, mat74 in getattr(model, "mat_law74s", {}).items():
             if mid not in getattr(model, "materials", {}):
                 log.error(f"/MAT/LAW74/{mid}: LAW74 is not supported for 2D analysis (N2D > 0) (ANCMSG 305)", "MAT CHECK")
+
+    # M569: LAW95 is 3D solid only, invalid for 2D formulations (hm_read_mat95.F)
+    if getattr(model, "n2d", 0) > 0:
+        for mid, mat in getattr(model, "materials", {}).items():
+            if getattr(mat, "law", None) in (95, "95", "LAW95", "BERGSTROM_BOYCE") or getattr(mat, "law_name", None) in ("95", "LAW95", "BERGSTROM_BOYCE", "MAT_LAW95", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE"):
+                log.error(f"/MAT/LAW95/{mid}: LAW95 is not supported for 2D analysis (N2D > 0) (ANCMSG 305)", "MAT CHECK")
+        for mid, mat95 in getattr(model, "mat_law95s", {}).items():
+            if mid not in getattr(model, "materials", {}):
+                log.error(f"/MAT/LAW95/{mid}: LAW95 is not supported for 2D analysis (N2D > 0) (ANCMSG 305)", "MAT CHECK")
 
     # material law vs element family compatibility (fail in the Starter
     # with a clear message instead of a NotImplementedError mid-run)
@@ -5803,6 +6059,21 @@ def check_model(model: Model, log: MessageLog) -> None:
                     log.error(
                         f"/MAT/LAW94/{mat.id} (/MAT/YEOH) is not supported for {name} elements "
                         f"(solids and shells only: bricks, tetras, penta6, pyra5, shells, shells_qbat, shells_qeph, sh3n, quads)",
+                        "MAT CHECK",
+                    )
+                    continue
+            if (mat.law in (95, "95", "LAW95", "BERGSTROM_BOYCE")
+                    or getattr(mat, "law_name", None) in ("95", "LAW95", "BERGSTROM_BOYCE", "MAT_LAW95", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE")):
+                if name in ("trusses", "beams", "springs"):
+                    log.error(
+                        f"/MAT/LAW95/{mat.id} (/MAT/BERGSTROM_BOYCE) is not supported for {name} elements (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    continue
+                if name in ("shells", "shells_qbat", "shells_qeph", "sh3n", "quads"):
+                    log.error(
+                        f"/MAT/LAW95/{mat.id} (/MAT/BERGSTROM_BOYCE) is not supported for {name} elements "
+                        f"(solids only: bricks, tetras, penta6, pyra5) (ANCMSG 305)",
                         "MAT CHECK",
                     )
                     continue
