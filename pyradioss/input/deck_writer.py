@@ -6791,6 +6791,185 @@ class StarterDeck:
         kwargs.setdefault("law_name", "PLAS_DRUCK")
         return self.mat_law104(*args, **kwargs)
 
+    def mat_law106(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho: float = 0.0,
+        refer_rho: float = 0.0,
+        young: float = 0.0,
+        nu: float = 0.0,
+        fct_id1: int = 0,
+        fct_id2: int = 0,
+        fct_id3: int = 0,
+        a: float = 0.0,
+        b: float = 0.0,
+        n: float = 1.0,
+        eps_max: float = 1.0e30,
+        sigma_max: float = 1.0e30,
+        fcut: float = 10000.0,
+        vp: int = 2,
+        nmax: int = 3,
+        tol: float = 1.0e-7,
+        c: float = 0.0,
+        deps0: float = 1.0,
+        m: float = 1.0,
+        tmelt: float = 1.0e30,
+        rho_cp: float = 0.0,
+        eta: float = 1.0,
+        t0: float = 300.0,
+        tr: float = 300.0,
+        law_name: str = "LAW106",
+        unit_id: Optional[int] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW106`` (/MAT/JCOOK_ALM) Johnson-Cook Additive Layer Manufacturing model (M575).
+
+        Card 1: RHO_I [, Refer_Rho] (%20lg%20lg)
+        Card 2: E, nu, fct_ID1, fct_ID2, fct_ID3 (%20lg%20lg%10d%10d%10d)
+        Card 3: A, B, n, epsmax, sigmax (%20lg%20lg%20lg%20lg%20lg)
+        Card 4: Fcut, VP, Nmax, Tol, C, deps0 (%20lg%10d%10d%20lg%20lg%20lg)
+        Card 5: _BLANK_ (40 chars), m, Tmelt (%40s%20lg%20lg)
+        Card 6: RHo_Cp, Eta, T0, Tr (%20lg%20lg%20lg%20lg)
+        """
+        mat_obj = None
+        if hasattr(mid, "id") or hasattr(mid, "rho") or hasattr(mid, "nu") or hasattr(mid, "young"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+        elif len(args) > 0 and not isinstance(args[0], (int, float, str)):
+            mat_obj = args[0]
+        elif "mat_obj" in kwargs:
+            mat_obj = kwargs["mat_obj"]
+        elif "mat" in kwargs:
+            mat_obj = kwargs["mat"]
+        elif "material" in kwargs:
+            mat_obj = kwargs["material"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", rho))
+            refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", refer_rho))
+            young = getattr(mat_obj, "young", getattr(mat_obj, "e", getattr(mat_obj, "E", young)))
+            nu = getattr(mat_obj, "nu", nu)
+            fct_id1 = getattr(mat_obj, "fct_id1", fct_id1)
+            fct_id2 = getattr(mat_obj, "fct_id2", fct_id2)
+            fct_id3 = getattr(mat_obj, "fct_id3", fct_id3)
+            a = getattr(mat_obj, "a", getattr(mat_obj, "sigy", a))
+            b = getattr(mat_obj, "b", getattr(mat_obj, "beta", b))
+            n = getattr(mat_obj, "n", getattr(mat_obj, "hard_n", n))
+            eps_max = getattr(mat_obj, "eps_max", getattr(mat_obj, "ep_max", eps_max))
+            sigma_max = getattr(mat_obj, "sigma_max", getattr(mat_obj, "sig_max", sigma_max))
+            fcut = getattr(mat_obj, "fcut", fcut)
+            vp = getattr(mat_obj, "vp", vp)
+            nmax = getattr(mat_obj, "nmax", nmax)
+            tol = getattr(mat_obj, "tol", tol)
+            c = getattr(mat_obj, "c", getattr(mat_obj, "cjc", c))
+            deps0 = getattr(mat_obj, "deps0", deps0)
+            m = getattr(mat_obj, "m", m)
+            tmelt = getattr(mat_obj, "tmelt", tmelt)
+            rho_cp = getattr(mat_obj, "rho_cp", getattr(mat_obj, "spheat", getattr(mat_obj, "cs", getattr(mat_obj, "rhocp", rho_cp))))
+            eta = getattr(mat_obj, "eta", eta)
+            t0 = getattr(mat_obj, "t0", t0)
+            tr = getattr(mat_obj, "tr", getattr(mat_obj, "tref", tr))
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("material_id", "mat_id", "id", "mid"):
+                mid = int(v)
+            elif kl == "title":
+                title = str(v)
+            elif kl in ("rho", "rho0", "rho_i", "initial_density"):
+                rho = float(v)
+            elif kl in ("refer_rho", "rhor", "ref_rho"):
+                refer_rho = float(v)
+            elif kl in ("young", "e"):
+                young = float(v)
+            elif kl in ("nu", "poisson"):
+                nu = float(v)
+            elif kl == "fct_id1":
+                fct_id1 = int(v)
+            elif kl == "fct_id2":
+                fct_id2 = int(v)
+            elif kl == "fct_id3":
+                fct_id3 = int(v)
+            elif kl in ("a", "sigy", "sigy0", "yld0"):
+                a = float(v)
+            elif kl in ("b", "beta"):
+                b = float(v)
+            elif kl in ("n", "hard_n", "hard"):
+                n = float(v)
+            elif kl in ("eps_max", "ep_max", "epsm"):
+                eps_max = float(v)
+            elif kl in ("sigma_max", "sig_max", "sigm"):
+                sigma_max = float(v)
+            elif kl in ("fcut", "f_cut"):
+                fcut = float(v)
+            elif kl == "vp":
+                vp = int(v)
+            elif kl == "nmax":
+                nmax = int(v)
+            elif kl == "tol":
+                tol = float(v)
+            elif kl in ("c", "cjc"):
+                c = float(v)
+            elif kl in ("deps0", "eps0", "epsp0"):
+                deps0 = float(v)
+            elif kl == "m":
+                m = float(v)
+            elif kl in ("tmelt", "t_melt"):
+                tmelt = float(v)
+            elif kl in ("rho_cp", "rhocp", "spheat", "cs"):
+                rho_cp = float(v)
+            elif kl in ("eta", "mat_eta"):
+                eta = float(v)
+            elif kl in ("t0", "t_initial", "tini"):
+                t0 = float(v)
+            elif kl in ("tr", "tref", "t_ref"):
+                tr = float(v)
+
+        if data_cards is not None and len(data_cards) > 0:
+            hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+            self.lines.append(hdr)
+            self._title(title)
+            for cd in data_cards:
+                self.lines.append(cd if isinstance(cd, str) else str(cd))
+            return self
+
+        hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+        self.lines.append(hdr)
+        self._title(title)
+
+        # Card 1: RHO_I [, Refer_Rho]
+        if refer_rho > 0.0 and refer_rho != rho:
+            self.lines.append(fmt_float(rho) + fmt_float(refer_rho))
+        else:
+            self.lines.append(fmt_float(rho))
+        # Card 2: E, nu, fct_ID1, fct_ID2, fct_ID3
+        self.lines.append(fmt_float(young) + fmt_float(nu) + fmt_int(fct_id1) + fmt_int(fct_id2) + fmt_int(fct_id3))
+        # Card 3: A, B, n, epsmax, sigmax
+        self.lines.append(fmt_float(a) + fmt_float(b) + fmt_float(n) + fmt_float(eps_max) + fmt_float(sigma_max))
+        # Card 4: Fcut, VP, Nmax, Tol, C, deps0
+        self.lines.append(fmt_float(fcut) + fmt_int(vp) + fmt_int(nmax) + fmt_float(tol) + fmt_float(c) + fmt_float(deps0))
+        # Card 5: _BLANK_ (40 chars), m, Tmelt
+        self.lines.append(" " * 40 + fmt_float(m) + fmt_float(tmelt))
+        # Card 6: RHo_Cp, Eta, T0, Tr
+        self.lines.append(fmt_float(rho_cp) + fmt_float(eta) + fmt_float(t0) + fmt_float(tr))
+
+        return self
+
+    def mat_jcook_alm(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/JCOOK_ALM`` — synonym for ``/MAT/LAW106``."""
+        kwargs.setdefault("law_name", "JCOOK_ALM")
+        return self.mat_law106(*args, **kwargs)
+
+    def mat_johns_cook_alm(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/JOHNS_COOK_ALM`` — synonym for ``/MAT/LAW106``."""
+        kwargs.setdefault("law_name", "JOHNS_COOK_ALM")
+        return self.mat_law106(*args, **kwargs)
+
     def mat_law93(
         self,
         mid: int = 0,
@@ -10483,6 +10662,8 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law103(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     elif law in ("104", "LAW104", "DRUCKER", "JOHNS_VOCE_DRUCKER", "JOHNS-VOCE-DRUCKER", "PLAS_DRUCK", "MAT_DRUCKER", "MAT_104", "MAT_LAW104", "MAT_JOHNS_VOCE_DRUCKER", "MAT_PLAS_DRUCK", "LAW104_DRUCKER"):
         d.mat_law104(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
+    elif law in ("106", "LAW106", "JCOOK_ALM", "JOHNS_COOK_ALM", "MAT_JCOOK_ALM", "MAT_106", "MAT_LAW106", "LAW106_JCOOK_ALM"):
+        d.mat_law106(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")

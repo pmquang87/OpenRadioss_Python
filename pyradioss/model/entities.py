@@ -7464,6 +7464,86 @@ class MaterialLaw106:
     eta: float = 0.0
     t0: float = 300.0
     tr: float = 300.0
+    params: dict = field(default_factory=dict)
+    law: int = 106
+    law_name: str = "LAW106"
+
+    @property
+    def rho(self) -> float:
+        return self.rho0
+
+    @property
+    def refer_rho(self) -> float:
+        return self.rhor if self.rhor > 0.0 else self.rho0
+
+    @property
+    def e(self) -> float:
+        return self.young
+
+    @property
+    def E(self) -> float:
+        return self.young
+
+    @property
+    def G(self) -> float:
+        return self.young / (2.0 * (1.0 + self.nu)) if (1.0 + self.nu) != 0.0 else 0.0
+
+    @property
+    def K(self) -> float:
+        return self.young / (3.0 * (1.0 - 2.0 * self.nu)) if (1.0 - 2.0 * self.nu) != 0.0 else 0.0
+
+    @property
+    def bulk(self) -> float:
+        return self.K
+
+    @property
+    def sound_speed(self) -> float:
+        r = self.refer_rho if self.refer_rho > 0.0 else (self.rho0 if self.rho0 > 0.0 else 1.0)
+        return math.sqrt(max(0.0, self.K + (4.0 / 3.0) * self.G) / r)
+
+    @property
+    def sound_speed_shell(self) -> float:
+        r = self.refer_rho if self.refer_rho > 0.0 else (self.rho0 if self.rho0 > 0.0 else 1.0)
+        denom = 1.0 - self.nu * self.nu
+        mod = self.young / denom if denom > 0.0 else self.young
+        return math.sqrt(max(0.0, mod) / r)
+
+    @property
+    def a(self) -> float:
+        return self.sigy
+
+    @property
+    def b(self) -> float:
+        return self.beta
+
+    @property
+    def n(self) -> float:
+        return self.hard_n
+
+    @property
+    def eps_max(self) -> float:
+        return self.ep_max
+
+    @property
+    def sigma_max(self) -> float:
+        return self.sig_max
+
+    @property
+    def cs(self) -> float:
+        return self.spheat
+
+    @property
+    def tref(self) -> float:
+        return self.tr
+
+    @property
+    def c(self) -> float:
+        return self.cjc
+
+
+MatLaw106 = MaterialLaw106
+MatJCookAlm = MaterialLaw106
+MatJohnsCookAlm = MaterialLaw106
 
 
 @dataclass

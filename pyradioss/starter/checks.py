@@ -170,6 +170,13 @@ _LAW104_KEYS = {
 for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells"):
     _ALLOWED_LAWS[_fam].update(_LAW104_KEYS)
 
+_LAW106_KEYS = {
+    106, "106", "LAW106", "JCOOK_ALM", "JOHNS_COOK_ALM", "MAT_JCOOK_ALM",
+    "MAT_106", "MAT_LAW106", "LAW106_JCOOK_ALM", "MAT_JOHNS_COOK_ALM",
+}
+for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells"):
+    _ALLOWED_LAWS[_fam].update(_LAW106_KEYS)
+
 _ALLOWED_LAWS["quads"] = _ALLOWED_LAWS["shells"]
 _ALLOWED_LAWS["solids"] = _ALLOWED_LAWS["bricks"]
 _ALLOWED_LAWS["solids_heph"] = _ALLOWED_LAWS["bricks"]
@@ -6324,6 +6331,160 @@ check_mat_johns_voce_drucker = check_mat_law104
 check_mat_plas_druck = check_mat_law104
 
 
+def check_mat_law106(*args: Any, **kwargs: Any) -> None:
+    """Validate /MAT/LAW106 or /MAT/JCOOK_ALM parameter bounds and element compatibility (M575).
+
+    Checks:
+      1. RHO0 > 0 (ANCMSG 1514).
+      2. E > 0 (ANCMSG 276 / 1514).
+      3. nu > -1 and nu <= 0.495 (ANCMSG 300 / 1514, hm_read_mat106.F90:171).
+      4. Thermal bounds: Tmelt > 0, T0 <= Tmelt.
+      5. Compatible elements: 3D solids and 2D shells.
+         - Rejects 1D elements: trusses, beams, springs (ANCMSG 306).
+    """
+    actual_mat = None
+    actual_log = None
+    actual_model = None
+    actual_mid = None
+
+    if "model" in kwargs:
+        actual_model = kwargs["model"]
+    if "mat" in kwargs:
+        actual_mat = kwargs["mat"]
+    if "log" in kwargs:
+        actual_log = kwargs["log"]
+    if "mat_id" in kwargs:
+        actual_mid = kwargs["mat_id"]
+
+    for c in args:
+        if isinstance(c, MessageLog):
+            actual_log = c
+        elif isinstance(c, Model):
+            actual_model = c
+        elif hasattr(c, "id") and (hasattr(c, "e") or hasattr(c, "young") or hasattr(c, "nu")):
+            actual_mat = c
+        elif isinstance(c, int):
+            actual_mid = c
+
+    if actual_log is None:
+        actual_log = MessageLog()
+
+    mat = actual_mat
+    mat_id = actual_mid if actual_mid is not None else (mat.id if mat is not None else 0)
+
+    if mat is None and actual_model is not None and mat_id:
+        mat = actual_model.mat_law106s.get(mat_id)
+        if mat is None:
+            mat = actual_model.materials.get(mat_id)
+
+    if mat is None:
+        return
+
+    # Extract density
+    rho0 = getattr(mat, "rho0", getattr(mat, "rho", 0.0))
+    if isinstance(mat, dict):
+        rho0 = mat.get("rho0", mat.get("rho", 0.0))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        rho0 = mat.params.get("rho0", mat.params.get("rho", rho0))
+    if rho0 <= 0.0:
+        actual_log.error(
+            f"MATERIAL {mat_id}: ZERO OR NEGATIVE DENSITY RHO={rho0} (ANCMSG 1514)",
+            "MAT CHECK",
+        )
+
+    # Extract Young's modulus
+    e_val = getattr(mat, "young", getattr(mat, "e", getattr(mat, "E", 0.0)))
+    if isinstance(mat, dict):
+        e_val = mat.get("young", mat.get("e", mat.get("E", 0.0)))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        e_val = mat.params.get("young", mat.params.get("e", mat.params.get("E", e_val)))
+    if e_val <= 0.0:
+        actual_log.error(
+            f"/MAT/LAW106/{mat_id}: ZERO OR NEGATIVE YOUNG'S MODULUS E={e_val} (ANCMSG 276)",
+            "MAT CHECK",
+        )
+
+    # Extract Poisson's ratio
+    nu_val = getattr(mat, "nu", 0.0)
+    if isinstance(mat, dict):
+        nu_val = mat.get("nu", 0.0)
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        nu_val = mat.params.get("nu", nu_val)
+    if nu_val <= -1.0 or nu_val > 0.495:
+        actual_log.error(
+            f"/MAT/LAW106/{mat_id}: INVALID POISSON'S RATIO NU={nu_val} (MUST BE -1 < NU <= 0.495) (ANCMSG 300)",
+            "MAT CHECK",
+        )
+
+    # Thermal checks
+    tmelt = getattr(mat, "tmelt", 1e30)
+    t0 = getattr(mat, "t0", 300.0)
+    if isinstance(mat, dict):
+        tmelt = mat.get("tmelt", 1e30)
+        t0 = mat.get("t0", 300.0)
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        tmelt = mat.params.get("tmelt", tmelt)
+        t0 = mat.params.get("t0", t0)
+    if tmelt <= 0.0:
+        actual_log.warning(
+            f"/MAT/LAW106/{mat_id}: TMELT={tmelt} <= 0, defaulting to 1e30",
+            "MAT CHECK",
+        )
+    if t0 > tmelt:
+        actual_log.warning(
+            f"/MAT/LAW106/{mat_id}: INITIAL TEMPERATURE T0={t0} EXCEEDS MELTING TEMPERATURE TMELT={tmelt}",
+            "MAT CHECK",
+        )
+
+    # Check element compatibility: 3D solids and 2D shells supported, 1D elements rejected (ANCMSG 306)
+    if actual_model is not None:
+        oned_colls = [
+            getattr(actual_model, "trusses", None),
+            getattr(actual_model, "beams", None),
+            getattr(actual_model, "springs", None),
+        ]
+        oned_found = False
+        for coll in oned_colls:
+            if not coll:
+                continue
+            for el_id, el in coll.items():
+                pid = getattr(el, "part_id", getattr(el, "pid", 0))
+                part = getattr(actual_model, "parts", {}).get(pid)
+                if part and getattr(part, "mat_id", 0) == mat_id:
+                    actual_log.error(
+                        f"/MAT/LAW106/{mat_id} is not supported for 1D elements (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    oned_found = True
+                    break
+            if oned_found:
+                break
+
+        for pid, part in getattr(actual_model, "parts", {}).items():
+            if getattr(part, "mat_id", 0) == mat_id:
+                etype = str(getattr(part, "element_type", "") or "").upper()
+                if any(s in etype for s in ("BEAM", "TRUSS", "SPRING")):
+                    actual_log.error(
+                        f"/MAT/LAW106/{mat_id} is not supported for 1D elements ({etype.lower()}) (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    break
+                prop_id = getattr(part, "prop_id", 0)
+                prop = getattr(actual_model, "properties", {}).get(prop_id)
+                if prop is not None:
+                    ptype = str(getattr(prop, "type", getattr(prop, "prop_type", "")) or "").upper()
+                    if any(s in ptype for s in ("TYPE2", "TYPE3", "TYPE4", "TYPE11", "BEAM", "TRUSS", "SPRING")):
+                        actual_log.error(
+                            f"/MAT/LAW106/{mat_id} is not supported for 1D elements ({ptype.lower()}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
+
+_check_mat_law106 = check_mat_law106
+check_mat_jcook_alm = check_mat_law106
+check_mat_johns_cook_alm = check_mat_law106
+
+
 
 def check_materials(model: Model, log: MessageLog) -> None:
     """Validate all material parameters across model."""
@@ -6928,6 +7089,15 @@ _MAT_CHECKS: dict[Any, Any] = {
     "MAT_104": check_mat_law104,
     "MAT_LAW104": check_mat_law104,
     "LAW104_DRUCKER": check_mat_law104,
+    106: check_mat_law106,
+    "106": check_mat_law106,
+    "LAW106": check_mat_law106,
+    "JCOOK_ALM": check_mat_law106,
+    "JOHNS_COOK_ALM": check_mat_law106,
+    "MAT_JCOOK_ALM": check_mat_law106,
+    "MAT_106": check_mat_law106,
+    "MAT_LAW106": check_mat_law106,
+    "LAW106_JCOOK_ALM": check_mat_law106,
 }
 
 
@@ -7379,6 +7549,14 @@ def check_model(model: Model, log: MessageLog) -> None:
                 if name in ("trusses", "beams", "springs"):
                     log.error(
                         f"/MAT/LAW74/{mat.id} (/MAT/HILL_3D) is not supported for 1D elements ({name}) (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    continue
+            if (mat.law in _LAW106_KEYS
+                    or getattr(mat, "law_name", None) in _LAW106_KEYS):
+                if name in ("trusses", "beams", "springs"):
+                    log.error(
+                        f"/MAT/LAW106/{mat.id} (/MAT/JCOOK_ALM) is not supported for 1D elements ({name}) (ANCMSG 306)",
                         "MAT CHECK",
                     )
                     continue
