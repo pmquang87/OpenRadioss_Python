@@ -1258,7 +1258,9 @@ class Model:
         self.prop_type30s: Dict[int, PropType30] = {}               # /PROP/TYPE30 (M190)
         self.prop_type31s: Dict[int, PropType31] = {}               # /PROP/TYPE31 (M190)
         # M191 containers and aliases
-        self.mat_law100s: Dict[int, MatLaw100] = {}                 # /MAT/LAW100, /MAT/SPOTWELD (M191)
+        self.mat_law100s: Dict[int, MatLaw100] = {}                 # /MAT/LAW100, /MAT/VISC_HYP, /MAT/MNF (M191/M570)
+        self.mat_visc_hyps = self.mat_law100s
+        self.mat_mnfs = self.mat_law100s
         self.mat_spotwelds = self.mat_law100s
         self.mat_structural_adhesives = self.mat_law100s
         self.mat_law97s: Dict[int, MatLaw97] = {}                   # /MAT/LAW97, /MAT/EXPLOSIVE_JWLS (M191)

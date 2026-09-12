@@ -200,6 +200,29 @@ MAT_BERGSTROM_BOYCE_4_2020 = MAT_LAW95_4_2020
 MAT_BERGSTROM_BOYCE_5 = MAT_LAW95_5
 MAT_BERGSTROM_BOYCE_5_2018 = MAT_LAW95_5_2018
 
+# M570: /MAT/LAW100 (/MAT/VISC_HYP, /MAT/MNF) card layout constants citing radioss2020/MAT/LAW100.cfg
+MAT_LAW100_1 = (20,)                       # RHO_I
+MAT_LAW100_2 = (10, 10, 10)                 # N_net, Flag_HE, Flag_Cr
+MAT_LAW100_HE1_1 = (20, 20, 20, 20, 20)    # C_10, C_01, C_20, C_11, C_02
+MAT_LAW100_HE1_2 = (20, 20, 20, 20)        # C_30, C_21, C_12, C_03
+MAT_LAW100_HE1_3 = (20, 20, 20)            # D_1, D_2, D_3
+MAT_LAW100_HE2_1 = (20, 20, 20)            # Mu, D, Lambda_M
+MAT_LAW100_HE2_2 = (10, 10, 20, 20)        # Itype, fct_ID_AB, Nu, Fscale_AB
+MAT_LAW100_HE3_1 = (20, 20)                # C_10, D_1
+MAT_LAW100_HE4_1 = (20, 20, 20)            # C_10, C_01, D_1
+MAT_LAW100_HE5_1 = (20, 20, 20, 20)        # C_10, C_20, C_30, D_1
+MAT_LAW100_HE13_1 = (10, 10, 20, 20)       # fct_ID_SM, fct_ID_BM, Fscale_SM, Fscale_BM
+MAT_LAW100_PL = (20, 20, 20, 20, 10)       # A_pl, Sigma_pl, F_pl, epsilon_pl, N_pl
+MAT_LAW100_NET_HDR = (10, 10, 20)          # networkID, Flag_visc, stiffness
+MAT_LAW100_NET_V1 = (20, 20, 20, 20, 20)   # A1, C, M, KSI, Tau_ref
+MAT_LAW100_NET_V2 = (20, 20, 20)           # A2, B, n2
+MAT_LAW100_NET_V3 = (20, 20, 20)           # A3, n3, M3
+
+MAT_VISC_HYP_1 = MAT_LAW100_1
+MAT_VISC_HYP_2 = MAT_LAW100_2
+MAT_MNF_1 = MAT_LAW100_1
+MAT_MNF_2 = MAT_LAW100_2
+
 
 # M563: /MAT/LAW74 (/MAT/HILL_3D, /MAT/ORTH_PLAS, /MAT/THERM_HILL) card layout constants citing radioss120/MAT/matl74_74.cfg
 MAT_LAW74_1 = (20, 20)
@@ -3519,6 +3542,26 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_BERGSTROM_BOYCE_4_2020": [20, 20, 20],
     "MAT_BERGSTROM_BOYCE_5": [20, 20, 20, 20, 20],
     "MAT_BERGSTROM_BOYCE_5_2018": [20, 20, 20, 20],
+    "MAT_LAW100_1": [20],
+    "MAT_LAW100_2": [10, 10, 10],
+    "MAT_LAW100_HE1_1": [20, 20, 20, 20, 20],
+    "MAT_LAW100_HE1_2": [20, 20, 20, 20],
+    "MAT_LAW100_HE1_3": [20, 20, 20],
+    "MAT_LAW100_HE2_1": [20, 20, 20],
+    "MAT_LAW100_HE2_2": [10, 10, 20, 20],
+    "MAT_LAW100_HE3_1": [20, 20],
+    "MAT_LAW100_HE4_1": [20, 20, 20],
+    "MAT_LAW100_HE5_1": [20, 20, 20, 20],
+    "MAT_LAW100_HE13_1": [10, 10, 20, 20],
+    "MAT_LAW100_PL": [20, 20, 20, 20, 10],
+    "MAT_LAW100_NET_HDR": [10, 10, 20],
+    "MAT_LAW100_NET_V1": [20, 20, 20, 20, 20],
+    "MAT_LAW100_NET_V2": [20, 20, 20],
+    "MAT_LAW100_NET_V3": [20, 20, 20],
+    "MAT_VISC_HYP_1": [20],
+    "MAT_VISC_HYP_2": [10, 10, 10],
+    "MAT_MNF_1": [20],
+    "MAT_MNF_2": [10, 10, 10],
     "MAT_LAW163_1": [20],
     "MAT_LAW163_2": [20, 20, 20, 20, 10, 10],
     "MAT_LAW163_3": [10, 10, 20, 20, 20, 10, 10],
@@ -4577,14 +4620,14 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_LAW78_4": [20, 20, 20, 20],
     # M190: FAIL HASHIN
     # M191: Advanced Materials (LAW100, LAW97, LAW71, LAW73, LAW84, LAW93, LAW133, LAW101, LAW43)
-    "MAT_LAW100_1": [20, 20],
-    "MAT_LAW100_2": [10, 10],
-    "MAT_LAW100_3": [20, 20, 20, 20, 20],
-    "MAT_LAW100_4": [20, 20, 20, 20, 20],
-    "MAT_LAW100_5": [20, 20, 20, 20, 20],
-    "MAT_LAW100_6": [10, 10, 20, 10, 10],
-    "MAT_LAW100_7": [20, 20, 20, 20, 20],
-    "MAT_LAW100_8": [20, 10],
+    "MAT_LAW100_LEGACY_1": [20, 20],
+    "MAT_LAW100_LEGACY_2": [10, 10],
+    "MAT_LAW100_LEGACY_3": [20, 20, 20, 20, 20],
+    "MAT_LAW100_LEGACY_4": [20, 20, 20, 20, 20],
+    "MAT_LAW100_LEGACY_5": [20, 20, 20, 20, 20],
+    "MAT_LAW100_LEGACY_6": [10, 10, 20, 10, 10],
+    "MAT_LAW100_LEGACY_7": [20, 20, 20, 20, 20],
+    "MAT_LAW100_LEGACY_8": [20, 10],
     "MAT_LAW97_1": [20, 20],
     "MAT_LAW97_2": [20, 20, 10],
     "MAT_LAW97_3": [20, 20, 20, 20, 20],

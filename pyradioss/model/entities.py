@@ -14036,11 +14036,12 @@ class PropType31:
 
 @dataclass
 class MatLaw100:
-    """``/MAT/LAW100`` or ``/MAT/SPOTWELD``: Spotweld / structural adhesive material model."""
+    """``/MAT/LAW100`` or ``/MAT/VISC_HYP`` / ``/MAT/MNF``: Multi-Network Visco-Hyperelastic polymer model."""
     id: int = 0
     rho0: float = 0.0
     rhor: float = 0.0
-    flag_he: int = 0
+    n_net: int = 0
+    flag_he: int = 1
     flag_cr: int = 0
     c10: float = 0.0
     c01: float = 0.0
@@ -14056,24 +14057,128 @@ class MatLaw100:
     d3: float = 0.0
     mue1: float = 0.0
     d: float = 0.0
-    lambda_m: float = 0.0
-    itype: int = 0
+    lambda_m: float = 7.0
+    itype: int = 1
     fct_id_ab: int = 0
-    nu: float = 0.0
+    nu_val: float = 0.0
+    fscale_ab: float = 1.0
     fct_id_sm: int = 0
     fct_id_bm: int = 0
     fscale_sm: float = 1.0
     fscale_bm: float = 1.0
-    a_pl: float = 0.0
-    sigma_pl: float = 0.0
-    f_pl: float = 0.0
-    epsilon_f: float = 0.0
-    n_pl: int = 0
+    a_pl: float = 1.0
+    sigma_pl: float = 1.0
+    f_pl: float = 1.0
+    epsilon_f: float = 1.0
+    n_pl: int = 1
     title: str = ""
+    networks: List[Dict[str, Any]] = field(default_factory=list)
+    law: int = 100
+    law_name: str = "LAW100"
+    params: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def rho(self) -> float:
+        return self.rhor if self.rhor > 0.0 else self.rho0
+
+    @rho.setter
+    def rho(self, val: float) -> None:
+        self.rho0 = float(val)
+
+    @property
+    def sb(self) -> float:
+        if "sb" in self.params:
+            return float(self.params["sb"])
+        if self.networks:
+            return float(sum(net.get("stiffness", net.get("stiffn", 1.0)) for net in self.networks))
+        return float(self.params.get("stiffness", 0.0))
+
+    @property
+    def G(self) -> float:
+        if "G" in self.params:
+            return float(self.params["G"])
+        if self.flag_he in (1, 3, 4, 5):
+            return float(2.0 * (self.c10 + self.c01) * (1.0 + self.sb))
+        elif self.flag_he == 2:
+            lm = self.lambda_m if self.lambda_m > 0.0 else 7.0
+            beta = 1.0 / (lm ** 2)
+            poly = (1.0 + 0.6 * beta + (99.0 / 175.0) * (beta ** 2)
+                    + (513.0 / 875.0) * (beta ** 3) + (42039.0 / 67375.0) * (beta ** 4))
+            return float(self.mue1 * poly * (1.0 + self.sb))
+        elif self.flag_he == 13:
+            return float(self.fscale_sm * (1.0 + self.sb))
+        return float(2.0 * (self.c10 + self.c01) * (1.0 + self.sb))
+
+    @property
+    def g(self) -> float:
+        return self.G
+
+    @property
+    def shear(self) -> float:
+        return self.G
+
+    @property
+    def K(self) -> float:
+        if "K" in self.params:
+            return float(self.params["K"])
+        if self.flag_he in (1, 3, 4, 5):
+            if self.d1 > 0.0:
+                d1_inv = (1.0 / self.d1) if self.d1 < 1.0 else self.d1
+                return float(2.0 * d1_inv * (1.0 + self.sb))
+            nu = self.nu
+            return float((2.0 / 3.0) * self.G * (1.0 + nu) / max(1e-30, (1.0 - 2.0 * nu)))
+        elif self.flag_he == 2:
+            d_inv = (1.0 / self.d) if (self.d > 0.0 and self.d < 1.0) else (self.d if self.d > 0.0 else 1e20)
+            return float(2.0 * (1.0 + self.sb) * d_inv)
+        elif self.flag_he == 13:
+            return float(self.fscale_bm * (1.0 + self.sb))
+        return float(self.G * 100.0)
+
+    @property
+    def k(self) -> float:
+        return self.K
+
+    @property
+    def bulk(self) -> float:
+        return self.K
+
+    @property
+    def nu(self) -> float:
+        if "nu" in self.params:
+            return float(self.params["nu"])
+        if 0.0 < self.nu_val < 0.5:
+            return self.nu_val
+        k = self.K
+        g = self.G
+        denom = 2.0 * (3.0 * k + g)
+        if denom > 0.0:
+            val = (3.0 * k - 2.0 * g) / denom
+            if 0.0 <= val < 0.5:
+                return float(val)
+        return 0.495
+
+    @property
+    def E(self) -> float:
+        if "E" in self.params:
+            return float(self.params["E"])
+        k = self.K
+        g = self.G
+        denom = 3.0 * k + g
+        if denom > 0.0:
+            return float(9.0 * k * g / denom)
+        return float(2.0 * g * (1.0 + self.nu))
+
+    @property
+    def sound_speed(self) -> float:
+        stiff = self.K + (4.0 / 3.0) * self.G
+        return float(np.sqrt(max(0.0, stiff / max(1e-20, self.rho))))
 
 
 MatSpotweld = MatLaw100
 MatStructuralAdhesive = MatLaw100
+MatViscHyp = MatLaw100
+MatMNF = MatLaw100
+MaterialLaw100 = MatLaw100
 
 
 @dataclass

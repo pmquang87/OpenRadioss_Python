@@ -5933,6 +5933,212 @@ class StarterDeck:
         kwargs.setdefault("law_name", "BERGSTROM_BOYCE")
         return self.mat_law95(*args, **kwargs)
 
+    def mat_law100(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho0: float = 0.0,
+        n_net: int = 0,
+        flag_he: int = 1,
+        flag_cr: int = 0,
+        c10: float = 0.0,
+        c01: float = 0.0,
+        c20: float = 0.0,
+        c11: float = 0.0,
+        c02: float = 0.0,
+        c30: float = 0.0,
+        c21: float = 0.0,
+        c12: float = 0.0,
+        c03: float = 0.0,
+        d1: float = 0.0,
+        d2: float = 0.0,
+        d3: float = 0.0,
+        mue1: float = 0.0,
+        d: float = 0.0,
+        lambda_m: float = 7.0,
+        itype: int = 1,
+        fct_id_ab: int = 0,
+        nu_val: float = 0.0,
+        fscale_ab: float = 1.0,
+        fct_id_sm: int = 0,
+        fct_id_bm: int = 0,
+        fscale_sm: float = 1.0,
+        fscale_bm: float = 1.0,
+        a_pl: float = 1.0,
+        sigma_pl: float = 1.0,
+        f_pl: float = 1.0,
+        epsilon_f: float = 1.0,
+        n_pl: int = 1,
+        networks: Any = None,
+        unit_id: int | None = None,
+        law_name: str = "LAW100",
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW100``, ``/MAT/VISC_HYP`` or ``/MAT/MNF`` (M570): Multi-network visco-hyperelastic polymer."""
+        if "id" in kwargs and mid == 0:
+            mid = kwargs["id"]
+        if "mat_id" in kwargs and mid == 0:
+            mid = kwargs["mat_id"]
+        mat_obj = kwargs.get("mat_law100", kwargs.get("mat_visc_hyp", kwargs.get("mat_mnf", kwargs.get("mat", kwargs.get("material", None)))))
+        if mat_obj is not None or hasattr(mid, "n_net") or hasattr(mid, "flag_he"):
+            if mat_obj is None:
+                mat_obj = mid
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho0 = getattr(mat_obj, "rho0", rho0)
+            n_net = getattr(mat_obj, "n_net", n_net)
+            flag_he = getattr(mat_obj, "flag_he", flag_he)
+            flag_cr = getattr(mat_obj, "flag_cr", flag_cr)
+            c10 = getattr(mat_obj, "c10", c10)
+            c01 = getattr(mat_obj, "c01", c01)
+            c20 = getattr(mat_obj, "c20", c20)
+            c11 = getattr(mat_obj, "c11", c11)
+            c02 = getattr(mat_obj, "c02", c02)
+            c30 = getattr(mat_obj, "c30", c30)
+            c21 = getattr(mat_obj, "c21", c21)
+            c12 = getattr(mat_obj, "c12", c12)
+            c03 = getattr(mat_obj, "c03", c03)
+            d1 = getattr(mat_obj, "d1", d1)
+            d2 = getattr(mat_obj, "d2", d2)
+            d3 = getattr(mat_obj, "d3", d3)
+            mue1 = getattr(mat_obj, "mue1", mue1)
+            d = getattr(mat_obj, "d", d)
+            lambda_m = getattr(mat_obj, "lambda_m", lambda_m)
+            itype = getattr(mat_obj, "itype", itype)
+            fct_id_ab = getattr(mat_obj, "fct_id_ab", fct_id_ab)
+            nu_val = getattr(mat_obj, "nu_val", getattr(mat_obj, "nu", nu_val))
+            fscale_ab = getattr(mat_obj, "fscale_ab", fscale_ab)
+            fct_id_sm = getattr(mat_obj, "fct_id_sm", fct_id_sm)
+            fct_id_bm = getattr(mat_obj, "fct_id_bm", fct_id_bm)
+            fscale_sm = getattr(mat_obj, "fscale_sm", fscale_sm)
+            fscale_bm = getattr(mat_obj, "fscale_bm", fscale_bm)
+            a_pl = getattr(mat_obj, "a_pl", a_pl)
+            sigma_pl = getattr(mat_obj, "sigma_pl", sigma_pl)
+            f_pl = getattr(mat_obj, "f_pl", f_pl)
+            epsilon_f = getattr(mat_obj, "epsilon_f", epsilon_f)
+            n_pl = getattr(mat_obj, "n_pl", n_pl)
+            networks = getattr(mat_obj, "networks", networks)
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("rho", "rho0", "rho_i", "mat_rho"): rho0 = float(v)
+            elif kl in ("n_net", "nnet"): n_net = int(v)
+            elif kl in ("flag_he", "flaghe"): flag_he = int(v)
+            elif kl in ("flag_cr", "flagcr"): flag_cr = int(v)
+            elif kl in ("c10", "c_10"): c10 = float(v)
+            elif kl in ("c01", "c_01"): c01 = float(v)
+            elif kl in ("c20", "c_20"): c20 = float(v)
+            elif kl in ("c11", "c_11"): c11 = float(v)
+            elif kl in ("c02", "c_02"): c02 = float(v)
+            elif kl in ("c30", "c_30"): c30 = float(v)
+            elif kl in ("c21", "c_21"): c21 = float(v)
+            elif kl in ("c12", "c_12"): c12 = float(v)
+            elif kl in ("c03", "c_03"): c03 = float(v)
+            elif kl in ("d1", "d_1"): d1 = float(v)
+            elif kl in ("d2", "d_2"): d2 = float(v)
+            elif kl in ("d3", "d_3"): d3 = float(v)
+            elif kl in ("mue1", "mu", "mu1"): mue1 = float(v)
+            elif kl == "d": d = float(v)
+            elif kl in ("lambda_m", "lambdam"): lambda_m = float(v)
+            elif kl == "itype": itype = int(v)
+            elif kl in ("fct_id_ab", "fctid_ab"): fct_id_ab = int(v)
+            elif kl in ("nu", "nu_val"): nu_val = float(v)
+            elif kl in ("fscale_ab", "fscaleab"): fscale_ab = float(v)
+            elif kl in ("fct_id_sm", "fctid_sm"): fct_id_sm = int(v)
+            elif kl in ("fct_id_bm", "fctid_bm"): fct_id_bm = int(v)
+            elif kl in ("fscale_sm", "fscalesm"): fscale_sm = float(v)
+            elif kl in ("fscale_bm", "fscalebm"): fscale_bm = float(v)
+            elif kl in ("a_pl", "apl"): a_pl = float(v)
+            elif kl in ("sigma_pl", "sigmapl"): sigma_pl = float(v)
+            elif kl in ("f_pl", "fpl"): f_pl = float(v)
+            elif kl in ("epsilon_f", "epsilon_pl", "eps_pl"): epsilon_f = float(v)
+            elif kl in ("n_pl", "npl"): n_pl = int(v)
+            elif kl == "networks": networks = v
+
+        if data_cards is not None and isinstance(data_cards, (list, tuple)):
+            if unit_id is not None:
+                self._header("MAT", law_name, mid, unit_id)
+            else:
+                self._header("MAT", law_name, mid)
+            self._title(title)
+            self.lines.extend(str(card).rstrip("\r\n") for card in data_cards)
+            return self
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        # Card 1: RHO_I (%20lg)
+        self.lines.append(fmt_float(rho0))
+
+        # Card 2: N_net, Flag_HE, Flag_Cr (%10d%10d%10d)
+        if networks is not None and len(networks) > 0 and n_net == 0:
+            n_net = len(networks)
+        self.lines.append(fmt_int(n_net, 10) + fmt_int(flag_he, 10) + fmt_int(flag_cr, 10))
+
+        # Hyperelastic cards based on Flag_HE:
+        if flag_he == 1:
+            self.lines.append(fmt_float(c10) + fmt_float(c01) + fmt_float(c20) + fmt_float(c11) + fmt_float(c02))
+            self.lines.append(fmt_float(c30) + fmt_float(c21) + fmt_float(c12) + fmt_float(c03))
+            self.lines.append(fmt_float(d1) + fmt_float(d2) + fmt_float(d3))
+        elif flag_he == 2:
+            self.lines.append(fmt_float(mue1) + fmt_float(d) + fmt_float(lambda_m))
+            self.lines.append(fmt_int(itype, 10) + fmt_int(fct_id_ab, 10) + fmt_float(nu_val) + fmt_float(fscale_ab))
+        elif flag_he == 3:
+            self.lines.append(fmt_float(c10) + fmt_float(d1))
+        elif flag_he == 4:
+            self.lines.append(fmt_float(c10) + fmt_float(c01) + fmt_float(d1))
+        elif flag_he == 5:
+            self.lines.append(fmt_float(c10) + fmt_float(c20) + fmt_float(c30) + fmt_float(d1))
+        elif flag_he == 13:
+            self.lines.append(fmt_int(fct_id_sm, 10) + fmt_int(fct_id_bm, 10) + fmt_float(fscale_sm) + fmt_float(fscale_bm))
+        else:
+            self.lines.append(fmt_float(c10) + fmt_float(c01) + fmt_float(c20) + fmt_float(c11) + fmt_float(c02))
+
+        # Plasticity/Creep card if Flag_Cr == 1
+        if flag_cr == 1:
+            self.lines.append(fmt_float(a_pl) + fmt_float(sigma_pl) + fmt_float(f_pl) + fmt_float(epsilon_f) + fmt_int(n_pl, 10))
+
+        # Secondary networks:
+        if networks:
+            for idx, net in enumerate(networks):
+                net_id = net.get("net_id", idx + 1)
+                flag_visc = net.get("flag_visc", 1)
+                stiffness = net.get("stiffness", 1.0)
+                self.lines.append(fmt_int(net_id, 10) + fmt_int(flag_visc, 10) + fmt_float(stiffness))
+                if flag_visc == 1:
+                    a1 = net.get("a", net.get("a1", 0.0))
+                    c_exp = net.get("c", -0.7)
+                    m_exp = net.get("m", 1.0)
+                    ksi = net.get("ksi", 0.01)
+                    tau_ref = net.get("tau_ref", net.get("tauref", 1.0))
+                    self.lines.append(fmt_float(a1) + fmt_float(c_exp) + fmt_float(m_exp) + fmt_float(ksi) + fmt_float(tau_ref))
+                elif flag_visc == 2:
+                    a2 = net.get("a", net.get("a2", 0.0))
+                    b_val = net.get("b", 0.0)
+                    n2 = net.get("n", net.get("n2", 1.0))
+                    self.lines.append(fmt_float(a2) + fmt_float(b_val) + fmt_float(n2))
+                elif flag_visc == 3:
+                    a3 = net.get("a", net.get("a3", 0.0))
+                    n3 = net.get("n", net.get("n3", 1.0))
+                    m3 = net.get("m", net.get("m3", 0.0))
+                    self.lines.append(fmt_float(a3) + fmt_float(n3) + fmt_float(m3))
+
+        return self
+
+    def mat_visc_hyp(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/VISC_HYP`` — synonym for ``/MAT/LAW100``."""
+        kwargs.setdefault("law_name", "VISC_HYP")
+        return self.mat_law100(*args, **kwargs)
+
+    def mat_mnf(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/MNF`` — synonym for ``/MAT/LAW100``."""
+        kwargs.setdefault("law_name", "MNF")
+        return self.mat_law100(*args, **kwargs)
+
     def mat_law93(
         self,
         mid: int = 0,
@@ -9615,6 +9821,8 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
                 if len(toks) >= 1 and toks[0]: kw["fsmooth"] = int(float(toks[0]))
                 if len(toks) >= 2 and toks[1]: kw["fcut"] = float(toks[1])
         d.mat_law25(mid, rho_ref=rho_ref, title=title, unit_id=b.unit_id, law_name=law, **kw)
+    elif law in ("LAW100", "VISC_HYP", "MNF", "MAT_100", "MAT_LAW100", "MAT_VISC_HYP", "MAT_MNF", "LAW100_VISC_HYP", "LAW100_MNF"):
+        d.mat_law100(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")
