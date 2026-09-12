@@ -27438,13 +27438,26 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/MAT/LAW88/id`` or ``/MAT/HYPER_ELAS/id`` (M173): Tabulated hyperelastic Ogden model."""
     from ..model.entities import MaterialLaw88, Material
     mat_id = block.user_id or 0
-    # Detect fixed format either from block.fixed or by card line width (e.g. fragments without /BEGIN)
+    # Initial format probe
     is_fixed = block.fixed
-    if not is_fixed:
-        raw_lines = [c.raw for c in block.cards if not c.is_blank]
+    title, cards = _fixed_data(block) if is_fixed else _title_and_data(block)
+    # If block.fixed is True, check whether the actual data cards are free-format tokens
+    if is_fixed and cards:
+        first_raw = cards[0].raw.rstrip()
+        toks0 = cards[0].tokens()
+        if any("," in c.raw for c in cards):
+            is_fixed = False
+        elif len(toks0) > 1 and len(first_raw) < 20:
+            is_fixed = False
+        elif len(cards) > 1 and len(cards[1].tokens()) >= 3 and len(cards[1].raw.rstrip()) < 50:
+            is_fixed = False
+        if not is_fixed:
+            title, cards = _title_and_data(block)
+    elif not is_fixed and cards:
+        raw_lines = [c.raw for c in cards if not c.is_blank]
         if any(len(line) >= 50 and "," not in line for line in raw_lines):
             is_fixed = True
-    title, cards = _fixed_data(block) if is_fixed else _title_and_data(block)
+            title, cards = _fixed_data(block)
 
     rho0 = 0.0
     refer_rho = 0.0

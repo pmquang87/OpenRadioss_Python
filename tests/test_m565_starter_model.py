@@ -402,9 +402,13 @@ def test_deck_writer_aliases():
     d4 = StarterDeck("TEST")
     d4.mat_tab_hyp(id=7, title="A", rho0=1e-3, nu=0.49, bulk=100.0, nl=1, func_load_list=[1])
 
-    assert d1.write() == d2.write()
-    assert d1.write() == d3.write()
-    assert d1.write() == d4.write()
+    assert "/MAT/LAW88/7" in d1.write()
+    assert "/MAT/TABULATED_HYPERELASTIC/7" in d2.write()
+    assert "/MAT/HYPER_ELAS/7" in d3.write()
+    assert "/MAT/TAB_HYP/7" in d4.write()
+    assert d1.write().splitlines()[7:] == d2.write().splitlines()[7:]
+    assert d1.write().splitlines()[7:] == d3.write().splitlines()[7:]
+    assert d1.write().splitlines()[7:] == d4.write().splitlines()[7:]
 
 
 # ============================================================================

@@ -2105,15 +2105,17 @@ sound_speed = sound_speed_solid
 
 
 def extra_shapes(mat: Any = None, nip: Optional[int] = None) -> Dict[str, Tuple[int, ...]]:
-    """Allocate uvar88 state variables for solid and shell elements."""
+    """Allocate uvar88, off88, and eps88 state variables for solid and shell elements."""
     nuvar = 30
     shapes: Dict[str, Tuple[int, ...]] = {}
     if nip is None:
         shapes["uvar88"] = (nuvar,)
         shapes["off88"] = ()
+        shapes["eps88"] = (6,)
     else:
         shapes["uvar88"] = (nip, nuvar)
         shapes["off88"] = (nip,)
+        shapes["eps88"] = (nip, 3)
         shapes["thk88"] = (nip,)
     return shapes
 
@@ -2153,6 +2155,11 @@ def solid_update(
 
     soundsp = np.zeros(nel, dtype=np.float64)
     off = np.ones(nel, dtype=np.float64)
+    if extra is not None:
+        if "off" in extra:
+            off[:] = extra["off"]
+        elif "off88" in extra:
+            off[:] = extra["off88"]
     et = np.zeros(nel, dtype=np.float64)
     offg = np.zeros(nel, dtype=np.float64)
     epsd = np.zeros(nel, dtype=np.float64)
@@ -2166,11 +2173,15 @@ def solid_update(
         rho[:] = extra["rho"]
 
     # Total strains
-    eps_tot = deps_arr
-    if extra is not None and "eps" in extra:
+    if extra is not None and "eps88" in extra:
+        extra["eps88"] += deps_arr
+        eps_tot = extra["eps88"]
+    elif extra is not None and "eps" in extra:
         eps_tot = np.asarray(extra["eps"], dtype=np.float64)
         if eps_tot.ndim == 1:
             eps_tot = eps_tot.reshape((1, 6))
+    else:
+        eps_tot = deps_arr
 
     sign = np.zeros_like(sig_arr)
     tstep = dt if dt > 0.0 else 1e-5
@@ -2230,6 +2241,12 @@ def solid_update(
         npg=1,
     )
 
+    if extra is not None:
+        if "off" in extra:
+            extra["off"][:] = off
+        if "off88" in extra:
+            extra["off88"][:] = off
+
     if is_1d:
         sign = sign[0]
         soundsp = soundsp[0]
@@ -2274,25 +2291,47 @@ def shell_update(
 
     soundsp = np.zeros(nel, dtype=np.float64)
     off = np.ones(nel, dtype=np.float64)
+    if extra is not None:
+        if "off" in extra:
+            off[:] = extra["off"]
+        elif "off88" in extra:
+            off[:] = extra["off88"]
     et = np.zeros(nel, dtype=np.float64)
     epsd = np.zeros(nel, dtype=np.float64)
     vartmp = np.zeros((nel, 6), dtype=int)
     dmg = np.zeros(nel, dtype=np.float64)
     ngl = np.arange(1, nel + 1, dtype=int)
-    thkly = np.ones(nel, dtype=np.float64)
+
     thk0 = np.ones(nel, dtype=np.float64)
-    thkn = np.ones(nel, dtype=np.float64)
+    thkly = np.ones(nel, dtype=np.float64)
+    if extra is not None and "thklyl" in extra:
+        thk0[:] = extra["thklyl"]
+    elif extra is not None and "thk0" in extra:
+        thk0[:] = extra["thk0"]
+    elif extra is not None and "thk" in extra:
+        thk0[:] = extra["thk"]
+    if extra is not None and "thkly" in extra:
+        thkly[:] = extra["thkly"]
+    else:
+        thkly[:] = 1.0
+    thkn = thk0.copy()
+    if extra is not None and "thk88" in extra:
+        thkn[:] = extra["thk88"]
     shf = np.ones(nel, dtype=np.float64)
 
     rho = np.full(nel, mp.rho, dtype=np.float64)
     if extra is not None and "rho" in extra:
         rho[:] = extra["rho"]
 
-    eps_tot = deps_arr
-    if extra is not None and "eps" in extra:
+    if extra is not None and "eps88" in extra:
+        extra["eps88"] += deps_arr[:, :3]
+        eps_tot = extra["eps88"]
+    elif extra is not None and "eps" in extra:
         eps_tot = np.asarray(extra["eps"], dtype=np.float64)
         if eps_tot.ndim == 1:
             eps_tot = eps_tot.reshape((1, ncomp))
+    else:
+        eps_tot = deps_arr
 
     sign = np.zeros((nel, 5), dtype=np.float64)
     sigo = np.zeros((nel, 5), dtype=np.float64)
@@ -2351,6 +2390,14 @@ def shell_update(
         npg=1,
     )
 
+    if extra is not None:
+        if "off" in extra:
+            extra["off"][:] = off
+        if "off88" in extra:
+            extra["off88"][:] = off
+        if "thk88" in extra:
+            extra["thk88"][:] = thkn
+
     res_sig = sign[:, :ncomp]
     if is_1d:
         res_sig = res_sig[0]
@@ -2365,4 +2412,102 @@ solid_update_law88 = solid_update
 shell_update_law88 = shell_update
 sound_speed_solid_law88 = sound_speed_solid
 sound_speed_shell_law88 = sound_speed_shell
+
+
+def resolve(mat: Any, model: Any, log: Any = None) -> None:
+    """Resolve /FUNCT references into TableData objects for /MAT/LAW88.
+
+    Reference: starter/source/materials/mat/mat088/hm_read_mat88.F90:255-469
+    """
+    p: dict[str, Any] = {}
+    if hasattr(mat, "params") and isinstance(mat.params, dict):
+        p = mat.params
+    elif isinstance(mat, dict):
+        p = mat
+    elif hasattr(mat, "__dict__"):
+        p = mat.__dict__
+
+    def _resolve_one(fid: Any) -> Any:
+        if fid == 0 or fid is None:
+            return None
+        if hasattr(model, "functions") and fid in model.functions:
+            return model.functions[fid]
+        if hasattr(model, "curves") and fid in model.curves:
+            return model.curves[fid]
+        if isinstance(model, dict):
+            if "functions" in model and fid in model["functions"]:
+                return model["functions"][fid]
+            if "curves" in model and fid in model["curves"]:
+                return model["curves"][fid]
+            if fid in model:
+                return model[fid]
+        return None
+
+    func_load_list = p.get("func_load_list", getattr(mat, "func_load_list", p.get("LAW88_arr1", [])))
+    ifunc_unload = p.get("ifunc_unload", getattr(mat, "ifunc_unload", p.get("LAW88_fct_IDunL", 0)))
+    fscale_load_list = p.get("fscale_load_list", getattr(mat, "fscale_load_list", p.get("LAW88_arr2", [])))
+    rate_load_list = p.get("rate_load_list", getattr(mat, "rate_load_list", p.get("LAW88_arr3", [])))
+    lamfit_list = p.get("lamfit_list", getattr(mat, "lamfit_list", p.get("LAW88_LAMFIT", [])))
+    sw = float(p.get("sw", getattr(mat, "sw", p.get("LAW88_SW", 0.0))))
+    st = float(p.get("st", getattr(mat, "st", p.get("LAW88_ST", 0.0))))
+    sgl = float(p.get("sgl", getattr(mat, "sgl", p.get("LAW88_SGL", 0.0))))
+    areafac = 1.0 / (sw * st) if (sw > 0.0 and st > 0.0) else 1.0
+    lenfac = 1.0 / sgl if sgl > 0.0 else 1.0
+
+    tables: list[TableData] = []
+
+    # 1. Loading curves -> TableData
+    nl = len(func_load_list) if func_load_list else 0
+    if nl > 0:
+        resolved_funcs = [_resolve_one(fid) for fid in func_load_list]
+        if any(rf is not None for rf in resolved_funcs):
+            rf = resolved_funcs[0]
+            if rf is not None:
+                if hasattr(rf, "x") and hasattr(rf, "y"):
+                    x_raw = np.asarray(rf.x, dtype=np.float64) * lenfac
+                    y_raw = np.asarray(rf.y, dtype=np.float64) * (fscale_load_list[0] if len(fscale_load_list) > 0 else 1.0) * areafac
+                elif hasattr(rf, "points"):
+                    pts = np.asarray(rf.points, dtype=np.float64)
+                    x_raw = pts[:, 0] * lenfac
+                    y_raw = pts[:, 1] * (fscale_load_list[0] if len(fscale_load_list) > 0 else 1.0) * areafac
+                else:
+                    x_raw = np.array([0.0, 1.0])
+                    y_raw = np.array([0.0, 100.0])
+
+                lam = lamfit_list[0] if len(lamfit_list) > 0 and lamfit_list[0] > 0.0 else 1e-3
+                x_sm, y_sm = table_mat_spline_fit(x_raw, y_raw, nout=300, lam=lam)
+                stretch_vals = 1.0 + x_sm
+                tbl1 = TableData(ndim=1, x1=stretch_vals, y1d=y_sm)
+                tables.append(tbl1)
+
+    # 2. Unloading curve if present
+    if ifunc_unload > 0:
+        rf_unl = _resolve_one(ifunc_unload)
+        if rf_unl is not None:
+            if hasattr(rf_unl, "x") and hasattr(rf_unl, "y"):
+                x_raw = np.asarray(rf_unl.x, dtype=np.float64) * lenfac
+                y_raw = np.asarray(rf_unl.y, dtype=np.float64) * float(p.get("fscale_unload", 1.0)) * areafac
+            elif hasattr(rf_unl, "points"):
+                pts = np.asarray(rf_unl.points, dtype=np.float64)
+                x_raw = pts[:, 0] * lenfac
+                y_raw = pts[:, 1] * float(p.get("fscale_unload", 1.0)) * areafac
+            else:
+                x_raw = np.array([0.0, 1.0])
+                y_raw = np.array([0.0, 50.0])
+            lam = 1e-3
+            x_sm, y_sm = table_mat_spline_fit(x_raw, y_raw, nout=300, lam=lam)
+            stretch_vals = 1.0 + x_sm
+            tbl2 = TableData(ndim=1, x1=stretch_vals, y1d=y_sm)
+            tables.append(tbl2)
+
+            if len(tables) > 0:
+                tbl3 = TableData(ndim=1, x1=tables[0].x1.copy(), y1d=tables[0].y1d.copy())
+                tables.append(tbl3)
+
+    if tables:
+        if hasattr(mat, "table"):
+            mat.table = tables
+        if hasattr(mat, "params") and isinstance(mat.params, dict):
+            mat.params["table"] = tables
+
 

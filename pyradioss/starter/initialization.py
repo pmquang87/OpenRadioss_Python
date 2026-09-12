@@ -483,6 +483,10 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
             from ..materials import law74_hill_3d
             if hasattr(law74_hill_3d, "resolve"):
                 law74_hill_3d.resolve(mat, model, log)
+        elif mat.law in (88, "88", "LAW88", "HYP_TAB", "TAB_HYP", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TABULATED_HYP", "MAT_LAW88") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYP_TAB", "TAB_HYP", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TABULATED_HYP", "MAT_LAW88"):
+            from ..materials import law88_tab_hyp
+            if hasattr(law88_tab_hyp, "resolve"):
+                law88_tab_hyp.resolve(mat, model, log)
 
     for mat_id, fm, source in model.raw_fails:
         mat = model.materials.get(mat_id)

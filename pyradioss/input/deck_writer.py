@@ -6011,9 +6011,20 @@ class StarterDeck:
 
         return self
 
-    mat_tabulated_hyperelastic = mat_law88
-    mat_hyper_elas = mat_law88
-    mat_tab_hyp = mat_law88
+    def mat_tabulated_hyperelastic(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/TABULATED_HYPERELASTIC`` — synonym for ``/MAT/LAW88``."""
+        kwargs.setdefault("law_name", "TABULATED_HYPERELASTIC")
+        return self.mat_law88(*args, **kwargs)
+
+    def mat_hyper_elas(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/HYPER_ELAS`` — synonym for ``/MAT/LAW88``."""
+        kwargs.setdefault("law_name", "HYPER_ELAS")
+        return self.mat_law88(*args, **kwargs)
+
+    def mat_tab_hyp(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/TAB_HYP`` — synonym for ``/MAT/LAW88``."""
+        kwargs.setdefault("law_name", "TAB_HYP")
+        return self.mat_law88(*args, **kwargs)
 
 
     def mat_connect(self, mid: int, title: str, data_cards) -> None:
