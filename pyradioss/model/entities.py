@@ -7430,6 +7430,46 @@ class MaterialLaw105:
     scale_rho: float = 1.0
     c1: float = 0.0
     c2: float = 0.0
+    refer_rho: float = 0.0
+    rhor: float = 0.0
+    compac: float = 0.93
+    params: dict = field(default_factory=dict)
+    law: int = 105
+    law_name: str = "LAW105"
+
+    @property
+    def rho(self) -> float:
+        return self.rho0
+
+    @property
+    def K(self) -> float:
+        return self.bulk
+
+    @property
+    def young(self) -> float:
+        return 1.2 * self.bulk
+
+    @property
+    def nu(self) -> float:
+        return 0.3
+
+    @property
+    def G(self) -> float:
+        return (6.0 / 13.0) * self.bulk
+
+    @property
+    def sound_speed(self) -> float:
+        r = self.refer_rho if self.refer_rho > 0.0 else (self.rhor if self.rhor > 0.0 else (self.rho0 if self.rho0 > 0.0 else 1.0))
+        return math.sqrt(max(0.0, self.bulk / r))
+
+    @property
+    def sound_speed_solid(self) -> float:
+        return self.sound_speed
+
+
+MatLaw105 = MaterialLaw105
+MatPowderBurn = MaterialLaw105
+MaterialPowderBurn = MaterialLaw105
 
 
 @dataclass

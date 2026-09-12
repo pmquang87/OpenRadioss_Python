@@ -6791,6 +6791,166 @@ class StarterDeck:
         kwargs.setdefault("law_name", "PLAS_DRUCK")
         return self.mat_law104(*args, **kwargs)
 
+    def mat_law105(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho: float = 0.0,
+        refer_rho: float = 0.0,
+        bulk: float = 0.0,
+        p0: float = 0.0,
+        psh: float = 0.0,
+        d: float = 0.0,
+        eg: float = 0.0,
+        gr: float = 0.0,
+        c: float = 0.0,
+        alpha: float = 0.0,
+        func_b: int = 0,
+        scale_b: float = 1.0,
+        scale_p: float = 1.0,
+        func_gam: int = 0,
+        scale_gam: float = 1.0,
+        scale_rho: float = 1.0,
+        c1: float = 0.0,
+        c2: float = 0.0,
+        law_name: str = "LAW105",
+        unit_id: Optional[int] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW105`` (/MAT/POWDER_BURN / /MAT/POWDERBURN) Powder burn explosive propellant model (M576).
+
+        Card 1: RHO [, Refer_Rho] (%20lg[%20lg])
+        Card 2: BULK, P0, PSH (%20lg%20lg%20lg)
+        Card 3: D, EG (%20lg%20lg)
+        Card 4: Gr, C, Alpha (%20lg%20lg%20lg)
+        Card 5: F_id_b(P), blank, SCALE_B, SCALE_P (%10d%10s%20lg%20lg)
+        Card 6: F_id_g(r), blank, SCALE_GAMMA, SCALE_RHO, C1, C2 (%10d%10s%20lg%20lg%20lg%20lg)
+        """
+        mat_obj = None
+        if hasattr(mid, "id") or hasattr(mid, "bulk") or hasattr(mid, "gas_d") or hasattr(mid, "gr"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+        elif len(args) > 0 and not isinstance(args[0], (int, float, str)):
+            mat_obj = args[0]
+        elif "mat_obj" in kwargs:
+            mat_obj = kwargs["mat_obj"]
+        elif "mat" in kwargs:
+            mat_obj = kwargs["mat"]
+        elif "material" in kwargs:
+            mat_obj = kwargs["material"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", rho))
+            refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", refer_rho))
+            bulk = getattr(mat_obj, "bulk", bulk)
+            p0 = getattr(mat_obj, "p0", p0)
+            psh = getattr(mat_obj, "psh", psh)
+            d = getattr(mat_obj, "gas_d", getattr(mat_obj, "d", d))
+            eg = getattr(mat_obj, "gas_eg", getattr(mat_obj, "eg", eg))
+            gr = getattr(mat_obj, "gr", gr)
+            c = getattr(mat_obj, "c", c)
+            alpha = getattr(mat_obj, "alpha", alpha)
+            func_b = getattr(mat_obj, "func_b", func_b)
+            scale_b = getattr(mat_obj, "scale_b", scale_b)
+            scale_p = getattr(mat_obj, "scale_p", scale_p)
+            func_gam = getattr(mat_obj, "func_gam", func_gam)
+            scale_gam = getattr(mat_obj, "scale_gam", scale_gam)
+            scale_rho = getattr(mat_obj, "scale_rho", scale_rho)
+            c1 = getattr(mat_obj, "c1", c1)
+            c2 = getattr(mat_obj, "c2", c2)
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("material_id", "mat_id", "id", "mid"):
+                mid = int(v)
+            elif kl == "title":
+                title = str(v)
+            elif kl in ("rho", "rho0", "density", "mat_rho"):
+                rho = float(v)
+            elif kl in ("refer_rho", "rhor", "ref_rho"):
+                refer_rho = float(v)
+            elif kl in ("bulk", "powder_bulk", "k"):
+                bulk = float(v)
+            elif kl in ("p0", "powder_p0"):
+                p0 = float(v)
+            elif kl in ("psh", "mat_psh", "pressure_shift"):
+                psh = float(v)
+            elif kl in ("gas_d", "d", "dd"):
+                d = float(v)
+            elif kl in ("gas_eg", "eg"):
+                eg = float(v)
+            elif kl in ("gr", "powder_gr"):
+                gr = float(v)
+            elif kl in ("c", "powder_c"):
+                c = float(v)
+            elif kl in ("alpha",):
+                alpha = float(v)
+            elif kl in ("func_b", "powder_b_func", "f_id_b"):
+                func_b = int(v)
+            elif kl in ("scale_b", "powder_scale_b"):
+                scale_b = float(v)
+            elif kl in ("scale_p", "powder_scale_p"):
+                scale_p = float(v)
+            elif kl in ("func_gam", "powder_gam_func", "f_id_g"):
+                func_gam = int(v)
+            elif kl in ("scale_gam", "powder_scale_gam"):
+                scale_gam = float(v)
+            elif kl in ("scale_rho", "powder_scale_rho"):
+                scale_rho = float(v)
+            elif kl in ("c1", "mat_c1"):
+                c1 = float(v)
+            elif kl in ("c2", "mat_c2"):
+                c2 = float(v)
+
+        if data_cards is not None and len(data_cards) > 0:
+            hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+            self.lines.append(hdr)
+            self._title(title)
+            for cd in data_cards:
+                self.lines.append(cd if isinstance(cd, str) else str(cd))
+            return self
+
+        hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+        self.lines.append(hdr)
+        self._title(title)
+
+        # Card 1: RHO [, Refer_Rho]
+        if refer_rho > 0.0 and refer_rho != rho:
+            self.lines.append(fmt_float(rho) + fmt_float(refer_rho))
+        else:
+            self.lines.append(fmt_float(rho))
+
+        # Card 2: BULK, P0, PSH
+        self.lines.append(fmt_float(bulk) + fmt_float(p0) + fmt_float(psh))
+
+        # Card 3: D, EG
+        self.lines.append(fmt_float(d) + fmt_float(eg))
+
+        # Card 4: Gr, C, Alpha
+        self.lines.append(fmt_float(gr) + fmt_float(c) + fmt_float(alpha))
+
+        # Card 5: F_id_b(P), blank, SCALE_B, SCALE_P
+        self.lines.append(fmt_int(func_b) + " " * 10 + fmt_float(scale_b) + fmt_float(scale_p))
+
+        # Card 6: F_id_g(r), blank, SCALE_GAMMA, SCALE_RHO, C1, C2
+        self.lines.append(fmt_int(func_gam) + " " * 10 + fmt_float(scale_gam) + fmt_float(scale_rho) + fmt_float(c1) + fmt_float(c2))
+
+        return self
+
+    def mat_powder_burn(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/POWDER_BURN`` — synonym for ``/MAT/LAW105``."""
+        kwargs.setdefault("law_name", "POWDER_BURN")
+        return self.mat_law105(*args, **kwargs)
+
+    def mat_powderburn(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/POWDERBURN`` — synonym for ``/MAT/LAW105``."""
+        kwargs.setdefault("law_name", "POWDERBURN")
+        return self.mat_law105(*args, **kwargs)
+
     def mat_law106(
         self,
         mid: int = 0,
@@ -10662,6 +10822,8 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law103(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     elif law in ("104", "LAW104", "DRUCKER", "JOHNS_VOCE_DRUCKER", "JOHNS-VOCE-DRUCKER", "PLAS_DRUCK", "MAT_DRUCKER", "MAT_104", "MAT_LAW104", "MAT_JOHNS_VOCE_DRUCKER", "MAT_PLAS_DRUCK", "LAW104_DRUCKER"):
         d.mat_law104(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
+    elif law in ("105", "LAW105", "POWDER_BURN", "POWDERBURN", "MAT_POWDER_BURN", "MAT_POWDERBURN", "MAT_105", "MAT_LAW105", "LAW105_POWDER_BURN"):
+        d.mat_law105(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     elif law in ("106", "LAW106", "JCOOK_ALM", "JOHNS_COOK_ALM", "MAT_JCOOK_ALM", "MAT_106", "MAT_LAW106", "LAW106_JCOOK_ALM"):
         d.mat_law106(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     else:

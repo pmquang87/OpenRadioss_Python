@@ -30231,12 +30231,13 @@ def read_mat_law104(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law105(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW105/id`` or ``/MAT/POWDER_BURN/id`` (M176): Powder burn propellant model."""
+    """``/MAT/LAW105/id`` or ``/MAT/POWDER_BURN/id`` (M176/M576): Powder burn propellant model."""
     from ..model.entities import MaterialLaw105, Material
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
 
     rho0 = 0.0
+    rhor = 0.0
     bulk, p0, psh = 0.0, 0.0, 0.0
     gas_d, gas_eg = 0.0, 0.0
     gr, c, alpha = 0.0, 0.0, 0.0
@@ -30249,6 +30250,7 @@ def read_mat_law105(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if len(valid_cards) > 0:
             f1 = cut(valid_cards[0].raw, "MAT_LAW105_1")
             rho0 = _f(f1[0])
+            rhor = _f(f1[1]) if len(f1) > 1 and f1[1].strip() else rho0
         if len(valid_cards) > 1:
             f2 = cut(valid_cards[1].raw, "MAT_LAW105_2")
             bulk = _f(f2[0])
@@ -30279,6 +30281,7 @@ def read_mat_law105(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if len(valid_cards) > 0:
             toks1 = valid_cards[0].tokens()
             rho0 = float(toks1[0]) if len(toks1) > 0 else 0.0
+            rhor = float(toks1[1]) if len(toks1) > 1 else rho0
         if len(valid_cards) > 1:
             toks2 = valid_cards[1].tokens()
             bulk = float(toks2[0]) if len(toks2) > 0 else 0.0
@@ -30293,18 +30296,42 @@ def read_mat_law105(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             gr = float(toks4[0]) if len(toks4) > 0 else 0.0
             c = float(toks4[1]) if len(toks4) > 1 else 0.0
             alpha = float(toks4[2]) if len(toks4) > 2 else 0.0
+    compac = 0.93
+    if block.fixed:
+        if len(valid_cards) > 6:
+            toks7 = valid_cards[6].tokens()
+            if len(toks7) > 0:
+                compac = float(toks7[0])
+    else:
         if len(valid_cards) > 4:
             toks5 = valid_cards[4].tokens()
             func_b = int(toks5[0]) if len(toks5) > 0 else 0
-            scale_b = float(toks5[1]) if len(toks5) > 1 else 1.0
-            scale_p = float(toks5[2]) if len(toks5) > 2 else 1.0
+            if len(toks5) >= 4:
+                scale_b = float(toks5[2]) if toks5[2] else 1.0
+                scale_p = float(toks5[3]) if toks5[3] else 1.0
+            else:
+                scale_b = float(toks5[1]) if len(toks5) > 1 else 1.0
+                scale_p = float(toks5[2]) if len(toks5) > 2 else 1.0
         if len(valid_cards) > 5:
             toks6 = valid_cards[5].tokens()
             func_gam = int(toks6[0]) if len(toks6) > 0 else 0
-            scale_gam = float(toks6[1]) if len(toks6) > 1 else 1.0
-            scale_rho = float(toks6[2]) if len(toks6) > 2 else 1.0
-            c1 = float(toks6[3]) if len(toks6) > 3 else 0.0
-            c2 = float(toks6[4]) if len(toks6) > 4 else 0.0
+            if len(toks6) >= 6:
+                scale_gam = float(toks6[2]) if toks6[2] else 1.0
+                scale_rho = float(toks6[3]) if toks6[3] else 1.0
+                c1 = float(toks6[4]) if len(toks6) > 4 else 0.0
+                c2 = float(toks6[5]) if len(toks6) > 5 else 0.0
+            else:
+                scale_gam = float(toks6[1]) if len(toks6) > 1 else 1.0
+                scale_rho = float(toks6[2]) if len(toks6) > 2 else 1.0
+                c1 = float(toks6[3]) if len(toks6) > 3 else 0.0
+                c2 = float(toks6[4]) if len(toks6) > 4 else 0.0
+        if len(valid_cards) > 6:
+            toks7 = valid_cards[6].tokens()
+            if len(toks7) > 0:
+                compac = float(toks7[0])
+
+    if rhor <= 0.0:
+        rhor = rho0
 
     m105 = MaterialLaw105(
         id=mat_id, title=title, rho0=rho0,
@@ -30314,23 +30341,29 @@ def read_mat_law105(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         func_b=func_b, scale_b=scale_b, scale_p=scale_p,
         func_gam=func_gam, scale_gam=scale_gam, scale_rho=scale_rho,
         c1=c1, c2=c2,
+        refer_rho=rhor, rhor=rhor,
+        compac=compac,
     )
+    mat_law_name = block.parts[1].upper() if len(block.parts) > 1 else "LAW105"
+    m105.law_name = mat_law_name
     model.mat_law105s[mat_id] = m105
     from .mat_reader import GenericMaterialRecord
     mat105 = Material(
-        id=mat_id, law=105, rho0=rho0, title=title,
+        id=mat_id, law=105, rho0=rho0, title=title, law_name=mat_law_name,
         params={
             "E": 3.0 * bulk * (1.0 - 2.0 * 0.3) if bulk > 0.0 else 1.0, "nu": 0.3,
-            "MAT_RHO": rho0, "POWDER_BULK": bulk, "POWDER_P0": p0, "MAT_PSH": psh,
+            "MAT_RHO": rho0, "Refer_Rho": rhor, "POWDER_BULK": bulk, "POWDER_P0": p0, "MAT_PSH": psh,
             "GAS_D": gas_d, "GAS_EG": gas_eg,
             "POWDER_Gr": gr, "POWDER_C": c, "Alpha": alpha,
             "POWDER_B_FUNC": func_b, "POWDER_SCALE_B": scale_b, "POWDER_SCALE_P": scale_p,
             "POWDER_GAM_FUNC": func_gam, "POWDER_SCALE_GAM": scale_gam, "POWDER_SCALE_RHO": scale_rho,
             "MAT_C1": c1, "MAT_C2": c2,
+            "compac": compac, "COMPAC": compac,
         }
     )
+    m105.params = mat105.params
     mat105.record = GenericMaterialRecord(
-        law_name="LAW105", law_number=105, id=mat_id, title=title,
+        law_name=mat_law_name, law_number=105, id=mat_id, title=title,
         params=mat105.params, density=rho0, unit_id=block.unit_id,
     )
     model.materials[mat_id] = mat105

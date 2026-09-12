@@ -170,6 +170,14 @@ _LAW104_KEYS = {
 for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells"):
     _ALLOWED_LAWS[_fam].update(_LAW104_KEYS)
 
+_LAW105_KEYS = {
+    105, "105", "LAW105", "POWDER_BURN", "POWDERBURN", "LAW105_POWDER_BURN",
+    "MAT_105", "MAT_LAW105", "MAT_POWDER_BURN", "MAT_POWDERBURN",
+}
+for _fam in ("bricks", "tetras", "penta6", "pyra5", "sph"):
+    if _fam in _ALLOWED_LAWS:
+        _ALLOWED_LAWS[_fam].update(_LAW105_KEYS)
+
 _LAW106_KEYS = {
     106, "106", "LAW106", "JCOOK_ALM", "JOHNS_COOK_ALM", "MAT_JCOOK_ALM",
     "MAT_106", "MAT_LAW106", "LAW106_JCOOK_ALM", "MAT_JOHNS_COOK_ALM",
@@ -6331,6 +6339,216 @@ check_mat_johns_voce_drucker = check_mat_law104
 check_mat_plas_druck = check_mat_law104
 
 
+def check_mat_law105(*args: Any, **kwargs: Any) -> None:
+    """Validate /MAT/LAW105 or /MAT/POWDER_BURN parameter bounds and element compatibility (M576).
+
+    Upstream reference: ``starter/source/materials/mat/mat105/hm_read_mat105.F90``.
+
+    Checks:
+      1. RHO0 > 0 (ANCMSG 1514).
+      2. BULK > 0 (ANCMSG 856, hm_read_mat105.F90:163: 'BULK MODULUS MUST BE DEFINED').
+      3. D > 0 (ANCMSG 856, hm_read_mat105.F90:168: 'GAS EOS PARAMETER D MUST BE DEFINED').
+      4. EG > 0 (ANCMSG 856, hm_read_mat105.F90:173: 'GAS EOS PARAMETER EG MUST BE DEFINED').
+      5. Gr > 0 (ANCMSG 856, hm_read_mat105.F90:178: 'GROWTH PARAMETER Gr MUST BE DEFINED').
+      6. C1 > 0 (ANCMSG 856, hm_read_mat105.F90:183: 'BURNING VELOCITY C1 MUST BE DEFINED').
+      7. Element compatibility: 3D solids and SPH supported; reject 2D shells (ANCMSG 305) and 1D elements (ANCMSG 306).
+    """
+    actual_mat = None
+    actual_log = None
+    actual_model = None
+    actual_mid = None
+
+    if "model" in kwargs:
+        actual_model = kwargs["model"]
+    if "mat" in kwargs:
+        actual_mat = kwargs["mat"]
+    if "log" in kwargs:
+        actual_log = kwargs["log"]
+    if "mat_id" in kwargs:
+        actual_mid = kwargs["mat_id"]
+
+    for c in args:
+        if isinstance(c, MessageLog):
+            actual_log = c
+        elif isinstance(c, Model):
+            actual_model = c
+        elif hasattr(c, "id") and (hasattr(c, "bulk") or hasattr(c, "gas_d") or hasattr(c, "gr")):
+            actual_mat = c
+        elif isinstance(c, int):
+            actual_mid = c
+
+    if actual_log is None:
+        actual_log = MessageLog()
+
+    mat = actual_mat
+    mat_id = actual_mid if actual_mid is not None else (mat.id if mat is not None else 0)
+
+    if mat is None and actual_model is not None and mat_id:
+        mat = getattr(actual_model, "mat_law105s", {}).get(mat_id)
+        if mat is None:
+            mat = getattr(actual_model, "materials", {}).get(mat_id)
+
+    if mat is None:
+        return
+
+    titr = getattr(mat, "title", f"/MAT/LAW105/{mat_id}")
+
+    # 1. Density check
+    rho0 = getattr(mat, "rho0", getattr(mat, "rho", 0.0))
+    if isinstance(mat, dict):
+        rho0 = mat.get("rho0", mat.get("rho", 0.0))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        rho0 = mat.params.get("rho0", mat.params.get("rho", mat.params.get("MAT_RHO", rho0)))
+    if rho0 <= 0.0:
+        actual_log.error(
+            f"MATERIAL {mat_id}: ZERO OR NEGATIVE DENSITY RHO={rho0} (ANCMSG 1514)",
+            "MAT CHECK",
+        )
+
+    # 2. Bulk modulus check (ANCMSG 856)
+    bulk = getattr(mat, "bulk", 0.0)
+    if isinstance(mat, dict):
+        bulk = mat.get("bulk", mat.get("POWDER_BULK", 0.0))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        bulk = mat.params.get("bulk", mat.params.get("POWDER_BULK", bulk))
+    if bulk <= 0.0:
+        actual_log.error(
+            f"/MAT/LAW105/{mat_id}: BULK MODULUS MUST BE DEFINED (ANCMSG 856)",
+            "MAT CHECK",
+        )
+
+    # 3. Gas EOS parameter D check (ANCMSG 856)
+    gas_d = getattr(mat, "gas_d", getattr(mat, "d", 0.0))
+    if isinstance(mat, dict):
+        gas_d = mat.get("gas_d", mat.get("d", mat.get("GAS_D", 0.0)))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        gas_d = mat.params.get("gas_d", mat.params.get("d", mat.params.get("GAS_D", gas_d)))
+    if gas_d <= 0.0:
+        actual_log.error(
+            f"/MAT/LAW105/{mat_id}: GAS EOS PARAMETER D MUST BE DEFINED (ANCMSG 856)",
+            "MAT CHECK",
+        )
+
+    # 4. Gas EOS parameter EG check (ANCMSG 856)
+    gas_eg = getattr(mat, "gas_eg", getattr(mat, "eg", 0.0))
+    if isinstance(mat, dict):
+        gas_eg = mat.get("gas_eg", mat.get("eg", mat.get("GAS_EG", 0.0)))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        gas_eg = mat.params.get("gas_eg", mat.params.get("eg", mat.params.get("GAS_EG", gas_eg)))
+    if gas_eg <= 0.0:
+        actual_log.error(
+            f"/MAT/LAW105/{mat_id}: GAS EOS PARAMETER EG MUST BE DEFINED (ANCMSG 856)",
+            "MAT CHECK",
+        )
+
+    # 5. Grain growth parameter Gr check (ANCMSG 856)
+    gr = getattr(mat, "gr", 0.0)
+    if isinstance(mat, dict):
+        gr = mat.get("gr", mat.get("POWDER_Gr", 0.0))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        gr = mat.params.get("gr", mat.params.get("POWDER_Gr", gr))
+    if gr <= 0.0:
+        actual_log.error(
+            f"/MAT/LAW105/{mat_id}: GROWTH PARAMETER Gr MUST BE DEFINED (ANCMSG 856)",
+            "MAT CHECK",
+        )
+
+    # 6. Burn velocity parameter C1 check (ANCMSG 856)
+    c1 = getattr(mat, "c1", 0.0)
+    if isinstance(mat, dict):
+        c1 = mat.get("c1", mat.get("MAT_C1", 0.0))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        c1 = mat.params.get("c1", mat.params.get("MAT_C1", c1))
+    if c1 <= 0.0:
+        actual_log.error(
+            f"/MAT/LAW105/{mat_id}: BURNING VELOCITY C1 MUST BE DEFINED (ANCMSG 856)",
+            "MAT CHECK",
+        )
+
+    # 7. Element compatibility: reject 2D shells (ANCMSG 305) and 1D elements (ANCMSG 306)
+    if actual_model is not None:
+        # Check shells
+        shell_colls = [
+            getattr(actual_model, "shells", None),
+            getattr(actual_model, "quads", None),
+            getattr(actual_model, "trias", None),
+        ]
+        shell_found = False
+        for coll in shell_colls:
+            if not coll:
+                continue
+            for el_id, el in coll.items():
+                pid = getattr(el, "part_id", getattr(el, "pid", 0))
+                part = getattr(actual_model, "parts", {}).get(pid)
+                if part and getattr(part, "mat_id", 0) == mat_id:
+                    actual_log.error(
+                        f"/MAT/LAW105/{mat_id} is not supported for shell elements (ANCMSG 305)",
+                        "MAT CHECK",
+                    )
+                    shell_found = True
+                    break
+            if shell_found:
+                break
+
+        # Check 1D elements
+        oned_colls = [
+            getattr(actual_model, "trusses", None),
+            getattr(actual_model, "beams", None),
+            getattr(actual_model, "springs", None),
+        ]
+        oned_found = False
+        for coll in oned_colls:
+            if not coll:
+                continue
+            for el_id, el in coll.items():
+                pid = getattr(el, "part_id", getattr(el, "pid", 0))
+                part = getattr(actual_model, "parts", {}).get(pid)
+                if part and getattr(part, "mat_id", 0) == mat_id:
+                    actual_log.error(
+                        f"/MAT/LAW105/{mat_id} is not supported for 1D elements (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    oned_found = True
+                    break
+            if oned_found:
+                break
+
+        for pid, part in getattr(actual_model, "parts", {}).items():
+            if getattr(part, "mat_id", 0) == mat_id:
+                etype = str(getattr(part, "element_type", "") or "").upper()
+                if any(s in etype for s in ("SHELL", "QUAD", "TRIA")):
+                    actual_log.error(
+                        f"/MAT/LAW105/{mat_id} is not supported for shell elements ({etype.lower()}) (ANCMSG 305)",
+                        "MAT CHECK",
+                    )
+                    break
+                if any(s in etype for s in ("BEAM", "TRUSS", "SPRING")):
+                    actual_log.error(
+                        f"/MAT/LAW105/{mat_id} is not supported for 1D elements ({etype.lower()}) (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    break
+                prop_id = getattr(part, "prop_id", 0)
+                prop = getattr(actual_model, "properties", {}).get(prop_id)
+                if prop is not None:
+                    ptype = str(getattr(prop, "type", getattr(prop, "prop_type", "")) or "").upper()
+                    if ptype == "TYPE1" or any(s in ptype for s in ("SHELL", "SH_SEAT")):
+                        actual_log.error(
+                            f"/MAT/LAW105/{mat_id} is not supported for shell elements ({ptype.lower()}) (ANCMSG 305)",
+                            "MAT CHECK",
+                        )
+                    elif ptype in ("TYPE2", "TYPE3", "TYPE4", "TYPE11") or any(s in ptype for s in ("BEAM", "TRUSS", "SPRING", "SPR_SEAT")):
+                        actual_log.error(
+                            f"/MAT/LAW105/{mat_id} is not supported for 1D elements ({ptype.lower()}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
+
+_check_mat_law105 = check_mat_law105
+check_mat_powder_burn = check_mat_law105
+check_mat_powderburn = check_mat_law105
+
+
 def check_mat_law106(*args: Any, **kwargs: Any) -> None:
     """Validate /MAT/LAW106 or /MAT/JCOOK_ALM parameter bounds and element compatibility (M575).
 
@@ -7089,6 +7307,16 @@ _MAT_CHECKS: dict[Any, Any] = {
     "MAT_104": check_mat_law104,
     "MAT_LAW104": check_mat_law104,
     "LAW104_DRUCKER": check_mat_law104,
+    105: check_mat_law105,
+    "105": check_mat_law105,
+    "LAW105": check_mat_law105,
+    "POWDER_BURN": check_mat_law105,
+    "POWDERBURN": check_mat_law105,
+    "MAT_POWDER_BURN": check_mat_law105,
+    "MAT_POWDERBURN": check_mat_law105,
+    "MAT_105": check_mat_law105,
+    "MAT_LAW105": check_mat_law105,
+    "LAW105_POWDER_BURN": check_mat_law105,
     106: check_mat_law106,
     "106": check_mat_law106,
     "LAW106": check_mat_law106,
@@ -7549,6 +7777,20 @@ def check_model(model: Model, log: MessageLog) -> None:
                 if name in ("trusses", "beams", "springs"):
                     log.error(
                         f"/MAT/LAW74/{mat.id} (/MAT/HILL_3D) is not supported for 1D elements ({name}) (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    continue
+            if (mat.law in _LAW105_KEYS
+                    or getattr(mat, "law_name", None) in _LAW105_KEYS):
+                if name in ("shells", "shells_qbat", "shells_qeph", "sh3n", "quads", "tria3", "shells_bt4"):
+                    log.error(
+                        f"/MAT/LAW105/{mat.id} (/MAT/POWDER_BURN) is not supported for shell elements ({name}) (ANCMSG 305)",
+                        "MAT CHECK",
+                    )
+                    continue
+                if name in ("trusses", "beams", "springs"):
+                    log.error(
+                        f"/MAT/LAW105/{mat.id} (/MAT/POWDER_BURN) is not supported for 1D elements ({name}) (ANCMSG 306)",
                         "MAT CHECK",
                     )
                     continue

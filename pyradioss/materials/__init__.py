@@ -82,9 +82,17 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                law102_dprag2,
                law103_hensel_spittel,
                law104_drucker,
+               law105_powder_burn,
                law106_jcook_alm,
                law163_crush_foam,
                mat_gas, mat_void)
+from .law105_powder_burn import (
+    PowderBurnParams,
+    build_law105,
+    solid_update as law105_solid_update,
+    sound_speed as law105_sound_speed,
+    solid_tangent as law105_solid_tangent,
+)
 from .law106_jcook_alm import (
     JCookAlmParams,
     build_law106,
@@ -1420,6 +1428,24 @@ _LAW104_KEYS = (
 )
 
 
+def _register_law105():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law105_powder_burn, "build_law105", None)
+        if builder is not None:
+            for k in (105, "105", "LAW105", "POWDER_BURN", "POWDERBURN", "MAT_POWDER_BURN", "MAT_POWDERBURN", "MAT_105", "MAT_LAW105", "LAW105_POWDER_BURN"):
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law105()
+
+_LAW105_KEYS = (
+    105, "105", "LAW105", "POWDER_BURN", "POWDERBURN", "MAT_POWDER_BURN", "MAT_POWDERBURN", "MAT_105", "MAT_LAW105", "LAW105_POWDER_BURN",
+)
+
+
 def _register_law106():
     try:
         from ..input.mat_reader import MAT_PHYSICS_REGISTRY
@@ -2057,6 +2083,8 @@ def extra_shapes(mat, nip=None):
         shapes.update(law95_extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in _LAW101_KEYS or getattr(mat, "law_name", None) in _LAW101_KEYS:
         shapes.update(law101_extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW105_KEYS or getattr(mat, "law_name", None) in _LAW105_KEYS:
+        shapes.update(law105_powder_burn.extra_shapes(mat, nip=nip))
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
         shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
     return shapes
@@ -2098,7 +2126,8 @@ def needs_env(mat) -> bool:
     M568: LAW93 Orthotropic Hill Plasticity;
     M569: LAW95 Bergstrom-Boyce Hyperelasticity;
     M570: LAW100 Multi-Network Hyperelasticity;
-    M571: LAW101 Bouvard Polypropylene Viscoplasticity)."""
+    M571: LAW101 Bouvard Polypropylene Viscoplasticity;
+    M576: LAW105 Powder Burn Propellant)."""
     if getattr(mat, "law", None) in _LAW88_KEYS or getattr(mat, "law_name", None) in _LAW88_KEYS:
         return True
     if getattr(mat, "law", None) in _LAW92_KEYS or getattr(mat, "law_name", None) in _LAW92_KEYS:
@@ -2112,6 +2141,8 @@ def needs_env(mat) -> bool:
     if getattr(mat, "law", None) in _LAW100_KEYS or getattr(mat, "law_name", None) in _LAW100_KEYS:
         return True
     if getattr(mat, "law", None) in _LAW101_KEYS or getattr(mat, "law_name", None) in _LAW101_KEYS:
+        return True
+    if getattr(mat, "law", None) in _LAW105_KEYS or getattr(mat, "law_name", None) in _LAW105_KEYS:
         return True
     if getattr(mat, "law", None) in _LAW106_KEYS or getattr(mat, "law_name", None) in _LAW106_KEYS:
         return True
@@ -2700,6 +2731,29 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
             except Exception:
                 pass
         return sig, epsp_out, c
+    if getattr(mat, "law", None) in _LAW105_KEYS or getattr(mat, "law_name", None) in _LAW105_KEYS:
+        res = law105_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra, return_tuple=True)
+        if isinstance(res, tuple):
+            if len(res) == 3:
+                sign, epsp_out, c = res
+            elif len(res) == 2:
+                sign, epsp_out = res
+                c = law105_sound_speed(mat, rho=extra.get("rho") if extra else None, extra=extra)
+            else:
+                sign, epsp_out, c = res[0], epsp, None
+        else:
+            sign, epsp_out, c = res, epsp, None
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = sign
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
     if getattr(mat, "law", None) in _LAW106_KEYS or getattr(mat, "law_name", None) in _LAW106_KEYS:
         res = law106_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra, return_tuple=True)
         if isinstance(res, tuple):
@@ -2730,6 +2784,8 @@ def sound_speed(mat, rho=None, extra=None, is_shell: bool = False):
     """Dispatch sound speed calculation to material law."""
     law = getattr(mat, "law", None)
     law_name = getattr(mat, "law_name", None)
+    if law in _LAW105_KEYS or law_name in _LAW105_KEYS:
+        return law105_sound_speed(mat, rho=rho, extra=extra)
     if law in _LAW106_KEYS or law_name in _LAW106_KEYS:
         if is_shell:
             return law106_sound_speed_shell(mat, rho=rho)
@@ -3032,7 +3088,7 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
 # Consistent tangents for the implicit solver (M8)
 # ----------------------------------------------------------------------------
 
-def solid_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
+def solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
     """Dispatch the (n, 6, 6) consistent solid tangent for the implicit
     solve. LAW1 returns the constant elastic C broadcast over the group;
     LAW2 returns the CONSISTENT (algorithmic) elastoplastic tangent of the
@@ -3225,6 +3281,8 @@ def solid_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
         return law103_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     if getattr(mat, "law", None) in _LAW104_KEYS or getattr(mat, "law_name", None) in _LAW104_KEYS:
         return law104_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
+    if getattr(mat, "law", None) in _LAW105_KEYS or getattr(mat, "law_name", None) in _LAW105_KEYS:
+        return law105_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     if getattr(mat, "law", None) in _LAW106_KEYS or getattr(mat, "law_name", None) in _LAW106_KEYS:
         return law106_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     raise NotImplementedError(
@@ -3238,6 +3296,10 @@ consistent_solid_tangent = solid_tangent
 
 def resolve_curves(mat, model, log=None):
     """Wire curve resolution hook for /FUNCT references so model.curves can be accessed by the kernel."""
+    if getattr(mat, "law", None) in _LAW105_KEYS or getattr(mat, "law_name", None) in _LAW105_KEYS:
+        if hasattr(law105_powder_burn, "resolve"):
+            return law105_powder_burn.resolve(mat, model, log)
+
     if getattr(mat, "law", None) in _LAW106_KEYS or getattr(mat, "law_name", None) in _LAW106_KEYS:
         if hasattr(law106_jcook_alm, "resolve"):
             return law106_jcook_alm.resolve(mat, model, log)
