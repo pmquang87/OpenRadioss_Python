@@ -5908,7 +5908,7 @@ class StarterDeck:
             if func_load_list is None:
                 func_load_list = getattr(mat_obj, "func_load_list", mat_params.get("func_load_list", mat_params.get("LAW88_arr1", None)))
             if fscale_load_list is None:
-                fscale_load_list = getattr(mat_obj, "fscale_load_list", mat_params.get("fscale_load_list", mat_params.get("LAW88_arr2", None)))
+                fscale_load_list = getattr(mat_obj, "fscale_load_card", None) or getattr(mat_obj, "fscale_load_unscaled", None) or getattr(mat_obj, "fscale_load_list", mat_params.get("fscale_load_card", mat_params.get("fscale_load_list", mat_params.get("LAW88_arr2", None))))
             if rate_load_list is None:
                 rate_load_list = getattr(mat_obj, "rate_load_list", mat_params.get("rate_load_list", mat_params.get("LAW88_arr3", None)))
             if lamfit_list is None:

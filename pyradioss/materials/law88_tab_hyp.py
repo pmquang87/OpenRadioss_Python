@@ -631,6 +631,18 @@ class MatparamLaw88:
     uparam: np.ndarray = field(default_factory=lambda: np.zeros(9, dtype=np.float64))
     table: list[TableData] = field(default_factory=list)
 
+    @property
+    def E(self) -> float:
+        return self.young
+
+    @property
+    def G(self) -> float:
+        return self.shear
+
+    @property
+    def K(self) -> float:
+        return self.bulk
+
     @classmethod
     def from_dict_or_obj(cls, obj: Any) -> MatparamLaw88:
         if isinstance(obj, MatparamLaw88):
@@ -658,11 +670,50 @@ class MatparamLaw88:
         rho0 = float(_get(("rho0", "rho", "MAT_RHO"), 1e-9))
         rho = float(_get(("rho", "rho0", "MAT_RHO"), rho0))
 
-        iparam_raw = _get(("iparam",), np.zeros(6, dtype=int))
-        iparam = np.asarray(iparam_raw, dtype=int)
-        uparam_raw = _get(("uparam",), np.zeros(9, dtype=np.float64))
-        uparam = np.asarray(uparam_raw, dtype=np.float64)
+        iparam_raw = _get(("iparam",), None)
+        if iparam_raw is not None:
+            iparam = np.asarray(iparam_raw, dtype=int)
+        else:
+            iparam = np.zeros(6, dtype=int)
+
+        uparam_raw = _get(("uparam",), None)
+        if uparam_raw is not None:
+            uparam = np.asarray(uparam_raw, dtype=np.float64)
+        else:
+            uparam = np.zeros(9, dtype=np.float64)
+
+        if np.all(iparam == 0):
+            itens = int(_get(("tension", "LAW88_Tension", "itens"), 0))
+            ifunc_unload = int(_get(("ifunc_unload", "LAW88_fct_IDunL"), 0))
+            hys = float(_get(("hys", "LAW88_Hys"), 0.0))
+            iunl_for = int(_get(("iunl_for",), 1 if ifunc_unload > 0 else (2 if hys != 0.0 else 0)))
+            nl = int(_get(("nl", "LAW88_NL", "nload"), 0))
+            if nl == 0:
+                func_load_list = _get(("func_load_list", "LAW88_arr1"), None)
+                if func_load_list:
+                    nl = len(func_load_list)
+            rtype = int(_get(("rtype", "LAW88_RTYPE"), 0))
+            failip = int(_get(("failip", "LAW88_FAILIP"), 0))
+            nv_base = int(_get(("nv_base",), 12))
+            iparam = np.array([itens, iunl_for, nl, rtype, failip, nv_base], dtype=int)
+
+        if np.all(uparam == 0):
+            hys = float(_get(("hys", "LAW88_Hys"), 0.0))
+            shape = float(_get(("shape", "LAW88_Shape"), 1.0))
+            gdamp = float(_get(("gdamp", "LAW88_GDAMP"), 0.0))
+            sigf = float(_get(("sigf", "LAW88_SIGF"), 0.0))
+            if gdamp == 0.0 and sigf > 0.0:
+                gdamp = float(_get(("LAW88_G", "g"), 0.0))
+            kfail = float(_get(("kfail", "LAW88_KFAIL"), 0.0))
+            gam1 = float(_get(("gam1", "LAW88_GAM1"), 0.0))
+            gam2 = float(_get(("gam2", "LAW88_GAM2"), 0.0))
+            eh = float(_get(("eh", "LAW88_EH"), 0.0))
+            beta = float(_get(("beta", "LAW88_BETA"), 0.0))
+            uparam = np.array([hys, shape, gdamp, sigf, kfail, gam1, gam2, eh, beta], dtype=np.float64)
+
         table = _get(("table",), [])
+        if not table and hasattr(obj, "table"):
+            table = obj.table
 
         return cls(
             bulk=bulk,
@@ -2006,9 +2057,19 @@ def build_law88(rec: Any = None, **kwargs: Any) -> Any:
     young = float(p.get("young", p.get("E", p.get("MAT_E", 300.0))))
     shear = float(p.get("shear", p.get("G", p.get("MAT_G", 100.0))))
 
+    p["rho0"] = rho0
+    p["nu"] = nu
+    p["bulk"] = bulk
+    p["young"] = young
+    p["shear"] = shear
+    p["E"] = young
+    p["G"] = shear
+    p["K"] = bulk
+
     try:
         from ..model.entities import Material
-        return Material(id=mid, law=88, rho0=rho0, title=title, law_name="LAW88", params=p)
+        mat_inst = Material(id=mid, law=88, rho0=rho0, title=title, law_name="LAW88", params=p)
+        return mat_inst
     except Exception:
         return MatparamLaw88.from_dict_or_obj(p)
 

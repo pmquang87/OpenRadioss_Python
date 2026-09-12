@@ -601,6 +601,12 @@ def _init_material_state(group, nip_max=None, n=None):
                 st["uvar66"] = np.zeros((n, 8))
             if "uvar66" not in st["mat_extra"]:
                 st["mat_extra"]["uvar66"] = np.zeros((n, nip_max, 8))
+        if (getattr(mat, "law", 1) in (88, "88", "LAW88", "HYP_TAB", "TAB_HYP", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TABULATED_HYP")
+                or getattr(mat, "law_name", None) in ("88", "LAW88", "HYP_TAB", "TAB_HYP", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TABULATED_HYP", "MAT_LAW88", "MAT_HYP_TAB", "MAT_TAB_HYP", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC")):
+            if "uvar88" not in st:
+                st["uvar88"] = np.zeros((n, 30))
+            if "uvar88" not in st["mat_extra"]:
+                st["mat_extra"]["uvar88"] = np.zeros((n, nip_max, 30))
     if any(getattr(mat, "fail", None) is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros((n, nip_max))
     st["chk_fail"] = any(
@@ -1165,8 +1171,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         elif getattr(mat, "law", 1) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP"):
             from ..materials import law88_tab_hyp
             c[sl] = law88_tab_hyp.sound_speed_shell(mat, getattr(mat, "rho0", None))
-            if "uvar88" in st and "uvar88" in st.get("mat_extra", {}):
+            if "uvar88" in st.get("mat_extra", {}):
                 u88 = st["mat_extra"]["uvar88"]
+                if "uvar88" not in st:
+                    st["uvar88"] = np.zeros((n, 30))
                 st["uvar88"][sl] = u88[sl, 0] if u88.ndim == 3 else u88[sl]
         elif getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
             c[sl] = mat.sound_speed_shell()

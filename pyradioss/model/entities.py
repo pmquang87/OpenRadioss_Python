@@ -6224,6 +6224,7 @@ class MaterialLaw88:
     rtype: int = 0
     func_load_list: list = field(default_factory=list)
     fscale_load_list: list = field(default_factory=list)
+    fscale_load_card: list = field(default_factory=list)
     rate_load_list: list = field(default_factory=list)
     lamfit_list: list = field(default_factory=list)
     sgl: float = 0.0

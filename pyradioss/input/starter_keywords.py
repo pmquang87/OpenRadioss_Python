@@ -27438,7 +27438,13 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/MAT/LAW88/id`` or ``/MAT/HYPER_ELAS/id`` (M173): Tabulated hyperelastic Ogden model."""
     from ..model.entities import MaterialLaw88, Material
     mat_id = block.user_id or 0
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    # Detect fixed format either from block.fixed or by card line width (e.g. fragments without /BEGIN)
+    is_fixed = block.fixed
+    if not is_fixed:
+        raw_lines = [c.raw for c in block.cards if not c.is_blank]
+        if any(len(line) >= 50 and "," not in line for line in raw_lines):
+            is_fixed = True
+    title, cards = _fixed_data(block) if is_fixed else _title_and_data(block)
 
     rho0 = 0.0
     refer_rho = 0.0
@@ -27476,7 +27482,7 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             parts = c.tokens()
         return [p.rstrip(",") for p in parts if p]
 
-    if block.fixed:
+    if is_fixed:
         if len(cards) > 0 and not cards[0].is_blank:
             f1 = cut(cards[0].raw, "MAT_LAW88_1")
             rho0 = _f(f1[0])
@@ -27605,6 +27611,7 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 failip = int(float(t6[4])) if len(t6) > 4 else 0
 
     # Specimen dimensions scaling per hm_read_mat88.F90:546-558
+    fscale_load_unscaled = list(fscale_load_list)
     if sw > 0.0 and st > 0.0:
         areafac = 1.0 / (sw * st)
         fscale_load_list = [sc * areafac for sc in fscale_load_list]
@@ -27647,6 +27654,7 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         ifunc_unload=ifunc_unload, fscale_unload=fscale_unload,
         hys=hys, shape=shape, tension=tension, rtype=rtype,
         func_load_list=func_load_list, fscale_load_list=fscale_load_list,
+        fscale_load_card=fscale_load_unscaled,
         rate_load_list=rate_load_list, lamfit_list=lamfit_list,
         sgl=sgl, sw=sw, st=st, g=g, sigf=sigf,
         kfail=kfail, gam1=gam1, gam2=gam2, eh=eh, failip=failip,
@@ -27674,6 +27682,8 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "nl": nl, "ifunc_unload": ifunc_unload, "fscale_unload": fscale_unload,
             "hys": hys, "shape": shape, "tension": tension, "rtype": rtype,
             "func_load_list": func_load_list, "fscale_load_list": fscale_load_list,
+            "fscale_load_card": fscale_load_unscaled,
+            "fscale_load_list_scaled": fscale_load_list,
             "rate_load_list": rate_load_list, "lamfit_list": lamfit_list,
             "sgl": sgl, "sw": sw, "st": st, "g": g, "sigf": sigf,
             "kfail": kfail, "gam1": gam1, "gam2": gam2, "eh": eh, "failip": failip,

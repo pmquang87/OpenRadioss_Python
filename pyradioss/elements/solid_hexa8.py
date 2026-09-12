@@ -411,6 +411,12 @@ def _init_material_state(group, dndx0):
             st["eint"][sl] = e0 * st["vol0"][sl]
             if "eint" in st["mat_extra"]:
                 st["mat_extra"]["eint"][sl] = st["eint"][sl]
+        if (getattr(mat, "law", 1) in (88, "88", "LAW88", "HYP_TAB", "TAB_HYP", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TABULATED_HYP")
+                or getattr(mat, "law_name", None) in ("88", "LAW88", "HYP_TAB", "TAB_HYP", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TABULATED_HYP", "MAT_LAW88", "MAT_HYP_TAB", "MAT_TAB_HYP", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC")):
+            if "uvar88" not in st:
+                st["uvar88"] = np.zeros((n, 30))
+            if "uvar88" not in st["mat_extra"]:
+                st["mat_extra"]["uvar88"] = np.zeros((n, 30))
     if any(getattr(mat, "eos", None) is not None for _, mat, _ in st["slices"]):
         from ..materials import eos as eos_mod
         st["eos_mask"] = np.zeros(n, dtype=bool)
@@ -764,6 +770,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         for name in st["mat_extra"]:
             if name in extra and name != "eint":
                 st["mat_extra"][name][sl] = extra[name]
+        if "uvar88" in extra:
+            if "uvar88" not in st:
+                st["uvar88"] = np.zeros((group.n, 30))
+            st["uvar88"][sl] = extra["uvar88"]
         if "off25" in extra:
             st["off"][sl] = np.minimum(st["off"][sl], extra["off25"])
         elif "off28" in extra:

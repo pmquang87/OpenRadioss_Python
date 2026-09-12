@@ -458,8 +458,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         if "uvar87" in st and "uvar87" in st.get("mat_extra", {}):
             u87 = st["mat_extra"]["uvar87"]
             st["uvar87"][sl] = u87[sl, 0] if u87.ndim == 3 else u87[sl]
-        if "uvar88" in st and "uvar88" in st.get("mat_extra", {}):
+        if "uvar88" in st.get("mat_extra", {}):
             u88 = st["mat_extra"]["uvar88"]
+            if "uvar88" not in st:
+                st["uvar88"] = np.zeros((n, 30))
             st["uvar88"][sl] = u88[sl, 0] if u88.ndim == 3 else u88[sl]
         # elastic transverse shear resultant stress (with 5/6 factor)
         qold = st["qshear"][sl].copy()
