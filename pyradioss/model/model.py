@@ -1335,7 +1335,8 @@ class Model:
         self.mat_law108s: Dict[int, MatLaw108] = {}                 # /MAT/LAW108, /MAT/SPR_GENE (M195)
         self.mat_spr_genes = self.mat_law108s
         self.mat_plas_predefs: Dict[int, MatPlasPredef] = {}         # /MAT/PLAS_PREDEF (M195)
-        self.mat_dprag2s: Dict[int, MatDPrag2] = {}                 # /MAT/DPRAG2 (M195)
+        self.mat_dprag2s = self.mat_law102s                         # /MAT/DPRAG2 (M195/M572)
+
         self.prop_type23s: Dict[int, PropType23] = {}               # /PROP/TYPE23, /PROP/SPR_MAT (M195)
         self.prop_spr_mats = self.prop_type23s
         self.damp_freq_ranges: Dict[int, DampFreqRange] = {}        # /DAMP/FREQUENCY_RANGE (M195)

@@ -15,6 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Union, Any
 
+import math
+
 import numpy as np
 
 
@@ -16545,18 +16547,47 @@ class MatLaw80:
 
 @dataclass
 class MatLaw102:
-    """``/MAT/LAW102``, ``/MAT/HILL_48`` (M194), or ``/MAT/DPRAG2`` (M195)."""
+    """``/MAT/LAW102`` or ``/MAT/DPRAG2``: Extended Drucker-Prager material model (M194, M195, M572)."""
     id: int
     title: str = ""
     rho: float = 0.0
+    iform: int = 2
     e: float = 0.0
     nu: float = 0.0
+    c: float = 0.0
+    phi: float = 0.0
+    amax: float = 1.0e30
+    pmin: float = -1.0e30
     a0: float = 0.0
     a1: float = 0.0
+    a2: float = 0.0
     b0: float = 0.0
     b1: float = 0.0
     icrit: int = 1
     params: dict = field(default_factory=dict)
+    law: int = 102
+    law_name: str = "LAW102"
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @property
+    def G(self) -> float:
+        return self.e / (2.0 * (1.0 + self.nu)) if (1.0 + self.nu) != 0.0 else 0.0
+
+    @property
+    def K(self) -> float:
+        return self.e / (3.0 * (1.0 - 2.0 * self.nu)) if (1.0 - 2.0 * self.nu) != 0.0 else 0.0
+
+    @property
+    def sound_speed(self) -> float:
+        rho_val = self.rho if self.rho > 0.0 else 1.0
+        return math.sqrt(max(0.0, self.K + 4.0 / 3.0 * self.G) / rho_val)
+
+MatHill48 = MatLaw102
+MaterialLaw102 = MatLaw102
+
 
 
 @dataclass
@@ -16680,20 +16711,9 @@ class MatPlasPredef:
     params: dict = field(default_factory=dict)
 
 
-@dataclass
-class MatDPrag2:
-    """``/MAT/DPRAG2`` (M195): Drucker-Prager 2nd formulation material."""
-    id: int
-    title: str = ""
-    rho: float = 0.0
-    iform: int = 1
-    e: float = 0.0
-    nu: float = 0.0
-    c: float = 0.0
-    phi: float = 0.0
-    amax: float = 1.0e30
-    pmin: float = -1.0e30
-    params: dict = field(default_factory=dict)
+# MatDPrag2 is consolidated into MatLaw102 above (M195/M572)
+MatDPrag2 = MatLaw102
+
 
 
 @dataclass

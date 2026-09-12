@@ -49222,25 +49222,146 @@ def read_mat_law40(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law102(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW102`` or ``/MAT/HILL_48`` (M194): Hill 1948 anisotropic plasticity."""
+    """``/MAT/LAW102`` or ``/MAT/DPRAG2`` (M194, M195, M572): Extended Drucker-Prager material model.
+
+    Citing starter/source/materials/mat/mat102/hm_read_mat102.F and mat102_DPRAG2.cfg:
+      Card 1: RHO_I (%20lg)
+      Card 2: IFORM (%10d)
+      Card 3: E, NU (%20lg%20lg)
+      Card 4: C, PHI, AMAX (%20lg%20lg%20lg)
+      Card 5: PMIN (%20lg)
+    """
     from ..model.entities import MatLaw102, Material
+    from ..materials.law102_dprag2 import compute_dprag2_constants
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
-    rho, e, nu = 0.0, 0.0, 0.0
-    params = {}
-    if len(valid_cards) > 0:
-        c0 = valid_cards[0].tokens()
-        rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
-        e = _safe_float(c0[1]) if len(c0) > 1 else 0.0
-        nu = _safe_float(c0[2]) if len(c0) > 2 else 0.0
-    if len(valid_cards) > 1:
-        c1 = valid_cards[1].tokens()
-        for idx, val in enumerate(c1):
+
+    if not valid_cards:
+        mat = MatLaw102(id=mat_id, title=title)
+        model.mat_law102s[mat_id] = mat
+        model.materials[mat_id] = Material(id=mat_id, law=102, rho0=0.0, title=title, params={})
+        return
+
+    # Check for legacy M194 2-card test layout:
+    # Card 1 has >= 3 tokens (RHO, E, NU) and Card 2 has >= 4 tokens (F, G, H, L, M, N)
+    c0_tokens = valid_cards[0].tokens()
+    if len(c0_tokens) >= 3 and len(valid_cards) > 1 and len(valid_cards[1].tokens()) >= 4:
+        rho = _safe_float(c0_tokens[0])
+        e = _safe_float(c0_tokens[1])
+        nu = _safe_float(c0_tokens[2])
+        params = {}
+        for idx, val in enumerate(valid_cards[1].tokens()):
             params[f"param_{idx}"] = _safe_float(val)
-    mat = MatLaw102(id=mat_id, title=title, rho=rho, e=e, nu=nu, params=params)
+        mat = MatLaw102(id=mat_id, title=title, rho=rho, e=e, nu=nu, params=params)
+        model.mat_law102s[mat_id] = mat
+        model.materials[mat_id] = Material(id=mat_id, law=102, rho0=rho, title=title, params={"rho": rho, "e": e, "nu": nu, **params})
+        return
+
+    rho = 0.0
+    iform = 2
+    e, nu = 0.0, 0.0
+    c, phi, amax = 0.0, 0.0, 1.0e30
+    pmin = -1.0e30
+
+    if block.fixed:
+        if len(valid_cards) > 0:
+            c0 = valid_cards[0].cut("MAT_LAW102_1")
+            rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
+        if len(valid_cards) > 1:
+            c1 = valid_cards[1].cut("MAT_LAW102_2")
+            iform = _safe_int(c1[0], 2) if len(c1) > 0 else 2
+        if len(valid_cards) > 2:
+            c2 = valid_cards[2].cut("MAT_LAW102_3")
+            e = _safe_float(c2[0]) if len(c2) > 0 else 0.0
+            nu = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+        if len(valid_cards) > 3:
+            c3 = valid_cards[3].cut("MAT_LAW102_4")
+            c = _safe_float(c3[0]) if len(c3) > 0 else 0.0
+            phi = _safe_float(c3[1]) if len(c3) > 1 else 0.0
+            if len(c3) > 2 and c3[2].strip():
+                amax = _safe_float(c3[2], 1.0e30)
+        if len(valid_cards) > 4:
+            c4_tokens = valid_cards[4].tokens()
+            if len(c4_tokens) >= 2 and amax == 1.0e30:
+                amax = _safe_float(c4_tokens[0], 1.0e30)
+                pmin = _safe_float(c4_tokens[1], -1.0e30)
+            else:
+                c4 = valid_cards[4].cut("MAT_LAW102_5")
+                pmin = _safe_float(c4[0], -1.0e30) if len(c4) > 0 else -1.0e30
+    else:
+        # Free-format reading
+        if len(valid_cards) > 0:
+            c0 = valid_cards[0].tokens()
+            rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
+            if len(c0) > 1 and e == 0.0:
+                e = _safe_float(c0[1])
+            if len(c0) > 2 and nu == 0.0:
+                nu = _safe_float(c0[2])
+        if len(valid_cards) > 1:
+            c1 = valid_cards[1].tokens()
+            if len(c1) == 1:
+                iform = _safe_int(c1[0], 2)
+            elif len(c1) >= 2 and e == 0.0:
+                e = _safe_float(c1[0])
+                nu = _safe_float(c1[1])
+        if len(valid_cards) > 2 and (e == 0.0 and nu == 0.0):
+            c2 = valid_cards[2].tokens()
+            e = _safe_float(c2[0]) if len(c2) > 0 else 0.0
+            nu = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+        if len(valid_cards) > 3:
+            c3 = valid_cards[3].tokens()
+            c = _safe_float(c3[0]) if len(c3) > 0 else 0.0
+            phi = _safe_float(c3[1]) if len(c3) > 1 else 0.0
+            if len(c3) > 2:
+                amax = _safe_float(c3[2], 1.0e30)
+        if len(valid_cards) > 4:
+            c4 = valid_cards[4].tokens()
+            if len(c4) >= 2 and amax == 1.0e30:
+                amax = _safe_float(c4[0], 1.0e30)
+                pmin = _safe_float(c4[1], -1.0e30)
+            elif len(c4) > 0:
+                pmin = _safe_float(c4[0], -1.0e30)
+
+    g, bulk, phi_rad, k_yield, alpha, a0, a1, a2, pstar, iform_sanitized = compute_dprag2_constants(
+        e=e, nu=nu, c=c, phi_deg=phi, iform=iform, amax=amax, pmin=pmin
+    )
+
+    params = {
+        "rho": rho,
+        "iform": iform_sanitized,
+        "e": e,
+        "nu": nu,
+        "c": c,
+        "phi": phi,
+        "amax": amax,
+        "pmin": pmin,
+        "a0": a0,
+        "a1": a1,
+        "a2": a2,
+        "pstar": pstar,
+        "g": g,
+        "bulk": bulk,
+    }
+    mat = MatLaw102(
+        id=mat_id,
+        title=title,
+        rho=rho,
+        iform=iform_sanitized,
+        e=e,
+        nu=nu,
+        c=c,
+        phi=phi,
+        amax=amax,
+        pmin=pmin,
+        a0=a0,
+        a1=a1,
+        a2=a2,
+        params=params,
+    )
     model.mat_law102s[mat_id] = mat
-    model.materials[mat_id] = Material(id=mat_id, law=102, rho0=rho, title=title, params={"rho": rho, "e": e, "nu": nu, **params})
+    model.materials[mat_id] = Material(id=mat_id, law=102, rho0=rho, title=title, params=params)
+
 
 
 def read_mat_nlocal(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -49595,63 +49716,8 @@ def read_mat_plas_predef(block: KeywordBlock, model: Model, log: MessageLog) -> 
     )
 
 
-def read_mat_dprag2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/DPRAG2`` or ``/MAT/LAW102`` (M195): Drucker-Prager 2nd formulation material."""
-    from ..model.entities import MatDPrag2, MatLaw102, Material
-    mat_id = block.user_id or 0
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
-    rho = 0.0
-    iform = 1
-    e, nu = 0.0, 0.0
-    a0, a1, b0, b1 = 0.0, 0.0, 0.0, 0.0
-    icrit = 1
-    c, phi, amax = 0.0, 0.0, 1.0e30
-    pmin = -1.0e30
-    params = {}
+read_mat_dprag2 = read_mat_law102
 
-    if len(valid_cards) > 0:
-        c0 = valid_cards[0].tokens()
-        rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
-        if len(c0) > 1:
-            e = _safe_float(c0[1])
-        if len(c0) > 2:
-            nu = _safe_float(c0[2])
-
-    if len(valid_cards) > 1:
-        c1 = valid_cards[1].tokens()
-        if len(c1) >= 4:
-            a0 = _safe_float(c1[0])
-            a1 = _safe_float(c1[1])
-            b0 = _safe_float(c1[2]) if len(c1) > 2 else 0.0
-            b1 = _safe_float(c1[3]) if len(c1) > 3 else 0.0
-            icrit = _safe_int(c1[4], 1) if len(c1) > 4 else 1
-            iform = icrit
-        elif len(c1) == 1:
-            iform = _safe_int(c1[0], 1)
-        elif len(c1) == 2 and e == 0.0:
-            e = _safe_float(c1[0])
-            nu = _safe_float(c1[1])
-
-    if len(valid_cards) > 2 and e == 0.0:
-        c2 = valid_cards[2].tokens()
-        e = _safe_float(c2[0]) if len(c2) > 0 else 0.0
-        nu = _safe_float(c2[1]) if len(c2) > 1 else 0.0
-    if len(valid_cards) > 3:
-        c3 = valid_cards[3].tokens()
-        c = _safe_float(c3[0]) if len(c3) > 0 else 0.0
-        phi = _safe_float(c3[1]) if len(c3) > 1 else 0.0
-        amax = _safe_float(c3[2], 1.0e30) if len(c3) > 2 else 1.0e30
-    if len(valid_cards) > 4:
-        c4 = valid_cards[4].tokens()
-        pmin = _safe_float(c4[0], -1.0e30) if len(c4) > 0 else -1.0e30
-
-    params.update({"rho": rho, "iform": iform, "e": e, "nu": nu, "a0": a0, "a1": a1, "b0": b0, "b1": b1, "icrit": icrit, "c": c, "phi": phi, "amax": amax, "pmin": pmin})
-    mat = MatDPrag2(id=mat_id, title=title, rho=rho, iform=iform, e=e, nu=nu, c=c, phi=phi, amax=amax, pmin=pmin, params=params)
-    model.mat_dprag2s[mat_id] = mat
-    mat_law = MatLaw102(id=mat_id, title=title, rho=rho, e=e, nu=nu, a0=a0, a1=a1, b0=b0, b1=b1, icrit=icrit, params=params)
-    model.mat_law102s[mat_id] = mat_law
-    model.materials[mat_id] = Material(id=mat_id, law=102, rho0=rho, title=title, params=params)
 
 
 

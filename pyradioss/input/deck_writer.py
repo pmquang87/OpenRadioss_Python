@@ -6364,6 +6364,110 @@ class StarterDeck:
         kwargs.setdefault("law_name", "PLAS_POLY")
         return self.mat_law101(*args, **kwargs)
 
+    def mat_law102(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho: float = 0.0,
+        iform: int = 2,
+        e: float = 0.0,
+        nu: float = 0.0,
+        c: float = 0.0,
+        phi: float = 0.0,
+        amax: float = 1.0e30,
+        pmin: float = -1.0e30,
+        law_name: str = "LAW102",
+        unit_id: Optional[int] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW102`` (/MAT/DPRAG2) Extended Drucker-Prager Material Model (M572).
+
+        Card 1: RHO_I (%20lg)
+        Card 2: IFORM (%10d)
+        Card 3: E, NU (%20lg%20lg)
+        Card 4: C, PHI, A_MAX (%20lg%20lg%20lg)
+        Card 5: P_MIN (%20lg)
+        """
+        mat_obj = None
+        if hasattr(mid, "id") or hasattr(mid, "rho") or hasattr(mid, "nu"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+        elif len(args) > 0 and not isinstance(args[0], (int, float, str)):
+            mat_obj = args[0]
+        elif "mat_obj" in kwargs:
+            mat_obj = kwargs["mat_obj"]
+        elif "mat" in kwargs:
+            mat_obj = kwargs["mat"]
+        elif "material" in kwargs:
+            mat_obj = kwargs["material"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", rho))
+            iform = getattr(mat_obj, "iform", iform)
+            e = getattr(mat_obj, "e", getattr(mat_obj, "E", e))
+            nu = getattr(mat_obj, "nu", nu)
+            c = getattr(mat_obj, "c", c)
+            phi = getattr(mat_obj, "phi", phi)
+            amax = getattr(mat_obj, "amax", amax)
+            pmin = getattr(mat_obj, "pmin", pmin)
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("material_id", "mat_id", "id", "mid"):
+                mid = int(v)
+            elif kl == "title":
+                title = str(v)
+            elif kl in ("rho", "rho0", "rho_i", "rho_initial"):
+                rho = float(v)
+            elif kl == "iform":
+                iform = int(v)
+            elif kl in ("e", "young"):
+                e = float(v)
+            elif kl in ("nu", "poisson"):
+                nu = float(v)
+            elif kl in ("c", "cohesion"):
+                c = float(v)
+            elif kl in ("phi", "friction_angle"):
+                phi = float(v)
+            elif kl in ("amax", "a_max"):
+                amax = float(v)
+            elif kl in ("pmin", "p_min"):
+                pmin = float(v)
+
+        if data_cards is not None and len(data_cards) > 0:
+            hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+            self.lines.append(hdr)
+            self._title(title)
+            for cd in data_cards:
+                self.lines.append(cd if isinstance(cd, str) else str(cd))
+            return self
+
+        hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+        self.lines.append(hdr)
+        self._title(title)
+
+        # Card 1: RHO_I (%20lg)
+        self.lines.append(fmt_float(rho))
+        # Card 2: IFORM (%10d)
+        self.lines.append(fmt_int(iform))
+        # Card 3: E, NU (%20lg%20lg)
+        self.lines.append(fmt_float(e) + fmt_float(nu))
+        # Card 4: C, PHI, A_MAX (%20lg%20lg%20lg)
+        self.lines.append(fmt_float(c) + fmt_float(phi) + fmt_float(amax))
+        # Card 5: P_MIN (%20lg)
+        self.lines.append(fmt_float(pmin))
+
+        return self
+
+    def mat_dprag2(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/DPRAG2`` — synonym for ``/MAT/LAW102``."""
+        kwargs.setdefault("law_name", "DPRAG2")
+        return self.mat_law102(*args, **kwargs)
+
     def mat_law93(
         self,
         mid: int = 0,
@@ -10050,6 +10154,8 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law100(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     elif law in ("101", "LAW101", "PP", "MAT_PP", "PLAS_POLY", "MAT_PLAS_POLY", "MAT_101", "MAT_LAW101", "LAW101_PLAS_POLY", "LAW101_PP"):
         d.mat_law101(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
+    elif law in ("102", "LAW102", "DPRAG2", "DRUCKER_PRAGER_2", "MAT_DPRAG2", "MAT_102", "MAT_LAW102", "LAW102_DPRAG2"):
+        d.mat_law102(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")

@@ -4679,6 +4679,17 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_LAW101_10": [20, 20, 20, 20],
     "MAT_LAW101_11": [20, 20, 20, 20],
     "MAT_LAW101_LEGACY_7": [20, 20, 20],
+    # M572: /MAT/LAW102 (/MAT/DPRAG2) Extended Drucker-Prager
+    "MAT_LAW102_1": [20],
+    "MAT_LAW102_2": [10],
+    "MAT_LAW102_3": [20, 20],
+    "MAT_LAW102_4": [20, 20, 20],
+    "MAT_LAW102_5": [20],
+    "MAT_DPRAG2_1": [20],
+    "MAT_DPRAG2_2": [10],
+    "MAT_DPRAG2_3": [20, 20],
+    "MAT_DPRAG2_4": [20, 20, 20],
+    "MAT_DPRAG2_5": [20],
     # M548: /MAT/LAW43 (/MAT/HILL_TAB)
     "MAT_LAW43_1": [20, 20],
     "MAT_LAW43_2": [20, 20],
