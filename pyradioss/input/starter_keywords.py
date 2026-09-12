@@ -1245,6 +1245,10 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW103", "HENSEL_SPITTEL", "HENSEL-SPITTEL", "HEN", "MAT_HENSEL_SPITTEL", "LAW103_HENSEL_SPITTEL", "PLAS_HENS", "MAT_PLAS_HENS", "MAT_LAW103"):
         read_mat_law103(block, model, log)
         return
+    # M574: LAW104 (JOHNS_VOCE_DRUCKER / DRUCKER / PLAS_DRUCK)
+    if lawname in ("LAW104", "JOHNS_VOCE_DRUCKER", "JOHNS-VOCE-DRUCKER", "DRUCKER", "PLAS_DRUCK", "MAT_LAW104", "MAT_DRUCKER", "MAT_JOHNS_VOCE_DRUCKER", "MAT_PLAS_DRUCK", "LAW104_DRUCKER", "LAW104_JOHNS_VOCE_DRUCKER"):
+        read_mat_law104(block, model, log)
+        return
     if lawname in ("LAW108", "SPR_GENE", "MAT_SPR_GENE", "LAW108_SPR_GENE"):
         read_mat_law108(block, model, log)
         return
@@ -1287,8 +1291,8 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     # M199: DRUCKER_PRAGER / BRITTLE
     subaction = block.parts[2].upper() if len(block.parts) > 2 else ""
-    if (lawname in ("DRUCKER_PRAGER", "BRITTLE", "DRUCKER", "MAT_DRUCKER_PRAGER", "MAT_BRITTLE", "LAW51_DRUCKER_PRAGER", "LAW51_BRITTLE")
-            or subaction in ("DRUCKER_PRAGER", "BRITTLE", "DRUCKER")):
+    if (lawname in ("DRUCKER_PRAGER", "BRITTLE", "MAT_DRUCKER_PRAGER", "MAT_BRITTLE", "LAW51_DRUCKER_PRAGER", "LAW51_BRITTLE")
+            or subaction in ("DRUCKER_PRAGER", "BRITTLE")):
         read_mat_law51(block, model, log)
         return
     law_aliases = {"LAW1": 1, "ELAST": 1, "LAW2": 2, "PLAS_JOHNS": 2,
@@ -49601,6 +49605,133 @@ def read_mat_law103(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 read_mat_hensel_spittel = read_mat_law103
 read_mat_plas_hens = read_mat_law103
+
+
+def read_mat_law104(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW104``, ``/MAT/JOHNS_VOCE_DRUCKER``, ``/MAT/DRUCKER``, ``/MAT/PLAS_DRUCK`` (M176/M574).
+
+    Combined Drucker yield criterion, Voce hardening, Johnson-Cook rate sensitivity,
+    and Taylor-Quinney self-heating.
+    Fortran origin: ``starter/source/materials/mat/mat104/hm_read_mat104.F``.
+    """
+    from ..model.entities import MaterialLaw104, Material
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+
+    rho0, refer_rho = 0.0, 0.0
+    young, nu = 0.0, 0.0
+    ires = 1
+    sigma0_yld, h, q_voce, b_voce, c_dr = 1.0e30, 0.0, 0.0, 0.0, 0.0
+    c_jc, eps0, fcut = 0.0, 1.0, 10000.0
+    tss, tref, tini = 0.0, 0.0, 0.0
+    eta, cp, eps_iso, eps_ad = 0.0, 0.0, 1.0e30, 2.0e30
+    params = {}
+
+    card_idx = 0
+    # Card 1: MAT_RHO (and optional refer_rho)
+    if card_idx < len(valid_cards):
+        c0 = valid_cards[card_idx].tokens()
+        rho0 = _safe_float(c0[0]) if len(c0) > 0 else 0.0
+        refer_rho = _safe_float(c0[1]) if len(c0) > 1 else rho0
+        card_idx += 1
+
+    # Card 2: MAT_E, MAT_NU, MAT104_Ires
+    if card_idx < len(valid_cards):
+        c1 = valid_cards[card_idx].tokens()
+        young = _safe_float(c1[0]) if len(c1) > 0 else 0.0
+        nu = _safe_float(c1[1]) if len(c1) > 1 else 0.0
+        ires = _safe_int(c1[2]) if len(c1) > 2 else 1
+        card_idx += 1
+
+    # Card 3: SIGMA_r, MAT104_H, MAT_PR, MAT104_Bv, MAT104_Cdr
+    if card_idx < len(valid_cards):
+        c2 = valid_cards[card_idx].tokens()
+        sigma0_yld = _safe_float(c2[0]) if len(c2) > 0 else 1.0e30
+        h = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+        q_voce = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+        b_voce = _safe_float(c2[3]) if len(c2) > 3 else 0.0
+        c_dr = _safe_float(c2[4]) if len(c2) > 4 else 0.0
+        card_idx += 1
+
+    # Card 4: MAT104_Cjc, MAT104_Eps0, MAT104_Fcut
+    if card_idx < len(valid_cards):
+        c3 = valid_cards[card_idx].tokens()
+        c_jc = _safe_float(c3[0]) if len(c3) > 0 else 0.0
+        eps0 = _safe_float(c3[1]) if len(c3) > 1 else 1.0
+        fcut = _safe_float(c3[2]) if len(c3) > 2 else 10000.0
+        card_idx += 1
+
+    # Card 5: MAT104_Tss, MAT104_Tref, T_Initial
+    if card_idx < len(valid_cards):
+        c4 = valid_cards[card_idx].tokens()
+        tss = _safe_float(c4[0]) if len(c4) > 0 else 0.0
+        tref = _safe_float(c4[1]) if len(c4) > 1 else 0.0
+        tini = _safe_float(c4[2]) if len(c4) > 2 else 0.0
+        card_idx += 1
+
+    # Card 6: MAT_ETA, MAT_SPHEAT, MAT104_EpsIso, MAT104_EpsAd
+    if card_idx < len(valid_cards):
+        c5 = valid_cards[card_idx].tokens()
+        eta = _safe_float(c5[0]) if len(c5) > 0 else 0.0
+        cp = _safe_float(c5[1]) if len(c5) > 1 else 0.0
+        eps_iso = _safe_float(c5[2]) if len(c5) > 2 else 1.0e30
+        eps_ad = _safe_float(c5[3]) if len(c5) > 3 else 2.0e30
+        card_idx += 1
+
+    # Apply defaults matching hm_read_mat104.F
+    if sigma0_yld == 0.0:
+        sigma0_yld = 1.0e30
+    if fcut == 0.0:
+        fcut = 10000.0
+    if eps0 == 0.0:
+        eps0 = 1.0
+        c_jc = 0.0
+    if eps_iso == 0.0:
+        eps_iso = 1.0e30
+    if eps_ad == 0.0:
+        eps_ad = 2.0e30
+    if ires == 0:
+        ires = 1
+    if refer_rho == 0.0:
+        refer_rho = rho0
+
+    params.update({
+        "rho": rho0, "rho0": rho0, "refer_rho": refer_rho, "rhor": refer_rho,
+        "young": young, "e": young, "nu": nu, "ires": ires,
+        "sigma0_yld": sigma0_yld, "yld0": sigma0_yld, "sigy": sigma0_yld,
+        "h": h, "hp": h,
+        "q_voce": q_voce, "qvoce": q_voce, "qv": q_voce,
+        "b_voce": b_voce, "bvoce": b_voce, "bv": b_voce,
+        "c_dr": c_dr, "cdr": c_dr,
+        "c_jc": c_jc, "cjc": c_jc,
+        "eps0": eps0, "epsp0": eps0,
+        "fcut": fcut,
+        "tss": tss, "mu": tss, "mtemp": tss,
+        "tref": tref,
+        "tini": tini, "t0": tini,
+        "eta": eta,
+        "cp": cp, "rhocp": rho0 * cp if cp > 0.0 else 0.0,
+        "eps_iso": eps_iso, "dpis": eps_iso,
+        "eps_ad": eps_ad, "dpad": eps_ad,
+    })
+
+    mat = MaterialLaw104(
+        id=mat_id, title=title, rho0=rho0, refer_rho=refer_rho,
+        young=young, nu=nu, ires=ires,
+        sigma_r=sigma0_yld, h=h, qv=q_voce, bv=b_voce, cdr=c_dr,
+        cjc=c_jc, epsp0=eps0, fcut=fcut,
+        tss=tss, tref=tref, tini=tini,
+        eta=eta, cp=cp, eps_iso=eps_iso, eps_ad=eps_ad,
+        params=params, law=104, law_name="LAW104"
+    )
+    model.mat_law104s[mat_id] = mat
+    model.materials[mat_id] = Material(id=mat_id, law=104, rho0=rho0, title=title, params=params)
+
+
+read_mat_drucker = read_mat_law104
+read_mat_johns_voce_drucker = read_mat_law104
+read_mat_plas_druck = read_mat_law104
 
 
 def read_mat_law108(block: KeywordBlock, model: Model, log: MessageLog) -> None:

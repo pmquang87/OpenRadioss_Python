@@ -6623,6 +6623,174 @@ class StarterDeck:
         kwargs.setdefault("law_name", "PLAS_HENS")
         return self.mat_law103(*args, **kwargs)
 
+    def mat_law104(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho: float = 0.0,
+        refer_rho: float = 0.0,
+        young: float = 0.0,
+        nu: float = 0.0,
+        ires: int = 1,
+        sigma0_yld: float = 1.0e30,
+        h: float = 0.0,
+        q_voce: float = 0.0,
+        b_voce: float = 0.0,
+        c_dr: float = 0.0,
+        c_jc: float = 0.0,
+        eps0: float = 1.0,
+        fcut: float = 10000.0,
+        tss: float = 0.0,
+        tref: float = 0.0,
+        tini: float = 0.0,
+        eta: float = 0.0,
+        cp: float = 0.0,
+        eps_iso: float = 1.0e30,
+        eps_ad: float = 2.0e30,
+        law_name: str = "LAW104",
+        unit_id: Optional[int] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW104`` (/MAT/DRUCKER, /MAT/JOHNS_VOCE_DRUCKER, /MAT/PLAS_DRUCK) Drucker-Voce-Johnson-Cook Model (M574).
+
+        Card 1: RHO_I [, Refer_Rho] (%20lg%20lg)
+        Card 2: E, Nu, Ires (%20lg%20lg%10d)
+        Card 3: sigma0_yld, H, Qv, Bv, Cdr (%20lg%20lg%20lg%20lg%20lg)
+        Card 4: Cjc, Eps0, Fcut (%20lg%20lg%20lg)
+        Card 5: mu, Tref, Tini (%20lg%20lg%20lg)
+        Card 6: ETA, Cp, EpsIso, EpsAd (%20lg%20lg%20lg%20lg)
+        """
+        mat_obj = None
+        if hasattr(mid, "id") or hasattr(mid, "rho") or hasattr(mid, "nu") or hasattr(mid, "young"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+        elif len(args) > 0 and not isinstance(args[0], (int, float, str)):
+            mat_obj = args[0]
+        elif "mat_obj" in kwargs:
+            mat_obj = kwargs["mat_obj"]
+        elif "mat" in kwargs:
+            mat_obj = kwargs["mat"]
+        elif "material" in kwargs:
+            mat_obj = kwargs["material"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", rho))
+            refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", refer_rho))
+            young = getattr(mat_obj, "young", getattr(mat_obj, "e", getattr(mat_obj, "E", young)))
+            nu = getattr(mat_obj, "nu", nu)
+            ires = getattr(mat_obj, "ires", ires)
+            sigma0_yld = getattr(mat_obj, "sigma0_yld", getattr(mat_obj, "sigma_r", getattr(mat_obj, "sigy", sigma0_yld)))
+            h = getattr(mat_obj, "h", h)
+            q_voce = getattr(mat_obj, "q_voce", getattr(mat_obj, "qv", q_voce))
+            b_voce = getattr(mat_obj, "b_voce", getattr(mat_obj, "bv", b_voce))
+            c_dr = getattr(mat_obj, "c_dr", getattr(mat_obj, "cdr", c_dr))
+            c_jc = getattr(mat_obj, "c_jc", getattr(mat_obj, "cjc", c_jc))
+            eps0 = getattr(mat_obj, "eps0", getattr(mat_obj, "epsp0", eps0))
+            fcut = getattr(mat_obj, "fcut", fcut)
+            tss = getattr(mat_obj, "tss", getattr(mat_obj, "mu", getattr(mat_obj, "mtemp", tss)))
+            tref = getattr(mat_obj, "tref", tref)
+            tini = getattr(mat_obj, "tini", getattr(mat_obj, "t0", tini))
+            eta = getattr(mat_obj, "eta", eta)
+            cp = getattr(mat_obj, "cp", cp)
+            eps_iso = getattr(mat_obj, "eps_iso", getattr(mat_obj, "dpis", eps_iso))
+            eps_ad = getattr(mat_obj, "eps_ad", getattr(mat_obj, "dpad", eps_ad))
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("material_id", "mat_id", "id", "mid"):
+                mid = int(v)
+            elif kl == "title":
+                title = str(v)
+            elif kl in ("rho", "rho0", "rho_i", "initial_density"):
+                rho = float(v)
+            elif kl in ("refer_rho", "rhor", "ref_rho"):
+                refer_rho = float(v)
+            elif kl in ("young", "e"):
+                young = float(v)
+            elif kl in ("nu", "poisson"):
+                nu = float(v)
+            elif kl in ("ires", "flag_nice", "flagnice"):
+                ires = int(v)
+            elif kl in ("sigma0_yld", "sigma_r", "sigy", "sigy0", "yld0"):
+                sigma0_yld = float(v)
+            elif kl in ("h", "hp"):
+                h = float(v)
+            elif kl in ("q_voce", "qv", "mat_pr"):
+                q_voce = float(v)
+            elif kl in ("b_voce", "bv"):
+                b_voce = float(v)
+            elif kl in ("c_dr", "cdr"):
+                c_dr = float(v)
+            elif kl in ("c_jc", "cjc"):
+                c_jc = float(v)
+            elif kl in ("eps0", "epsp0"):
+                eps0 = float(v)
+            elif kl in ("fcut", "f_cut"):
+                fcut = float(v)
+            elif kl in ("tss", "mu", "mtemp"):
+                tss = float(v)
+            elif kl in ("tref", "t_ref"):
+                tref = float(v)
+            elif kl in ("tini", "t_initial", "t0"):
+                tini = float(v)
+            elif kl in ("eta", "mat_eta"):
+                eta = float(v)
+            elif kl in ("cp", "mat_spheat"):
+                cp = float(v)
+            elif kl in ("eps_iso", "dpis"):
+                eps_iso = float(v)
+            elif kl in ("eps_ad", "dpad"):
+                eps_ad = float(v)
+
+        if data_cards is not None and len(data_cards) > 0:
+            hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+            self.lines.append(hdr)
+            self._title(title)
+            for cd in data_cards:
+                self.lines.append(cd if isinstance(cd, str) else str(cd))
+            return self
+
+        hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+        self.lines.append(hdr)
+        self._title(title)
+
+        # Card 1: RHO_I [, Refer_Rho]
+        if refer_rho > 0.0 and refer_rho != rho:
+            self.lines.append(fmt_float(rho) + fmt_float(refer_rho))
+        else:
+            self.lines.append(fmt_float(rho))
+        # Card 2: E, Nu, Ires
+        self.lines.append(fmt_float(young) + fmt_float(nu) + fmt_int(ires))
+        # Card 3: sigma0_yld, H, Qv, Bv, Cdr
+        self.lines.append(fmt_float(sigma0_yld) + fmt_float(h) + fmt_float(q_voce) + fmt_float(b_voce) + fmt_float(c_dr))
+        # Card 4: Cjc, Eps0, Fcut
+        self.lines.append(fmt_float(c_jc) + fmt_float(eps0) + fmt_float(fcut))
+        # Card 5: mu, Tref, Tini
+        self.lines.append(fmt_float(tss) + fmt_float(tref) + fmt_float(tini))
+        # Card 6: ETA, Cp, EpsIso, EpsAd
+        self.lines.append(fmt_float(eta) + fmt_float(cp) + fmt_float(eps_iso) + fmt_float(eps_ad))
+
+        return self
+
+    def mat_johns_voce_drucker(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/JOHNS_VOCE_DRUCKER`` — synonym for ``/MAT/LAW104``."""
+        kwargs.setdefault("law_name", "JOHNS_VOCE_DRUCKER")
+        return self.mat_law104(*args, **kwargs)
+
+    def mat_drucker(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/DRUCKER`` — synonym for ``/MAT/LAW104``."""
+        kwargs.setdefault("law_name", "DRUCKER")
+        return self.mat_law104(*args, **kwargs)
+
+    def mat_plas_druck(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/PLAS_DRUCK`` — synonym for ``/MAT/LAW104``."""
+        kwargs.setdefault("law_name", "PLAS_DRUCK")
+        return self.mat_law104(*args, **kwargs)
+
     def mat_law93(
         self,
         mid: int = 0,
@@ -10313,6 +10481,8 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law102(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     elif law in ("103", "LAW103", "HENSEL_SPITTEL", "HENSEL-SPITTEL", "PLAS_HENS", "MAT_HENSEL_SPITTEL", "MAT_103", "MAT_LAW103", "MAT_PLAS_HENS", "HEN"):
         d.mat_law103(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
+    elif law in ("104", "LAW104", "DRUCKER", "JOHNS_VOCE_DRUCKER", "JOHNS-VOCE-DRUCKER", "PLAS_DRUCK", "MAT_DRUCKER", "MAT_104", "MAT_LAW104", "MAT_JOHNS_VOCE_DRUCKER", "MAT_PLAS_DRUCK", "LAW104_DRUCKER"):
+        d.mat_law104(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")

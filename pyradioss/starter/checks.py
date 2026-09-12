@@ -163,6 +163,13 @@ _LAW103_KEYS = {
 for _fam in ("bricks", "tetras", "penta6", "pyra5"):
     _ALLOWED_LAWS[_fam].update(_LAW103_KEYS)
 
+_LAW104_KEYS = {
+    104, "104", "LAW104", "DRUCKER", "JOHNS_VOCE_DRUCKER", "JOHNS-VOCE-DRUCKER", "PLAS_DRUCK",
+    "MAT_104", "MAT_LAW104", "MAT_DRUCKER", "MAT_JOHNS_VOCE_DRUCKER", "MAT_PLAS_DRUCK", "LAW104_DRUCKER",
+}
+for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells"):
+    _ALLOWED_LAWS[_fam].update(_LAW104_KEYS)
+
 _ALLOWED_LAWS["quads"] = _ALLOWED_LAWS["shells"]
 _ALLOWED_LAWS["solids"] = _ALLOWED_LAWS["bricks"]
 _ALLOWED_LAWS["solids_heph"] = _ALLOWED_LAWS["bricks"]
@@ -6139,6 +6146,184 @@ check_mat_hensel_spittel = check_mat_law103
 check_mat_plas_hens = check_mat_law103
 
 
+def check_mat_law104(*args: Any, **kwargs: Any) -> None:
+    """Validate /MAT/LAW104 or /MAT/DRUCKER parameter bounds and element compatibility (M574).
+
+    Checks:
+      1. RHO0 > 0 (ANCMSG 1514).
+      2. E > 0 (ANCMSG 276 / 1514).
+      3. nu > -1 and nu < 0.5 (ANCMSG 300 / 1514).
+      4. Drucker coefficient Cdr convexity:
+         - Cdr <= 2.25 (ANCMSG 1651 warning).
+         - Cdr >= -3.375 (-27/8) (ANCMSG 1652 warning).
+      5. Return mapping method Ires (ANCMSG 1731 warning if Ires > 2).
+      6. Self-heating bounds: DPIS <= DPAD (ANCMSG 1655 error if DPIS > DPAD).
+      7. Compatible elements: 3D solids and 2D shells (SOLID_ISOTROPIC, SHELL_ISOTROPIC).
+         - Rejects 1D elements: trusses, beams, springs (ANCMSG 306).
+    """
+    actual_mat = None
+    actual_log = None
+    actual_model = None
+    actual_mid = None
+
+    if "model" in kwargs:
+        actual_model = kwargs["model"]
+    if "mat" in kwargs:
+        actual_mat = kwargs["mat"]
+    if "log" in kwargs:
+        actual_log = kwargs["log"]
+    if "mat_id" in kwargs:
+        actual_mid = kwargs["mat_id"]
+
+    for c in args:
+        if isinstance(c, MessageLog):
+            actual_log = c
+        elif isinstance(c, Model):
+            actual_model = c
+        elif hasattr(c, "id") and (hasattr(c, "e") or hasattr(c, "young") or hasattr(c, "nu")):
+            actual_mat = c
+        elif isinstance(c, int):
+            actual_mid = c
+
+    if actual_log is None:
+        actual_log = MessageLog()
+
+    mat = actual_mat
+    mat_id = actual_mid if actual_mid is not None else (mat.id if mat is not None else 0)
+
+    if mat is None and actual_model is not None and mat_id:
+        mat = actual_model.mat_law104s.get(mat_id)
+        if mat is None:
+            mat = actual_model.materials.get(mat_id)
+
+    if mat is None:
+        return
+
+    # Extract density
+    rho0 = getattr(mat, "rho0", getattr(mat, "rho", 0.0))
+    if isinstance(mat, dict):
+        rho0 = mat.get("rho0", mat.get("rho", 0.0))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        rho0 = mat.params.get("rho0", mat.params.get("rho", rho0))
+    if rho0 <= 0.0:
+        actual_log.error(
+            f"MATERIAL {mat_id}: ZERO OR NEGATIVE DENSITY RHO={rho0} (ANCMSG 1514)",
+            "MAT CHECK",
+        )
+
+    # Extract Young's modulus
+    e_val = getattr(mat, "young", getattr(mat, "e", getattr(mat, "E", 0.0)))
+    if isinstance(mat, dict):
+        e_val = mat.get("young", mat.get("e", mat.get("E", 0.0)))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        e_val = mat.params.get("young", mat.params.get("e", mat.params.get("E", e_val)))
+    if e_val <= 0.0:
+        actual_log.error(
+            f"/MAT/LAW104/{mat_id}: ZERO OR NEGATIVE YOUNG'S MODULUS E={e_val} (ANCMSG 276)",
+            "MAT CHECK",
+        )
+
+    # Extract Poisson's ratio
+    nu_val = getattr(mat, "nu", 0.0)
+    if isinstance(mat, dict):
+        nu_val = mat.get("nu", 0.0)
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        nu_val = mat.params.get("nu", nu_val)
+    if nu_val <= -1.0 or nu_val >= 0.5:
+        actual_log.error(
+            f"/MAT/LAW104/{mat_id}: INVALID POISSON'S RATIO NU={nu_val} (MUST BE -1 < NU < 0.5) (ANCMSG 300)",
+            "MAT CHECK",
+        )
+
+    # Extract Drucker coefficient Cdr
+    c_dr = getattr(mat, "c_dr", getattr(mat, "cdr", 0.0))
+    if isinstance(mat, dict):
+        c_dr = mat.get("c_dr", mat.get("cdr", 0.0))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        c_dr = mat.params.get("c_dr", mat.params.get("cdr", c_dr))
+    if c_dr > 2.25:
+        actual_log.warning(
+            f"/MAT/LAW104/{mat_id}: DRUCKER COEFF CDR={c_dr} EXCEEDS 2.25, CLAMPING TO 2.25 (ANCMSG 1651)",
+            "MAT CHECK",
+        )
+    elif c_dr < -3.375:
+        actual_log.warning(
+            f"/MAT/LAW104/{mat_id}: DRUCKER COEFF CDR={c_dr} LESS THAN -3.375, CLAMPING TO -3.375 (ANCMSG 1652)",
+            "MAT CHECK",
+        )
+
+    # Extract return mapping method Ires
+    ires = getattr(mat, "ires", 1)
+    if isinstance(mat, dict):
+        ires = mat.get("ires", 1)
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        ires = mat.params.get("ires", ires)
+    if ires > 2:
+        actual_log.warning(
+            f"/MAT/LAW104/{mat_id}: INVALID RESOLUTION METHOD IRES={ires} (MUST BE 1 OR 2) (ANCMSG 1731)",
+            "MAT CHECK",
+        )
+
+    # Extract self-heating rates
+    eps_iso = getattr(mat, "eps_iso", getattr(mat, "dpis", 1.0e30))
+    eps_ad = getattr(mat, "eps_ad", getattr(mat, "dpad", 2.0e30))
+    if isinstance(mat, dict):
+        eps_iso = mat.get("eps_iso", mat.get("dpis", 1.0e30))
+        eps_ad = mat.get("eps_ad", mat.get("dpad", 2.0e30))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        eps_iso = mat.params.get("eps_iso", mat.params.get("dpis", eps_iso))
+        eps_ad = mat.params.get("eps_ad", mat.params.get("dpad", eps_ad))
+    if eps_iso > eps_ad:
+        actual_log.error(
+            f"/MAT/LAW104/{mat_id}: ISOTHERMAL RATE EPS_ISO={eps_iso} EXCEEDS ADIABATIC RATE EPS_AD={eps_ad} (ANCMSG 1655)",
+            "MAT CHECK",
+        )
+
+    # Check element compatibility: 3D solids and 2D shells supported, 1D elements rejected (ANCMSG 306)
+    if actual_model is not None:
+        # Check 1D element collections
+        oned_colls = [
+            getattr(actual_model, "trusses", None),
+            getattr(actual_model, "beams", None),
+            getattr(actual_model, "springs", None),
+        ]
+        oned_found = False
+        for coll in oned_colls:
+            if not coll:
+                continue
+            for el_id, el in coll.items():
+                pid = getattr(el, "part_id", getattr(el, "pid", 0))
+                part = getattr(actual_model, "parts", {}).get(pid)
+                if part and getattr(part, "mat_id", 0) == mat_id:
+                    actual_log.error(
+                        f"/MAT/LAW104/{mat_id} is not supported for 1D elements (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    oned_found = True
+                    break
+            if oned_found:
+                break
+
+        # Check parts with 1D property types
+        for pid, part in getattr(actual_model, "parts", {}).items():
+            if getattr(part, "mat_id", 0) == mat_id:
+                prop_id = getattr(part, "prop_id", 0)
+                prop = getattr(actual_model, "properties", {}).get(prop_id)
+                if prop is not None:
+                    ptype = str(getattr(prop, "type", getattr(prop, "prop_type", "")) or "").upper()
+                    if any(s in ptype for s in ("TYPE2", "TYPE3", "TYPE4", "TYPE11", "BEAM", "TRUSS", "SPRING")):
+                        actual_log.error(
+                            f"/MAT/LAW104/{mat_id} is not supported for 1D elements ({ptype.lower()}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
+
+_check_mat_law104 = check_mat_law104
+check_mat_drucker = check_mat_law104
+check_mat_johns_voce_drucker = check_mat_law104
+check_mat_plas_druck = check_mat_law104
+
+
 
 def check_materials(model: Model, log: MessageLog) -> None:
     """Validate all material parameters across model."""
@@ -6437,6 +6622,14 @@ def check_materials(model: Model, log: MessageLog) -> None:
         if mid not in getattr(model, "materials", {}):
             check_mat_law103(model=model, mat_id=mid, mat=mat103, log=log)
 
+    # M574: Material LAW104 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in _LAW104_KEYS or getattr(mat, "law_name", None) in _LAW104_KEYS:
+            check_mat_law104(model=model, mat_id=mid, mat=mat, log=log)
+    for mid, mat104 in getattr(model, "mat_law104s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law104(model=model, mat_id=mid, mat=mat104, log=log)
+
 
 
 
@@ -6722,6 +6915,19 @@ _MAT_CHECKS: dict[Any, Any] = {
     "MAT_103": check_mat_law103,
     "MAT_LAW103": check_mat_law103,
     "HEN": check_mat_law103,
+    104: check_mat_law104,
+    "104": check_mat_law104,
+    "LAW104": check_mat_law104,
+    "DRUCKER": check_mat_law104,
+    "JOHNS_VOCE_DRUCKER": check_mat_law104,
+    "JOHNS-VOCE-DRUCKER": check_mat_law104,
+    "PLAS_DRUCK": check_mat_law104,
+    "MAT_DRUCKER": check_mat_law104,
+    "MAT_JOHNS_VOCE_DRUCKER": check_mat_law104,
+    "MAT_PLAS_DRUCK": check_mat_law104,
+    "MAT_104": check_mat_law104,
+    "MAT_LAW104": check_mat_law104,
+    "LAW104_DRUCKER": check_mat_law104,
 }
 
 

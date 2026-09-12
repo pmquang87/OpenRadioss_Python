@@ -7296,13 +7296,14 @@ class MaterialLaw134:
 
 @dataclass
 class MaterialLaw104:
-    """/MAT/LAW104 or /MAT/JOHNS_VOCE_DRUCKER (M176): Combined Drucker-Prager and Voce hardening model.
+    """/MAT/LAW104 or /MAT/JOHNS_VOCE_DRUCKER (M176/M574): Combined Drucker-Prager and Voce hardening model.
 
     Fortran origin: ``starter/source/materials/mat/mat104/hm_read_mat104.F`` / CFG ``matl104_drucker.cfg``.
     """
     id: int
     title: str = ""
     rho0: float = 0.0
+    refer_rho: float = 0.0
     young: float = 0.0
     nu: float = 0.0
     ires: int = 1
@@ -7321,6 +7322,87 @@ class MaterialLaw104:
     cp: float = 0.0
     eps_iso: float = 1e20
     eps_ad: float = 2e20
+    params: dict = field(default_factory=dict)
+    law: int = 104
+    law_name: str = "LAW104"
+
+    @property
+    def rho(self) -> float:
+        return self.rho0
+
+    @property
+    def rhor(self) -> float:
+        return self.refer_rho if self.refer_rho > 0.0 else self.rho0
+
+    @property
+    def e(self) -> float:
+        return self.young
+
+    @property
+    def E(self) -> float:
+        return self.young
+
+    @property
+    def G(self) -> float:
+        return self.young / (2.0 * (1.0 + self.nu)) if (1.0 + self.nu) != 0.0 else 0.0
+
+    @property
+    def K(self) -> float:
+        return self.young / (3.0 * (1.0 - 2.0 * self.nu)) if (1.0 - 2.0 * self.nu) != 0.0 else 0.0
+
+    @property
+    def bulk(self) -> float:
+        return self.K
+
+    @property
+    def sound_speed(self) -> float:
+        r = self.refer_rho if self.refer_rho > 0.0 else (self.rho0 if self.rho0 > 0.0 else 1.0)
+        return math.sqrt(max(0.0, self.K + (4.0 / 3.0) * self.G) / r)
+
+    @property
+    def sound_speed_shell(self) -> float:
+        r = self.refer_rho if self.refer_rho > 0.0 else (self.rho0 if self.rho0 > 0.0 else 1.0)
+        denom = 1.0 - self.nu * self.nu
+        mod = self.young / denom if denom > 0.0 else self.young
+        return math.sqrt(max(0.0, mod) / r)
+
+    @property
+    def sigma0_yld(self) -> float:
+        return self.sigma_r
+
+    @property
+    def sigy(self) -> float:
+        return self.sigma_r
+
+    @property
+    def q_voce(self) -> float:
+        return self.qv
+
+    @property
+    def b_voce(self) -> float:
+        return self.bv
+
+    @property
+    def c_dr(self) -> float:
+        return self.cdr
+
+    @property
+    def c_jc(self) -> float:
+        return self.cjc
+
+    @property
+    def eps0(self) -> float:
+        return self.epsp0
+
+    @property
+    def mu(self) -> float:
+        return self.tss
+
+
+MatLaw104 = MaterialLaw104
+MatDrucker = MaterialLaw104
+MatJohnsVoceDrucker = MaterialLaw104
+MatPlasDruck = MaterialLaw104
 
 
 @dataclass

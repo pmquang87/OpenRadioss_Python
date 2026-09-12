@@ -5,6 +5,10 @@ pyradioss.input.checks — input and starter sanity checks for materials, proper
 from __future__ import annotations
 
 from ..starter.checks import (
+    check_mat_law104,
+    check_mat_drucker,
+    check_mat_johns_voce_drucker,
+    check_mat_plas_druck,
     check_mat_law103,
     check_mat_hensel_spittel,
     check_mat_plas_hens,
@@ -25,6 +29,10 @@ from ..starter.checks import (
 check_all = check_model
 
 __all__ = [
+    "check_mat_law104",
+    "check_mat_drucker",
+    "check_mat_johns_voce_drucker",
+    "check_mat_plas_druck",
     "check_mat_law103",
     "check_mat_hensel_spittel",
     "check_mat_plas_hens",

@@ -31,6 +31,10 @@ class MessageLog:
         self.errors: List[str] = []
         self._listing: Optional[TextIO] = None
 
+    @property
+    def messages(self) -> List[str]:
+        return self.errors + self.warnings
+
     def attach_listing(self, fh: TextIO) -> None:
         """Duplicate every future message into an open ``*.out`` file."""
         self._listing = fh
