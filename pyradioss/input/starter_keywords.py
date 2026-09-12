@@ -27511,7 +27511,8 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
         if len(cards) > 2 and not cards[2].is_blank:
             f3 = cut(cards[2].raw, "MAT_LAW88_3")
-            ifunc_unload = _i(f3[0])
+            w3 = cards[2].raw[:20].split()
+            ifunc_unload = _i(w3[0]) if w3 else 0
             fscale_unload = _f(f3[2]) if len(f3) > 2 and f3[2].strip() else 1.0
             hys = _f(f3[3]) if len(f3) > 3 else 0.0
             shape = _f(f3[4]) if len(f3) > 4 and f3[4].strip() else 1.0
@@ -27522,7 +27523,8 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         for _ in range(nl):
             if idx < len(cards) and not cards[idx].is_blank:
                 fr = cut(cards[idx].raw, "MAT_LAW88_4_ROW")
-                fid = _i(fr[0])
+                wr = cards[idx].raw[:20].split()
+                fid = _i(wr[0]) if wr else 0
                 fsc = _f(fr[2]) if len(fr) > 2 and fr[2].strip() else 1.0
                 frate = _f(fr[3]) if len(fr) > 3 else 0.0
                 flam = _f(fr[4]) if len(fr) > 4 else 0.0
@@ -33961,7 +33963,9 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             yfun11 = [_ival_safe(x) for x in f6 if x.strip()]
         if len(valid_cards) > 6:
             f7 = valid_cards[6].cut("MAT_LAW50_7")
-            sfac11 = _pad_sfac([_fval_safe(x, 1.0) if x.strip() else 1.0 for x in f7])
+            v7 = [_fval_safe(x, 1.0) for x in f7 if x.strip()]
+            if v7:
+                sfac11 = v7
         if len(valid_cards) > 7:
             f8 = valid_cards[7].cut("MAT_LAW50_8")
             eps11 = [_fval_safe(x) for x in f8 if x.strip()]
@@ -33971,7 +33975,9 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             yfun22 = [_ival_safe(x) for x in f9 if x.strip()]
         if len(valid_cards) > 9:
             f10 = valid_cards[9].cut("MAT_LAW50_10")
-            sfac22 = _pad_sfac([_fval_safe(x, 1.0) if x.strip() else 1.0 for x in f10])
+            v10 = [_fval_safe(x, 1.0) for x in f10 if x.strip()]
+            if v10:
+                sfac22 = v10
         if len(valid_cards) > 10:
             f11 = valid_cards[10].cut("MAT_LAW50_11")
             eps22 = [_fval_safe(x) for x in f11 if x.strip()]
@@ -33981,7 +33987,9 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             yfun33 = [_ival_safe(x) for x in f12 if x.strip()]
         if len(valid_cards) > 12:
             f13 = valid_cards[12].cut("MAT_LAW50_13")
-            sfac33 = _pad_sfac([_fval_safe(x, 1.0) if x.strip() else 1.0 for x in f13])
+            v13 = [_fval_safe(x, 1.0) for x in f13 if x.strip()]
+            if v13:
+                sfac33 = v13
         if len(valid_cards) > 13:
             f14 = valid_cards[13].cut("MAT_LAW50_14")
             eps33 = [_fval_safe(x) for x in f14 if x.strip()]
@@ -34001,7 +34009,9 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             yfun12 = [_ival_safe(x) for x in f16 if x.strip()]
         if len(valid_cards) > 16:
             f17 = valid_cards[16].cut("MAT_LAW50_17")
-            sfac12 = _pad_sfac([_fval_safe(x, 1.0) if x.strip() else 1.0 for x in f17])
+            v17 = [_fval_safe(x, 1.0) for x in f17 if x.strip()]
+            if v17:
+                sfac12 = v17
         if len(valid_cards) > 17:
             f18 = valid_cards[17].cut("MAT_LAW50_18")
             eps12 = [_fval_safe(x) for x in f18 if x.strip()]
@@ -34011,7 +34021,9 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             yfun23 = [_ival_safe(x) for x in f19 if x.strip()]
         if len(valid_cards) > 19:
             f20 = valid_cards[19].cut("MAT_LAW50_20")
-            sfac23 = _pad_sfac([_fval_safe(x, 1.0) if x.strip() else 1.0 for x in f20])
+            v20 = [_fval_safe(x, 1.0) for x in f20 if x.strip()]
+            if v20:
+                sfac23 = v20
         if len(valid_cards) > 20:
             f21 = valid_cards[20].cut("MAT_LAW50_21")
             eps23 = [_fval_safe(x) for x in f21 if x.strip()]
@@ -34021,7 +34033,9 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             yfun31 = [_ival_safe(x) for x in f22 if x.strip()]
         if len(valid_cards) > 22:
             f23 = valid_cards[22].cut("MAT_LAW50_23")
-            sfac31 = _pad_sfac([_fval_safe(x, 1.0) if x.strip() else 1.0 for x in f23])
+            v23 = [_fval_safe(x, 1.0) for x in f23 if x.strip()]
+            if v23:
+                sfac31 = v23
         if len(valid_cards) > 23:
             f24 = valid_cards[23].cut("MAT_LAW50_24")
             eps31 = [_fval_safe(x) for x in f24 if x.strip()]
@@ -34080,21 +34094,27 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if len(valid_cards) > 5:
             yfun11 = [_ival_safe(x) for x in _card_tokens(valid_cards[5])]
         if len(valid_cards) > 6:
-            sfac11 = _pad_sfac([_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[6])])
+            v6 = [_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[6])]
+            if v6:
+                sfac11 = v6
         if len(valid_cards) > 7:
             eps11 = [_fval_safe(x) for x in _card_tokens(valid_cards[7])]
 
         if len(valid_cards) > 8:
             yfun22 = [_ival_safe(x) for x in _card_tokens(valid_cards[8])]
         if len(valid_cards) > 9:
-            sfac22 = _pad_sfac([_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[9])])
+            v9 = [_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[9])]
+            if v9:
+                sfac22 = v9
         if len(valid_cards) > 10:
             eps22 = [_fval_safe(x) for x in _card_tokens(valid_cards[10])]
 
         if len(valid_cards) > 11:
             yfun33 = [_ival_safe(x) for x in _card_tokens(valid_cards[11])]
         if len(valid_cards) > 12:
-            sfac33 = _pad_sfac([_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[12])])
+            v12 = [_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[12])]
+            if v12:
+                sfac33 = v12
         if len(valid_cards) > 13:
             eps33 = [_fval_safe(x) for x in _card_tokens(valid_cards[13])]
 
@@ -34111,21 +34131,27 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if len(valid_cards) > 15:
             yfun12 = [_ival_safe(x) for x in _card_tokens(valid_cards[15])]
         if len(valid_cards) > 16:
-            sfac12 = _pad_sfac([_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[16])])
+            v16 = [_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[16])]
+            if v16:
+                sfac12 = v16
         if len(valid_cards) > 17:
             eps12 = [_fval_safe(x) for x in _card_tokens(valid_cards[17])]
 
         if len(valid_cards) > 18:
             yfun23 = [_ival_safe(x) for x in _card_tokens(valid_cards[18])]
         if len(valid_cards) > 19:
-            sfac23 = _pad_sfac([_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[19])])
+            v19 = [_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[19])]
+            if v19:
+                sfac23 = v19
         if len(valid_cards) > 20:
             eps23 = [_fval_safe(x) for x in _card_tokens(valid_cards[20])]
 
         if len(valid_cards) > 21:
             yfun31 = [_ival_safe(x) for x in _card_tokens(valid_cards[21])]
         if len(valid_cards) > 22:
-            sfac31 = _pad_sfac([_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[22])])
+            v22 = [_fval_safe(x, 1.0) for x in _card_tokens(valid_cards[22])]
+            if v22:
+                sfac31 = v22
         if len(valid_cards) > 23:
             eps31 = [_fval_safe(x) for x in _card_tokens(valid_cards[23])]
 

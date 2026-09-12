@@ -8848,6 +8848,32 @@ class MatLaw87Curve:
     epsp: float = 0.0
 
 
+class AlphaFloat(float):
+    """Float representing scalar Swift-Voce mixing parameter that also
+    supports indexing and iteration to access the 8 Barlat anisotropy alphas."""
+    _owner: Any = None
+
+    def __new__(cls, val: float, owner: Any = None):
+        obj = super().__new__(cls, val)
+        obj._owner = owner
+        return obj
+
+    def __getitem__(self, idx: Any) -> Any:
+        if self._owner is not None and hasattr(self._owner, "alphas"):
+            return self._owner.alphas[idx]
+        raise IndexError("alpha index out of range")
+
+    def __len__(self) -> int:
+        if self._owner is not None and hasattr(self._owner, "alphas"):
+            return len(self._owner.alphas)
+        return 0
+
+    def __iter__(self):
+        if self._owner is not None and hasattr(self._owner, "alphas"):
+            return iter(self._owner.alphas)
+        return iter([])
+
+
 @dataclass
 class MatLaw87:
     """/MAT/LAW87 or /MAT/BARLAT2000 / /MAT/BARLAT_2000 / /MAT/BARLAT2000_2D (M183, M564):
@@ -9008,9 +9034,9 @@ class MatLaw87:
         self.aswift = kwargs.get("a_swift", aswift)
         self.nexp = kwargs.get("n_hard", kwargs.get("n", nexp))
         if isinstance(alpha, (int, float)):
-            self.alpha = kwargs.get("alpha_vol", float(alpha))
+            self.alpha = AlphaFloat(kwargs.get("alpha_vol", float(alpha)), self)
         else:
-            self.alpha = kwargs.get("alpha_vol", 0.0)
+            self.alpha = AlphaFloat(kwargs.get("alpha_vol", 0.0), self)
         self.epso = kwargs.get("eps0", epso)
         self.qvoce = kwargs.get("q_voce", qvoce)
         self.beta = beta

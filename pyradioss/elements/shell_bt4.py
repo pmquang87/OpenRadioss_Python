@@ -354,9 +354,12 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
         if getattr(mat, "law", 1) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
             from ..materials import law57_barlat
             c = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
-        elif getattr(mat, "law", 1) in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
+        elif getattr(mat, "law", 1) in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
             from ..materials import law73_hill_therm
             c = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
+        elif getattr(mat, "law", 1) in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000") or getattr(mat, "law_name", None) in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000"):
+            from ..materials import law87_barlat2000
+            c = law87_barlat2000.sound_speed(mat, getattr(mat, "rho0", None))
         elif getattr(mat, "law", 1) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP"):
             from ..materials import law88_tab_hyp
             c = law88_tab_hyp.sound_speed_shell(mat, getattr(mat, "rho0", None))
@@ -557,7 +560,7 @@ def _init_material_state(group, nip_max=None, n=None):
             if name not in st["mat_extra"]:
                 if name.startswith("off") or name.startswith("damt") or name.startswith("alpe") or name.startswith("uvar82"):
                     st["mat_extra"][name] = np.ones((n,) + shape)
-                elif name.startswith("thk"):
+                elif name in ("thk", "thk0", "thk87"):
                     thk_arr = st.get("thick")
                     if thk_arr is None:
                         thk_arr = np.full(n, getattr(prop, "thick", 1.0))
@@ -644,8 +647,10 @@ def _layer_extra(st, sl, k, area=None):
     if "time" in st:
         extra["time"] = st["time"]
     if "thick" in st:
-        extra["thkn"] = st["thick"][sl]
-        extra["thk"] = st["thick"][sl]
+        if "thkn" not in extra:
+            extra["thkn"] = st["thick"][sl]
+        if "thk" not in extra:
+            extra["thk"] = st["thick"][sl]
     if "thick0" in st:
         extra["thklyl"] = st["thick0"][sl]
     elif "thick" in st:
@@ -932,6 +937,7 @@ def forces(group, x, v, vr, dt, fint, mint):
                 c[sl] = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
             elif getattr(mat, "law", 1) in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000") or getattr(mat, "law_name", None) in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000"):
                 from ..materials import law87_barlat2000
+                c[sl] = law87_barlat2000.sound_speed(mat, getattr(mat, "rho0", None))
             elif getattr(mat, "law", 1) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP"):
                 from ..materials import law88_tab_hyp
                 c[sl] = law88_tab_hyp.sound_speed_shell(mat, getattr(mat, "rho0", None))
