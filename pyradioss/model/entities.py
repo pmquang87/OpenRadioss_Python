@@ -379,12 +379,19 @@ class Material:
                 return float(law57_barlat.sound_speed_shell_law57(self, rho0=self.rho0))
             except Exception:
                 pass
-        if self.law in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(self, "law_name", None) in ("73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
+        if self.law in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(self, "law_name", None) in ("73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
             try:
                 from ..materials import law73_hill_therm
                 return float(law73_hill_therm.sound_speed(self, rho=self.rho0))
             except Exception:
                 pass
+        if self.law in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000") or getattr(self, "law_name", None) in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000"):
+            E = float(self.params.get("E", self.params.get("e", 0.0))) if isinstance(self.params, dict) else 0.0
+            nu = float(self.params.get("Nu", self.params.get("nu", 0.0))) if isinstance(self.params, dict) else 0.0
+            rho = float(self.rho0) if self.rho0 > 0.0 else (float(self.params.get("rho", 0.0)) if isinstance(self.params, dict) else 0.0)
+            if rho > 0.0 and E > 0.0 and (1.0 - nu**2) > 0.0:
+                import math
+                return float(math.sqrt(E / (rho * (1.0 - nu**2))))
         if self.law in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB") or getattr(self, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
             try:
                 from ..materials import law66_plas_tab
@@ -8692,18 +8699,54 @@ class MatLaw87Curve:
 
 @dataclass
 class MatLaw87:
-    """/MAT/LAW87 or /MAT/BARLAT_YLD2000 (M183): Barlat Yld2000 anisotropic plasticity."""
-    id: int
+    """/MAT/LAW87 or /MAT/BARLAT2000 / /MAT/BARLAT_2000 / /MAT/BARLAT2000_2D (M183, M564):
+    Barlat 2000 (Yld2000-2d) plane-stress anisotropic plasticity material model.
+
+    Upstream Fortran:
+      starter/source/materials/mat/mat087/hm_read_mat87.F90
+      radioss140/MAT/matl87_barlat.cfg
+      radioss2025/MAT/matl87_barlat.cfg
+    """
+    id: int = 0
     rho: float = 0.0
-    refer_rho: float = 0.0
     e: float = 0.0
     nu: float = 0.0
     iflag: int = 0
-    vp: int = 0
-    strain1: float = 0.0
-    exp1: float = 0.0
-    ifit: int = 0
-    alpha: list[float] = field(default_factory=lambda: [1.0]*8)
+    iflagsr: int = 0
+    invc: float = 0.0
+    invp: float = 0.0
+    flag_fit: int = 0
+    al1: float = 1.0
+    al2: float = 1.0
+    al3: float = 1.0
+    al4: float = 1.0
+    al5: float = 1.0
+    al6: float = 1.0
+    al7: float = 1.0
+    al8: float = 1.0
+    fisokin: float = 0.0
+    ikin: int = 1
+    expa: float = 2.0
+    fcut: float = 0.0
+    fsmooth: int = 0
+    nrate: int = 0
+    aswift: float = 0.0
+    nexp: float = 0.0
+    alpha: float = 0.0
+    epso: float = 0.0
+    qvoce: float = 0.0
+    beta: float = 0.0
+    ko: float = 0.0
+    ckh: tuple = (0.0, 0.0, 0.0, 0.0)
+    akh: tuple = (0.0, 0.0, 0.0, 0.0)
+    title: str = ""
+    law: int = 87
+    law_name: str = "LAW87"
+    refer_rho: float = 0.0
+    fail: Optional[Any] = None
+    eos: Optional[Any] = None
+    params: Optional[dict] = None
+    # Extended / fitting / tabulated parameters:
     sigma_00: float = 0.0
     sigma_45: float = 0.0
     sigma_90: float = 0.0
@@ -8712,22 +8755,7 @@ class MatLaw87:
     r_45: float = 1.0
     r_90: float = 1.0
     r_b: float = 1.0
-    chard: float = 0.0
-    ikin: int = 0
-    exp_a: float = 6.0
-    alpha_vol: float = 1.0
-    n_hard: float = 0.0
-    fcut: float = 0.0
-    fsmooth: int = 0
-    nrate: int = 0
     curves: list[MatLaw87Curve] = field(default_factory=list)
-    # Swift-Voce parameters (iflag=1)
-    aswift: float = 0.0
-    eps0: float = 0.0
-    qvoce: float = 0.0
-    beta: float = 0.0
-    k0: float = 0.0
-    # Tabulated (iflag=3)
     tab_id0: int = 0
     fscale0: float = 1.0
     epsd0: float = 0.0
@@ -8737,19 +8765,226 @@ class MatLaw87:
     tab_id90: int = 0
     fscale90: float = 1.0
     epsd90: float = 0.0
-    title: str = ""
+
+    def __init__(
+        self,
+        id: int = 0,
+        rho: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        iflag: int = 0,
+        iflagsr: int = 0,
+        invc: float = 0.0,
+        invp: float = 0.0,
+        flag_fit: int = 0,
+        al1: float = 1.0,
+        al2: float = 1.0,
+        al3: float = 1.0,
+        al4: float = 1.0,
+        al5: float = 1.0,
+        al6: float = 1.0,
+        al7: float = 1.0,
+        al8: float = 1.0,
+        fisokin: float = 0.0,
+        ikin: int = 1,
+        expa: float = 2.0,
+        fcut: float = 0.0,
+        fsmooth: int = 0,
+        nrate: int = 0,
+        aswift: float = 0.0,
+        nexp: float = 0.0,
+        alpha: float = 0.0,
+        epso: float = 0.0,
+        qvoce: float = 0.0,
+        beta: float = 0.0,
+        ko: float = 0.0,
+        ckh: tuple = (0.0, 0.0, 0.0, 0.0),
+        akh: tuple = (0.0, 0.0, 0.0, 0.0),
+        title: str = "",
+        law: int = 87,
+        law_name: str = "LAW87",
+        refer_rho: float = 0.0,
+        fail: Optional[Any] = None,
+        eos: Optional[Any] = None,
+        params: Optional[dict] = None,
+        **kwargs: Any,
+    ):
+        self.id = id
+        self.rho = kwargs.get("rho0", rho)
+        self.refer_rho = kwargs.get("rhor", refer_rho)
+        self.e = kwargs.get("E", e)
+        self.nu = kwargs.get("Nu", nu)
+        self.iflag = iflag
+        self.iflagsr = kwargs.get("vflag", kwargs.get("vp", iflagsr))
+        self.invc = kwargs.get("strain1", kwargs.get("c", invc))
+        self.invp = kwargs.get("exp1", kwargs.get("p", invp))
+        self.flag_fit = kwargs.get("ifit", flag_fit)
+
+        if "alphas" in kwargs and isinstance(kwargs["alphas"], (list, tuple)) and len(kwargs["alphas"]) >= 8:
+            self.al1 = float(kwargs["alphas"][0])
+            self.al2 = float(kwargs["alphas"][1])
+            self.al3 = float(kwargs["alphas"][2])
+            self.al4 = float(kwargs["alphas"][3])
+            self.al5 = float(kwargs["alphas"][4])
+            self.al6 = float(kwargs["alphas"][5])
+            self.al7 = float(kwargs["alphas"][6])
+            self.al8 = float(kwargs["alphas"][7])
+        elif isinstance(alpha, (list, tuple)) and len(alpha) >= 8:
+            self.al1 = float(alpha[0])
+            self.al2 = float(alpha[1])
+            self.al3 = float(alpha[2])
+            self.al4 = float(alpha[3])
+            self.al5 = float(alpha[4])
+            self.al6 = float(alpha[5])
+            self.al7 = float(alpha[6])
+            self.al8 = float(alpha[7])
+        else:
+            self.al1 = kwargs.get("a1", kwargs.get("alpha1", al1))
+            self.al2 = kwargs.get("a2", kwargs.get("alpha2", al2))
+            self.al3 = kwargs.get("a3", kwargs.get("alpha3", al3))
+            self.al4 = kwargs.get("a4", kwargs.get("alpha4", al4))
+            self.al5 = kwargs.get("a5", kwargs.get("alpha5", al5))
+            self.al6 = kwargs.get("a6", kwargs.get("alpha6", al6))
+            self.al7 = kwargs.get("a7", kwargs.get("alpha7", al7))
+            self.al8 = kwargs.get("a8", kwargs.get("alpha8", al8))
+
+        self.fisokin = kwargs.get("chard", fisokin)
+        self.ikin = ikin
+        self.expa = kwargs.get("exp_a", kwargs.get("a_exp", kwargs.get("a", expa)))
+        self.fcut = kwargs.get("f_cut", fcut)
+        self.fsmooth = kwargs.get("f_smooth", fsmooth)
+        self.nrate = nrate
+        self.aswift = kwargs.get("a_swift", aswift)
+        self.nexp = kwargs.get("n_hard", kwargs.get("n", nexp))
+        if isinstance(alpha, (int, float)):
+            self.alpha = kwargs.get("alpha_vol", float(alpha))
+        else:
+            self.alpha = kwargs.get("alpha_vol", 0.0)
+        self.epso = kwargs.get("eps0", epso)
+        self.qvoce = kwargs.get("q_voce", qvoce)
+        self.beta = beta
+        self.ko = kwargs.get("k0", ko)
+        self.ckh = ckh
+        self.akh = akh
+        self.title = title
+        self.law = law
+        self.law_name = law_name
+        self.fail = fail
+        self.eos = eos
+
+        self.sigma_00 = kwargs.get("sigma_00", 0.0)
+        self.sigma_45 = kwargs.get("sigma_45", 0.0)
+        self.sigma_90 = kwargs.get("sigma_90", 0.0)
+        self.sigma_b = kwargs.get("sigma_b", 0.0)
+        self.r_00 = kwargs.get("r_00", 1.0)
+        self.r_45 = kwargs.get("r_45", 1.0)
+        self.r_90 = kwargs.get("r_90", 1.0)
+        self.r_b = kwargs.get("r_b", 1.0)
+
+        self.curves = list(kwargs.get("curves", []))
+        self.tab_id0 = kwargs.get("tab_id0", 0)
+        self.fscale0 = kwargs.get("fscale0", 1.0)
+        self.epsd0 = kwargs.get("epsd0", 0.0)
+        self.tab_id45 = kwargs.get("tab_id45", 0)
+        self.fscale45 = kwargs.get("fscale45", 1.0)
+        self.epsd45 = kwargs.get("epsd45", 0.0)
+        self.tab_id90 = kwargs.get("tab_id90", 0)
+        self.fscale90 = kwargs.get("fscale90", 1.0)
+        self.epsd90 = kwargs.get("epsd90", 0.0)
+
+        self._extra_params: dict[str, Any] = dict(params) if isinstance(params, dict) else {}
+        for k, v in kwargs.items():
+            if not hasattr(self, k):
+                self._extra_params[k] = v
 
     @property
     def rho0(self) -> float:
         return self.rho
 
+    @rho0.setter
+    def rho0(self, val: float) -> None:
+        self.rho = val
+
+    @property
+    def rhor(self) -> float:
+        return self.refer_rho if self.refer_rho > 0.0 else self.rho
+
+    @rhor.setter
+    def rhor(self, val: float) -> None:
+        self.refer_rho = val
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @E.setter
+    def E(self, val: float) -> None:
+        self.e = val
+
+    @property
+    def Nu(self) -> float:
+        return self.nu
+
+    @Nu.setter
+    def Nu(self, val: float) -> None:
+        self.nu = val
+
+    @property
+    def G(self) -> float:
+        return 0.5 * self.e / (1.0 + self.nu) if (1.0 + self.nu) > 0.0 else 0.0
+
+    @property
+    def bulk(self) -> float:
+        denom = 3.0 * (1.0 - 2.0 * self.nu)
+        return self.e / denom if abs(denom) > 1e-12 else 0.0
+
+    @property
+    def K(self) -> float:
+        return self.bulk
+
+    @property
+    def sound_speed_shell(self) -> CallableFloat:
+        """Shell plane-stress sound speed: c = sqrt(E / (rho * (1 - nu^2)))."""
+        rho_val = self.rhor if self.refer_rho > 0.0 else self.rho
+        denom = rho_val * (1.0 - self.nu ** 2)
+        if denom > 0.0 and self.e > 0.0:
+            import math
+            return CallableFloat(math.sqrt(self.e / denom))
+        return CallableFloat(0.0)
+
+    @property
+    def sound_speed(self) -> CallableFloat:
+        return self.sound_speed_shell
+
+    @property
+    def Lp(self) -> np.ndarray:
+        """First linear transformation matrix (3x3) for Barlat 2000 (Fortran hm_read_mat87.F90 lines 412-417)."""
+        lp = np.zeros((3, 3), dtype=float)
+        lp[0, 0] = 2.0 * self.al1 / 3.0
+        lp[0, 1] = -self.al1 / 3.0
+        lp[1, 0] = -self.al2 / 3.0
+        lp[1, 1] = 2.0 * self.al2 / 3.0
+        lp[2, 2] = self.al7
+        return lp
+
+    @property
+    def Lpp(self) -> np.ndarray:
+        """Second linear transformation matrix (3x3) for Barlat 2000 (Fortran hm_read_mat87.F90 lines 428-433)."""
+        lpp = np.zeros((3, 3), dtype=float)
+        lpp[0, 0] = (-2.0 * self.al3 + 2.0 * self.al4 + 8.0 * self.al5 - 2.0 * self.al6) / 9.0
+        lpp[0, 1] = (self.al3 - 4.0 * self.al4 - 4.0 * self.al5 + 4.0 * self.al6) / 9.0
+        lpp[1, 0] = (4.0 * self.al3 - 4.0 * self.al4 - 4.0 * self.al5 + self.al6) / 9.0
+        lpp[1, 1] = (-2.0 * self.al3 + 8.0 * self.al4 + 2.0 * self.al5 - 2.0 * self.al6) / 9.0
+        lpp[2, 2] = self.al8
+        return lpp
+
     @property
     def alphas(self) -> list[float]:
-        return self.alpha
+        return [self.al1, self.al2, self.al3, self.al4, self.al5, self.al6, self.al7, self.al8]
 
     @property
     def a_exp(self) -> int:
-        return int(self.exp_a)
+        return int(round(self.expa))
 
     @property
     def a_swift(self) -> float:
@@ -8760,12 +8995,175 @@ class MatLaw87:
         return self.qvoce
 
     @property
+    def k0(self) -> float:
+        return self.ko
+
+    @property
+    def eps0(self) -> float:
+        return self.epso
+
+    @property
+    def ifit(self) -> int:
+        return self.flag_fit
+
+    @property
+    def vp(self) -> int:
+        return self.iflagsr
+
+    @property
     def vflag(self) -> int:
-        return self.vp
+        return self.iflagsr
+
+    @property
+    def strain1(self) -> float:
+        return self.invc
+
+    @property
+    def exp1(self) -> float:
+        return self.invp
+
+    @property
+    def chard(self) -> float:
+        return self.fisokin
+
+    @property
+    def exp_a(self) -> float:
+        return self.expa
+
+    @property
+    def alpha_vol(self) -> float:
+        return self.alpha
+
+    @property
+    def n_hard(self) -> float:
+        return self.nexp
+
+    @property
+    def params(self) -> Dict[str, Any]:
+        p = {
+            "rho": self.rho,
+            "rho0": self.rho,
+            "refer_rho": self.refer_rho,
+            "rhor": self.rhor,
+            "e": self.e,
+            "E": self.e,
+            "nu": self.nu,
+            "Nu": self.nu,
+            "iflag": self.iflag,
+            "iflagsr": self.iflagsr,
+            "vp": self.iflagsr,
+            "vflag": self.iflagsr,
+            "invc": self.invc,
+            "strain1": self.invc,
+            "c": self.invc,
+            "invp": self.invp,
+            "exp1": self.invp,
+            "p": self.invp,
+            "flag_fit": self.flag_fit,
+            "ifit": self.flag_fit,
+            "al1": self.al1,
+            "al2": self.al2,
+            "al3": self.al3,
+            "al4": self.al4,
+            "al5": self.al5,
+            "al6": self.al6,
+            "al7": self.al7,
+            "al8": self.al8,
+            "alphas": self.alphas,
+            "fisokin": self.fisokin,
+            "chard": self.fisokin,
+            "ikin": self.ikin,
+            "expa": self.expa,
+            "exp_a": self.expa,
+            "a_exp": self.a_exp,
+            "fcut": self.fcut,
+            "fsmooth": self.fsmooth,
+            "nrate": self.nrate,
+            "aswift": self.aswift,
+            "a_swift": self.aswift,
+            "nexp": self.nexp,
+            "n_hard": self.nexp,
+            "alpha": self.alpha,
+            "alpha_vol": self.alpha,
+            "epso": self.epso,
+            "eps0": self.epso,
+            "qvoce": self.qvoce,
+            "q_voce": self.qvoce,
+            "beta": self.beta,
+            "ko": self.ko,
+            "k0": self.ko,
+            "ckh": self.ckh,
+            "akh": self.akh,
+            "curves": self.curves,
+            "sigma_00": self.sigma_00,
+            "sigma_45": self.sigma_45,
+            "sigma_90": self.sigma_90,
+            "sigma_b": self.sigma_b,
+            "r_00": self.r_00,
+            "r_45": self.r_45,
+            "r_90": self.r_90,
+            "r_b": self.r_b,
+            "G": self.G,
+            "bulk": self.bulk,
+            "K": self.K,
+            "sound_speed": self.sound_speed,
+            "sound_speed_shell": self.sound_speed_shell,
+            "title": self.title,
+            "law": self.law,
+            "law_name": self.law_name,
+        }
+        if hasattr(self, "_extra_params") and self._extra_params:
+            p.update(self._extra_params)
+        return p
+
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        p = self.params
+        if key in p:
+            return p[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            if not hasattr(self, "_extra_params"):
+                self._extra_params = {}
+            self._extra_params[key] = value
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or key in self.params
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self) -> list[str]:
+        import dataclasses
+        k = [f.name for f in dataclasses.fields(self)]
+        k.extend([
+            "rho0", "rhor", "E", "Nu", "G", "bulk", "K", "sound_speed", "sound_speed_shell",
+            "Lp", "Lpp", "alphas", "a_exp", "a_swift", "q_voce", "k0", "eps0",
+            "ifit", "vp", "vflag", "strain1", "exp1", "chard", "exp_a", "alpha_vol", "n_hard"
+        ])
+        if hasattr(self, "_extra_params") and self._extra_params:
+            k.extend(self._extra_params.keys())
+        return list(dict.fromkeys(k))
+
+    def values(self) -> list[Any]:
+        return [self[k] for k in self.keys()]
+
+    def items(self) -> list[tuple[str, Any]]:
+        return [(k, self[k]) for k in self.keys()]
 
 
 MatBarlatYld2000 = MatLaw87
 MatBarlat2000 = MatLaw87
+MatBarlat20002D = MatLaw87
+MaterialLaw87 = MatLaw87
 
 
 @dataclass
@@ -13657,7 +14055,6 @@ class MatLaw73:
 
 
 MatHillTherm = MatLaw73
-MatBarlat2000 = MatLaw73
 MatThermalHill = MatLaw73
 MatThermHill = MatLaw73
 

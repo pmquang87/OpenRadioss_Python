@@ -26,7 +26,6 @@ import pytest
 from pyradioss.model.entities import (
     MatLaw73,
     MatHillTherm,
-    MatBarlat2000,
     MatThermalHill,
     MatThermHill,
     Material,
@@ -81,7 +80,6 @@ def test_mat_law73_entities_and_properties():
 
     # Class aliases
     assert MatHillTherm is MatLaw73
-    assert MatBarlat2000 is MatLaw73
     assert MatThermalHill is MatLaw73
     assert MatThermHill is MatLaw73
 
@@ -183,9 +181,7 @@ def test_model_mat_law73_containers():
     model = Model()
     assert hasattr(model, "mat_law73s")
     assert hasattr(model, "mat_therm_hills")
-    assert hasattr(model, "mat_barlat2000s")
     assert model.mat_therm_hills is model.mat_law73s
-    assert model.mat_barlat2000s is model.mat_law73s
 
 
 # ============================================================================
@@ -194,7 +190,7 @@ def test_model_mat_law73_containers():
 
 def test_card_layouts_and_cfg_catalogue_law73():
     """Verify card layouts and law catalogue mappings for LAW73 and synonyms."""
-    for prefix in ("MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL"):
+    for prefix in ("MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL"):
         assert CARD_LAYOUTS[f"{prefix}_1"] == [20]
         assert CARD_LAYOUTS[f"{prefix}_2"] == [20, 20]
         assert CARD_LAYOUTS[f"{prefix}_3"] == [10, 10, 20, 20]
@@ -204,16 +200,13 @@ def test_card_layouts_and_cfg_catalogue_law73():
         assert CARD_LAYOUTS[f"{prefix}_7"] == [20, 20]
 
     assert law_number("LAW73") == 73
-    assert law_number("BARLAT2000") == 73
     assert law_number("HILL_THERM") == 73
     assert law_number("THERM_HILL") == 73
     assert law_number("MAT_LAW73") == 73
-    assert law_number("MAT_BARLAT2000") == 73
     assert law_number("MAT_HILL_THERM") == 73
     assert law_number("MAT_THERM_HILL") == 73
 
     assert canonical_law_name(73) == "LAW73"
-    assert canonical_law_name("BARLAT2000") == "LAW73"
     assert canonical_law_name("HILL_THERM") == "LAW73"
     assert canonical_law_name("THERM_HILL") == "LAW73"
 
@@ -290,10 +283,10 @@ def test_starter_keyword_reader_fixed_7card(tmp_path):
 
 
 def test_starter_keyword_reader_free_and_synonyms(tmp_path):
-    """Verify free-format /MAT/BARLAT2000, /MAT/HILL_THERM, and /MAT/THERM_HILL parsing."""
+    """Verify free-format /MAT/LAW73, /MAT/HILL_THERM, and /MAT/THERM_HILL parsing."""
     deck_text = (
-        "/MAT/BARLAT2000/10\n"
-        "Barlat2000 Free\n"
+        "/MAT/LAW73/10\n"
+        "Law73 Free\n"
         "2.8e-9\n"
         "72000.0 0.32\n"
         "0 0.0 0.0\n"
@@ -338,7 +331,7 @@ def test_starter_keyword_reader_free_and_synonyms(tmp_path):
 
     m10 = model.mat_law73s[10]
     assert m10.id == 10
-    assert m10.title == "Barlat2000 Free"
+    assert m10.title == "Law73 Free"
     assert m10.rho == pytest.approx(2.8e-9)
     assert m10.e == pytest.approx(72000.0)
     assert m10.nu == pytest.approx(0.32)
@@ -523,8 +516,8 @@ def test_starter_checks_elements_compatibility():
 
 def test_allowed_laws_and_mat_checks_registration():
     """Verify LAW73 is registered in _MAT_CHECKS and _ALLOWED_LAWS for shells."""
-    for key in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL",
-                "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL"):
+    for key in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL",
+                "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL"):
         assert key in _MAT_CHECKS
         assert _MAT_CHECKS[key] is check_mat_law73
 
@@ -614,9 +607,9 @@ def test_deck_writer_and_roundtrip(tmp_path):
         t0=298.0,
         rhocp=3.2e-3,
     )
-    deck.mat_barlat2000(
+    deck.mat_law73(
         4,
-        "Alias Barlat 2000",
+        "Law 73 Secondary",
         rho=2.8e-9,
         e=72000.0,
         nu=0.32,
@@ -683,7 +676,7 @@ def test_deck_writer_and_roundtrip(tmp_path):
 
     m4 = model.mat_law73s[4]
     assert m4.id == 4
-    assert m4.title == "Alias Barlat 2000"
+    assert m4.title == "Law 73 Secondary"
     assert m4.rho == pytest.approx(2.8e-9)
     assert m4.e == pytest.approx(72000.0)
     assert m4.table_id == 204
@@ -762,8 +755,8 @@ def test_materials_dispatch_integration():
     )
 
     # Shell dispatch registered
-    for synonym in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL",
-                    "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL"):
+    for synonym in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL",
+                    "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL"):
         assert synonym in materials.MATERIAL_SHELL_DISPATCH
         assert synonym in materials.MATERIAL_SOLID_DISPATCH
 

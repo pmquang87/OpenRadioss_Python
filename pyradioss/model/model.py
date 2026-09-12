@@ -1118,6 +1118,9 @@ class Model:
         self.mat_hyp_foams = self.mat_law50s
         self.mat_law57s: Dict[int, MatLaw57] = {}                   # /MAT/LAW57, /MAT/BARLAT3 (M183)
         self.mat_barlat3s = self.mat_law57s
+        self.mat_law87s: Dict[int, MatLaw87] = {}                   # /MAT/LAW87, /MAT/BARLAT2000 (M183, M564)
+        self.mat_barlat2000s = self.mat_law87s
+        self.mat_barlats = self.mat_law87s
         self.mat_law163s: Dict[int, MatLaw163] = {}                 # /MAT/LAW163, /MAT/CRUSHABLE_FOAM (M183)
         self.mat_crushable_foams = self.mat_law163s
         self.mat_crush_foams = self.mat_law163s
@@ -1264,10 +1267,9 @@ class Model:
         self.mat_law71s: Dict[int, MatLaw71] = {}                   # /MAT/LAW71, /MAT/SUPER_ELAS (M191)
         self.mat_super_elass = self.mat_law71s
         self.mat_nitinols = self.mat_law71s
-        self.mat_law73s: Dict[int, MatLaw73] = {}                   # /MAT/LAW73, /MAT/BARLAT2000, /MAT/HILL_THERM (M191, M561)
+        self.mat_law73s: Dict[int, MatLaw73] = {}                   # /MAT/LAW73, /MAT/HILL_THERM (M191, M561)
         self.mat_therm_hills = self.mat_law73s
         self.mat_hill_therms = self.mat_law73s
-        self.mat_barlat2000s = self.mat_law73s
         self.mat_law84s: Dict[int, MatLaw84] = {}                   # /MAT/LAW84, /MAT/SWIFT_VOCE (M191)
         self.mat_swift_voces = self.mat_law84s
         self.mat_plas_swift_voces = self.mat_law84s

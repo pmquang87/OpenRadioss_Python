@@ -525,8 +525,8 @@ def test_law73_sound_speed():
 
 def test_law73_registration():
     """Verify LAW73 is correctly registered across all registries and metadata."""
-    aliases = [73, "73", "LAW73", "BARLAT2000", "HILL_THERM",
-               "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "LAW73_HILL_THERM"]
+    aliases = [73, "73", "LAW73", "HILL_THERM",
+               "MAT_LAW73", "MAT_HILL_THERM", "LAW73_HILL_THERM"]
 
     for k in aliases:
         assert k in MAT_PHYSICS_REGISTRY
@@ -607,10 +607,9 @@ def test_law73_batched_vectorization():
 
 def test_mat_law73_entities_and_properties():
     """Verify MatLaw73 entity dataclass fields, property helpers, and aliases."""
-    from pyradioss.model.entities import MatLaw73, MatHillTherm, MatBarlat2000, MatThermalHill, MatThermHill
+    from pyradioss.model.entities import MatLaw73, MatHillTherm, MatThermalHill, MatThermHill
 
     assert MatHillTherm is MatLaw73
-    assert MatBarlat2000 is MatLaw73
     assert MatThermalHill is MatLaw73
     assert MatThermHill is MatLaw73
 
@@ -684,7 +683,7 @@ def test_card_layouts_and_cfg_catalogue_law73():
     from pyradioss.input.card_layouts import CARD_LAYOUTS
     from pyradioss.input.cfg_catalogue import law_number, canonical_law_name
 
-    for prefix in ("MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "MAT_BARLAT2000"):
+    for prefix in ("MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL"):
         assert CARD_LAYOUTS[f"{prefix}_1"] == [20]
         assert CARD_LAYOUTS[f"{prefix}_2"] == [20, 20]
         assert CARD_LAYOUTS[f"{prefix}_3"] == [10, 10, 20, 20]
@@ -695,14 +694,11 @@ def test_card_layouts_and_cfg_catalogue_law73():
 
     assert law_number("LAW73") == 73
     assert law_number("HILL_THERM") == 73
-    assert law_number("BARLAT2000") == 73
     assert law_number("MAT_LAW73") == 73
     assert law_number("MAT_HILL_THERM") == 73
-    assert law_number("MAT_BARLAT2000") == 73
 
     assert canonical_law_name(73) == "LAW73"
     assert canonical_law_name("HILL_THERM") == "LAW73"
-    assert canonical_law_name("BARLAT2000") == "LAW73"
 
 
 def test_starter_keyword_reader_law73(tmp_path):

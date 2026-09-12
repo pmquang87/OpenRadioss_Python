@@ -4826,8 +4826,6 @@ class StarterDeck:
             mat_obj = kw_low["mat_hill_therm"]
         elif "mat_therm_hill" in kw_low:
             mat_obj = kw_low["mat_therm_hill"]
-        elif "mat_barlat2000" in kw_low:
-            mat_obj = kw_low["mat_barlat2000"]
 
         if mat_obj is not None:
             mid = getattr(mat_obj, "id", mid)
@@ -4977,9 +4975,423 @@ class StarterDeck:
         kwargs.setdefault("law_name", "THERM_HILL")
         return self.mat_law73(*args, **kwargs)
 
+    def mat_law87(
+        self,
+        mid: int = 0,
+        title: str = "",
+        rho: float = 0.0,
+        rhor: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        iflag: int = 0,
+        vp: int = 0,
+        c: float = 0.0,
+        p: float = 0.0,
+        ifit: int = 0,
+        alpha: Any = None,
+        sigma_00: float = 0.0,
+        sigma_45: float = 0.0,
+        sigma_90: float = 0.0,
+        sigma_b: float = 0.0,
+        r_00: float = 1.0,
+        r_45: float = 1.0,
+        r_90: float = 1.0,
+        r_b: float = 1.0,
+        chard: float = 0.0,
+        ikin: int = 1,
+        exp_a: float = 6.0,
+        alpha_vol: float = 1.0,
+        n_hard: float = 0.0,
+        fcut: float = 0.0,
+        fsmooth: int = 0,
+        nrate: int = 0,
+        aswift: float = 0.0,
+        eps0: float = 0.0,
+        qvoce: float = 0.0,
+        beta: float = 0.0,
+        k0: float = 0.0,
+        curves: Any = None,
+        tab_id0: int = 0,
+        fscale0: float = 1.0,
+        epsd0: float = 0.0,
+        tab_id45: int = 0,
+        fscale45: float = 1.0,
+        epsd45: float = 0.0,
+        tab_id90: int = 0,
+        fscale90: float = 1.0,
+        epsd90: float = 0.0,
+        ckh: Any = None,
+        akh: Any = None,
+        law_name: str = "LAW87",
+        unit_id: Optional[int] = None,
+        fixed_format: bool = True,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW87`` (/MAT/BARLAT2000, /MAT/BARLAT_2000, /MAT/BARLAT2000_2D) (M564)
+        Barlat 2000 (Yld2000-2d) plane-stress anisotropic plasticity material model.
+
+        Reference:
+          - radioss140/MAT/matl87_barlat.cfg
+          - radioss2025/MAT/matl87_barlat.cfg
+          - starter/source/materials/mat/mat087/hm_read_mat87.F90
+        """
+        if len(kwargs) == 0 and isinstance(mid, int) and isinstance(title, str) and isinstance(rho, (list, tuple)):
+            data_cards = rho
+            self._header("MAT", law_name, mid)
+            self._title(title)
+            self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+            return self
+
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+        if "fixed_format" in kw_low:
+            fixed_format = bool(kw_low["fixed_format"])
+        if "fixed" in kw_low:
+            fixed_format = bool(kw_low["fixed"])
+        if "free" in kw_low and bool(kw_low["free"]):
+            fixed_format = False
+        if "law_name" in kw_low:
+            law_name = str(kw_low["law_name"])
+
+        mat_obj = None
+        if hasattr(mid, "al1") or hasattr(mid, "al8") or hasattr(mid, "flag_fit"):
+            mat_obj = mid
+        elif hasattr(mid, "params") and (
+            "alpha" in getattr(mid, "params", {})
+            or "alphas" in getattr(mid, "params", {})
+            or "al1" in getattr(mid, "params", {})
+            or getattr(mid, "law", None) in (87, "87", "LAW87", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D")
+        ):
+            mat_obj = mid
+        elif "mat" in kw_low:
+            mat_obj = kw_low["mat"]
+        elif "material" in kw_low:
+            mat_obj = kw_low["material"]
+        elif "mat87" in kw_low:
+            mat_obj = kw_low["mat87"]
+        elif "mat_law87" in kw_low:
+            mat_obj = kw_low["mat_law87"]
+        elif "mat_barlat2000" in kw_low:
+            mat_obj = kw_low["mat_barlat2000"]
+        elif "mat_barlat" in kw_low:
+            mat_obj = kw_low["mat_barlat"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            if not title:
+                title = getattr(mat_obj, "title", "")
+            p = getattr(mat_obj, "params", {}) or {}
+            if not isinstance(p, dict):
+                p = {}
+            if rho == 0.0:
+                rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", p.get("rho", p.get("rho0", 0.0))))
+            if rhor == 0.0:
+                rhor = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", p.get("refer_rho", p.get("rhor", 0.0))))
+            if e == 0.0:
+                e = getattr(mat_obj, "e", getattr(mat_obj, "E", p.get("e", p.get("E", 0.0))))
+            if nu == 0.0:
+                nu = getattr(mat_obj, "nu", getattr(mat_obj, "Nu", p.get("nu", p.get("Nu", 0.0))))
+            if iflag == 0:
+                iflag = getattr(mat_obj, "iflag", p.get("iflag", 0))
+            if vp == 0:
+                vp = getattr(mat_obj, "iflagsr", getattr(mat_obj, "vp", p.get("iflagsr", p.get("vp", p.get("vflag", 0)))))
+            if c == 0.0:
+                c = getattr(mat_obj, "invc", p.get("invc", p.get("c", p.get("strain1", 0.0))))
+            if p == 0.0:
+                p = getattr(mat_obj, "invp", p.get("invp", p.get("p", p.get("exp1", 0.0))))
+            if ifit == 0:
+                ifit = getattr(mat_obj, "flag_fit", getattr(mat_obj, "ifit", p.get("flag_fit", p.get("ifit", 0))))
+            if alpha is None:
+                if hasattr(mat_obj, "al1") and hasattr(mat_obj, "al8"):
+                    alpha = [getattr(mat_obj, f"al{i}", 1.0) for i in range(1, 9)]
+                elif "alpha" in p:
+                    alpha = p["alpha"]
+                elif "alphas" in p:
+                    alpha = p["alphas"]
+            if sigma_00 == 0.0:
+                sigma_00 = getattr(mat_obj, "sigma_00", p.get("sigma_00", 0.0))
+            if sigma_45 == 0.0:
+                sigma_45 = getattr(mat_obj, "sigma_45", p.get("sigma_45", 0.0))
+            if sigma_90 == 0.0:
+                sigma_90 = getattr(mat_obj, "sigma_90", p.get("sigma_90", 0.0))
+            if sigma_b == 0.0:
+                sigma_b = getattr(mat_obj, "sigma_b", p.get("sigma_b", 0.0))
+            if r_00 == 1.0:
+                r_00 = getattr(mat_obj, "r_00", getattr(mat_obj, "r00", p.get("r_00", p.get("r00", 1.0))))
+            if r_45 == 1.0:
+                r_45 = getattr(mat_obj, "r_45", getattr(mat_obj, "r45", p.get("r_45", p.get("r45", 1.0))))
+            if r_90 == 1.0:
+                r_90 = getattr(mat_obj, "r_90", getattr(mat_obj, "r90", p.get("r_90", p.get("r90", 1.0))))
+            if r_b == 1.0:
+                r_b = getattr(mat_obj, "r_b", getattr(mat_obj, "rb", p.get("r_b", p.get("rb", 1.0))))
+            if chard == 0.0:
+                chard = getattr(mat_obj, "fisokin", getattr(mat_obj, "chard", p.get("fisokin", p.get("chard", 0.0))))
+            if ikin == 1:
+                ikin = getattr(mat_obj, "ikin", p.get("ikin", 1))
+            if exp_a == 6.0:
+                exp_a = getattr(mat_obj, "expa", getattr(mat_obj, "exp_a", p.get("expa", p.get("exp_a", p.get("a", 6.0)))))
+            if alpha_vol == 1.0:
+                alpha_vol = getattr(mat_obj, "alpha", getattr(mat_obj, "alpha_vol", p.get("alpha_vol", 1.0)))
+                if isinstance(alpha_vol, (list, tuple)):
+                    alpha_vol = 1.0
+            if n_hard == 0.0:
+                n_hard = getattr(mat_obj, "nexp", getattr(mat_obj, "n_hard", p.get("nexp", p.get("n_hard", p.get("n", 0.0)))))
+            if fcut == 0.0:
+                fcut = getattr(mat_obj, "fcut", p.get("fcut", p.get("f_cut", 0.0)))
+            if fsmooth == 0:
+                fsmooth = getattr(mat_obj, "fsmooth", p.get("fsmooth", p.get("f_smooth", 0)))
+            if nrate == 0:
+                nrate = getattr(mat_obj, "nrate", p.get("nrate", 0))
+            if aswift == 0.0:
+                aswift = getattr(mat_obj, "aswift", p.get("aswift", p.get("a_swift", 0.0)))
+            if eps0 == 0.0:
+                eps0 = getattr(mat_obj, "epso", getattr(mat_obj, "eps0", p.get("epso", p.get("eps0", 0.0))))
+            if qvoce == 0.0:
+                qvoce = getattr(mat_obj, "qvoce", p.get("qvoce", p.get("q_voce", 0.0)))
+            if beta == 0.0:
+                beta = getattr(mat_obj, "beta", p.get("beta", 0.0))
+            if k0 == 0.0:
+                k0 = getattr(mat_obj, "ko", getattr(mat_obj, "k0", p.get("ko", p.get("k0", 0.0))))
+            if curves is None:
+                curves = getattr(mat_obj, "curves", p.get("curves", []))
+            if tab_id0 == 0:
+                tab_id0 = getattr(mat_obj, "tab_id0", p.get("tab_id0", 0))
+            if fscale0 == 1.0:
+                fscale0 = getattr(mat_obj, "fscale0", p.get("fscale0", 1.0))
+            if epsd0 == 0.0:
+                epsd0 = getattr(mat_obj, "epsd0", p.get("epsd0", 0.0))
+            if tab_id45 == 0:
+                tab_id45 = getattr(mat_obj, "tab_id45", p.get("tab_id45", 0))
+            if fscale45 == 1.0:
+                fscale45 = getattr(mat_obj, "fscale45", p.get("fscale45", 1.0))
+            if epsd45 == 0.0:
+                epsd45 = getattr(mat_obj, "epsd45", p.get("epsd45", 0.0))
+            if tab_id90 == 0:
+                tab_id90 = getattr(mat_obj, "tab_id90", p.get("tab_id90", 0))
+            if fscale90 == 1.0:
+                fscale90 = getattr(mat_obj, "fscale90", p.get("fscale90", 1.0))
+            if epsd90 == 0.0:
+                epsd90 = getattr(mat_obj, "epsd90", p.get("epsd90", 0.0))
+            if ckh is None:
+                ckh = getattr(mat_obj, "ckh", p.get("ckh", None))
+            if akh is None:
+                akh = getattr(mat_obj, "akh", p.get("akh", None))
+
+        # Handle kwargs overrides
+        if "id" in kwargs and mid == 0:
+            mid = kwargs["id"]
+        elif "mat_id" in kwargs and mid == 0:
+            mid = kwargs["mat_id"]
+        if "rho0" in kwargs and rho == 0.0:
+            rho = kwargs["rho0"]
+        if "refer_rho" in kwargs and rhor == 0.0:
+            rhor = kwargs["refer_rho"]
+        if "rhor" in kwargs and rhor == 0.0:
+            rhor = kwargs["rhor"]
+        if "E" in kwargs and e == 0.0:
+            e = kwargs["E"]
+        if "Nu" in kwargs and nu == 0.0:
+            nu = kwargs["Nu"]
+        if "vflag" in kwargs and vp == 0:
+            vp = kwargs["vflag"]
+        if "strain1" in kwargs and c == 0.0:
+            c = kwargs["strain1"]
+        if "exp1" in kwargs and p == 0.0:
+            p = kwargs["exp1"]
+        if "flag_fit" in kwargs and ifit == 0:
+            ifit = kwargs["flag_fit"]
+        if "alphas" in kwargs and alpha is None:
+            alpha = kwargs["alphas"]
+        if "a_exp" in kwargs and exp_a == 6.0:
+            exp_a = kwargs["a_exp"]
+        if "a" in kwargs and exp_a == 6.0:
+            exp_a = kwargs["a"]
+        if "expa" in kwargs and exp_a == 6.0:
+            exp_a = kwargs["expa"]
+        if "a_swift" in kwargs and aswift == 0.0:
+            aswift = kwargs["a_swift"]
+        if "q_voce" in kwargs and qvoce == 0.0:
+            qvoce = kwargs["q_voce"]
+        if "ko" in kwargs and k0 == 0.0:
+            k0 = kwargs["ko"]
+        if "epso" in kwargs and eps0 == 0.0:
+            eps0 = kwargs["epso"]
+        if "f_cut" in kwargs and fcut == 0.0:
+            fcut = kwargs["f_cut"]
+        if "f_smooth" in kwargs and fsmooth == 0:
+            fsmooth = kwargs["f_smooth"]
+
+        # Alphas list unpacking:
+        a_vals = [1.0] * 8
+        if alpha is not None:
+            if isinstance(alpha, (list, tuple)):
+                for i in range(min(8, len(alpha))):
+                    a_vals[i] = float(alpha[i])
+        for i in range(1, 9):
+            k_a = f"a{i}"
+            k_al = f"alpha{i}"
+            if k_a in kwargs:
+                a_vals[i - 1] = float(kwargs[k_a])
+            elif k_al in kwargs:
+                a_vals[i - 1] = float(kwargs[k_al])
+
+        if curves is None:
+            curves = []
+        if nrate == 0 and len(curves) > 0:
+            nrate = len(curves)
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        if fixed_format:
+            # Card 1: RHO [Refer_Rho]
+            if rhor is not None and float(rhor) != 0.0 and float(rhor) != float(rho):
+                self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(rhor, 20)}")
+            else:
+                self.lines.append(fmt_float(rho, 20))
+
+            # Card 2: E, Nu, Iflag, VP, c, P
+            self.lines.append(
+                f"{fmt_float(e, 20)}{fmt_float(nu, 20)}{fmt_int(iflag, 10)}{fmt_int(vp, 10)}{fmt_float(c, 20)}{fmt_float(p, 20)}"
+            )
+
+            # Cards 3 & 4
+            if ifit == 1:
+                self.lines.append(
+                    f"{fmt_float(sigma_00, 20)}{fmt_float(sigma_45, 20)}{fmt_float(sigma_90, 20)}{fmt_float(sigma_b, 20)}{fmt_int(ifit, 10)}"
+                )
+                self.lines.append(
+                    f"{fmt_float(r_00, 20)}{fmt_float(r_45, 20)}{fmt_float(r_90, 20)}{fmt_float(r_b, 20)}"
+                )
+            else:
+                self.lines.append(
+                    f"{fmt_float(a_vals[0], 20)}{fmt_float(a_vals[1], 20)}{fmt_float(a_vals[2], 20)}{fmt_float(a_vals[3], 20)}"
+                )
+                self.lines.append(
+                    f"{fmt_float(a_vals[4], 20)}{fmt_float(a_vals[5], 20)}{fmt_float(a_vals[6], 20)}{fmt_float(a_vals[7], 20)}"
+                )
+
+            # Card 5: Chard, Ikin
+            self.lines.append(f"{fmt_float(chard, 20)}{fmt_int(ikin, 10)}")
+
+            if iflag == 0:
+                self.lines.append(
+                    f"{fmt_float(exp_a, 20)}{' ' * 40}{fmt_float(fcut, 20)}{fmt_int(fsmooth, 10)}{fmt_int(nrate, 10)}"
+                )
+                self.lines.append("")
+                for crv in curves:
+                    if hasattr(crv, "fct_id"):
+                        fid = crv.fct_id
+                        fsc = crv.fscale
+                        ep = crv.epsp
+                    elif isinstance(crv, dict):
+                        fid = crv.get("fct_id", crv.get("fid", 0))
+                        fsc = crv.get("fscale", crv.get("scale", 1.0))
+                        ep = crv.get("epsp", crv.get("eps", 0.0))
+                    elif isinstance(crv, (list, tuple)):
+                        fid = crv[0] if len(crv) > 0 else 0
+                        fsc = crv[1] if len(crv) > 1 else 1.0
+                        ep = crv[2] if len(crv) > 2 else 0.0
+                    else:
+                        continue
+                    self.lines.append(f"{fmt_int(fid, 10)}{' ' * 10}{fmt_float(fsc, 20)}{fmt_float(ep, 20)}")
+            elif iflag == 1:
+                self.lines.append(
+                    f"{fmt_float(exp_a, 20)}{fmt_float(alpha_vol, 20)}{fmt_float(n_hard, 20)}{fmt_float(fcut, 20)}{fmt_int(fsmooth, 10)}{fmt_int(nrate, 10)}"
+                )
+                self.lines.append(
+                    f"{fmt_float(aswift, 20)}{fmt_float(eps0, 20)}{fmt_float(qvoce, 20)}{fmt_float(beta, 20)}{fmt_float(k0, 20)}"
+                )
+            elif iflag == 3:
+                self.lines.append(
+                    f"{fmt_float(exp_a, 20)}{' ' * 40}{fmt_float(fcut, 20)}{fmt_int(fsmooth, 10)}"
+                )
+                self.lines.append(f"{' ' * 10}{fmt_int(tab_id0, 10)}{fmt_float(fscale0, 20)}{fmt_float(epsd0, 20)}")
+                self.lines.append(f"{' ' * 10}{fmt_int(tab_id45, 10)}{fmt_float(fscale45, 20)}{fmt_float(epsd45, 20)}")
+                self.lines.append(f"{' ' * 10}{fmt_int(tab_id90, 10)}{fmt_float(fscale90, 20)}{fmt_float(epsd90, 20)}")
+
+            if ikin == 1 and chard > 0.0 and ckh is not None and akh is not None:
+                self.lines.append(
+                    f"{fmt_float(ckh[0], 20)}{fmt_float(akh[0], 20)}{fmt_float(ckh[1], 20)}{fmt_float(akh[1], 20)}"
+                )
+                self.lines.append(
+                    f"{fmt_float(ckh[2], 20)}{fmt_float(akh[2], 20)}{fmt_float(ckh[3], 20)}{fmt_float(akh[3], 20)}"
+                )
+        else:
+            delim = kw_low.get("delimiter", ", " if (kw_low.get("comma") or kw_low.get("comma_delimited")) else " ")
+            if rhor is not None and float(rhor) != 0.0 and float(rhor) != float(rho):
+                self.lines.append(f"{float(rho)}{delim}{float(rhor)}")
+            else:
+                self.lines.append(f"{float(rho)}")
+            self.lines.append(
+                f"{float(e)}{delim}{float(nu)}{delim}{int(iflag)}{delim}{int(vp)}{delim}{float(c)}{delim}{float(p)}"
+            )
+            if ifit == 1:
+                self.lines.append(
+                    f"{float(sigma_00)}{delim}{float(sigma_45)}{delim}{float(sigma_90)}{delim}{float(sigma_b)}{delim}{int(ifit)}"
+                )
+                self.lines.append(f"{float(r_00)}{delim}{float(r_45)}{delim}{float(r_90)}{delim}{float(r_b)}")
+            else:
+                self.lines.append(
+                    f"{float(a_vals[0])}{delim}{float(a_vals[1])}{delim}{float(a_vals[2])}{delim}{float(a_vals[3])}"
+                )
+                self.lines.append(
+                    f"{float(a_vals[4])}{delim}{float(a_vals[5])}{delim}{float(a_vals[6])}{delim}{float(a_vals[7])}"
+                )
+            self.lines.append(f"{float(chard)}{delim}{int(ikin)}")
+
+            if iflag == 0:
+                self.lines.append(
+                    f"{float(exp_a)}{delim}{float(alpha_vol)}{delim}{float(n_hard)}{delim}{float(fcut)}{delim}{int(fsmooth)}{delim}{int(nrate)}"
+                )
+                for crv in curves:
+                    if hasattr(crv, "fct_id"):
+                        fid = crv.fct_id
+                        fsc = crv.fscale
+                        ep = crv.epsp
+                    elif isinstance(crv, dict):
+                        fid = crv.get("fct_id", crv.get("fid", 0))
+                        fsc = crv.get("fscale", crv.get("scale", 1.0))
+                        ep = crv.get("epsp", crv.get("eps", 0.0))
+                    elif isinstance(crv, (list, tuple)):
+                        fid = crv[0] if len(crv) > 0 else 0
+                        fsc = crv[1] if len(crv) > 1 else 1.0
+                        ep = crv[2] if len(crv) > 2 else 0.0
+                    else:
+                        continue
+                    self.lines.append(f"{int(fid)}{delim}{float(fsc)}{delim}{float(ep)}")
+            elif iflag == 1:
+                self.lines.append(
+                    f"{float(exp_a)}{delim}{float(alpha_vol)}{delim}{float(n_hard)}{delim}{float(fcut)}{delim}{int(fsmooth)}{delim}{int(nrate)}"
+                )
+                self.lines.append(
+                    f"{float(aswift)}{delim}{float(eps0)}{delim}{float(qvoce)}{delim}{float(beta)}{delim}{float(k0)}"
+                )
+            elif iflag == 3:
+                self.lines.append(f"{float(exp_a)}{delim}{float(fcut)}{delim}{int(fsmooth)}")
+                self.lines.append(f"{int(tab_id0)}{delim}{float(fscale0)}{delim}{float(epsd0)}")
+                self.lines.append(f"{int(tab_id45)}{delim}{float(fscale45)}{delim}{float(epsd45)}")
+                self.lines.append(f"{int(tab_id90)}{delim}{float(fscale90)}{delim}{float(epsd90)}")
+
+            if ikin == 1 and chard > 0.0 and ckh is not None and akh is not None:
+                self.lines.append(f"{float(ckh[0])}{delim}{float(akh[0])}{delim}{float(ckh[1])}{delim}{float(akh[1])}")
+                self.lines.append(f"{float(ckh[2])}{delim}{float(akh[2])}{delim}{float(ckh[3])}{delim}{float(akh[3])}")
+
+        return self
+
     def mat_barlat2000(self, *args, **kwargs) -> StarterDeck:
         kwargs.setdefault("law_name", "BARLAT2000")
-        return self.mat_law73(*args, **kwargs)
+        return self.mat_law87(*args, **kwargs)
+
+    def mat_barlat_2000(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "BARLAT_2000")
+        return self.mat_law87(*args, **kwargs)
+
+    def mat_barlat2000_2d(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "BARLAT2000_2D")
+        return self.mat_law87(*args, **kwargs)
 
     def mat_law74(
         self,

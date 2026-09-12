@@ -29,5 +29,6 @@ from .entities import (  # noqa: F401
     MatLaw21, MatDprag,
     MatLaw49, MatSteinb, MatSteinberg, MatSteinbergGuinan,
     MatLaw79, MatJohnHolm, MatJohnsonHolmquist, MatJH2,
+    MatLaw87, MatBarlat2000, MatBarlat20002D, MaterialLaw87,
 )
 

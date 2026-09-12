@@ -569,12 +569,18 @@ def _init_material_state(group, nip_max=None, n=None):
                 else:
                     st["mat_extra"][name] = np.zeros((n,) + shape)
     for sl, mat, prop in st["slices"]:
-        if (getattr(mat, "law", 1) in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL")
-                or getattr(mat, "law_name", None) in ("73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL")):
+        if (getattr(mat, "law", 1) in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL")
+                or getattr(mat, "law_name", None) in ("73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL")):
             if "uvar73" not in st:
                 st["uvar73"] = np.zeros((n, 7))
             if "uvar73" not in st["mat_extra"]:
                 st["mat_extra"]["uvar73"] = np.zeros((n, nip_max, 7))
+        if (getattr(mat, "law", 1) in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000")
+                or getattr(mat, "law_name", None) in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000")):
+            if "uvar87" not in st:
+                st["uvar87"] = np.zeros((n, 7))
+            if "uvar87" not in st["mat_extra"]:
+                st["mat_extra"]["uvar87"] = np.zeros((n, nip_max, 7))
         if (getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB")
                 or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB")):
             if "uvar66" not in st:
@@ -584,8 +590,8 @@ def _init_material_state(group, nip_max=None, n=None):
     if any(getattr(mat, "fail", None) is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros((n, nip_max))
     st["chk_fail"] = any(
-        getattr(mat, "fail", None) is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43, 48, 52, 57, 60, 66, 69, 73)
-        or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL")
+        getattr(mat, "fail", None) is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43, 48, 52, 57, 60, 66, 69, 73, 87)
+        or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "73", "LAW73", "HILL_THERM", "THERM_HILL", "87", "LAW87", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000")
         or mat.params.get("eps_p_max", EP30) < 1e30
         or mat.params.get("eps_max", EP30) < 1e30
         or mat.params.get("EPSMAX", EP30) < 1e30
@@ -603,6 +609,10 @@ def _layer_extra(st, sl, k, area=None):
         extra["uvar73"] = st["uvar73"][sl]
     if "uvar73" in extra and "uvar" not in extra:
         extra["uvar"] = extra["uvar73"]
+    if "uvar87" in st and "uvar87" not in extra:
+        extra["uvar87"] = st["uvar87"][sl]
+    if "uvar87" in extra and "uvar" not in extra:
+        extra["uvar"] = extra["uvar87"]
     if "uvar66" in st and "uvar66" not in extra:
         extra["uvar66"] = st["uvar66"][sl]
     if "uvar66" in extra and "uvar" not in extra:
@@ -655,7 +665,9 @@ def _layer_failure(st, sl, mat, k, sig_k, epsp_old, deps_k, dt):
         layf[st["mat_extra"]["off57"][sl, k] == 0.0] = 0.0
     elif "off73" in st["mat_extra"]:
         layf[st["mat_extra"]["off73"][sl, k] <= 0.8] = 0.0
-    elif "off" in st["mat_extra"] and getattr(mat, "law", 1) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3", 73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL"):
+    elif "off87" in st["mat_extra"]:
+        layf[st["mat_extra"]["off87"][sl, k] <= 0.8] = 0.0
+    elif "off" in st["mat_extra"] and getattr(mat, "law", 1) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3", 73, "73", "LAW73", "HILL_THERM", "THERM_HILL", 87, "87", "LAW87", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000"):
         layf[st["mat_extra"]["off"][sl, k] == 0.0] = 0.0
     if getattr(mat, "law", 1) != 43:
         eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
@@ -677,8 +689,8 @@ def _element_deletion(st, nip_of):
     layfail = st["layfail"]
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         law = getattr(mat, "law", 1)
-        if not (mat.fail is not None or law in (15, 22, 25, 27, 43, 48, 52, 57, 60, 66, 69, 73)
-                or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL")
+        if not (mat.fail is not None or law in (15, 22, 25, 27, 43, 48, 52, 57, 60, 66, 69, 73, 87)
+                or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "73", "LAW73", "HILL_THERM", "THERM_HILL", "87", "LAW87", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000")
                 or mat.params.get("eps_p_max", EP30) < 1e30
                 or mat.params.get("eps_max", EP30) < 1e30
                 or mat.params.get("EPSMAX", EP30) < 1e30
@@ -891,9 +903,12 @@ def forces(group, x, v, vr, dt, fint, mint):
             elif getattr(mat, "law", 1) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
                 from ..materials import law57_barlat
                 c[sl] = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
-            elif getattr(mat, "law", 1) in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
+            elif getattr(mat, "law", 1) in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
                 from ..materials import law73_hill_therm
                 c[sl] = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
+            elif getattr(mat, "law", 1) in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000") or getattr(mat, "law_name", None) in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000"):
+                from ..materials import law87_barlat2000
+                c[sl] = law87_barlat2000.sound_speed(mat, getattr(mat, "rho0", None))
             elif getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
                 c[sl] = mat.sound_speed_shell()
             else:
@@ -1118,9 +1133,14 @@ def forces(group, x, v, vr, dt, fint, mint):
         elif getattr(mat, "law", 1) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
             from ..materials import law57_barlat
             c[sl] = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
-        elif getattr(mat, "law", 1) in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
+        elif getattr(mat, "law", 1) in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
             from ..materials import law73_hill_therm
             c[sl] = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
+        elif getattr(mat, "law", 1) in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000") or getattr(mat, "law_name", None) in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000"):
+            from ..materials import law87_barlat2000
+            c[sl] = law87_barlat2000.sound_speed(mat, getattr(mat, "rho0", None))
+            if "uvar87" in st and "uvar87" in st.get("mat_extra", {}):
+                st["uvar87"][sl] = st["mat_extra"]["uvar87"][sl, 0]
         elif getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
             c[sl] = mat.sound_speed_shell()
             if "uvar66" in st and "uvar66" in st.get("mat_extra", {}):

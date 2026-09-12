@@ -140,8 +140,8 @@ def test_law73_registry_and_metadata():
     materials.register_materials()
 
     expected_keys = (
-        73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL",
-        "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL",
+        73, "73", "LAW73", "HILL_THERM", "THERM_HILL",
+        "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL",
         "LAW73_HILL_THERM", "LAW73_THERM_HILL",
     )
     for k in expected_keys:

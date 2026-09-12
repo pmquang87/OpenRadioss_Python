@@ -1008,7 +1008,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("57", "LAW57", "BARLAT3", "MAT_BARLAT3", "LAW57_BARLAT3"):
         read_mat_law57(block, model, log)
         return
-    if lawname in ("LAW87", "BARLAT", "BARLAT_YLD2000", "MAT_BARLAT_YLD2000", "LAW87_BARLAT", "MAT_BARLAT"):
+    if lawname in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_87", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000", "LAW87_BARLAT", "LAW87_BARLAT2000", "LAW87_BARLAT_2000"):
         read_mat_law87(block, model, log)
         return
     if lawname in ("LAW95", "BERGSTROM_BOYCE", "HYP_VISC_PLAS", "FOAM_TAB", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE"):
@@ -1173,7 +1173,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW71", "SUPER_ELAS", "NITINOL", "MAT_SUPER_ELAS", "MAT_NITINOL", "LAW71_SUPER_ELAS"):
         read_mat_law71(block, model, log)
         return
-    if lawname in ("73", "LAW73", "LAW73_THERM_HILL", "BARLAT2000", "MAT_BARLAT2000", "LAW73_BARLAT2000", "LAW73_HILL_THERM", "MAT_LAW73", "MAT_73"):
+    if lawname in ("73", "LAW73", "LAW73_THERM_HILL", "LAW73_HILL_THERM", "MAT_LAW73", "MAT_73"):
         read_mat_law73(block, model, log)
         return
     if lawname in ("LAW84", "SWIFT_VOCE", "PLAS_SWIFT_VOCE", "MAT_SWIFT_VOCE", "MAT_PLAS_SWIFT_VOCE", "LAW84_SWIFT_VOCE"):
@@ -34396,6 +34396,8 @@ def read_mat_law87(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     tab_id45, fscale45, epsd45 = 0, 1.0, 0.0
     tab_id90, fscale90, epsd90 = 0, 1.0, 0.0
 
+    ckh = [0.0, 0.0, 0.0, 0.0]
+    akh = [0.0, 0.0, 0.0, 0.0]
     alpha_vol = 1.0
     n_hard = 0.0
     card_idx = 0
@@ -34465,13 +34467,17 @@ def read_mat_law87(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 fsmooth = _ival(f6_0[4]) if len(f6_0) > 4 and f6_0[4].strip() else 0
                 nrate = _ival(f6_0[5]) if len(f6_0) > 5 and f6_0[5].strip() else 0
                 card_idx += 1
-            for c in valid_cards[card_idx:]:
+            while card_idx < len(valid_cards):
+                c = valid_cards[card_idx]
                 fc = c.cut("MAT_LAW87_CURVE")
-                if fc and fc[0].strip():
+                if fc and fc[0].strip() and len(curves) < (nrate if nrate > 0 else 9999):
                     fid = _ival(fc[0])
                     fsc = _fval(fc[1], 1.0) if len(fc) > 1 and fc[1].strip() else 1.0
                     ep = _fval(fc[2]) if len(fc) > 2 else 0.0
                     curves.append(MatLaw87Curve(fct_id=fid, fscale=fsc, epsp=ep))
+                    card_idx += 1
+                else:
+                    break
         elif iflag == 1:
             if card_idx < len(valid_cards):
                 f6_1 = valid_cards[card_idx].cut("MAT_LAW87_6_1")
@@ -34490,6 +34496,48 @@ def read_mat_law87(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 beta = _fval(f7_1[3]) if len(f7_1) > 3 else 0.0
                 k0 = _fval(f7_1[4]) if len(f7_1) > 4 else 0.0
                 card_idx += 1
+        elif iflag == 3:
+            if card_idx < len(valid_cards):
+                f6_3 = valid_cards[card_idx].cut("MAT_LAW87_6_0")
+                exp_a = _fval(f6_3[0], 6.0) if len(f6_3) > 0 and f6_3[0].strip() else 6.0
+                fcut = _fval(f6_3[3]) if len(f6_3) > 3 and f6_3[3].strip() else 0.0
+                fsmooth = _ival(f6_3[4]) if len(f6_3) > 4 and f6_3[4].strip() else 0
+                card_idx += 1
+            if card_idx < len(valid_cards):
+                f_tab0 = valid_cards[card_idx].cut("MAT_LAW87_8")
+                tab_id0 = _ival(f_tab0[1]) if len(f_tab0) > 1 else 0
+                fscale0 = _fval(f_tab0[2], 1.0) if len(f_tab0) > 2 and f_tab0[2].strip() else 1.0
+                epsd0 = _fval(f_tab0[3]) if len(f_tab0) > 3 else 0.0
+                card_idx += 1
+            if card_idx < len(valid_cards):
+                f_tab45 = valid_cards[card_idx].cut("MAT_LAW87_8")
+                tab_id45 = _ival(f_tab45[1]) if len(f_tab45) > 1 else 0
+                fscale45 = _fval(f_tab45[2], 1.0) if len(f_tab45) > 2 and f_tab45[2].strip() else 1.0
+                epsd45 = _fval(f_tab45[3]) if len(f_tab45) > 3 else 0.0
+                card_idx += 1
+            if card_idx < len(valid_cards):
+                f_tab90 = valid_cards[card_idx].cut("MAT_LAW87_8")
+                tab_id90 = _ival(f_tab90[1]) if len(f_tab90) > 1 else 0
+                fscale90 = _fval(f_tab90[2], 1.0) if len(f_tab90) > 2 and f_tab90[2].strip() else 1.0
+                epsd90 = _fval(f_tab90[3]) if len(f_tab90) > 3 else 0.0
+                card_idx += 1
+
+        if card_idx < len(valid_cards) and (ikin == 1 and chard > 0.0):
+            f_kin1 = valid_cards[card_idx].cut([20, 20, 20, 20])
+            if len(f_kin1) >= 4:
+                ckh[0] = _fval(f_kin1[0])
+                akh[0] = _fval(f_kin1[1])
+                ckh[1] = _fval(f_kin1[2])
+                akh[1] = _fval(f_kin1[3])
+                card_idx += 1
+            if card_idx < len(valid_cards):
+                f_kin2 = valid_cards[card_idx].cut([20, 20, 20, 20])
+                if len(f_kin2) >= 4:
+                    ckh[2] = _fval(f_kin2[0])
+                    akh[2] = _fval(f_kin2[1])
+                    ckh[3] = _fval(f_kin2[2])
+                    akh[3] = _fval(f_kin2[3])
+                    card_idx += 1
     else:
         toks1 = valid_cards[0].tokens()
         rho = float(toks1[0]) if len(toks1) > 0 else 0.0
@@ -34554,13 +34602,17 @@ def read_mat_law87(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     fsmooth = int(float(toks6[2])) if len(toks6) > 2 else 0
                     nrate = int(float(toks6[3])) if len(toks6) > 3 else 0
                 card_idx += 1
-            for c in valid_cards[card_idx:]:
+            while card_idx < len(valid_cards):
+                c = valid_cards[card_idx]
                 toksc = c.tokens()
-                if toksc:
+                if toksc and len(curves) < (nrate if nrate > 0 else 9999):
                     fid = int(float(toksc[0]))
                     fsc = float(toksc[1]) if len(toksc) > 1 else 1.0
                     ep = float(toksc[2]) if len(toksc) > 2 else 0.0
                     curves.append(MatLaw87Curve(fct_id=fid, fscale=fsc, epsp=ep))
+                    card_idx += 1
+                else:
+                    break
         elif iflag == 1:
             if card_idx < len(valid_cards):
                 toks6 = valid_cards[card_idx].tokens()
@@ -34585,6 +34637,48 @@ def read_mat_law87(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 beta = float(toks7[3]) if len(toks7) > 3 else 0.0
                 k0 = float(toks7[4]) if len(toks7) > 4 else 0.0
                 card_idx += 1
+        elif iflag == 3:
+            if card_idx < len(valid_cards):
+                toks6 = valid_cards[card_idx].tokens()
+                exp_a = float(toks6[0]) if len(toks6) > 0 else 6.0
+                fcut = float(toks6[1]) if len(toks6) > 1 else 0.0
+                fsmooth = int(float(toks6[2])) if len(toks6) > 2 else 0
+                card_idx += 1
+            if card_idx < len(valid_cards):
+                toks_tab0 = valid_cards[card_idx].tokens()
+                tab_id0 = int(float(toks_tab0[0])) if len(toks_tab0) > 0 else 0
+                fscale0 = float(toks_tab0[1]) if len(toks_tab0) > 1 else 1.0
+                epsd0 = float(toks_tab0[2]) if len(toks_tab0) > 2 else 0.0
+                card_idx += 1
+            if card_idx < len(valid_cards):
+                toks_tab45 = valid_cards[card_idx].tokens()
+                tab_id45 = int(float(toks_tab45[0])) if len(toks_tab45) > 0 else 0
+                fscale45 = float(toks_tab45[1]) if len(toks_tab45) > 1 else 1.0
+                epsd45 = float(toks_tab45[2]) if len(toks_tab45) > 2 else 0.0
+                card_idx += 1
+            if card_idx < len(valid_cards):
+                toks_tab90 = valid_cards[card_idx].tokens()
+                tab_id90 = int(float(toks_tab90[0])) if len(toks_tab90) > 0 else 0
+                fscale90 = float(toks_tab90[1]) if len(toks_tab90) > 1 else 1.0
+                epsd90 = float(toks_tab90[2]) if len(toks_tab90) > 2 else 0.0
+                card_idx += 1
+
+        if card_idx < len(valid_cards) and (ikin == 1 and chard > 0.0):
+            toks_k1 = valid_cards[card_idx].tokens()
+            if len(toks_k1) >= 4:
+                ckh[0] = float(toks_k1[0])
+                akh[0] = float(toks_k1[1])
+                ckh[1] = float(toks_k1[2])
+                akh[1] = float(toks_k1[3])
+                card_idx += 1
+            if card_idx < len(valid_cards):
+                toks_k2 = valid_cards[card_idx].tokens()
+                if len(toks_k2) >= 4:
+                    ckh[2] = float(toks_k2[0])
+                    akh[2] = float(toks_k2[1])
+                    ckh[3] = float(toks_k2[2])
+                    akh[3] = float(toks_k2[3])
+                    card_idx += 1
 
     m87 = MatLaw87(
         id=mat_id, rho=rho, refer_rho=refer_rho, e=e, nu=nu,
@@ -34597,9 +34691,11 @@ def read_mat_law87(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         tab_id0=tab_id0, fscale0=fscale0, epsd0=epsd0,
         tab_id45=tab_id45, fscale45=fscale45, epsd45=epsd45,
         tab_id90=tab_id90, fscale90=fscale90, epsd90=epsd90,
+        ckh=tuple(ckh), akh=tuple(akh),
         title=title,
     )
     model.mat_law87s[mat_id] = m87
+    model.mat_barlat2000s[mat_id] = m87
     model.mat_barlats[mat_id] = m87
     model.materials[mat_id] = Material(
         id=mat_id, law=87, rho0=rho, title=title,
@@ -34613,6 +34709,7 @@ def read_mat_law87(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "chard": chard, "ikin": ikin, "exp_a": exp_a, "a_exp": int(exp_a),
             "alpha_vol": alpha_vol, "n_hard": n_hard, "fcut": fcut, "fsmooth": fsmooth,
             "aswift": aswift, "a_swift": aswift, "eps0": eps0, "qvoce": qvoce, "q_voce": qvoce, "beta": beta, "k0": k0,
+            "ckh": tuple(ckh), "akh": tuple(akh),
             "curves": [{"fct_id": c.fct_id, "fscale": c.fscale, "epsp": c.epsp} for c in curves],
         }
     )
@@ -85390,8 +85487,20 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_CONC": read_mat,
     "CONC": read_mat,
     "MAT_LAW87": read_mat,
+    "LAW87": read_mat,
     "MAT_BARLAT": read_mat,
     "BARLAT": read_mat,
+    "MAT_BARLAT2000": read_mat,
+    "BARLAT2000": read_mat,
+    "MAT_BARLAT_2000": read_mat,
+    "BARLAT_2000": read_mat,
+    "MAT_BARLAT2000_2D": read_mat,
+    "BARLAT2000_2D": read_mat,
+    "MAT_BARLAT_YLD2000": read_mat,
+    "BARLAT_YLD2000": read_mat,
+    "LAW87_BARLAT": read_mat,
+    "LAW87_BARLAT2000": read_mat,
+    "LAW87_BARLAT_2000": read_mat,
     "MAT_LAW83": read_mat,
     "MAT_SPR_JOU": read_mat,
     "SPR_JOU": read_mat,
@@ -86123,12 +86232,9 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_LAW73": read_mat,
     "MAT_THERM_HILL": read_mat,
     "MAT_HILL_THERM": read_mat,
-    "MAT_BARLAT2000": read_mat,
     "THERM_HILL": read_mat,
     "HILL_THERM": read_mat,
-    "BARLAT2000": read_mat,
     "LAW73": read_mat,
-    "LAW73_BARLAT2000": read_mat,
     "LAW73_THERM_HILL": read_mat,
     "LAW73_HILL_THERM": read_mat,
     "MAT_LAW84": read_mat,

@@ -36,7 +36,6 @@ from pyradioss.materials.law73_hill_therm import (
     sound_speed as law73_sound_speed,
 )
 from pyradioss.model.entities import (
-    MatBarlat2000,
     MatHillTherm,
     MatLaw73,
     MatThermalHill,
@@ -636,7 +635,7 @@ Legacy 5-Card
         deck = StarterDeck("MULTI_LAW73")
         deck.mat_law73(1, "Mat 1", rho=2.7e-9, e=70000.0, nu=0.33, r00=1.1, r45=1.2, r90=1.3)
         deck.mat_hill_therm(2, "Mat 2", rho=7.85e-9, e=210000.0, nu=0.30, r00=1.4, r45=1.5, r90=1.6)
-        deck.mat_barlat2000(3, "Mat 3", rho=1.8e-9, e=45000.0, nu=0.35, r00=0.9, r45=1.0, r90=1.1)
+        deck.mat_therm_hill(3, "Mat 3", rho=1.8e-9, e=45000.0, nu=0.35, r00=0.9, r45=1.0, r90=1.1)
 
         rad_path = tmp_path / "multi_law73_0000.rad"
         deck.write(str(rad_path))
@@ -654,7 +653,7 @@ Legacy 5-Card
 # ============================================================================
 
 class TestLaw73Synonyms:
-    """Audit all keyword synonyms (/MAT/LAW73, /MAT/BARLAT2000, /MAT/HILL_THERM, /MAT/THERM_HILL, /MAT/73)."""
+    """Audit all keyword synonyms (/MAT/LAW73, /MAT/HILL_THERM, /MAT/THERM_HILL, /MAT/73)."""
 
     def test_all_keyword_synonyms_populate_containers(self, tmp_path: Path):
         """Verify that every synonym parses into model.mat_law73s, alias containers, and model.materials."""
@@ -669,8 +668,8 @@ Law 73 Standard
 101, 1.0, 1.0
 295.0, 2.4e-3
 
-/MAT/BARLAT2000/2
-Barlat 2000 Synonym
+/MAT/HILL_THERM/2
+Hill Therm Secondary
 2.7e-9
 70000.0, 0.33
 0, 0.0, 0.0
@@ -723,7 +722,6 @@ Numeric 73 Keyword
         assert not log.has_errors
         assert set(model.mat_law73s.keys()) == {1, 2, 3, 4, 5, 73}
         assert set(model.mat_therm_hills.keys()) == {1, 2, 3, 4, 5, 73}
-        assert set(model.mat_barlat2000s.keys()) == {1, 2, 3, 4, 5, 73}
         assert set(model.materials.keys()) == {1, 2, 3, 4, 5, 73}
 
         # Check entity types
@@ -731,7 +729,6 @@ Numeric 73 Keyword
             m = model.mat_law73s[mid]
             assert isinstance(m, MatLaw73)
             assert isinstance(m, MatHillTherm)
-            assert isinstance(m, MatBarlat2000)
             assert isinstance(m, MatThermalHill)
             assert isinstance(m, MatThermHill)
             assert model.materials[mid].law == 73
@@ -1208,8 +1205,8 @@ class TestLaw73NegativeValidation:
 
     def test_checks_registry_and_dispatch(self):
         """Verify registry membership and check_materials dispatch."""
-        for syn in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL",
-                    "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL"):
+        for syn in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL",
+                    "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL"):
             assert syn in _MAT_CHECKS, f"{syn} missing from _MAT_CHECKS"
             assert _MAT_CHECKS[syn] is check_mat_law73
 
