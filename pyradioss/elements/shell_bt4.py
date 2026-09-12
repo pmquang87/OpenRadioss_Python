@@ -357,6 +357,9 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
         elif getattr(mat, "law", 1) in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
             from ..materials import law73_hill_therm
             c = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
+        elif getattr(mat, "law", 1) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP"):
+            from ..materials import law88_tab_hyp
+            c = law88_tab_hyp.sound_speed_shell(mat, getattr(mat, "rho0", None))
         else:
             c = mat.sound_speed_shell()
         if c <= EM20:
@@ -628,6 +631,10 @@ def _layer_extra(st, sl, k, area=None):
         extra["uvar66"] = st["uvar66"][sl]
     if "uvar66" in extra and "uvar" not in extra:
         extra["uvar"] = extra["uvar66"]
+    if "uvar88" in st and "uvar88" not in extra:
+        extra["uvar88"] = st["uvar88"][sl]
+    if "uvar88" in extra and "uvar" not in extra:
+        extra["uvar"] = extra["uvar88"]
     if "time" in st:
         extra["time"] = st["time"]
     if "thick" in st:
@@ -919,7 +926,9 @@ def forces(group, x, v, vr, dt, fint, mint):
                 c[sl] = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
             elif getattr(mat, "law", 1) in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000") or getattr(mat, "law_name", None) in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000"):
                 from ..materials import law87_barlat2000
-                c[sl] = law87_barlat2000.sound_speed(mat, getattr(mat, "rho0", None))
+            elif getattr(mat, "law", 1) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP"):
+                from ..materials import law88_tab_hyp
+                c[sl] = law88_tab_hyp.sound_speed_shell(mat, getattr(mat, "rho0", None))
             elif getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
                 c[sl] = mat.sound_speed_shell()
             else:
@@ -1153,6 +1162,12 @@ def forces(group, x, v, vr, dt, fint, mint):
             if "uvar87" in st and "uvar87" in st.get("mat_extra", {}):
                 u87 = st["mat_extra"]["uvar87"]
                 st["uvar87"][sl] = u87[sl, 0] if u87.ndim == 3 else u87[sl]
+        elif getattr(mat, "law", 1) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP"):
+            from ..materials import law88_tab_hyp
+            c[sl] = law88_tab_hyp.sound_speed_shell(mat, getattr(mat, "rho0", None))
+            if "uvar88" in st and "uvar88" in st.get("mat_extra", {}):
+                u88 = st["mat_extra"]["uvar88"]
+                st["uvar88"][sl] = u88[sl, 0] if u88.ndim == 3 else u88[sl]
         elif getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
             c[sl] = mat.sound_speed_shell()
             if "uvar66" in st and "uvar66" in st.get("mat_extra", {}):

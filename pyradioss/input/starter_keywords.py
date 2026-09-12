@@ -884,8 +884,8 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW44", "COWPER_SYMONDS", "PLAS_COWPER", "LAW44_COWPER_SYMONDS"):
         read_mat_law44(block, model, log)
         return
-    # M173: MAT LAW88 (HYPER_ELAS), LAW92 (ARRUDA_BOYCE), LAW94 (YEOH), LAW46 (HYD_VISC), LAW69 (HYP_EXT_COMP)
-    if lawname in ("LAW88", "HYPER_ELAS", "LAW88_HYPER_ELAS", "TABULATED_HYPERELASTIC", "TABULATED_HYP"):
+    # M173/M565: MAT LAW88 (HYPER_ELAS, TABULATED_HYPERELASTIC, TAB_HYP)
+    if lawname in ("LAW88", "HYPER_ELAS", "LAW88_HYPER_ELAS", "TABULATED_HYPERELASTIC", "TABULATED_HYP", "TAB_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP"):
         read_mat_law88(block, model, log)
         return
     if lawname in ("LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "LAW92_ARRUDA_BOYCE"):
@@ -27468,6 +27468,14 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     eh = 0.0
     failip = 0
 
+    def _card_tokens(c: Card) -> list[str]:
+        raw = c.raw.strip()
+        if "," in raw:
+            parts = [p.strip() for p in raw.replace(",", " ").split()]
+        else:
+            parts = c.tokens()
+        return [p.rstrip(",") for p in parts if p]
+
     if block.fixed:
         if len(cards) > 0 and not cards[0].is_blank:
             f1 = cut(cards[0].raw, "MAT_LAW88_1")
@@ -27523,12 +27531,12 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             failip = _i(f6[5]) if len(f6) > 5 else 0
     else:
         if len(cards) > 0 and not cards[0].is_blank:
-            t1 = cards[0].tokens()
+            t1 = _card_tokens(cards[0])
             rho0 = float(t1[0]) if len(t1) > 0 else 0.0
             refer_rho = float(t1[1]) if len(t1) > 1 else 0.0
 
         if len(cards) > 1 and not cards[1].is_blank:
-            t2 = cards[1].tokens()
+            t2 = _card_tokens(cards[1])
             nu = float(t2[0]) if len(t2) > 0 else 0.495
             bulk = float(t2[1]) if len(t2) > 1 else 0.0
             fcut = float(t2[2]) if len(t2) > 2 else 0.0
@@ -27536,22 +27544,36 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             nl = int(float(t2[4])) if len(t2) > 4 else 0
 
         if len(cards) > 2 and not cards[2].is_blank:
-            t3 = cards[2].tokens()
-            ifunc_unload = int(float(t3[0])) if len(t3) > 0 else 0
-            fscale_unload = float(t3[1]) if len(t3) > 1 else 1.0
-            hys = float(t3[2]) if len(t3) > 2 else 0.0
-            shape = float(t3[3]) if len(t3) > 3 else 1.0
-            tension = int(float(t3[4])) if len(t3) > 4 else 0
-            rtype = int(float(t3[5])) if len(t3) > 5 else 0
+            t3 = _card_tokens(cards[2])
+            if len(t3) >= 7:
+                ifunc_unload = int(float(t3[0]))
+                fscale_unload = float(t3[2])
+                hys = float(t3[3])
+                shape = float(t3[4])
+                tension = int(float(t3[5]))
+                rtype = int(float(t3[6]))
+            else:
+                ifunc_unload = int(float(t3[0])) if len(t3) > 0 else 0
+                fscale_unload = float(t3[1]) if len(t3) > 1 else 1.0
+                hys = float(t3[2]) if len(t3) > 2 else 0.0
+                shape = float(t3[3]) if len(t3) > 3 else 1.0
+                tension = int(float(t3[4])) if len(t3) > 4 else 0
+                rtype = int(float(t3[5])) if len(t3) > 5 else 0
 
         idx = 3
         for _ in range(nl):
             if idx < len(cards) and not cards[idx].is_blank:
-                tr = cards[idx].tokens()
-                fid = int(float(tr[0])) if len(tr) > 0 else 0
-                fsc = float(tr[1]) if len(tr) > 1 else 1.0
-                frate = float(tr[2]) if len(tr) > 2 else 0.0
-                flam = float(tr[3]) if len(tr) > 3 else 0.0
+                tr = _card_tokens(cards[idx])
+                if len(tr) >= 5:
+                    fid = int(float(tr[0]))
+                    fsc = float(tr[2])
+                    frate = float(tr[3])
+                    flam = float(tr[4])
+                else:
+                    fid = int(float(tr[0])) if len(tr) > 0 else 0
+                    fsc = float(tr[1]) if len(tr) > 1 else 1.0
+                    frate = float(tr[2]) if len(tr) > 2 else 0.0
+                    flam = float(tr[3]) if len(tr) > 3 else 0.0
                 func_load_list.append(fid)
                 fscale_load_list.append(fsc)
                 rate_load_list.append(frate)
@@ -27559,7 +27581,7 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             idx += 1
 
         if idx < len(cards) and not cards[idx].is_blank:
-            t5 = cards[idx].tokens()
+            t5 = _card_tokens(cards[idx])
             sgl = float(t5[0]) if len(t5) > 0 else 0.0
             sw = float(t5[1]) if len(t5) > 1 else 0.0
             st = float(t5[2]) if len(t5) > 2 else 0.0
@@ -27568,19 +27590,56 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             idx += 1
 
         if idx < len(cards) and not cards[idx].is_blank:
-            t6 = cards[idx].tokens()
-            kfail = float(t6[0]) if len(t6) > 0 else 0.0
-            gam1 = float(t6[1]) if len(t6) > 1 else 0.0
-            gam2 = float(t6[2]) if len(t6) > 2 else 0.0
-            eh = float(t6[3]) if len(t6) > 3 else 0.0
-            failip = int(float(t6[4])) if len(t6) > 4 else 0
+            t6 = _card_tokens(cards[idx])
+            if len(t6) >= 6:
+                kfail = float(t6[0])
+                gam1 = float(t6[1])
+                gam2 = float(t6[2])
+                eh = float(t6[3])
+                failip = int(float(t6[5]))
+            else:
+                kfail = float(t6[0]) if len(t6) > 0 else 0.0
+                gam1 = float(t6[1]) if len(t6) > 1 else 0.0
+                gam2 = float(t6[2]) if len(t6) > 2 else 0.0
+                eh = float(t6[3]) if len(t6) > 3 else 0.0
+                failip = int(float(t6[4])) if len(t6) > 4 else 0
 
+    # Specimen dimensions scaling per hm_read_mat88.F90:546-558
+    if sw > 0.0 and st > 0.0:
+        areafac = 1.0 / (sw * st)
+        fscale_load_list = [sc * areafac for sc in fscale_load_list]
+
+    beta = 0.0
     if nu <= 0.0:
+        beta = abs(nu)
         nu = 0.495
     if shape == 0.0:
         shape = 1.0
+    if hys == 0.0:
+        hys = 1.0
     if fscale_unload == 0.0:
         fscale_unload = 1.0
+    eh = max(min(eh, 1.0), 0.0)
+    failip = max(failip, 0)
+    if ifunc_unload > 0 and len(func_load_list) > 0 and ifunc_unload == func_load_list[0]:
+        ifunc_unload = 0
+
+    # Derive initial moduli per hm_read_mat88.F90:593-619
+    e_equiv = 3.0 * bulk * (1.0 - 2.0 * nu) if bulk > 0.0 else 0.0
+    if e_equiv <= 0.0 and g > 0.0:
+        e_equiv = 2.0 * g * (1.0 + nu)
+    if e_equiv <= 0.0:
+        e_equiv = 1.0
+    if bulk <= 0.0:
+        bulk = e_equiv / (3.0 * (1.0 - 2.0 * nu))
+    shear_mod = 3.0 * bulk * e_equiv / (9.0 * bulk - e_equiv) if (9.0 * bulk - e_equiv) != 0.0 else 0.0
+    if shear_mod < 0.0 or g < 0.0:
+        log.warning(f"Material {mat_id} ({title}): shear modulus is negative. [ANCMSG 3109]")
+        bulk = 4.0 * (e_equiv / 9.0) * (1.0 + 1e-3)
+        shear_mod = 3.0 * bulk * e_equiv / (9.0 * bulk - e_equiv) if (9.0 * bulk - e_equiv) != 0.0 else 0.0
+
+    if g <= 0.0:
+        g = shear_mod
 
     m88 = MaterialLaw88(
         id=mat_id, title=title, rho0=rho0, ref_rho=refer_rho,
@@ -27591,16 +27650,15 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         rate_load_list=rate_load_list, lamfit_list=lamfit_list,
         sgl=sgl, sw=sw, st=st, g=g, sigf=sigf,
         kfail=kfail, gam1=gam1, gam2=gam2, eh=eh, failip=failip,
+        beta=beta, young=e_equiv, shear=shear_mod,
     )
     model.mat_law88s[mat_id] = m88
-    e_equiv = 3.0 * bulk * (1.0 - 2.0 * nu) if bulk > 0.0 else 0.0
-    if e_equiv <= 0.0 and g > 0.0:
-        e_equiv = 2.0 * g * (1.0 + nu)
+
     from .mat_reader import GenericMaterialRecord
     mat88 = Material(
         id=mat_id, law=88, rho0=rho0, title=title,
         params={
-            "E": e_equiv if e_equiv > 0.0 else 1.0, "nu": nu,
+            "E": e_equiv, "nu": nu, "young": e_equiv, "shear": shear_mod,
             "LAW88_Nu": nu, "LAW88_K": bulk, "LAW88_Fcut": fcut,
             "LAW88_Fsmooth": fsmooth, "LAW88_NL": nl,
             "LAW88_fct_IDunL": ifunc_unload, "LAW88_FscaleunL": fscale_unload,
@@ -27619,6 +27677,7 @@ def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "rate_load_list": rate_load_list, "lamfit_list": lamfit_list,
             "sgl": sgl, "sw": sw, "st": st, "g": g, "sigf": sigf,
             "kfail": kfail, "gam1": gam1, "gam2": gam2, "eh": eh, "failip": failip,
+            "beta": beta,
         }
     )
     mat88.record = GenericMaterialRecord(

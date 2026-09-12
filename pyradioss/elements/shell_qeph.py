@@ -582,8 +582,9 @@ def init_group(group, model, log):
         is_law57 = getattr(mat, "law", None) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3")
         is_law73 = getattr(mat, "law", None) in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL")
         is_law87 = getattr(mat, "law", None) in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000") or getattr(mat, "law_name", None) in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000")
+        is_law88 = getattr(mat, "law", None) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP")
         is_law66 = getattr(mat, "law", None) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB")
-        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58 or is_law52 or is_law57 or is_law73 or is_law66 or is_law87
+        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58 or is_law52 or is_law57 or is_law73 or is_law66 or is_law87 or is_law88
         if getattr(mat, "rho0", 0.0) > 0.0 and has_stiff and getattr(mat, "law", 1) != 0:
             if is_law52:
                 try:
@@ -613,6 +614,12 @@ def init_group(group, model, log):
                 try:
                     from ..materials import law87_barlat2000
                     cspd[sl] = law87_barlat2000.sound_speed(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    cspd[sl] = mat.sound_speed_shell()
+            elif is_law88:
+                try:
+                    from ..materials import law88_tab_hyp
+                    cspd[sl] = law88_tab_hyp.sound_speed_shell(mat, getattr(mat, "rho0", None))
                 except Exception:
                     cspd[sl] = mat.sound_speed_shell()
             elif is_law66:
@@ -1150,6 +1157,9 @@ def forces(group, x, v, vr, dt, fint, mint):
         if "uvar87" in st and "uvar87" in st.get("mat_extra", {}):
             u87 = st["mat_extra"]["uvar87"]
             st["uvar87"][sl] = u87[sl, 0] if u87.ndim == 3 else u87[sl]
+        if "uvar88" in st and "uvar88" in st.get("mat_extra", {}):
+            u88 = st["mat_extra"]["uvar88"]
+            st["uvar88"][sl] = u88[sl, 0] if u88.ndim == 3 else u88[sl]
 
     if st["chk_fail"]:
         alive = _element_deletion(st, nip_of)

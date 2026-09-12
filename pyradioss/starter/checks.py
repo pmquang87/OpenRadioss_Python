@@ -98,6 +98,13 @@ _LAW87_KEYS = {
 for _fam in ("shells", "shells_qbat", "shells_qeph", "sh3n"):
     _ALLOWED_LAWS[_fam].update(_LAW87_KEYS)
 
+_LAW88_KEYS = {
+    88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP",
+    "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP",
+}
+for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells", "shells_qbat", "shells_qeph", "sh3n"):
+    _ALLOWED_LAWS[_fam].update(_LAW88_KEYS)
+
 _ALLOWED_LAWS["quads"] = _ALLOWED_LAWS["shells"]
 _ALLOWED_LAWS["solids"] = _ALLOWED_LAWS["bricks"]
 _ALLOWED_LAWS["solids_heph"] = _ALLOWED_LAWS["bricks"]
@@ -4315,6 +4322,177 @@ def check_mat_law87(
 _check_mat_law87 = check_mat_law87
 
 
+def check_mat_law88(
+    model: Any = None,
+    mat_id: Any = None,
+    mat: Any = None,
+    log: Any = None,
+    **kwargs: Any,
+) -> None:
+    """Validate /MAT/LAW88 (/MAT/TABULATED_HYPERELASTIC, /MAT/HYPER_ELAS, /MAT/TAB_HYP) parameter bounds (M565).
+
+    Citing hm_read_mat88.F90:
+      - RHO0 > 0 (ANCMSG 1514)
+      - NL > 0 (ANCMSG 866: No loading curve defined)
+      - Ascending strain rate check: if NL > 1 and rate[i] < rate[i-1] (ANCMSG 478)
+      - Non-negative shear modulus check: warning ANCMSG 3109
+      - Compatible elements: solids (bricks, tetras, penta6, pyra5) and shells (quads, sh3n);
+        reject 1D elements (trusses, beams, springs) (ANCMSG 306).
+    """
+    actual_log = log
+    actual_model = model
+    actual_mat = mat
+    actual_mid = mat_id
+
+    candidates = [c for c in (model, mat_id, mat, log) if c is not None]
+    if hasattr(model, "params") and not isinstance(model, Model):
+        actual_mat = model
+        actual_model = None
+        actual_log = mat_id if isinstance(mat_id, MessageLog) else log
+        actual_mid = getattr(actual_mat, "id", kwargs.get("mat_id", 0))
+    elif hasattr(mat_id, "params") and isinstance(mat, MessageLog):
+        actual_mat = mat_id
+        actual_log = mat
+        actual_mid = getattr(actual_mat, "id", kwargs.get("mat_id", 0))
+    else:
+        for c in candidates:
+            if isinstance(c, MessageLog):
+                actual_log = c
+            elif isinstance(c, Model):
+                actual_model = c
+            elif hasattr(c, "params") or hasattr(c, "rho0") or hasattr(c, "func_load_list") or hasattr(c, "nl"):
+                actual_mat = c
+            elif isinstance(c, int) and not isinstance(c, bool):
+                actual_mid = c
+
+    if actual_mat is None:
+        if "mat" in kwargs:
+            actual_mat = kwargs["mat"]
+        elif "material" in kwargs:
+            actual_mat = kwargs["material"]
+        elif "mat88" in kwargs:
+            actual_mat = kwargs["mat88"]
+        elif "mat_law88" in kwargs:
+            actual_mat = kwargs["mat_law88"]
+
+    if actual_log is None:
+        if "log" in kwargs:
+            actual_log = kwargs["log"]
+        elif "logger" in kwargs:
+            actual_log = kwargs["logger"]
+        else:
+            actual_log = MessageLog()
+
+    mid_kw = kwargs.get("mat_id", kwargs.get("mid", actual_mid))
+    if actual_mat is None and actual_model is not None:
+        if mid_kw is not None and hasattr(actual_model, "materials"):
+            actual_mat = actual_model.materials.get(mid_kw)
+        if actual_mat is None and hasattr(actual_model, "mat_law88s"):
+            actual_mat = actual_model.mat_law88s.get(mid_kw)
+
+    mid = getattr(actual_mat, "id", mid_kw or 0)
+    params = getattr(actual_mat, "params", {}) or {}
+    log = actual_log
+    model = actual_model
+
+    def _extract(keys: list[str], default: Any = 0.0) -> Any:
+        for k in keys:
+            if hasattr(actual_mat, k):
+                val = getattr(actual_mat, k)
+                if val is not None:
+                    return val
+            if isinstance(params, dict) and k in params:
+                val = params[k]
+                if val is not None:
+                    return val
+        return default
+
+    # 1. Density rho0 > 0 (ANCMSG 1514)
+    rho0 = float(_extract(["rho0", "rho", "MAT_RHO", "RHO", "RHO0"], default=0.0))
+    if rho0 <= 0.0:
+        log.error(f"/MAT/LAW88/{mid}: initial density RHO must be > 0 (got {rho0:g}) (ANCMSG 1514)", "MAT CHECK")
+
+    # 2. Number of loading curves NL > 0 (ANCMSG 866)
+    nl = int(_extract(["nl", "NL", "LAW88_NL"], default=0))
+    func_list = _extract(["func_load_list", "LAW88_arr1", "curves"], default=[])
+    if isinstance(func_list, (list, tuple)) and len(func_list) > 0:
+        nl = max(nl, len(func_list))
+    if nl <= 0:
+        log.error(f"/MAT/LAW88/{mid}: no loading curve defined (NL = 0) (ANCMSG 866)", "MAT CHECK")
+
+    # 3. Ascending strain rate check (ANCMSG 478)
+    rate_list = _extract(["rate_load_list", "LAW88_arr3", "rates"], default=[])
+    if isinstance(rate_list, (list, tuple)) and len(rate_list) > 1:
+        for i in range(1, len(rate_list)):
+            try:
+                r_prev = float(rate_list[i - 1])
+                r_curr = float(rate_list[i])
+                if r_curr < r_prev:
+                    log.error(f"/MAT/LAW88/{mid}: strain rates must be in ascending order (ANCMSG 478)", "MAT CHECK")
+                    break
+            except (TypeError, ValueError):
+                pass
+
+    # 4. Shear modulus non-negative check (ANCMSG 3109)
+    shear_val = float(_extract(["shear", "gs", "g", "G", "LAW88_G"], default=0.0))
+    if shear_val < 0.0:
+        log.warning(f"/MAT/LAW88/{mid}: shear modulus is negative (ANCMSG 3109)", "MAT CHECK")
+
+    # 5. Compatible elements check (if model is provided)
+    if model is not None:
+        actual_mid = mid
+        if hasattr(model, "element_groups") and callable(model.element_groups):
+            try:
+                grps = list(model.element_groups())
+            except TypeError:
+                grps = []
+            for item in grps:
+                if isinstance(item, tuple) and len(item) == 2:
+                    name, el_group = item
+                else:
+                    continue
+                mids_in_group = set()
+                if hasattr(el_group, "values") and callable(el_group.values):
+                    for el in el_group.values():
+                        el_mid = getattr(el, "mat_id", getattr(el, "mid", None))
+                        if el_mid is not None:
+                            mids_in_group.add(el_mid)
+                if hasattr(el_group, "state") and isinstance(el_group.state, dict) and "slices" in el_group.state:
+                    for _, m_part, _ in el_group.state["slices"]:
+                        m_id = getattr(m_part, "id", None)
+                        if m_id is not None:
+                            mids_in_group.add(m_id)
+                if actual_mid in mids_in_group:
+                    if name in ("trusses", "beams", "springs"):
+                        log.error(
+                            f"/MAT/LAW88/{actual_mid} is not supported for 1D elements ({name}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
+        if hasattr(model, "parts") and isinstance(model.parts, dict):
+            for pid, part in model.parts.items():
+                p_mid = getattr(part, "mat_id", getattr(part, "mid", None))
+                if p_mid == actual_mid:
+                    etype = str(getattr(part, "elem_type", getattr(part, "type", ""))).upper()
+                    prop_id = getattr(part, "prop_id", None)
+                    if not etype or etype in ("NONE", ""):
+                        if prop_id is not None:
+                            props = getattr(model, "properties", {}) or getattr(model, "props", {})
+                            prop = props.get(prop_id) if isinstance(props, dict) else None
+                            if prop is not None:
+                                ptype = str(getattr(prop, "type", getattr(prop, "card_name", ""))).upper()
+                                if any(s in ptype for s in ("BEAM", "TRUSS", "SPRING")):
+                                    etype = "1D"
+                    if any(s in etype for s in ("BEAM", "TRUSS", "SPRING", "1D")):
+                        log.error(
+                            f"/MAT/LAW88/{actual_mid} is not supported for 1D elements ({etype.lower()}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
+
+_check_mat_law88 = check_mat_law88
+
+
 
 def check_materials(model: Model, log: MessageLog) -> None:
     """Validate all material parameters across model."""
@@ -4541,9 +4719,28 @@ def check_materials(model: Model, log: MessageLog) -> None:
         if mid not in getattr(model, "materials", {}):
             check_mat_law87(model=model, mat_id=mid, mat=mat87, log=log)
 
+    # M565: Material LAW88 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP"):
+            check_mat_law88(model=model, mat_id=mid, mat=mat, log=log)
+    for mid, mat88 in getattr(model, "mat_law88s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law88(model=model, mat_id=mid, mat=mat88, log=log)
+
 
 
 _MAT_CHECKS: dict[Any, Any] = {
+    88: check_mat_law88,
+    "88": check_mat_law88,
+    "LAW88": check_mat_law88,
+    "HYPER_ELAS": check_mat_law88,
+    "TABULATED_HYPERELASTIC": check_mat_law88,
+    "TAB_HYP": check_mat_law88,
+    "TABULATED_HYP": check_mat_law88,
+    "MAT_LAW88": check_mat_law88,
+    "MAT_HYPER_ELAS": check_mat_law88,
+    "MAT_TABULATED_HYPERELASTIC": check_mat_law88,
+    "MAT_TAB_HYP": check_mat_law88,
     87: check_mat_law87,
     "87": check_mat_law87,
     "LAW87": check_mat_law87,

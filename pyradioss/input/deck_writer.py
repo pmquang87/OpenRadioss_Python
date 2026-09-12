@@ -5790,11 +5790,231 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
-    def mat_law88(self, mid: int, title: str, data_cards) -> None:
-        """``/MAT/LAW88``."""
-        self._header("MAT", "LAW88", mid)
+    def mat_law88(
+        self,
+        mid: int = 0,
+        title: str = "",
+        rho0: float = 0.0,
+        ref_rho: float = 0.0,
+        nu: float = 0.495,
+        bulk: float = 0.0,
+        fcut: float = 0.0,
+        fsmooth: int = 0,
+        nl: int = 0,
+        ifunc_unload: int = 0,
+        fscale_unload: float = 1.0,
+        hys: float = 0.0,
+        shape: float = 1.0,
+        tension: int = 0,
+        rtype: int = 0,
+        func_load_list: Any = None,
+        fscale_load_list: Any = None,
+        rate_load_list: Any = None,
+        lamfit_list: Any = None,
+        sgl: float = 0.0,
+        sw: float = 0.0,
+        st: float = 0.0,
+        g: float = 0.0,
+        sigf: float = 0.0,
+        kfail: float = 0.0,
+        gam1: float = 0.0,
+        gam2: float = 0.0,
+        eh: float = 0.0,
+        failip: int = 0,
+        law_name: str = "LAW88",
+        fixed_format: bool = True,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW88`` (/MAT/TABULATED_HYPERELASTIC, /MAT/HYPER_ELAS, /MAT/TAB_HYP) (M173/M565).
+        Tabulated hyperelastic Ogden material model with strain-rate unloading and damage.
+
+        Upstream reference:
+          - starter/source/materials/mat/mat088/hm_read_mat88.F90
+          - CFG: radioss2026/MAT/mat_law88.cfg
+        """
+        if len(kwargs) == 0 and isinstance(mid, int) and isinstance(title, str) and isinstance(rho0, (list, tuple)):
+            data_cards = rho0
+            self._header("MAT", law_name, mid)
+            self._title(title)
+            self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+            return self
+
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+        if "fixed_format" in kw_low:
+            fixed_format = bool(kw_low["fixed_format"])
+        if "fixed" in kw_low:
+            fixed_format = bool(kw_low["fixed"])
+        if "free" in kw_low and bool(kw_low["free"]):
+            fixed_format = False
+        if "law_name" in kw_low:
+            law_name = str(kw_low["law_name"])
+
+        mat_obj = None
+        if hasattr(mid, "func_load_list") or hasattr(mid, "nl") or hasattr(mid, "ifunc_unload"):
+            mat_obj = mid
+        elif hasattr(mid, "params") and (
+            "func_load_list" in getattr(mid, "params", {})
+            or "LAW88_NL" in getattr(mid, "params", {})
+            or getattr(mid, "law", None) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP")
+        ):
+            mat_obj = mid
+        elif "mat" in kw_low:
+            mat_obj = kw_low["mat"]
+        elif "material" in kw_low:
+            mat_obj = kw_low["material"]
+        elif "mat88" in kw_low:
+            mat_obj = kw_low["mat88"]
+        elif "mat_law88" in kw_low:
+            mat_obj = kw_low["mat_law88"]
+
+        if "id" in kw_low and mid == 0:
+            mid = int(kw_low["id"])
+        elif "mid" in kw_low and mid == 0:
+            mid = int(kw_low["mid"])
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            if not title:
+                title = getattr(mat_obj, "title", "")
+            mat_params = getattr(mat_obj, "params", {}) or {}
+            if not isinstance(mat_params, dict):
+                mat_params = {}
+            if rho0 == 0.0:
+                rho0 = getattr(mat_obj, "rho0", getattr(mat_obj, "rho", mat_params.get("rho0", mat_params.get("rho", 0.0))))
+            if ref_rho == 0.0:
+                ref_rho = getattr(mat_obj, "ref_rho", getattr(mat_obj, "refer_rho", mat_params.get("ref_rho", mat_params.get("refer_rho", 0.0))))
+            if nu == 0.495:
+                nu = getattr(mat_obj, "nu", mat_params.get("nu", mat_params.get("LAW88_Nu", 0.495)))
+            if bulk == 0.0:
+                bulk = getattr(mat_obj, "bulk", getattr(mat_obj, "K", mat_params.get("bulk", mat_params.get("K", mat_params.get("LAW88_K", 0.0)))))
+            if fcut == 0.0:
+                fcut = getattr(mat_obj, "fcut", mat_params.get("fcut", mat_params.get("LAW88_Fcut", 0.0)))
+            if fsmooth == 0:
+                fsmooth = getattr(mat_obj, "fsmooth", mat_params.get("fsmooth", mat_params.get("LAW88_Fsmooth", 0)))
+            if nl == 0:
+                nl = getattr(mat_obj, "nl", mat_params.get("nl", mat_params.get("LAW88_NL", 0)))
+            if ifunc_unload == 0:
+                ifunc_unload = getattr(mat_obj, "ifunc_unload", mat_params.get("ifunc_unload", mat_params.get("LAW88_fct_IDunL", 0)))
+            if fscale_unload == 1.0:
+                fscale_unload = getattr(mat_obj, "fscale_unload", mat_params.get("fscale_unload", mat_params.get("LAW88_FscaleunL", 1.0)))
+            if hys == 0.0:
+                hys = getattr(mat_obj, "hys", mat_params.get("hys", mat_params.get("LAW88_Hys", 0.0)))
+            if shape == 1.0:
+                shape = getattr(mat_obj, "shape", mat_params.get("shape", mat_params.get("LAW88_Shape", 1.0)))
+            if tension == 0:
+                tension = getattr(mat_obj, "tension", mat_params.get("tension", mat_params.get("LAW88_Tension", 0)))
+            if rtype == 0:
+                rtype = getattr(mat_obj, "rtype", mat_params.get("rtype", mat_params.get("LAW88_RTYPE", 0)))
+            if func_load_list is None:
+                func_load_list = getattr(mat_obj, "func_load_list", mat_params.get("func_load_list", mat_params.get("LAW88_arr1", None)))
+            if fscale_load_list is None:
+                fscale_load_list = getattr(mat_obj, "fscale_load_list", mat_params.get("fscale_load_list", mat_params.get("LAW88_arr2", None)))
+            if rate_load_list is None:
+                rate_load_list = getattr(mat_obj, "rate_load_list", mat_params.get("rate_load_list", mat_params.get("LAW88_arr3", None)))
+            if lamfit_list is None:
+                lamfit_list = getattr(mat_obj, "lamfit_list", mat_params.get("lamfit_list", mat_params.get("LAW88_LAMFIT", None)))
+            if sgl == 0.0:
+                sgl = getattr(mat_obj, "sgl", mat_params.get("sgl", mat_params.get("LAW88_SGL", 0.0)))
+            if sw == 0.0:
+                sw = getattr(mat_obj, "sw", mat_params.get("sw", mat_params.get("LAW88_SW", 0.0)))
+            if st == 0.0:
+                st = getattr(mat_obj, "st", mat_params.get("st", mat_params.get("LAW88_ST", 0.0)))
+            if g == 0.0:
+                g = getattr(mat_obj, "g", getattr(mat_obj, "shear", getattr(mat_obj, "G", mat_params.get("g", mat_params.get("shear", mat_params.get("LAW88_G", 0.0))))))
+            if sigf == 0.0:
+                sigf = getattr(mat_obj, "sigf", mat_params.get("sigf", mat_params.get("LAW88_SIGF", 0.0)))
+            if kfail == 0.0:
+                kfail = getattr(mat_obj, "kfail", mat_params.get("kfail", mat_params.get("LAW88_KFAIL", 0.0)))
+            if gam1 == 0.0:
+                gam1 = getattr(mat_obj, "gam1", mat_params.get("gam1", mat_params.get("LAW88_GAM1", 0.0)))
+            if gam2 == 0.0:
+                gam2 = getattr(mat_obj, "gam2", mat_params.get("gam2", mat_params.get("LAW88_GAM2", 0.0)))
+            if eh == 0.0:
+                eh = getattr(mat_obj, "eh", mat_params.get("eh", mat_params.get("LAW88_EH", 0.0)))
+            if failip == 0:
+                failip = getattr(mat_obj, "failip", mat_params.get("failip", mat_params.get("LAW88_FAILIP", 0)))
+
+        # Handle kwargs alternatives
+        if "rho" in kw_low and rho0 == 0.0:
+            rho0 = float(kw_low["rho"])
+        if "refer_rho" in kw_low and ref_rho == 0.0:
+            ref_rho = float(kw_low["refer_rho"])
+        if "k" in kw_low and bulk == 0.0:
+            bulk = float(kw_low["k"])
+
+        func_load = list(func_load_list) if func_load_list is not None else []
+        fscale_load = list(fscale_load_list) if fscale_load_list is not None else []
+        rate_load = list(rate_load_list) if rate_load_list is not None else []
+        lamfit = list(lamfit_list) if lamfit_list is not None else []
+        if nl == 0 and len(func_load) > 0:
+            nl = len(func_load)
+        while len(fscale_load) < nl:
+            fscale_load.append(1.0)
+        while len(rate_load) < nl:
+            rate_load.append(0.0)
+        while len(lamfit) < nl:
+            lamfit.append(0.0)
+
+        self._header("MAT", law_name, mid)
         self._title(title)
-        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+        if fixed_format:
+            # Card 1: RHO, RHOR [20, 20]
+            c1 = fmt_float(rho0, 20)
+            if ref_rho > 0.0:
+                c1 += fmt_float(ref_rho, 20)
+            self.lines.append(c1)
+
+            # Card 2: NU, BULK, FCUT, FSMOOTH, NL [20, 20, 20, 10, 10]
+            c2 = fmt_float(nu, 20) + fmt_float(bulk, 20)
+            c2 += fmt_float(fcut, 20) if fcut != 0.0 else blank(20)
+            c2 += fmt_int(fsmooth, 10) if fsmooth != 0 else blank(10)
+            c2 += fmt_int(nl, 10)
+            self.lines.append(c2)
+
+            # Card 3: FCT_IDUNL, _BLANK_, FSCALE_UNL, HYS, SHAPE, TENSION, RTYPE [10, 10, 20, 20, 20, 10, 10]
+            c3 = fmt_int(ifunc_unload, 10) + blank(10)
+            c3 += fmt_float(fscale_unload, 20) + fmt_float(hys, 20) + fmt_float(shape, 20)
+            c3 += fmt_int(tension, 10) + fmt_int(rtype, 10)
+            self.lines.append(c3)
+
+            # Card 4 (list of nl loading curves): FCT_ID, _BLANK_, FSCALE, RATE, LAMFIT [10, 10, 20, 20, 20]
+            for i in range(nl):
+                fid = func_load[i] if i < len(func_load) else 0
+                fsc = fscale_load[i] if i < len(fscale_load) else 1.0
+                frate = rate_load[i] if i < len(rate_load) else 0.0
+                flam = lamfit[i] if i < len(lamfit) else 0.0
+                c4 = fmt_int(fid, 10) + blank(10) + fmt_float(fsc, 20) + fmt_float(frate, 20)
+                if flam != 0.0:
+                    c4 += fmt_float(flam, 20)
+                self.lines.append(c4)
+
+            # Card 5: SGL, SW, ST, G, SIGF [20, 20, 20, 20, 20]
+            c5 = fmt_float(sgl, 20) + fmt_float(sw, 20) + fmt_float(st, 20) + fmt_float(g, 20) + fmt_float(sigf, 20)
+            self.lines.append(c5)
+
+            # Card 6: KFAIL, GAM1, GAM2, EH, _BLANK_, FAILIP [20, 20, 20, 20, 10, 10]
+            c6 = fmt_float(kfail, 20) + fmt_float(gam1, 20) + fmt_float(gam2, 20) + fmt_float(eh, 20) + blank(10) + fmt_int(failip, 10)
+            self.lines.append(c6)
+        else:
+            self.lines.append(f"{rho0} {ref_rho}".strip())
+            self.lines.append(f"{nu} {bulk} {fcut} {fsmooth} {nl}")
+            self.lines.append(f"{ifunc_unload} {fscale_unload} {hys} {shape} {tension} {rtype}")
+            for i in range(nl):
+                fid = func_load[i] if i < len(func_load) else 0
+                fsc = fscale_load[i] if i < len(fscale_load) else 1.0
+                frate = rate_load[i] if i < len(rate_load) else 0.0
+                flam = lamfit[i] if i < len(lamfit) else 0.0
+                self.lines.append(f"{fid} {fsc} {frate} {flam}".strip())
+            self.lines.append(f"{sgl} {sw} {st} {g} {sigf}")
+            self.lines.append(f"{kfail} {gam1} {gam2} {eh} {failip}")
+
+        return self
+
+    mat_tabulated_hyperelastic = mat_law88
+    mat_hyper_elas = mat_law88
+    mat_tab_hyp = mat_law88
+
 
     def mat_connect(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/CONNECT``."""

@@ -8461,6 +8461,42 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_BARLAT2000_2D_7_1": [20, 20, 20, 20, 20],
     "MAT_BARLAT2000_2D_8": [10, 10, 20, 20],
     "MAT_BARLAT2000_2D_CURVE": [10, 20, 20],
+
+    # /MAT/LAW88 (/MAT/TABULATED_HYPERELASTIC, /MAT/HYPER_ELAS, /MAT/TAB_HYP) (M173/M565)
+    # Fortran origin: hm_read_mat88.F90; CFG: radioss2026/MAT/mat_law88.cfg
+    "MAT_LAW88_1": [20, 20],
+    "MAT_LAW88_2": [20, 20, 20, 10, 10],
+    "MAT_LAW88_3": [10, 10, 20, 20, 20, 10, 10],
+    "MAT_LAW88_4": [10, 10, 20, 20, 20],
+    "MAT_LAW88_4_ROW": [10, 10, 20, 20, 20],
+    "MAT_LAW88_4_4": [10, 10, 20, 20],
+    "MAT_LAW88_5": [20, 20, 20, 20, 20],
+    "MAT_LAW88_6": [20, 20, 20, 20, 10, 10],
+    "MAT_LAW88_6_5": [20, 20, 20, 20, 10],
+
+    "MAT_TABULATED_HYPERELASTIC_1": [20, 20],
+    "MAT_TABULATED_HYPERELASTIC_2": [20, 20, 20, 10, 10],
+    "MAT_TABULATED_HYPERELASTIC_3": [10, 10, 20, 20, 20, 10, 10],
+    "MAT_TABULATED_HYPERELASTIC_4": [10, 10, 20, 20, 20],
+    "MAT_TABULATED_HYPERELASTIC_4_ROW": [10, 10, 20, 20, 20],
+    "MAT_TABULATED_HYPERELASTIC_5": [20, 20, 20, 20, 20],
+    "MAT_TABULATED_HYPERELASTIC_6": [20, 20, 20, 20, 10, 10],
+
+    "MAT_HYPER_ELAS_1": [20, 20],
+    "MAT_HYPER_ELAS_2": [20, 20, 20, 10, 10],
+    "MAT_HYPER_ELAS_3": [10, 10, 20, 20, 20, 10, 10],
+    "MAT_HYPER_ELAS_4": [10, 10, 20, 20, 20],
+    "MAT_HYPER_ELAS_4_ROW": [10, 10, 20, 20, 20],
+    "MAT_HYPER_ELAS_5": [20, 20, 20, 20, 20],
+    "MAT_HYPER_ELAS_6": [20, 20, 20, 20, 10, 10],
+
+    "MAT_TAB_HYP_1": [20, 20],
+    "MAT_TAB_HYP_2": [20, 20, 20, 10, 10],
+    "MAT_TAB_HYP_3": [10, 10, 20, 20, 20, 10, 10],
+    "MAT_TAB_HYP_4": [10, 10, 20, 20, 20],
+    "MAT_TAB_HYP_4_ROW": [10, 10, 20, 20, 20],
+    "MAT_TAB_HYP_5": [20, 20, 20, 20, 20],
+    "MAT_TAB_HYP_6": [20, 20, 20, 20, 10, 10],
 }
 
 

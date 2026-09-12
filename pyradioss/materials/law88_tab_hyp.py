@@ -475,6 +475,8 @@ class TableData:
             self.y1d = self.y2d[:, 0]
         elif self.ndim == 2 and self.y2d is None and self.y1d is not None:
             self.y2d = self.y1d[:, None]
+        elif self.y1d is None and self.y2d is None:
+            self.y1d = np.array([0.0, 100.0])
 
 
 def table_mat_vinterp_eval(
@@ -865,7 +867,7 @@ def sigeps88_solid(
     lam[:, 1] *= rv_mth
     lam[:, 2] *= rv_mth
 
-    table_load = mp.table[0] if len(mp.table) > 0 else TableData()
+    table_load = mp.table[0] if len(mp.table) > 0 else TableData(x1=np.array([0.0, 1.0]), y1d=np.array([0.0, max(float(mp.young), float(mp.shear), 1.0)]))
 
     f = np.zeros((nel, 3), dtype=np.float64)
     dfdlam = np.zeros((nel, 3), dtype=np.float64)
@@ -1371,7 +1373,7 @@ def sigeps88_shell(
     else:
         epsd[:] = erate
 
-    table_load = mp.table[0] if len(mp.table) > 0 else TableData()
+    table_load = mp.table[0] if len(mp.table) > 0 else TableData(x1=np.array([0.0, 1.0]), y1d=np.array([0.0, max(float(mp.young), float(mp.shear), 1.0)]))
 
     f = np.zeros((nel, 3), dtype=np.float64)
     dfdlam = np.zeros((nel, 3), dtype=np.float64)

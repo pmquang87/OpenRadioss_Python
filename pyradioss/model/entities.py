@@ -22,6 +22,12 @@ import numpy as np
 # Materials  (Fortran: PM array, filled by starter/source/materials/mat/...)
 # ============================================================================
 
+class CallableFloat(float):
+    """Float that is also callable returning itself (compatible with both property and method access)."""
+    def __call__(self) -> float:
+        return float(self)
+
+
 @dataclass
 class FailureModel:
     """One /FAIL option, attached to a material (the keyword carries the
@@ -6195,12 +6201,13 @@ class MaterialLaw44:
 
 @dataclass
 class MaterialLaw88:
-    """/MAT/LAW88 or /MAT/HYPER_ELAS or /MAT/TABULATED_HYPERELASTIC (M173):
+    """/MAT/LAW88 or /MAT/HYPER_ELAS or /MAT/TABULATED_HYPERELASTIC (M173/M565):
     Tabulated hyperelastic Ogden material model with strain-rate unloading and damage.
 
-    Fortran origin: ``starter/source/materials/mat/mat088/hm_read_mat88.F90``.
+    Fortran origin: ``starter/source/materials/mat/mat088/hm_read_mat88.F90``,
+                    ``engine/source/materials/mat/mat088/sigeps88.F90``.
     """
-    id: int
+    id: int = 0
     title: str = ""
     rho0: float = 0.0
     ref_rho: float = 0.0
@@ -6229,6 +6236,149 @@ class MaterialLaw88:
     gam2: float = 0.0
     eh: float = 0.0
     failip: int = 0
+    beta: float = 0.0
+    young: float = 0.0
+    shear: float = 0.0
+    law: int = 88
+    law_name: str = "LAW88"
+    params: dict = field(default_factory=dict)
+
+    @property
+    def rho(self) -> float:
+        return self.rho0 if self.rho0 > 0.0 else self.ref_rho
+
+    @rho.setter
+    def rho(self, val: float) -> None:
+        self.rho0 = float(val)
+
+    @property
+    def E(self) -> float:
+        if self.young > 0.0:
+            return self.young
+        if self.bulk > 0.0 and self.nu < 0.5:
+            return 3.0 * self.bulk * (1.0 - 2.0 * self.nu)
+        return 0.0
+
+    @E.setter
+    def E(self, val: float) -> None:
+        self.young = float(val)
+
+    @property
+    def G(self) -> float:
+        if self.shear > 0.0:
+            return self.shear
+        if self.g > 0.0:
+            return self.g
+        if self.bulk > 0.0 and self.nu < 0.5:
+            return (3.0 * self.bulk * (1.0 - 2.0 * self.nu)) / (2.0 * (1.0 + self.nu))
+        return 0.0
+
+    @G.setter
+    def G(self, val: float) -> None:
+        self.shear = float(val)
+        self.g = float(val)
+
+    @property
+    def K(self) -> float:
+        if self.bulk > 0.0:
+            return self.bulk
+        if self.young > 0.0 and self.nu < 0.5:
+            return self.young / (3.0 * (1.0 - 2.0 * self.nu))
+        return 0.0
+
+    @K.setter
+    def K(self, val: float) -> None:
+        self.bulk = float(val)
+
+    @property
+    def sound_speed(self) -> CallableFloat:
+        import math
+        r = self.rho
+        if r > 0.0:
+            k_mod = self.K
+            g_mod = self.G
+            c2 = (k_mod + (4.0 / 3.0) * g_mod) / r
+            if c2 > 0.0:
+                return CallableFloat(math.sqrt(c2))
+        return CallableFloat(0.0)
+
+    @property
+    def sound_speed_solid(self) -> CallableFloat:
+        return self.sound_speed
+
+    @property
+    def sound_speed_shell(self) -> CallableFloat:
+        import math
+        r = self.rho
+        if r > 0.0:
+            e_mod = self.E
+            nu_val = self.nu
+            denom = (1.0 - nu_val * nu_val) * r
+            if denom > 0.0 and e_mod > 0.0:
+                return CallableFloat(math.sqrt(e_mod / denom))
+        return self.sound_speed
+
+    @property
+    def curves(self) -> list:
+        return self.func_load_list
+
+    # Mapping protocol
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        if isinstance(self.params, dict) and key in self.params:
+            return self.params[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            if not isinstance(self.params, dict):
+                self.params = {}
+            self.params[key] = value
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or (isinstance(self.params, dict) and key in self.params)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self) -> List[str]:
+        base_keys = [
+            "id", "title", "rho0", "ref_rho", "nu", "bulk", "fcut", "fsmooth", "nl",
+            "ifunc_unload", "fscale_unload", "hys", "shape", "tension", "rtype",
+            "func_load_list", "fscale_load_list", "rate_load_list", "lamfit_list",
+            "sgl", "sw", "st", "g", "sigf", "kfail", "gam1", "gam2", "eh", "failip",
+            "beta", "young", "shear", "law", "law_name", "rho", "E", "G", "K",
+            "sound_speed", "sound_speed_solid", "sound_speed_shell", "curves",
+        ]
+        if isinstance(self.params, dict):
+            for k in self.params:
+                if k not in base_keys:
+                    base_keys.append(k)
+        return base_keys
+
+    def values(self) -> List[Any]:
+        return [self[k] for k in self.keys()]
+
+    def items(self) -> List[tuple]:
+        return [(k, self[k]) for k in self.keys()]
+
+    def __len__(self) -> int:
+        return len(self.keys())
+
+    def __iter__(self):
+        return iter(self.keys())
+
+
+MatLaw88 = MaterialLaw88
+MatTabulatedHyperelastic = MaterialLaw88
+MatHyperElas = MaterialLaw88
+MatTabHyp = MaterialLaw88
 
 
 @dataclass
@@ -15949,15 +16099,9 @@ class MatLaw62:
     params: dict = field(default_factory=dict)
 
 
-@dataclass
-class MatLaw88:
-    """``/MAT/LAW88`` or ``/MAT/HONEYCOMB`` (M197): Honeycomb material."""
-    id: int = 0
-    title: str = ""
-    rho: float = 0.0
-    e: float = 0.0
-    nu: float = 0.0
-    params: dict = field(default_factory=dict)
+# MatLaw88 is consolidated into MaterialLaw88 above (M173/M565)
+# MatLaw88 = MaterialLaw88
+
 
 
 @dataclass(init=False)
