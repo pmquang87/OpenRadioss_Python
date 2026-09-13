@@ -185,6 +185,13 @@ _LAW106_KEYS = {
 for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells"):
     _ALLOWED_LAWS[_fam].update(_LAW106_KEYS)
 
+_LAW107_KEYS = {
+    107, "107", "LAW107", "PAPER_LIGHT", "PLAS_PAPER_LIGHT", "LAW107_PAPER_LIGHT",
+    "PFEIFFER", "MAT_PFEIFFER", "MAT_PAPER_LIGHT", "MAT_PLAS_PAPER_LIGHT", "MAT_107", "MAT_LAW107",
+}
+for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells"):
+    _ALLOWED_LAWS[_fam].update(_LAW107_KEYS)
+
 _ALLOWED_LAWS["quads"] = _ALLOWED_LAWS["shells"]
 _ALLOWED_LAWS["solids"] = _ALLOWED_LAWS["bricks"]
 _ALLOWED_LAWS["solids_heph"] = _ALLOWED_LAWS["bricks"]
@@ -6703,6 +6710,196 @@ check_mat_jcook_alm = check_mat_law106
 check_mat_johns_cook_alm = check_mat_law106
 
 
+def check_mat_law107(*args: Any, **kwargs: Any) -> None:
+    """Validate /MAT/LAW107 or /MAT/PAPER_LIGHT parameter bounds and element compatibility (M577).
+
+    Upstream reference: ``starter/source/materials/mat/mat107/hm_read_mat107.F``.
+
+    Checks:
+      1. RHO0 > 0 (ANCMSG 1514).
+      2. E1 > 0, E2 > 0, E3 > 0 (ANCMSG 1514).
+      3. NU12 * NU21 < 1.0 (ANCMSG 3068).
+      4. Restriction for positive plastic work (K parameters):
+         - K1 >= 0 (ANCMSG 1815)
+         - K2 <= 0 (ANCMSG 1816)
+         - K3 >= 0 (ANCMSG 1817)
+         - K4 >= 0 (ANCMSG 1818)
+         - K5 >= 0 (ANCMSG 1819)
+         - K6 >= 0 (ANCMSG 1820)
+         - |K1| > |K2| (ANCMSG 1821)
+         - |K2| > |K4| (ANCMSG 1822)
+      5. Compatible elements: 3D solids and 2D shells.
+         - Rejection of 1D elements: trusses, beams, springs (ANCMSG 306).
+    """
+    actual_mat = None
+    actual_log = None
+    actual_model = None
+    actual_mid = None
+
+    if "model" in kwargs:
+        actual_model = kwargs["model"]
+    if "mat" in kwargs:
+        actual_mat = kwargs["mat"]
+    if "log" in kwargs:
+        actual_log = kwargs["log"]
+    if "mat_id" in kwargs:
+        actual_mid = kwargs["mat_id"]
+
+    for c in args:
+        if isinstance(c, MessageLog):
+            actual_log = c
+        elif isinstance(c, Model):
+            actual_model = c
+        elif hasattr(c, "id") and (hasattr(c, "young1") or hasattr(c, "e1") or hasattr(c, "k1")):
+            actual_mat = c
+        elif isinstance(c, int):
+            actual_mid = c
+
+    if actual_log is None:
+        actual_log = MessageLog()
+
+    mat = actual_mat
+    mat_id = actual_mid if actual_mid is not None else (mat.id if mat is not None else 0)
+
+    if mat is None and actual_model is not None and mat_id:
+        mat = getattr(actual_model, "mat_law107s", {}).get(mat_id)
+        if mat is None:
+            mat = getattr(actual_model, "materials", {}).get(mat_id)
+
+    if mat is None:
+        return
+
+    titr = getattr(mat, "title", f"/MAT/LAW107/{mat_id}")
+
+    # 1. Density check (ANCMSG 1514)
+    rho0 = getattr(mat, "rho0", getattr(mat, "rho", 0.0))
+    if isinstance(mat, dict):
+        rho0 = mat.get("rho0", mat.get("rho", 0.0))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        rho0 = mat.params.get("rho0", mat.params.get("rho", mat.params.get("MAT_RHO", rho0)))
+    if rho0 <= 0.0:
+        actual_log.error(
+            f"MATERIAL {mat_id}: ZERO OR NEGATIVE DENSITY RHO={rho0} (ANCMSG 1514)",
+            "MAT CHECK",
+        )
+
+    # 2. Young's moduli checks (ANCMSG 1514)
+    young1 = getattr(mat, "young1", getattr(mat, "e1", 0.0))
+    young2 = getattr(mat, "young2", getattr(mat, "e2", 0.0))
+    young3 = getattr(mat, "young3", getattr(mat, "e3", 0.0))
+    if isinstance(mat, dict):
+        young1 = mat.get("young1", mat.get("e1", mat.get("MAT_E1", 0.0)))
+        young2 = mat.get("young2", mat.get("e2", mat.get("MAT_E2", 0.0)))
+        young3 = mat.get("young3", mat.get("e3", mat.get("MAT_E3", 0.0)))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        young1 = mat.params.get("young1", mat.params.get("e1", mat.params.get("MAT_E1", young1)))
+        young2 = mat.params.get("young2", mat.params.get("e2", mat.params.get("MAT_E2", young2)))
+        young3 = mat.params.get("young3", mat.params.get("e3", mat.params.get("MAT_E3", young3)))
+
+    if young1 <= 0.0 or young2 <= 0.0 or young3 <= 0.0:
+        actual_log.error(
+            f"/MAT/LAW107/{mat_id}: ELASTIC MODULUS MUST BE POSITIVE (E1={young1}, E2={young2}, E3={young3}) (ANCMSG 1514)",
+            "MAT CHECK",
+        )
+
+    # 3. Poisson check (ANCMSG 3068)
+    nu21 = getattr(mat, "nu21", 0.0)
+    if isinstance(mat, dict):
+        nu21 = mat.get("nu21", mat.get("MAT_NU21", 0.0))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        nu21 = mat.params.get("nu21", mat.params.get("MAT_NU21", nu21))
+
+    nu12 = (nu21 * young1 / young2) if young2 > 0.0 else 0.0
+    if nu12 * nu21 >= 1.0:
+        actual_log.error(
+            f"/MAT/LAW107/{mat_id}: POISSON RATIO PRODUCT NU12*NU21 >= 1 (ANCMSG 3068)",
+            "MAT CHECK",
+        )
+
+    # 4. Plastic potential parameter checks (ANCMSG 1815-1822)
+    def _g_p(name: str, fallback: float) -> float:
+        val = getattr(mat, name, fallback)
+        if isinstance(mat, dict):
+            val = mat.get(name, mat.get(f"MAT_{name.upper()}", fallback))
+        elif hasattr(mat, "params") and isinstance(mat.params, dict):
+            val = mat.params.get(name, mat.params.get(f"MAT_{name.upper()}", val))
+        return float(val)
+
+    k1 = _g_p("k1", 0.0)
+    k2 = _g_p("k2", 0.0)
+    k3 = _g_p("k3", 0.0)
+    k4 = _g_p("k4", 0.0)
+    k5 = _g_p("k5", 0.0)
+    k6 = _g_p("k6", 0.0)
+
+    if k1 < 0.0:
+        actual_log.error(f"/MAT/LAW107/{mat_id}: K1 < 0 (ANCMSG 1815)", "MAT CHECK")
+    if k2 > 0.0:
+        actual_log.error(f"/MAT/LAW107/{mat_id}: K2 > 0 (ANCMSG 1816)", "MAT CHECK")
+    if k3 < 0.0:
+        actual_log.error(f"/MAT/LAW107/{mat_id}: K3 < 0 (ANCMSG 1817)", "MAT CHECK")
+    if k4 < 0.0:
+        actual_log.error(f"/MAT/LAW107/{mat_id}: K4 < 0 (ANCMSG 1818)", "MAT CHECK")
+    if k5 < 0.0:
+        actual_log.error(f"/MAT/LAW107/{mat_id}: K5 < 0 (ANCMSG 1819)", "MAT CHECK")
+    if k6 < 0.0:
+        actual_log.error(f"/MAT/LAW107/{mat_id}: K6 < 0 (ANCMSG 1820)", "MAT CHECK")
+    if abs(k1) <= abs(k2):
+        actual_log.error(f"/MAT/LAW107/{mat_id}: ABS(K1) <= ABS(K2) (ANCMSG 1821)", "MAT CHECK")
+    if abs(k2) <= abs(k4):
+        actual_log.error(f"/MAT/LAW107/{mat_id}: ABS(K2) <= ABS(K4) (ANCMSG 1822)", "MAT CHECK")
+
+    # 5. Element compatibility check: 3D solids and 2D shells supported, 1D elements rejected (ANCMSG 306)
+    if actual_model is not None:
+        oned_colls = [
+            getattr(actual_model, "trusses", None),
+            getattr(actual_model, "beams", None),
+            getattr(actual_model, "springs", None),
+        ]
+        oned_found = False
+        for coll in oned_colls:
+            if not coll:
+                continue
+            for el_id, el in coll.items():
+                pid = getattr(el, "part_id", getattr(el, "pid", 0))
+                part = getattr(actual_model, "parts", {}).get(pid)
+                if part and getattr(part, "mat_id", 0) == mat_id:
+                    actual_log.error(
+                        f"/MAT/LAW107/{mat_id} is not supported for 1D elements (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    oned_found = True
+                    break
+            if oned_found:
+                break
+
+        for pid, part in getattr(actual_model, "parts", {}).items():
+            if getattr(part, "mat_id", 0) == mat_id:
+                etype = str(getattr(part, "element_type", "") or "").upper()
+                if any(s in etype for s in ("BEAM", "TRUSS", "SPRING")):
+                    actual_log.error(
+                        f"/MAT/LAW107/{mat_id} is not supported for 1D elements ({etype.lower()}) (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    break
+                prop_id = getattr(part, "prop_id", 0)
+                prop = getattr(actual_model, "properties", {}).get(prop_id)
+                if prop is not None:
+                    ptype = str(getattr(prop, "type", getattr(prop, "prop_type", "")) or "").upper()
+                    if any(s in ptype for s in ("TYPE2", "TYPE3", "TYPE4", "TYPE11", "BEAM", "TRUSS", "SPRING")):
+                        actual_log.error(
+                            f"/MAT/LAW107/{mat_id} is not supported for 1D elements ({ptype.lower()}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+
+
+_check_mat_law107 = check_mat_law107
+check_mat_paper_light = check_mat_law107
+check_mat_plas_paper_light = check_mat_law107
+check_mat_pfeiffer = check_mat_law107
+
+
+
 
 def check_materials(model: Model, log: MessageLog) -> None:
     """Validate all material parameters across model."""
@@ -7326,6 +7523,18 @@ _MAT_CHECKS: dict[Any, Any] = {
     "MAT_106": check_mat_law106,
     "MAT_LAW106": check_mat_law106,
     "LAW106_JCOOK_ALM": check_mat_law106,
+    107: check_mat_law107,
+    "107": check_mat_law107,
+    "LAW107": check_mat_law107,
+    "PAPER_LIGHT": check_mat_law107,
+    "PLAS_PAPER_LIGHT": check_mat_law107,
+    "PFEIFFER": check_mat_law107,
+    "MAT_PAPER_LIGHT": check_mat_law107,
+    "MAT_PLAS_PAPER_LIGHT": check_mat_law107,
+    "MAT_PFEIFFER": check_mat_law107,
+    "MAT_107": check_mat_law107,
+    "MAT_LAW107": check_mat_law107,
+    "LAW107_PAPER_LIGHT": check_mat_law107,
 }
 
 
@@ -7799,6 +8008,14 @@ def check_model(model: Model, log: MessageLog) -> None:
                 if name in ("trusses", "beams", "springs"):
                     log.error(
                         f"/MAT/LAW106/{mat.id} (/MAT/JCOOK_ALM) is not supported for 1D elements ({name}) (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    continue
+            if (mat.law in _LAW107_KEYS
+                    or getattr(mat, "law_name", None) in _LAW107_KEYS):
+                if name in ("trusses", "beams", "springs"):
+                    log.error(
+                        f"/MAT/LAW107/{mat.id} (/MAT/PAPER_LIGHT) is not supported for 1D elements ({name}) (ANCMSG 306)",
                         "MAT CHECK",
                     )
                     continue

@@ -945,7 +945,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW106", "JCOOK_ALM", "JOHNS_COOK_ALM", "LAW106_JCOOK_ALM"):
         read_mat_law106(block, model, log)
         return
-    if lawname in ("LAW107", "PAPER_LIGHT", "PLAS_PAPER_LIGHT", "LAW107_PAPER_LIGHT"):
+    if lawname in ("LAW107", "PAPER_LIGHT", "PLAS_PAPER_LIGHT", "LAW107_PAPER_LIGHT", "PFEIFFER", "MAT_PFEIFFER", "MAT_PAPER_LIGHT", "MAT_107"):
         read_mat_law107(block, model, log)
         return
     if lawname in ("LAW110", "VEGTER", "PLAS_VEGTER", "LAW110_VEGTER"):
@@ -30814,11 +30814,44 @@ def read_mat_law107(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "TAB_YLDT": tab_yldt, "MAT_XscaleT": xscale_t, "MAT_YscaleT": yscale_t,
         }
     )
+    mat107.e1 = e1
+    mat107.e2 = e2
+    mat107.e3 = e3
+    mat107.nu21 = nu21
+    mat107.g12 = g12
+    mat107.g23 = g23
+    mat107.g13 = g13
+    mat107.g31 = g13
+    mat107.ires = ires
+    mat107.itab = itab
+    mat107.ismooth = ismooth
+    mat107.xi1 = xi1
+    mat107.xi2 = xi2
+    mat107.g1c = g1c
+    mat107.d1 = d1
+    mat107.d2 = d2
+    mat107.k1 = k1
+    mat107.k2 = k2
+    mat107.k3 = k3
+    mat107.k4 = k4
+    mat107.k5 = k5
+    mat107.k6 = k6
+    mat107.sigy1 = sigy1
+    mat107.sigy2 = sigy2
+    mat107.sigy1c = sigy1c
+    mat107.sigy2c = sigy2c
+    mat107.sigyt = sigyt
     mat107.record = GenericMaterialRecord(
         law_name="LAW107", law_number=107, id=mat_id, title=title,
         params=mat107.params, density=rho0, unit_id=block.unit_id,
     )
     model.materials[mat_id] = mat107
+
+
+read_mat_paper_light = read_mat_law107
+read_mat_plas_paper_light = read_mat_law107
+read_mat_pfeiffer = read_mat_law107
+
 
 
 def read_mat_law110(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -86505,6 +86538,8 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PAPER_LIGHT": read_mat,
     "MAT_PLAS_PAPER_LIGHT": read_mat,
     "PLAS_PAPER_LIGHT": read_mat,
+    "MAT_PFEIFFER": read_mat,
+    "PFEIFFER": read_mat,
     "MAT_LAW110": read_mat,
     "MAT_VEGTER": read_mat,
     "VEGTER": read_mat,

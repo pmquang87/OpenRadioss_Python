@@ -7648,8 +7648,238 @@ class MaterialLaw107:
     xscale_t: float = 1.0
     yscale_t: float = 1.0
 
+    def __init__(
+        self,
+        id: int = 0,
+        title: str = "",
+        rho0: float = 0.0,
+        rhor: float = 0.0,
+        e1: float = 0.0,
+        e2: float = 0.0,
+        e3: float = 0.0,
+        ires: int = 2,
+        itab: int = 0,
+        ismooth: int = 1,
+        nu21: float = 0.0,
+        g12: float = 0.0,
+        g23: float = 0.0,
+        g13: float = 0.0,
+        xi1: float = 0.0,
+        xi2: float = 0.0,
+        g1c: float = 0.0,
+        d1: float = 0.0,
+        d2: float = 0.0,
+        k1: float = 0.0,
+        k2: float = 0.0,
+        k3: float = 0.0,
+        k4: float = 0.0,
+        k5: float = 0.0,
+        k6: float = 0.0,
+        sigy1: float = 1.0e30,
+        cini1: float = 1.0e30,
+        s1: float = 0.0,
+        sigy2: float = 1.0e30,
+        cini2: float = 1.0e30,
+        s2: float = 0.0,
+        sigy1c: float = 1.0e30,
+        cini1c: float = 1.0e30,
+        s1c: float = 0.0,
+        sigy2c: float = 1.0e30,
+        cini2c: float = 1.0e30,
+        s2c: float = 0.0,
+        sigyt: float = 1.0e30,
+        cinit: float = 1.0e30,
+        st: float = 0.0,
+        tab_yld1: int = 0,
+        xscale1: float = 1.0,
+        yscale1: float = 1.0,
+        tab_yld2: int = 0,
+        xscale2: float = 1.0,
+        yscale2: float = 1.0,
+        tab_yld1c: int = 0,
+        xscale1c: float = 1.0,
+        yscale1c: float = 1.0,
+        tab_yld2c: int = 0,
+        xscale2c: float = 1.0,
+        yscale2c: float = 1.0,
+        tab_yldt: int = 0,
+        xscale_t: float = 1.0,
+        yscale_t: float = 1.0,
+        **kwargs: Any,
+    ):
+        self.id = int(kwargs.pop("mat_id", kwargs.pop("id", id)))
+        self.title = str(kwargs.pop("mat_name", kwargs.pop("title", title)))
+        self.rho0 = float(kwargs.pop("rho", rho0))
+        self.rhor = float(kwargs.pop("refer_rho", rhor))
+        self.e1 = float(kwargs.pop("young1", kwargs.pop("E1", kwargs.pop("Young1", e1))))
+        self.e2 = float(kwargs.pop("young2", kwargs.pop("E2", kwargs.pop("Young2", e2))))
+        self.e3 = float(kwargs.pop("young3", kwargs.pop("E3", kwargs.pop("Young3", e3))))
+        self.ires = ires
+        self.itab = itab
+        self.ismooth = ismooth
+        if "nu12" in kwargs:
+            nu12_in = float(kwargs.pop("nu12"))
+            self.nu21 = (nu12_in * self.e2 / self.e1) if abs(self.e1) > 1.0e-20 else nu12_in
+        else:
+            self.nu21 = float(kwargs.pop("nu21", nu21))
+        self.g12 = g12
+        self.g23 = g23
+        self.g13 = float(kwargs.pop("g31", kwargs.pop("G31", g13)))
+        self.xi1 = xi1
+        self.xi2 = xi2
+        self.g1c = g1c
+        self.d1 = d1
+        self.d2 = d2
+        self.k1 = k1
+        self.k2 = k2
+        self.k3 = k3
+        self.k4 = k4
+        self.k5 = k5
+        self.k6 = k6
+        self.sigy1 = sigy1
+        self.cini1 = cini1
+        self.s1 = s1
+        self.sigy2 = sigy2
+        self.cini2 = cini2
+        self.s2 = s2
+        self.sigy1c = sigy1c
+        self.cini1c = cini1c
+        self.s1c = s1c
+        self.sigy2c = sigy2c
+        self.cini2c = cini2c
+        self.s2c = s2c
+        self.sigyt = sigyt
+        self.cinit = cinit
+        self.st = st
+        self.tab_yld1 = tab_yld1
+        self.xscale1 = xscale1
+        self.yscale1 = yscale1
+        self.tab_yld2 = tab_yld2
+        self.xscale2 = xscale2
+        self.yscale2 = yscale2
+        self.tab_yld1c = tab_yld1c
+        self.xscale1c = xscale1c
+        self.yscale1c = yscale1c
+        self.tab_yld2c = tab_yld2c
+        self.xscale2c = xscale2c
+        self.yscale2c = yscale2c
+        self.tab_yldt = tab_yldt
+        self.xscale_t = xscale_t
+        self.yscale_t = yscale_t
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
-@dataclass
+    @property
+    def rho(self) -> float:
+        return self.rho0
+
+    @rho.setter
+    def rho(self, value: float) -> None:
+        self.rho0 = value
+
+    @property
+    def g31(self) -> float:
+        return self.g13
+
+    @g31.setter
+    def g31(self, value: float) -> None:
+        self.g13 = value
+
+    @property
+    def E1(self) -> float:
+        return self.e1
+
+    @E1.setter
+    def E1(self, value: float) -> None:
+        self.e1 = value
+
+    @property
+    def E2(self) -> float:
+        return self.e2
+
+    @E2.setter
+    def E2(self, value: float) -> None:
+        self.e2 = value
+
+    @property
+    def E3(self) -> float:
+        return self.e3
+
+    @E3.setter
+    def E3(self, value: float) -> None:
+        self.e3 = value
+
+    @property
+    def Young1(self) -> float:
+        return self.e1
+
+    @Young1.setter
+    def Young1(self, value: float) -> None:
+        self.e1 = value
+
+    @property
+    def Young2(self) -> float:
+        return self.e2
+
+    @Young2.setter
+    def Young2(self, value: float) -> None:
+        self.e2 = value
+
+    @property
+    def Young3(self) -> float:
+        return self.e3
+
+    @Young3.setter
+    def Young3(self, value: float) -> None:
+        self.e3 = value
+
+    @property
+    def nu12(self) -> float:
+        return (self.nu21 * self.e1 / self.e2) if abs(self.e2) > 1.0e-20 else 0.0
+
+    @nu12.setter
+    def nu12(self, value: float) -> None:
+        self.nu21 = (value * self.e2 / self.e1) if abs(self.e1) > 1.0e-20 else value
+
+    @property
+    def sound_speed(self) -> float:
+        import math
+        nu12 = self.nu12
+        denom = 1.0 - nu12 * self.nu21
+        if abs(denom) < 1.0e-20:
+            denom = 1.0e-6
+        a11 = self.e1 / denom
+        a12 = nu12 * self.e2 / denom
+        a21 = self.nu21 * self.e1 / denom
+        a22 = self.e2 / denom
+        rho = max(self.rho0, 1.0e-20)
+        max_mod = max(a11, a12, a21, a22, self.e3, self.g12, self.g23, self.g13)
+        return math.sqrt(max_mod / rho)
+
+    @property
+    def sound_speed_shell(self) -> float:
+        import math
+        nu12 = self.nu12
+        denom = 1.0 - nu12 * self.nu21
+        if abs(denom) < 1.0e-20:
+            denom = 1.0e-6
+        a11 = self.e1 / denom
+        a12 = nu12 * self.e2 / denom
+        a21 = self.nu21 * self.e1 / denom
+        a22 = self.e2 / denom
+        rho = max(self.rho0, 1.0e-20)
+        max_mod = max(a11, a12, a21, a22, self.g12, self.g23, self.g13)
+        return math.sqrt(max_mod / rho)
+
+
+MatLaw107 = MaterialLaw107
+MatPaperLight = MaterialLaw107
+MatPlasPaperLight = MaterialLaw107
+MatPfeiffer = MaterialLaw107
+MaterialPaperLight = MaterialLaw107
+MaterialPlasPaperLight = MaterialLaw107
+MaterialPfeiffer = MaterialLaw107
+
 class MaterialLaw110:
     """/MAT/LAW110 or /MAT/VEGTER (M176): Vegter anisotropic yield locus material model.
 

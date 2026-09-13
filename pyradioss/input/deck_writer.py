@@ -7130,6 +7130,344 @@ class StarterDeck:
         kwargs.setdefault("law_name", "JOHNS_COOK_ALM")
         return self.mat_law106(*args, **kwargs)
 
+    def mat_law107(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho: float = 0.0,
+        refer_rho: float = 0.0,
+        young1: float = 0.0,
+        young2: float = 0.0,
+        young3: float = 0.0,
+        ires: int = 2,
+        itab: int = 0,
+        ismooth: int = 1,
+        nu21: float = 0.0,
+        g12: float = 0.0,
+        g23: float = 0.0,
+        g13: float = 0.0,
+        xi1: float = 0.0,
+        xi2: float = 0.0,
+        g1c: float = 0.0,
+        d1: float = 0.0,
+        d2: float = 0.0,
+        k1: float = 0.0,
+        k2: float = 0.0,
+        k3: float = 0.0,
+        k4: float = 0.0,
+        k5: float = 0.0,
+        k6: float = 0.0,
+        sigy1: float = 1.0e20,
+        cini1: float = 1.0e20,
+        s1: float = 0.0,
+        sigy2: float = 1.0e20,
+        cini2: float = 1.0e20,
+        s2: float = 0.0,
+        sigy1c: float = 1.0e20,
+        cini1c: float = 1.0e20,
+        s1c: float = 0.0,
+        sigy2c: float = 1.0e20,
+        cini2c: float = 1.0e20,
+        s2c: float = 0.0,
+        sigyt: float = 1.0e20,
+        cinit: float = 1.0e20,
+        st: float = 0.0,
+        tab_yld1: int = 0,
+        xscale1: float = 1.0,
+        yscale1: float = 1.0,
+        tab_yld2: int = 0,
+        xscale2: float = 1.0,
+        yscale2: float = 1.0,
+        tab_yld1c: int = 0,
+        xscale1c: float = 1.0,
+        yscale1c: float = 1.0,
+        tab_yld2c: int = 0,
+        xscale2c: float = 1.0,
+        yscale2c: float = 1.0,
+        tab_yldt: int = 0,
+        xscale_t: float = 1.0,
+        yscale_t: float = 1.0,
+        law_name: str = "LAW107",
+        unit_id: Optional[int] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW107`` (/MAT/PAPER_LIGHT / /MAT/PLAS_PAPER_LIGHT / /MAT/PFEIFFER) Orthotropic paper model (M577).
+
+        Card 1: RHO_I [, Refer_Rho] (%20lg[%20lg])
+        Card 2: E1, E2, E3, Ires, Itab, Ismooth (%20lg%20lg%20lg%10d%10d%10d)
+        Card 3: nu21, G12, G23, G13 (%20lg%20lg%20lg%20lg)
+        Card 4: XI1, XI2, g1c, d1, d2 (%20lg%20lg%20lg%20lg%20lg)
+        Card 5: k1, k2, k3 (%20lg%20lg%20lg)
+        Card 6: k4, k5, k6 (%20lg%20lg%20lg)
+        Cards 7-11:
+            If Itab == 0 (Analytic):
+                SIGY1, CINI1, S1 (%20lg%20lg%20lg)
+                SIGY2, CINI2, S2 (%20lg%20lg%20lg)
+                SIGY1C, CINI1C, S1C (%20lg%20lg%20lg)
+                SIGY2C, CINI2C, S2C (%20lg%20lg%20lg)
+                SIGYT, CINIT, ST (%20lg%20lg%20lg)
+            If Itab > 0 (Tabulated):
+                blank(10), TAB_YLD1, Xscale1, Yscale1 (%10s%10d%20lg%20lg)
+                ...
+        """
+        mat_obj = None
+        if hasattr(mid, "id") or hasattr(mid, "young1") or hasattr(mid, "e1") or hasattr(mid, "k1"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+        elif len(args) > 0 and not isinstance(args[0], (int, float, str)):
+            mat_obj = args[0]
+        elif "mat_obj" in kwargs:
+            mat_obj = kwargs["mat_obj"]
+        elif "mat" in kwargs:
+            mat_obj = kwargs["mat"]
+        elif "material" in kwargs:
+            mat_obj = kwargs["material"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", rho))
+            refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", refer_rho))
+            young1 = getattr(mat_obj, "young1", getattr(mat_obj, "e1", young1))
+            young2 = getattr(mat_obj, "young2", getattr(mat_obj, "e2", young2))
+            young3 = getattr(mat_obj, "young3", getattr(mat_obj, "e3", young3))
+            ires = getattr(mat_obj, "ires", ires)
+            itab = getattr(mat_obj, "itab", itab)
+            ismooth = getattr(mat_obj, "ismooth", ismooth)
+            nu21 = getattr(mat_obj, "nu21", nu21)
+            g12 = getattr(mat_obj, "g12", g12)
+            g23 = getattr(mat_obj, "g23", g23)
+            g13 = getattr(mat_obj, "g13", getattr(mat_obj, "g31", g13))
+            xi1 = getattr(mat_obj, "xi1", xi1)
+            xi2 = getattr(mat_obj, "xi2", xi2)
+            g1c = getattr(mat_obj, "g1c", g1c)
+            d1 = getattr(mat_obj, "d1", d1)
+            d2 = getattr(mat_obj, "d2", d2)
+            k1 = getattr(mat_obj, "k1", k1)
+            k2 = getattr(mat_obj, "k2", k2)
+            k3 = getattr(mat_obj, "k3", k3)
+            k4 = getattr(mat_obj, "k4", k4)
+            k5 = getattr(mat_obj, "k5", k5)
+            k6 = getattr(mat_obj, "k6", k6)
+            sigy1 = getattr(mat_obj, "sigy1", sigy1)
+            cini1 = getattr(mat_obj, "cini1", cini1)
+            s1 = getattr(mat_obj, "s1", s1)
+            sigy2 = getattr(mat_obj, "sigy2", sigy2)
+            cini2 = getattr(mat_obj, "cini2", cini2)
+            s2 = getattr(mat_obj, "s2", s2)
+            sigy1c = getattr(mat_obj, "sigy1c", sigy1c)
+            cini1c = getattr(mat_obj, "cini1c", cini1c)
+            s1c = getattr(mat_obj, "s1c", s1c)
+            sigy2c = getattr(mat_obj, "sigy2c", sigy2c)
+            cini2c = getattr(mat_obj, "cini2c", cini2c)
+            s2c = getattr(mat_obj, "s2c", s2c)
+            sigyt = getattr(mat_obj, "sigyt", sigyt)
+            cinit = getattr(mat_obj, "cinit", cinit)
+            st = getattr(mat_obj, "st", st)
+            tab_yld1 = getattr(mat_obj, "tab_yld1", tab_yld1)
+            xscale1 = getattr(mat_obj, "xscale1", xscale1)
+            yscale1 = getattr(mat_obj, "yscale1", yscale1)
+            tab_yld2 = getattr(mat_obj, "tab_yld2", tab_yld2)
+            xscale2 = getattr(mat_obj, "xscale2", xscale2)
+            yscale2 = getattr(mat_obj, "yscale2", yscale2)
+            tab_yld1c = getattr(mat_obj, "tab_yld1c", tab_yld1c)
+            xscale1c = getattr(mat_obj, "xscale1c", xscale1c)
+            yscale1c = getattr(mat_obj, "yscale1c", yscale1c)
+            tab_yld2c = getattr(mat_obj, "tab_yld2c", tab_yld2c)
+            xscale2c = getattr(mat_obj, "xscale2c", xscale2c)
+            yscale2c = getattr(mat_obj, "yscale2c", yscale2c)
+            tab_yldt = getattr(mat_obj, "tab_yldt", tab_yldt)
+            xscale_t = getattr(mat_obj, "xscale_t", getattr(mat_obj, "xscalet", xscale_t))
+            yscale_t = getattr(mat_obj, "yscale_t", getattr(mat_obj, "yscalet", yscale_t))
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("material_id", "mat_id", "id", "mid"):
+                mid = int(v)
+            elif kl == "title":
+                title = str(v)
+            elif kl in ("rho", "rho0", "density", "mat_rho"):
+                rho = float(v)
+            elif kl in ("refer_rho", "rhor", "ref_rho"):
+                refer_rho = float(v)
+            elif kl in ("young1", "e1", "mat_e1"):
+                young1 = float(v)
+            elif kl in ("young2", "e2", "mat_e2"):
+                young2 = float(v)
+            elif kl in ("young3", "e3", "mat_e3"):
+                young3 = float(v)
+            elif kl in ("ires", "mat_ires"):
+                ires = int(v)
+            elif kl in ("itab", "mat_itab"):
+                itab = int(v)
+            elif kl in ("ismooth", "mat_smooth"):
+                ismooth = int(v)
+            elif kl in ("nu21", "mat_nu21"):
+                nu21 = float(v)
+            elif kl in ("g12", "mat_g12"):
+                g12 = float(v)
+            elif kl in ("g23", "mat_g23"):
+                g23 = float(v)
+            elif kl in ("g13", "g31", "mat_g13"):
+                g13 = float(v)
+            elif kl in ("xi1", "mat_xi1"):
+                xi1 = float(v)
+            elif kl in ("xi2", "mat_xi2"):
+                xi2 = float(v)
+            elif kl in ("g1c", "mat_g1c"):
+                g1c = float(v)
+            elif kl in ("d1", "mat_d1"):
+                d1 = float(v)
+            elif kl in ("d2", "mat_d2"):
+                d2 = float(v)
+            elif kl in ("k1", "mat_k1"):
+                k1 = float(v)
+            elif kl in ("k2", "mat_k2"):
+                k2 = float(v)
+            elif kl in ("k3", "mat_k3"):
+                k3 = float(v)
+            elif kl in ("k4", "mat_k4"):
+                k4 = float(v)
+            elif kl in ("k5", "mat_k5"):
+                k5 = float(v)
+            elif kl in ("k6", "mat_k6"):
+                k6 = float(v)
+            elif kl in ("sigy1", "mat_sigy1"):
+                sigy1 = float(v)
+            elif kl in ("cini1", "mat_cini1"):
+                cini1 = float(v)
+            elif kl in ("s1", "mat_s1"):
+                s1 = float(v)
+            elif kl in ("sigy2", "mat_sigy2"):
+                sigy2 = float(v)
+            elif kl in ("cini2", "mat_cini2"):
+                cini2 = float(v)
+            elif kl in ("s2", "mat_s2"):
+                s2 = float(v)
+            elif kl in ("sigy1c", "mat_sigy1c"):
+                sigy1c = float(v)
+            elif kl in ("cini1c", "mat_cini1c"):
+                cini1c = float(v)
+            elif kl in ("s1c", "mat_s1c"):
+                s1c = float(v)
+            elif kl in ("sigy2c", "mat_sigy2c"):
+                sigy2c = float(v)
+            elif kl in ("cini2c", "mat_cini2c"):
+                cini2c = float(v)
+            elif kl in ("s2c", "mat_s2c"):
+                s2c = float(v)
+            elif kl in ("sigyt", "mat_sigyt"):
+                sigyt = float(v)
+            elif kl in ("cinit", "mat_cinit"):
+                cinit = float(v)
+            elif kl in ("st", "mat_st"):
+                st = float(v)
+            elif kl in ("tab_yld1",):
+                tab_yld1 = int(v)
+            elif kl in ("xscale1", "mat_xscale1"):
+                xscale1 = float(v)
+            elif kl in ("yscale1", "mat_yscale1"):
+                yscale1 = float(v)
+            elif kl in ("tab_yld2",):
+                tab_yld2 = int(v)
+            elif kl in ("xscale2", "mat_xscale2"):
+                xscale2 = float(v)
+            elif kl in ("yscale2", "mat_yscale2"):
+                yscale2 = float(v)
+            elif kl in ("tab_yld1c",):
+                tab_yld1c = int(v)
+            elif kl in ("xscale1c", "mat_xscale1c"):
+                xscale1c = float(v)
+            elif kl in ("yscale1c", "mat_yscale1c"):
+                yscale1c = float(v)
+            elif kl in ("tab_yld2c",):
+                tab_yld2c = int(v)
+            elif kl in ("xscale2c", "mat_xscale2c"):
+                xscale2c = float(v)
+            elif kl in ("yscale2c", "mat_yscale2c"):
+                yscale2c = float(v)
+            elif kl in ("tab_yldt",):
+                tab_yldt = int(v)
+            elif kl in ("xscale_t", "xscalet", "mat_xscalet"):
+                xscale_t = float(v)
+            elif kl in ("yscale_t", "yscalet", "mat_yscalet"):
+                yscale_t = float(v)
+
+        if data_cards is not None and len(data_cards) > 0:
+            hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+            self.lines.append(hdr)
+            self._title(title)
+            for cd in data_cards:
+                self.lines.append(cd if isinstance(cd, str) else str(cd))
+            return self
+
+        hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+        self.lines.append(hdr)
+        self._title(title)
+
+        # Card 1: RHO_I [, Refer_Rho]
+        if refer_rho > 0.0 and refer_rho != rho:
+            self.lines.append(fmt_float(rho) + fmt_float(refer_rho))
+        else:
+            self.lines.append(fmt_float(rho))
+
+        # Card 2: E1, E2, E3, Ires, Itab, Ismooth
+        self.lines.append(
+            fmt_float(young1) + fmt_float(young2) + fmt_float(young3)
+            + fmt_int(ires) + fmt_int(itab) + fmt_int(ismooth)
+        )
+
+        # Card 3: nu21, G12, G23, G13
+        self.lines.append(fmt_float(nu21) + fmt_float(g12) + fmt_float(g23) + fmt_float(g13))
+
+        # Card 4: XI1, XI2, g1c, d1, d2
+        self.lines.append(fmt_float(xi1) + fmt_float(xi2) + fmt_float(g1c) + fmt_float(d1) + fmt_float(d2))
+
+        # Card 5: k1, k2, k3
+        self.lines.append(fmt_float(k1) + fmt_float(k2) + fmt_float(k3))
+
+        # Card 6: k4, k5, k6
+        self.lines.append(fmt_float(k4) + fmt_float(k5) + fmt_float(k6))
+
+        if itab == 0:
+            # Card 7: SIGY1, CINI1, S1
+            self.lines.append(fmt_float(sigy1) + fmt_float(cini1) + fmt_float(s1))
+            # Card 8: SIGY2, CINI2, S2
+            self.lines.append(fmt_float(sigy2) + fmt_float(cini2) + fmt_float(s2))
+            # Card 9: SIGY1C, CINI1C, S1C
+            self.lines.append(fmt_float(sigy1c) + fmt_float(cini1c) + fmt_float(s1c))
+            # Card 10: SIGY2C, CINI2C, S2C
+            self.lines.append(fmt_float(sigy2c) + fmt_float(cini2c) + fmt_float(s2c))
+            # Card 11: SIGYT, CINIT, ST
+            self.lines.append(fmt_float(sigyt) + fmt_float(cinit) + fmt_float(st))
+        else:
+            # Cards 7-11: blank(10), TAB_YLD*, Xscale*, Yscale*
+            self.lines.append(" " * 10 + fmt_int(tab_yld1) + fmt_float(xscale1) + fmt_float(yscale1))
+            self.lines.append(" " * 10 + fmt_int(tab_yld2) + fmt_float(xscale2) + fmt_float(yscale2))
+            self.lines.append(" " * 10 + fmt_int(tab_yld1c) + fmt_float(xscale1c) + fmt_float(yscale1c))
+            self.lines.append(" " * 10 + fmt_int(tab_yld2c) + fmt_float(xscale2c) + fmt_float(yscale2c))
+            self.lines.append(" " * 10 + fmt_int(tab_yldt) + fmt_float(xscale_t) + fmt_float(yscale_t))
+
+        return self
+
+    def mat_paper_light(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/PAPER_LIGHT`` — synonym for ``/MAT/LAW107``."""
+        kwargs.setdefault("law_name", "PAPER_LIGHT")
+        return self.mat_law107(*args, **kwargs)
+
+    def mat_plas_paper_light(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/PLAS_PAPER_LIGHT`` — synonym for ``/MAT/LAW107``."""
+        kwargs.setdefault("law_name", "PLAS_PAPER_LIGHT")
+        return self.mat_law107(*args, **kwargs)
+
+    def mat_pfeiffer(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/PFEIFFER`` — synonym for ``/MAT/LAW107``."""
+        kwargs.setdefault("law_name", "PFEIFFER")
+        return self.mat_law107(*args, **kwargs)
+
+
     def mat_law93(
         self,
         mid: int = 0,
@@ -10826,6 +11164,8 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law105(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     elif law in ("106", "LAW106", "JCOOK_ALM", "JOHNS_COOK_ALM", "MAT_JCOOK_ALM", "MAT_106", "MAT_LAW106", "LAW106_JCOOK_ALM"):
         d.mat_law106(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
+    elif law in ("107", "LAW107", "PAPER_LIGHT", "PLAS_PAPER_LIGHT", "LAW107_PAPER_LIGHT", "PFEIFFER", "MAT_PFEIFFER", "MAT_PAPER_LIGHT", "MAT_PLAS_PAPER_LIGHT", "MAT_107", "MAT_LAW107"):
+        d.mat_law107(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")
