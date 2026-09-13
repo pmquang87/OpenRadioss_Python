@@ -7467,6 +7467,158 @@ class StarterDeck:
         kwargs.setdefault("law_name", "PFEIFFER")
         return self.mat_law107(*args, **kwargs)
 
+    def mat_law109(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho: float = 0.0,
+        refer_rho: float = 0.0,
+        young: float = 0.0,
+        nu: float = 0.0,
+        cp: float = 0.0,
+        eta: float = 1.0,
+        tref: float = 293.0,
+        tini: float = 293.0,
+        tab_yld: int = 0,
+        tab_temp: int = 0,
+        xscale_h: float = 1.0,
+        yscale_h: float = 1.0,
+        ismooth: int = 1,
+        tab_eta: int = 0,
+        xscale_eta: float = 1.0,
+        fcut: float = 10000.0,
+        law_name: str = "LAW109",
+        unit_id: Optional[int] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW109`` (/MAT/TAB_PLAS / /MAT/ELASTO_PLAS_TAB) Tabulated elasto-plasticity model (M578).
+
+        Card 1: RHO_I [, Refer_Rho] (%20lg[%20lg])
+        Card 2: E, Nu (%20lg%20lg)
+        Card 3: C_p, ETA, T_ref, T_ini (%20lg%20lg%20lg%20lg)
+        Card 4: tab_ID_h, tab_ID_t, Xscale_h, Yscale_h, blank(30), I_smooth (%10d%10d%20lg%20lg%30s%10d)
+        Card 5: TAB_ETA, Xscale_ETA (%10d%20lg)
+        """
+        mat_obj = None
+        if hasattr(mid, "id") or hasattr(mid, "rho_i") or hasattr(mid, "tab_id_h") or hasattr(mid, "tab_yld"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+        elif len(args) > 0 and not isinstance(args[0], (int, float, str)):
+            mat_obj = args[0]
+        elif "mat_obj" in kwargs:
+            mat_obj = kwargs["mat_obj"]
+        elif "mat" in kwargs:
+            mat_obj = kwargs["mat"]
+        elif "material" in kwargs:
+            mat_obj = kwargs["material"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho_i", getattr(mat_obj, "rho0", getattr(mat_obj, "rho", rho)))
+            refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", refer_rho))
+            young = getattr(mat_obj, "e", getattr(mat_obj, "young", getattr(mat_obj, "E", young)))
+            nu = getattr(mat_obj, "nu", getattr(mat_obj, "Nu", nu))
+            cp = getattr(mat_obj, "c_p", getattr(mat_obj, "cp", getattr(mat_obj, "spheat", cp)))
+            eta = getattr(mat_obj, "eta", getattr(mat_obj, "ETA", eta))
+            tref = getattr(mat_obj, "t_ref", getattr(mat_obj, "tref", getattr(mat_obj, "wpref", tref)))
+            tini = getattr(mat_obj, "t_ini", getattr(mat_obj, "tini", getattr(mat_obj, "t_initial", tini)))
+            tab_yld = getattr(mat_obj, "tab_id_h", getattr(mat_obj, "tab_yld", getattr(mat_obj, "tab_h", tab_yld)))
+            tab_temp = getattr(mat_obj, "tab_id_t", getattr(mat_obj, "tab_temp", getattr(mat_obj, "tab_t", tab_temp)))
+            xscale_h = getattr(mat_obj, "xscale_h", getattr(mat_obj, "xscale", xscale_h))
+            yscale_h = getattr(mat_obj, "yscale_h", getattr(mat_obj, "yscale", yscale_h))
+            ismooth = getattr(mat_obj, "i_smooth", getattr(mat_obj, "ismooth", ismooth))
+            tab_eta = getattr(mat_obj, "tab_eta", tab_eta)
+            xscale_eta = getattr(mat_obj, "xscale_eta", getattr(mat_obj, "xrate", xscale_eta))
+            fcut = getattr(mat_obj, "fcut", fcut)
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("material_id", "mat_id", "id", "mid"):
+                mid = int(v)
+            elif kl == "title":
+                title = str(v)
+            elif kl in ("rho", "rho0", "rho_i", "density", "mat_rho"):
+                rho = float(v)
+            elif kl in ("refer_rho", "rhor", "ref_rho"):
+                refer_rho = float(v)
+            elif kl in ("young", "e", "mat_e"):
+                young = float(v)
+            elif kl in ("nu", "mat_nu"):
+                nu = float(v)
+            elif kl in ("cp", "c_p", "mat_spheat", "spheat"):
+                cp = float(v)
+            elif kl in ("eta", "mat_eta"):
+                eta = float(v)
+            elif kl in ("tref", "t_ref", "wpref"):
+                tref = float(v)
+            elif kl in ("tini", "t_ini", "t_initial"):
+                tini = float(v)
+            elif kl in ("tab_yld", "tab_id_h", "mat_tab_yld", "tab_h"):
+                tab_yld = int(v)
+            elif kl in ("tab_temp", "tab_id_t", "mat_tab_temp", "tab_t"):
+                tab_temp = int(v)
+            elif kl in ("xscale_h", "xscale", "mat_xscale"):
+                xscale_h = float(v)
+            elif kl in ("yscale_h", "yscale", "mat_yscale"):
+                yscale_h = float(v)
+            elif kl in ("ismooth", "i_smooth", "mat_ismooth"):
+                ismooth = int(v)
+            elif kl in ("tab_eta",):
+                tab_eta = int(v)
+            elif kl in ("xscale_eta", "xrate", "mat_xrate"):
+                xscale_eta = float(v)
+            elif kl in ("fcut", "mat_fcut"):
+                fcut = float(v)
+
+        if data_cards is not None and len(data_cards) > 0:
+            hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+            self.lines.append(hdr)
+            self._title(title)
+            for cd in data_cards:
+                self.lines.append(cd if isinstance(cd, str) else str(cd))
+            return self
+
+        hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+        self.lines.append(hdr)
+        self._title(title)
+
+        # Card 1: RHO_I [, Refer_Rho]
+        if refer_rho > 0.0 and refer_rho != rho:
+            self.lines.append(fmt_float(rho) + fmt_float(refer_rho))
+        else:
+            self.lines.append(fmt_float(rho))
+
+        # Card 2: E, Nu
+        self.lines.append(fmt_float(young) + fmt_float(nu))
+
+        # Card 3: C_p, ETA, T_ref, T_ini
+        self.lines.append(fmt_float(cp) + fmt_float(eta) + fmt_float(tref) + fmt_float(tini))
+
+        # Card 4: tab_ID_h, tab_ID_t, Xscale_h, Yscale_h, blank(30), I_smooth
+        self.lines.append(
+            fmt_int(tab_yld) + fmt_int(tab_temp)
+            + fmt_float(xscale_h) + fmt_float(yscale_h)
+            + " " * 30 + fmt_int(ismooth)
+        )
+
+        # Card 5: TAB_ETA, Xscale_ETA
+        self.lines.append(fmt_int(tab_eta) + fmt_float(xscale_eta))
+
+        return self
+
+    def mat_tab_plas(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/TAB_PLAS`` — synonym for ``/MAT/LAW109``."""
+        kwargs.setdefault("law_name", "TAB_PLAS")
+        return self.mat_law109(*args, **kwargs)
+
+    def mat_elasto_plas_tab(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/ELASTO_PLAS_TAB`` — synonym for ``/MAT/LAW109``."""
+        kwargs.setdefault("law_name", "ELASTO_PLAS_TAB")
+        return self.mat_law109(*args, **kwargs)
+
 
     def mat_law93(
         self,
@@ -11166,6 +11318,8 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law106(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     elif law in ("107", "LAW107", "PAPER_LIGHT", "PLAS_PAPER_LIGHT", "LAW107_PAPER_LIGHT", "PFEIFFER", "MAT_PFEIFFER", "MAT_PAPER_LIGHT", "MAT_PLAS_PAPER_LIGHT", "MAT_107", "MAT_LAW107"):
         d.mat_law107(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
+    elif law in ("109", "LAW109", "TAB_PLAS", "ELASTO_PLAS_TAB", "LAW109_TAB_PLAS", "MLAW109", "MAT_LAW109", "MAT_TAB_PLAS", "MAT_ELASTO_PLAS_TAB", "MAT_109"):
+        d.mat_law109(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")

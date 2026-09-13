@@ -954,7 +954,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW115", "DESHPANDE_FLECK", "DESHFLECK", "FOAM_DESHPANDE", "LAW115_DESHPANDE_FLECK"):
         read_mat_law115(block, model, log)
         return
-    if lawname in ("LAW109", "LAW109_LAW109"):
+    if lawname in ("LAW109", "109", "TAB_PLAS", "ELASTO_PLAS_TAB", "LAW109_TAB_PLAS", "LAW109_LAW109", "MAT_LAW109", "MAT_TAB_PLAS", "MAT_ELASTO_PLAS_TAB", "MLAW109"):
         read_mat_law109(block, model, log)
         return
     if lawname in ("LAW111", "MARLOW", "LAW111_MARLOW"):
@@ -31198,7 +31198,7 @@ def read_mat_law109(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/MAT/LAW109/{mat_id}: missing data cards", block.source)
         return
 
-    rho0, young, nu = 0.0, 0.0, 0.0
+    rho0, refer_rho, young, nu = 0.0, 0.0, 0.0, 0.0
     cp, eta, tref, tini = 0.0, 1.0, 293.0, 293.0
     tab_yld, tab_temp, xscale_h, yscale_h, ismooth = 0, 0, 1.0, 1.0, 1
     tab_eta, xscale_eta = 0, 1.0
@@ -31207,6 +31207,7 @@ def read_mat_law109(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if len(valid_cards) > 0:
             f1 = cut(valid_cards[0].raw, "MAT_LAW109_1")
             rho0 = _f(f1[0]) if len(f1) > 0 else 0.0
+            refer_rho = _f(f1[1]) if len(f1) > 1 and f1[1] else 0.0
         if len(valid_cards) > 1:
             f2 = cut(valid_cards[1].raw, "MAT_LAW109_2")
             young = _f(f2[0]) if len(f2) > 0 else 0.0
@@ -31223,42 +31224,54 @@ def read_mat_law109(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             tab_temp = _i(f4[1]) if len(f4) > 1 else 0
             xscale_h = _f(f4[2]) if len(f4) > 2 else 1.0
             yscale_h = _f(f4[3]) if len(f4) > 3 else 1.0
-            ismooth = _i(f4[5]) if len(f4) > 5 else 1
+            ismooth = _i(f4[5]) if len(f4) > 5 and f4[5] else 1
         if len(valid_cards) > 4:
             f5 = cut(valid_cards[4].raw, "MAT_LAW109_5")
             tab_eta = _i(f5[0]) if len(f5) > 0 else 0
             xscale_eta = _f(f5[1]) if len(f5) > 1 else 1.0
     else:
+        def _get_toks(c):
+            return [t.strip().rstrip(",").strip() for t in c.raw.replace(",", " ").split()]
+
         if len(valid_cards) > 0:
-            toks1 = valid_cards[0].tokens()
+            toks1 = _get_toks(valid_cards[0])
             rho0 = float(toks1[0]) if len(toks1) > 0 else 0.0
+            refer_rho = float(toks1[1]) if len(toks1) > 1 else 0.0
         if len(valid_cards) > 1:
-            toks2 = valid_cards[1].tokens()
+            toks2 = _get_toks(valid_cards[1])
             young = float(toks2[0]) if len(toks2) > 0 else 0.0
             nu = float(toks2[1]) if len(toks2) > 1 else 0.0
         if len(valid_cards) > 2:
-            toks3 = valid_cards[2].tokens()
+            toks3 = _get_toks(valid_cards[2])
             cp = float(toks3[0]) if len(toks3) > 0 else 0.0
             eta = float(toks3[1]) if len(toks3) > 1 else 1.0
             tref = float(toks3[2]) if len(toks3) > 2 else 293.0
             tini = float(toks3[3]) if len(toks3) > 3 else 293.0
         if len(valid_cards) > 3:
-            toks4 = valid_cards[3].tokens()
+            toks4 = _get_toks(valid_cards[3])
             tab_yld = int(toks4[0]) if len(toks4) > 0 else 0
             tab_temp = int(toks4[1]) if len(toks4) > 1 else 0
             xscale_h = float(toks4[2]) if len(toks4) > 2 else 1.0
             yscale_h = float(toks4[3]) if len(toks4) > 3 else 1.0
-            ismooth = int(toks4[4]) if len(toks4) > 4 else 1
+            if len(toks4) >= 6:
+                try:
+                    ismooth = int(toks4[5])
+                except ValueError:
+                    ismooth = int(toks4[4])
+            elif len(toks4) >= 5:
+                ismooth = int(toks4[4])
+            else:
+                ismooth = 1
         if len(valid_cards) > 4:
-            toks5 = valid_cards[4].tokens()
+            toks5 = _get_toks(valid_cards[4])
             tab_eta = int(toks5[0]) if len(toks5) > 0 else 0
             xscale_eta = float(toks5[1]) if len(toks5) > 1 else 1.0
 
     m109 = MaterialLaw109(
-        id=mat_id, title=title, rho0=rho0,
+        id=mat_id, title=title, rho0=rho0, refer_rho=refer_rho,
         young=young, nu=nu, cp=cp, eta=eta, tref=tref, tini=tini,
         tab_yld=tab_yld, tab_temp=tab_temp, xscale_h=xscale_h, yscale_h=yscale_h, ismooth=ismooth,
-        tab_eta=tab_eta, xscale_eta=xscale_eta,
+        tab_eta=tab_eta, xscale_eta=xscale_eta, unit_system=block.unit_id,
     )
     model.mat_law109s[mat_id] = m109
     from .mat_reader import GenericMaterialRecord
@@ -31266,13 +31279,15 @@ def read_mat_law109(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=mat_id, law=109, rho0=rho0, title=title,
         params={
             "E": young if young > 0.0 else 1.0, "nu": nu if 0.0 <= nu < 0.5 else 0.3,
-            "MAT_RHO": rho0, "MAT_E": young, "MAT_NU": nu,
+            "MAT_RHO": rho0, "Refer_Rho": refer_rho, "MAT_E": young, "MAT_NU": nu,
             "MAT_SPHEAT": cp, "MAT_ETA": eta, "WPREF": tref, "T_Initial": tini,
             "MAT_TAB_YLD": tab_yld, "MAT_TAB_TEMP": tab_temp,
             "MAT_Xscale": xscale_h, "MAT_Yscale": yscale_h, "MAT_Ismooth": ismooth,
             "TAB_ETA": tab_eta, "MAT_Xrate": xscale_eta,
         }
     )
+    mat109.law_name = "TAB_PLAS"
+    mat109.m109 = m109
     mat109.record = GenericMaterialRecord(
         law_name="LAW109", law_number=109, id=mat_id, title=title,
         params=mat109.params, density=rho0, unit_id=block.unit_id,
@@ -94642,10 +94657,13 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_SNAP_RATE_TRANS": read_sensor_spring_transverse_snap_rate,
     "SENSOR_TRANSVERSE_SNAP_RATE_SPRING": read_sensor_spring_transverse_snap_rate,
     "SENSOR_SPRING_SNAP_TRANS": read_sensor_spring_transverse_snap_rate,
-
-
-
-
+    "MAT_LAW109": read_mat_law109,
+    "MAT_TAB_PLAS": read_mat_law109,
+    "MAT_ELASTO_PLAS_TAB": read_mat_law109,
+    "LAW109": read_mat_law109,
+    "TAB_PLAS": read_mat_law109,
+    "ELASTO_PLAS_TAB": read_mat_law109,
+    "MLAW109": read_mat_law109,
 }
 
 
@@ -94685,6 +94703,13 @@ MATERIAL_DISPATCH: Dict[str, Any] = {
     "MAT_CRUSH_FOAM": read_mat_law163,
     "LAW163_CRUSHABLE_FOAM": read_mat_law163,
     "LAW163_CRUSH_FOAM": read_mat_law163,
+    "MAT_LAW109": read_mat_law109,
+    "MAT_TAB_PLAS": read_mat_law109,
+    "MAT_ELASTO_PLAS_TAB": read_mat_law109,
+    "LAW109": read_mat_law109,
+    "TAB_PLAS": read_mat_law109,
+    "ELASTO_PLAS_TAB": read_mat_law109,
+    "MLAW109": read_mat_law109,
 }
 
 

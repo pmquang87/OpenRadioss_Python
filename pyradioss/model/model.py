@@ -87,7 +87,8 @@ from .entities import (
     MaterialLaw104, MaterialLaw105, MatLaw105, MatPowderBurn, MaterialPowderBurn, MaterialLaw106,
     MaterialLaw107, MatLaw107, MatPaperLight, MatPlasPaperLight, MatPfeiffer,
     MaterialLaw110, MaterialLaw115,
-    MaterialLaw109, MaterialLaw111, MaterialLaw112, MaterialLaw116, MaterialLaw122, MaterialLaw158,
+    MaterialLaw109, MatLaw109, MatTabPlas, MaterialTabPlas, MatElastoPlasTab, MatLaw109TabPlas,
+    MaterialLaw111, MaterialLaw112, MaterialLaw116, MaterialLaw122, MaterialLaw158,
     AirbagInjector, AirbagVenthole,
     ErefElement, IniCrack, PropRivet, PropXelem, AdmeshControl,
     PreloadBolt, LoadHydro,
@@ -1087,7 +1088,9 @@ class Model:
         self.mat_pfeiffers = self.mat_law107s
         self.mat_law110s: Dict[int, MaterialLaw110] = {}           # /MAT/LAW110, /MAT/VEGTER (M176)
         self.mat_law115s: Dict[int, MaterialLaw115] = {}           # /MAT/LAW115, /MAT/DESHPANDE_FLECK (M176)
-        self.mat_law109s: Dict[int, MaterialLaw109] = {}           # /MAT/LAW109, /MAT/LAW109 (M177)
+        self.mat_law109s: Dict[int, MaterialLaw109] = {}           # /MAT/LAW109, /MAT/TAB_PLAS (M177/M578)
+        self.mat_tab_plass = self.mat_law109s
+        self.mat_elasto_plas_tabs = self.mat_law109s
         self.mat_law111s: Dict[int, MaterialLaw111] = {}           # /MAT/LAW111, /MAT/MARLOW (M177)
         self.mat_law112s: Dict[int, MaterialLaw112] = {}           # /MAT/LAW112, /MAT/PAPER (M177)
         self.mat_law116s: Dict[int, MaterialLaw116] = {}           # /MAT/LAW116, /MAT/COH_HYST (M177)

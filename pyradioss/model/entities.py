@@ -7880,6 +7880,202 @@ MaterialPaperLight = MaterialLaw107
 MaterialPlasPaperLight = MaterialLaw107
 MaterialPfeiffer = MaterialLaw107
 
+
+@dataclass(init=False)
+class MaterialLaw109:
+    """/MAT/LAW109 or /MAT/TAB_PLAS (M578): Tabulated elasto-plastic material model.
+
+    Fortran origin: ``starter/source/materials/mat/mat109/hm_read_mat109.F`` / CFG ``mat109.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho_i: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    c_p: float = 0.0
+    eta: float = 1.0
+    t_ref: float = 293.0
+    t_ini: float = 293.0
+    tab_id_h: int = 0
+    tab_id_t: int = 0
+    xscale_h: float = 1.0
+    yscale_h: float = 1.0
+    i_smooth: int = 1
+    tab_eta: int = 0
+    xscale_eta: float = 1.0
+    fcut: float = 10000.0
+
+    comments: list[str] = field(default_factory=list)
+    unit_system: Optional[str] = None
+    law: int = 109
+    law_name: str = "TAB_PLAS"
+
+    # Resolved references
+    yield_table: Any = None
+    temp_table: Any = None
+    eta_table: Any = None
+
+    def __init__(
+        self,
+        id: int = 0,
+        title: str = "",
+        rho_i: float = 0.0,
+        refer_rho: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        c_p: float = 0.0,
+        eta: float = 1.0,
+        t_ref: float = 293.0,
+        t_ini: float = 293.0,
+        tab_id_h: int = 0,
+        tab_id_t: int = 0,
+        xscale_h: float = 1.0,
+        yscale_h: float = 1.0,
+        i_smooth: int = 1,
+        tab_eta: int = 0,
+        xscale_eta: float = 1.0,
+        fcut: float = 10000.0,
+        comments: Optional[list] = None,
+        unit_system: Optional[str] = None,
+        law: int = 109,
+        law_name: str = "TAB_PLAS",
+        yield_table: Any = None,
+        temp_table: Any = None,
+        eta_table: Any = None,
+        **kwargs: Any,
+    ):
+        self.id = int(id)
+        self.title = str(title)
+        self.rho_i = float(kwargs.get("rho0", kwargs.get("rho", rho_i)))
+        self.refer_rho = float(kwargs.get("rhor", refer_rho))
+        self.e = float(kwargs.get("young", kwargs.get("E", e)))
+        self.nu = float(kwargs.get("Nu", nu))
+        self.c_p = float(kwargs.get("cp", c_p))
+        self.eta = float(kwargs.get("ETA", eta))
+        self.t_ref = float(kwargs.get("tref", kwargs.get("T_ref", t_ref)))
+        self.t_ini = float(kwargs.get("tini", kwargs.get("T_ini", t_ini)))
+        self.tab_id_h = int(kwargs.get("tab_yld", kwargs.get("tab_h", tab_id_h)))
+        self.tab_id_t = int(kwargs.get("tab_temp", kwargs.get("tab_t", tab_id_t)))
+        self.xscale_h = float(kwargs.get("xscale_h", kwargs.get("xscale", kwargs.get("Xscale_h", xscale_h))))
+        self.yscale_h = float(kwargs.get("yscale_h", kwargs.get("yscale", kwargs.get("Yscale_h", yscale_h))))
+        self.i_smooth = int(kwargs.get("ismooth", kwargs.get("I_smooth", i_smooth)))
+        self.tab_eta = int(kwargs.get("TAB_ETA", tab_eta))
+        self.xscale_eta = float(kwargs.get("xscale_eta", kwargs.get("xrate", kwargs.get("Xscale_ETA", xscale_eta))))
+        self.fcut = float(kwargs.get("FCUT", fcut))
+        self.comments = list(comments) if comments is not None else []
+        self.unit_system = unit_system
+        self.law = int(law)
+        self.law_name = str(law_name)
+        self.yield_table = yield_table
+        self.temp_table = temp_table
+        self.eta_table = eta_table
+
+    @property
+    def rho0(self) -> float:
+        return self.rho_i
+
+    @rho0.setter
+    def rho0(self, val: float) -> None:
+        self.rho_i = val
+
+    @property
+    def rho(self) -> float:
+        return self.rho_i
+
+    @property
+    def young(self) -> float:
+        return self.e
+
+    @young.setter
+    def young(self, val: float) -> None:
+        self.e = val
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @property
+    def Nu(self) -> float:
+        return self.nu
+
+    @property
+    def cp(self) -> float:
+        return self.c_p
+
+    @cp.setter
+    def cp(self, val: float) -> None:
+        self.c_p = val
+
+    @property
+    def tref(self) -> float:
+        return self.t_ref
+
+    @property
+    def tini(self) -> float:
+        return self.t_ini
+
+    @property
+    def tab_yld(self) -> int:
+        return self.tab_id_h
+
+    @property
+    def tab_temp(self) -> int:
+        return self.tab_id_t
+
+    @property
+    def xscale(self) -> float:
+        return self.xscale_h
+
+    @property
+    def yscale(self) -> float:
+        return self.yscale_h
+
+    @property
+    def ismooth(self) -> int:
+        return self.i_smooth
+
+    @property
+    def xrate(self) -> float:
+        return self.xscale_eta
+
+    @property
+    def G(self) -> float:
+        return self.e / (2.0 * (1.0 + self.nu)) if self.e > 0.0 and self.nu > -1.0 else 0.0
+
+    @property
+    def bulk(self) -> float:
+        return self.e / (3.0 * (1.0 - 2.0 * self.nu)) if self.e > 0.0 and self.nu < 0.5 else 0.0
+
+    def sound_speed_solid(self) -> float:
+        import math
+        rho = self.rho_i if self.rho_i > 0.0 else (self.refer_rho if self.refer_rho > 0.0 else 1.0)
+        g = self.G
+        k = self.bulk
+        return math.sqrt(max((k + 4.0 / 3.0 * g) / rho, 0.0))
+
+    def sound_speed_shell(self) -> float:
+        import math
+        rho = self.rho_i if self.rho_i > 0.0 else (self.refer_rho if self.refer_rho > 0.0 else 1.0)
+        denom = 1.0 - self.nu**2
+        if abs(denom) < 1.0e-20:
+            denom = 1.0e-6
+        a11 = self.e / denom
+        return math.sqrt(max(a11 / rho, 0.0))
+
+    def sound_speed(self) -> float:
+        return self.sound_speed_solid()
+
+
+MatLaw109 = MaterialLaw109
+MatTabPlas = MaterialLaw109
+MaterialTabPlas = MaterialLaw109
+MatElastoPlasTab = MaterialLaw109
+MaterialElastoPlasTab = MaterialLaw109
+MatLaw109TabPlas = MaterialLaw109
+MaterialLaw109TabPlas = MaterialLaw109
+
+
 class MaterialLaw110:
     """/MAT/LAW110 or /MAT/VEGTER (M176): Vegter anisotropic yield locus material model.
 
@@ -7962,26 +8158,7 @@ class MaterialLaw115:
     beta_n: float = 0.0
 
 
-# M177 Material Dataclasses: LAW109, LAW111, LAW112, LAW116, LAW122, LAW158
-@dataclass
-class MaterialLaw109:
-    """/MAT/LAW109: Thermo-viscoplastic with tabular yield, temperature, and Taylor-Quinney conversion."""
-    id: int
-    title: str = ""
-    rho0: float = 0.0
-    young: float = 0.0
-    nu: float = 0.0
-    cp: float = 0.0
-    eta: float = 1.0
-    tref: float = 293.0
-    tini: float = 293.0
-    tab_yld: int = 0
-    tab_temp: int = 0
-    xscale_h: float = 1.0
-    yscale_h: float = 1.0
-    ismooth: int = 1
-    tab_eta: int = 0
-    xscale_eta: float = 1.0
+# M177 Material Dataclasses: LAW111, LAW112, LAW116, LAW122, LAW158
 
 
 @dataclass
