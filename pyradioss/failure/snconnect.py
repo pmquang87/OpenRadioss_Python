@@ -166,7 +166,7 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
             (epsp[mask2] - pla1[mask2]) / np.maximum(_TINY, pla2[mask2] - pla1[mask2]),
             1.0,
         )
-        dama[mask2] = np.minimum(d_val, 1.0)
+        dama[mask2] = np.maximum(dama[mask2], np.minimum(d_val, 1.0))
 
         rupture = fct3 > 1.0
         if np.any(rupture):
