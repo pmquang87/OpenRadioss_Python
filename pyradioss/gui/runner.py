@@ -490,6 +490,8 @@ class JobRunner:
             "starter",
             self._base_cmd("pyradioss.starter") + ["-i", self.starter_deck])
         if rc != 0 or self._stop.is_set():
+            if self._stop.is_set():
+                rc = -1
             self.returncode = rc
             self._emit(("done", rc))
             return
@@ -500,6 +502,8 @@ class JobRunner:
         if self.backend:
             cmd += ["-backend", self.backend]
         rc = self._run_phase("engine", cmd)
+        if self._stop.is_set():
+            rc = -1
         self.returncode = rc
 
         # optional auto-convert after a clean, NORMAL engine run (same worker
@@ -584,7 +588,11 @@ class JobRunner:
                     proc.stdout.close()
             except OSError:
                 pass
-            rc = proc.wait()
+            try:
+                rc = proc.wait(timeout=5.0)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                rc = proc.wait()
             with self._lock:
                 self._proc = None
         return rc

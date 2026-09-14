@@ -124,6 +124,12 @@ class ContactType11:
 
     def _init_empty(self):
         """Initialize empty state for inactive or missing interfaces."""
+        self.es = np.zeros((0, 2), dtype=np.int64)
+        self.em = np.zeros((0, 2), dtype=np.int64)
+        self.es_gtype = np.zeros(0, dtype="<U8")
+        self.es_elem = np.zeros(0, dtype=np.int64)
+        self.em_gtype = np.zeros(0, dtype="<U8")
+        self.em_elem = np.zeros(0, dtype=np.int64)
         self.Ks = np.zeros(0, dtype=float)
         self.Km = np.zeros(0, dtype=float)
         self.gap_s = np.zeros(0, dtype=float)
@@ -396,10 +402,14 @@ class ContactType11:
                               self.Km[pm], self.Ks[ps])
         # per-node spring-stiffness sums (bincount = the fast add.at, M7)
         n_nod = len(fcont)
-        Knode = np.bincount(ea.reshape(-1), weights=np.repeat(K, 2),
-                            minlength=n_nod)
-        Knode += np.bincount(eb.reshape(-1), weights=np.repeat(K, 2),
-                             minlength=n_nod)
+        ea_flat = ea.reshape(-1)
+        w_a = np.repeat(K, 2)
+        v_a = (ea_flat >= 0) & (ea_flat < n_nod)
+        Knode = np.bincount(ea_flat[v_a], weights=w_a[v_a], minlength=n_nod)
+        eb_flat = eb.reshape(-1)
+        w_b = np.repeat(K, 2)
+        v_b = (eb_flat >= 0) & (eb_flat < n_nod)
+        Knode += np.bincount(eb_flat[v_b], weights=w_b[v_b], minlength=n_nod)
         loaded = Knode > 0.0
         dt_int = min(self.dt_bound, float(
             np.sqrt(2.0 * mass[loaded] / Knode[loaded]).min()))
@@ -453,6 +463,7 @@ class ContactType11:
         # mu = const, no-filter path is the M4 code verbatim
         # (x + (-a) == x - a exactly in IEEE — bit-identical).
         if self.fric > 0.0 or self.mfrot > 0:
+            Fn_pos = np.maximum(Fn, 0.0)
             gap_ref = float(np.mean(gap))
             vt = vrel - vn[:, None] * nvec
             vt_mag = norm3(vt)
@@ -461,12 +472,12 @@ class ContactType11:
                 # documented port DEFINITION of an edge pair's contact
                 # pressure (contact/friction.py)
                 lm = norm3(x[eb[:, 1]] - x[eb[:, 0]])
-                pres = Fn / np.maximum(lm * gap, EM20)
+                pres = Fn_pos / np.maximum(lm * gap, EM20)
                 mu = friction.mu_kinetic(self.mfrot, self.fric,
                                          self.fric_c, pres, vt_mag)
             else:
                 mu = self.fric
-            Ft = mu * Fn * vt_mag / (
+            Ft = mu * Fn_pos * vt_mag / (
                 vt_mag + 1e-3 * gap_ref / max(dt, EM20))
             ftvec = -(Ft / np.maximum(vt_mag, EM20))[:, None] * vt
             if self.ifq > 0:
@@ -483,11 +494,17 @@ class ContactType11:
         va = np.empty((len(s), 2, 3))
         va[:, 0, :] = (1 - s)[:, None] * Fvec
         va[:, 1, :] = s[:, None] * Fvec
-        scatter_add3(fcont, ea.reshape(-1), va.reshape(-1, 3))
+        ea_act = ea.reshape(-1)
+        va_act = va.reshape(-1, 3)
+        v_act_a = (ea_act >= 0) & (ea_act < n_nod)
+        scatter_add3(fcont, ea_act[v_act_a], va_act[v_act_a])
         vb = np.empty((len(t), 2, 3))
         vb[:, 0, :] = -(1 - t)[:, None] * Fvec
         vb[:, 1, :] = -t[:, None] * Fvec
-        scatter_add3(fcont, eb.reshape(-1), vb.reshape(-1, 3))
+        eb_act = eb.reshape(-1)
+        vb_act = vb.reshape(-1, 3)
+        v_act_b = (eb_act >= 0) & (eb_act < n_nod)
+        scatter_add3(fcont, eb_act[v_act_b], vb_act[v_act_b])
 
         wrk = float(np.einsum("nb,nb->", Fvec, vrel)) * dt
         return -wrk, dt_int

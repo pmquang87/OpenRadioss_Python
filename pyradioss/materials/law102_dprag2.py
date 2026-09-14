@@ -794,15 +794,18 @@ def solid_update(
 
 
 
-def sound_speed(params: Any, rho: Optional[float] = None) -> float:
+def sound_speed(params: Any, rho: Optional[Any] = None) -> Any:
     """Dilatational acoustic sound speed for /MAT/LAW102 solids."""
     p = params if isinstance(params, DPrag2Params) else build_law102(params)
-    rho_val = rho if (rho is not None and rho > 0.0) else p.rho
-    if rho_val <= 0.0:
+    stiff = max(0.0, p.bulk + (4.0 / 3.0) * p.g)
+    if rho is not None:
+        r = np.asarray(rho, dtype=np.float64)
+        r_val = np.where(r > 0.0, r, p.rho)
+        c = np.where(r_val > 0.0, np.sqrt(np.maximum(0.0, stiff / np.maximum(1e-20, r_val))), 0.0)
+        return float(c) if r.ndim == 0 else c
+    if p.rho <= 0.0:
         return 0.0
-    bulk = p.bulk
-    g = p.g
-    return math.sqrt(max(0.0, bulk + (4.0 / 3.0) * g) / rho_val)
+    return float(np.sqrt(np.maximum(0.0, stiff / p.rho)))
 
 
 def solid_tangent(
@@ -881,3 +884,9 @@ def shell_layer_tangent(*args: Any, **kwargs: Any) -> Any:
     raise NotImplementedError(
         "/MAT/LAW102 (/MAT/DPRAG2) does not support shell elements."
     )
+
+
+def extra_shapes(mat: Any = None, nip: Optional[int] = None) -> Dict[str, Tuple[int, ...]]:
+    """Extra history shapes needed for LAW102."""
+    return {"uvar102": (2,)}
+

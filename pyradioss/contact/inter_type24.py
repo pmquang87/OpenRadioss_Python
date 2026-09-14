@@ -608,6 +608,7 @@ class ContactType24:
         # no-filter path below is the M4 code verbatim (x + (-a) == x - a
         # exactly in IEEE — bit-identical, asserted by the M15 tests).
         if self.fric > 0.0 or self.mfrot > 0:
+            Fn_pos = np.maximum(Fn, 0.0)
             gap_ref = float(np.mean(gap))
             vt = vrel - vn[:, None] * nvec
             vt_mag = norm3(vt)
@@ -618,12 +619,12 @@ class ContactType24:
                 d13 = x[seg[:, 2]] - x[seg[:, 0]]
                 d24 = x[seg[:, 3]] - x[seg[:, 1]]
                 area = 0.5 * norm3(cross3(d13, d24))
-                pres = Fn / np.maximum(area, EM20)
+                pres = Fn_pos / np.maximum(area, EM20)
                 mu = friction.mu_kinetic(self.mfrot, self.fric,
                                          self.fric_c, pres, vt_mag)
             else:
                 mu = self.fric
-            Ft = mu * Fn * vt_mag / (
+            Ft = mu * Fn_pos * vt_mag / (
                 vt_mag + 1e-3 * gap_ref / max(dt, EM20))
             ftvec = -(Ft / np.maximum(vt_mag, EM20))[:, None] * vt
             if self.ifq > 0:

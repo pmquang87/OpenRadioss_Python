@@ -394,7 +394,22 @@ def solid_update(
     sig_out = np.zeros_like(sig_arr)
     sound_sp = np.zeros(nel, dtype=np.float64)
 
-    tot_eps = eps_arr + deps_arr if deps is not None else eps_arr.copy()
+    # Current strain tensor: preserve total strain via extra['eps94']
+    if extra is not None and "eps94" in extra and extra["eps94"] is not None:
+        if np.asarray(extra["eps94"]).ndim == 1 and deps_arr.shape[0] == 1:
+            extra["eps94"] = np.asarray(extra["eps94"]) + deps_arr[0]
+            tot_eps = np.asarray(extra["eps94"])[np.newaxis, :]
+        else:
+            extra["eps94"] = np.asarray(extra["eps94"]) + deps_arr
+            tot_eps = np.asarray(extra["eps94"])
+    elif eps is not None:
+        tot_eps = eps_arr + deps_arr if deps is not None else eps_arr.copy()
+        if extra is not None and isinstance(extra, dict):
+            extra["eps94"] = tot_eps[0].copy() if is_1d else tot_eps.copy()
+    else:
+        tot_eps = deps_arr.copy()
+        if extra is not None and isinstance(extra, dict):
+            extra["eps94"] = tot_eps[0].copy() if is_1d else tot_eps.copy()
 
     c10 = mat.c10
     c20 = mat.c20
@@ -829,5 +844,5 @@ def extra_shapes(mat: Any = None, nip: int | None = None) -> dict[str, tuple[int
     """Extra history shapes needed for LAW94 Yeoh."""
     if nip:
         return {"eps94": (nip, 3), "uvar_lam3": (nip,)}
-    return {}
+    return {"eps94": (6,)}
 

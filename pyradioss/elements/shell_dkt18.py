@@ -143,7 +143,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         nu[sl] = getattr(mat, "nu", 0.3)
 
     # Cycle 0 or velocity-free evaluation
-    if dt <= 0.0 or v is None:
+    if dt is None or dt <= 0.0 or v is None:
         ve0 = np.zeros((n, 3, 3), dtype=float)
         re0 = np.zeros((n, 3, 3), dtype=float)
         area2, xl2, yl2, xl3, yl3, _vlx, _vly, _vlz, _rlx, _rly, _e_frame = cdkcoor3(xe, ve0, re0, 0.0)
@@ -227,6 +227,11 @@ def forces(group, x, v, vr, dt, fint, mint):
         mom_pg = np.zeros((n, 3))
 
         for isl, (sl, mat, prop) in enumerate(st.get("slices", [])):
+            if NG == 0:
+                if getattr(mat, "law", 1) == 0 or isl >= len(st.get("zw", [])):
+                    nip_of.append(0)
+                else:
+                    nip_of.append(len(st["zw"][isl][0]))
             mask = sl
             if not np.any(mask):
                 continue
@@ -235,8 +240,6 @@ def forces(group, x, v, vr, dt, fint, mint):
 
             zrel, wrel = st["zw"][isl]
             nip = len(zrel)
-            if NG == 0:
-                nip_of.append(nip)
 
             for il in range(nip):
                 k = NG * nip_max + il

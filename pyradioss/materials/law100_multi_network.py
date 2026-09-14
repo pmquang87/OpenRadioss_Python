@@ -1218,3 +1218,17 @@ def solid_tangent(
             c[:, j] = (sig_pert - base_sig) / h
 
     return c
+
+
+def extra_shapes(mat: Any = None, nip: Optional[int] = None) -> Dict[str, Tuple[int, ...]]:
+    """Define persistent internal state variable shapes for LAW100."""
+    p = mat if isinstance(mat, MultiNetworkParams) else build_law100(mat)
+    eq_nvars = 13 if getattr(p, "flag_cr", 0) == 1 else 0
+    total_uvar = eq_nvars
+    for net in getattr(p, "networks", []):
+        shift = 12 if getattr(net, "flag_visc", 1) == 3 else 11
+        total_uvar += shift
+    if total_uvar == 0:
+        total_uvar = 1
+    return {"uvar100": (total_uvar,)}
+

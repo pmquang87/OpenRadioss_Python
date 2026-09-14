@@ -17,32 +17,62 @@ import numpy as np
 _TINY = 1e-20
 
 
+class _SncCache(dict):
+    """Dictionary mapping id(base) -> state dict, supporting backwards-compatible access."""
+    def __getitem__(self, key):
+        if key in ("epsp", "pla1", "pla2"):
+            for entry in reversed(list(self.values())):
+                if isinstance(entry, dict) and key in entry:
+                    return entry[key]
+        return super().__getitem__(key)
+
+
 def _get_state(fail, dama):
     """Retrieve or allocate persistent SNCONNECT state arrays.
 
-    Stored on ``fail._snc`` as a dict ``{'epsp': ..., 'pla1': ...,
-    'pla2': ...}`` with flat arrays matching the full (base) ``dama``
-    shape.  The returned views are sliced to match the caller's
-    ``dama`` view.
-
-    Unlike the old id()-keyed cache, this survives state copies because
-    ``fail`` is a model-definition object (not part of the copied
-    engine state), and the arrays are re-attached by shape, not by
-    Python object identity.
+    Stored on ``fail._snc`` as a dict keyed by id(dama.base if dama.base is not
+    None else dama) with flat arrays matching the full (base) ``dama`` shape.
+    The returned views are sliced to match the caller's ``dama`` view.
     """
     base = dama.base if dama.base is not None else dama
     n = len(base)
+    base_id = id(base)
 
-    snc = getattr(fail, "_snc", None)
-    if snc is None or snc["epsp"].shape[0] != n:
-        # First call, or shape mismatch after restart with changed mesh
+    if fail is not None:
+        snc_cache = getattr(fail, "_snc", None)
+        if snc_cache is None or not isinstance(snc_cache, _SncCache):
+            new_cache = _SncCache()
+            if isinstance(snc_cache, dict):
+                new_cache.update(snc_cache)
+            snc_cache = new_cache
+            fail._snc = snc_cache
+    else:
+        if not hasattr(_get_state, "_snc"):
+            _get_state._snc = _SncCache()
+        snc_cache = _get_state._snc
+
+    if base_id not in snc_cache:
+        # If there's a single existing entry of matching length, migrate it (for state copy / restart)
+        if len(snc_cache) == 1:
+            old_id, old_entry = next(iter(snc_cache.items()))
+            if isinstance(old_entry, dict) and "epsp" in old_entry and old_entry["epsp"].shape[0] == n:
+                snc_cache[base_id] = old_entry
+                del snc_cache[old_id]
+        if base_id not in snc_cache:
+            snc_cache[base_id] = {
+                "epsp": np.zeros(n, dtype=np.float64),
+                "pla1": np.zeros(n, dtype=np.float64),
+                "pla2": np.zeros(n, dtype=np.float64),
+            }
+
+    snc = snc_cache[base_id]
+    if snc["epsp"].shape[0] != n:
         snc = {
             "epsp": np.zeros(n, dtype=np.float64),
             "pla1": np.zeros(n, dtype=np.float64),
             "pla2": np.zeros(n, dtype=np.float64),
         }
-        if fail is not None:
-            fail._snc = snc
+        snc_cache[base_id] = snc
 
     # Compute the slice corresponding to this dama view
     if dama.base is not None:
@@ -60,8 +90,8 @@ def _get_state(fail, dama):
 def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     """3-D damage step for SNCONNECT."""
     p = fail.params
-    a2, b2 = p.get("a2", 0.0), p.get("b2", 1.0)
-    a3, b3 = p.get("a3", 0.0), p.get("b3", 1.0)
+    a2, b2 = p.get("a2", 0.0), p.get("b2") or 1.0
+    a3, b3 = p.get("a3", 0.0), p.get("b3") or 1.0
     isym = p.get("isym", 0)
 
     epsp, pla1, pla2 = _get_state(fail, dama)
@@ -96,7 +126,8 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
         start_dmg = fct > 1.0
         if np.any(start_dmg):
             idx = np.where(mask1)[0][start_dmg]
-            pla1[idx] = (t1[idx] ** b2 + t2[idx] ** b2) ** (-1.0 / b2)
+            base1 = np.maximum(t1[idx] ** b2 + t2[idx] ** b2, _TINY)
+            pla1[idx] = base1 ** (-1.0 / b2)
 
             t1_3 = np.where(
                 (isym == 1) & (signzz[idx] <= 0.0),
@@ -105,9 +136,12 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
             )
             t2_3 = cphi[idx]
 
-            pla2[idx] = (t1_3 ** b3 + t2_3 ** b3) ** (-1.0 / b3)
-            d_val = (epsp[idx] - pla1[idx]) / np.maximum(
-                _TINY, pla2[idx] - pla1[idx]
+            base2 = np.maximum(t1_3 ** b3 + t2_3 ** b3, _TINY)
+            pla2[idx] = base2 ** (-1.0 / b3)
+            d_val = np.where(
+                pla2[idx] > pla1[idx],
+                (epsp[idx] - pla1[idx]) / np.maximum(_TINY, pla2[idx] - pla1[idx]),
+                1.0,
             )
             dama[idx] = np.minimum(d_val, 1.0)
 
@@ -125,9 +159,12 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
         tts3 = t2_3 * epsp[mask2]
         fct3 = (ttn3 ** b3 + tts3 ** b3) ** (1.0 / b3)
 
-        pla2[mask2] = (t1_3 ** b3 + t2_3 ** b3) ** (-1.0 / b3)
-        d_val = (epsp[mask2] - pla1[mask2]) / np.maximum(
-            _TINY, pla2[mask2] - pla1[mask2]
+        base2 = np.maximum(t1_3 ** b3 + t2_3 ** b3, _TINY)
+        pla2[mask2] = base2 ** (-1.0 / b3)
+        d_val = np.where(
+            pla2[mask2] > pla1[mask2],
+            (epsp[mask2] - pla1[mask2]) / np.maximum(_TINY, pla2[mask2] - pla1[mask2]),
+            1.0,
         )
         dama[mask2] = np.minimum(d_val, 1.0)
 
@@ -137,3 +174,8 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
             dama[idx] = 1.0
 
     return dama >= 1.0
+
+
+def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
+    """Graceful no-op for shell elements using /FAIL/SNCONNECT (solid spotwelds only)."""
+    return np.zeros(len(dama), dtype=bool)

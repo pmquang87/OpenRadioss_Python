@@ -753,13 +753,21 @@ def shell_update(
             hist_arr[0, :min(7, len(h))] = h[:7]
         elif h.ndim == 2:
             hist_arr[:, :min(7, h.shape[1])] = h[:, :7]
-    elif extra is not None and isinstance(extra, dict):
-        if "uvar106" in extra:
-            u = np.asarray(extra["uvar106"], dtype=np.float64)
-            if u.ndim == 1:
-                hist_arr[0, :min(7, len(u))] = u[:7]
-            elif u.ndim == 2:
-                hist_arr[:, :min(7, u.shape[1])] = u[:, :7]
+    elif extra is not None and isinstance(extra, dict) and "uvar106" in extra:
+        u = np.asarray(extra["uvar106"], dtype=np.float64)
+        if u.ndim == 1:
+            hist_arr[0, :min(7, len(u))] = u[:7]
+        elif u.ndim == 2:
+            hist_arr[:, :min(7, u.shape[1])] = u[:, :7]
+    elif extra is not None and isinstance(extra, dict) and "uvar" in extra:
+        u = np.asarray(extra["uvar"], dtype=np.float64)
+        if u.ndim == 1:
+            hist_arr[0, :min(7, len(u))] = u[:7]
+        elif u.ndim == 2:
+            hist_arr[:, :min(7, u.shape[1])] = u[:, :7]
+    elif kwargs.get("epsp") is not None:
+        ep_arr = np.atleast_1d(kwargs.get("epsp")).astype(np.float64)
+        hist_arr[:, 6] = ep_arr[:nel]
 
     rho_arr = np.full(nel, params.rho, dtype=np.float64)
     if rho is not None:
@@ -973,7 +981,8 @@ def sound_speed_solid(mat: Any = None, rho: Optional[Any] = None, **kwargs: Any)
     """Compute 3D dilatational wave speed for solid elements."""
     params = mat if isinstance(mat, JCookAlmParams) else build_law106(mat, **kwargs)
     r = rho if (rho is not None and float(np.min(rho)) > 0.0) else (params.refer_rho if params.refer_rho > 0.0 else params.rho)
-    c_sq = (params.bulk + (4.0 / 3.0) * params.g) / r
+    r_val = max(1e-20, float(r)) if np.isscalar(r) else np.maximum(1e-20, np.asarray(r, dtype=np.float64))
+    c_sq = (params.bulk + (4.0 / 3.0) * params.g) / r_val
     return math.sqrt(max(0.0, float(c_sq))) if np.isscalar(c_sq) else np.sqrt(np.maximum(0.0, c_sq))
 
 
@@ -981,7 +990,9 @@ def sound_speed_shell(mat: Any = None, rho: Optional[Any] = None, **kwargs: Any)
     """Compute 2D acoustic wave speed for shell elements."""
     params = mat if isinstance(mat, JCookAlmParams) else build_law106(mat, **kwargs)
     r = rho if (rho is not None and float(np.min(rho)) > 0.0) else (params.refer_rho if params.refer_rho > 0.0 else params.rho)
-    c_sq = params.young / (r * (1.0 - params.nu * params.nu)) if (1.0 - params.nu * params.nu) > 0.0 else 0.0
+    r_val = max(1e-20, float(r)) if np.isscalar(r) else np.maximum(1e-20, np.asarray(r, dtype=np.float64))
+    denom = 1.0 - params.nu * params.nu
+    c_sq = params.young / (r_val * denom) if denom > 0.0 else 0.0
     return math.sqrt(max(0.0, float(c_sq))) if np.isscalar(c_sq) else np.sqrt(np.maximum(0.0, c_sq))
 
 
@@ -1078,3 +1089,9 @@ def consistent_shell_tangent(
     if denom > 1.0e-20:
         return c_el - np.outer(c_n, c_n) / denom
     return c_el
+
+
+def extra_shapes(mat: Any = None, nip: Optional[int] = None) -> Dict[str, Tuple[int, ...]]:
+    """Extra history shapes needed for LAW106."""
+    return {"uvar106": (nip, 7) if nip else (5,)}
+

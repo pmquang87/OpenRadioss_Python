@@ -1028,16 +1028,20 @@ def shell_update(
 
 def sound_speed(
     mat: Any,
-    rho: Optional[float] = None,
+    rho: Optional[Any] = None,
     is_shell: bool = False,
     **kwargs: Any,
-) -> float:
+) -> Any:
     """Acoustic wave speed for /MAT/LAW109."""
     p = mat if isinstance(mat, Law109Params) else Law109Params.from_material(mat)
-    r = rho if rho is not None and rho > 0.0 else (p.rho0 if p.rho0 > 0.0 else 1.0)
-    if is_shell:
-        return math.sqrt(max(p.a11 / r, 0.0))
-    return math.sqrt(max((p.bulk + 4.0 / 3.0 * p.g) / r, 0.0))
+    modulus = max(0.0, p.a11 if is_shell else (p.bulk + (4.0 / 3.0) * p.g))
+    rho0 = p.rho0 if p.rho0 > 0.0 else 1.0
+    if rho is not None:
+        r = np.asarray(rho, dtype=np.float64)
+        r_val = np.where(r > 0.0, r, rho0)
+        c = np.sqrt(np.maximum(0.0, modulus / np.maximum(1e-20, r_val)))
+        return float(c) if r.ndim == 0 else c
+    return float(math.sqrt(np.maximum(0.0, modulus / max(1e-20, rho0))))
 
 
 def solid_tangent(

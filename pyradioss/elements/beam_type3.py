@@ -119,7 +119,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..common.constants import EM20
+from ..common.constants import EM20, EP30
 from ..common.fastmath import cross3, norm3
 
 

@@ -263,10 +263,15 @@ class NodalTimeStep:
         for (name, conn, share, iner), dt_e in zip(self._shares, dt_claims):
             k = 2.0 * share / np.maximum(dt_e, EM20)[:, None] ** 2
             # a deleted element's claim is 1e30 -> its k underflows to 0
-            np.add.at(self.stifn, conn.reshape(-1), k.reshape(-1))
+            c_flat = conn.reshape(-1)
+            k_flat = k.reshape(-1)
+            valid = (c_flat >= 0) & (c_flat < len(self.stifn))
+            np.add.at(self.stifn, c_flat[valid], k_flat[valid])
             if iner is not None:
                 kr = 2.0 * iner / np.maximum(dt_e, EM20)[:, None] ** 2
-                np.add.at(self.stifr, conn.reshape(-1), kr.reshape(-1))
+                kr_flat = kr.reshape(-1)
+                valid_r = (c_flat >= 0) & (c_flat < len(self.stifr))
+                np.add.at(self.stifr, c_flat[valid_r], kr_flat[valid_r])
 
     # ------------------------------------------------------------------
     def apply(self, mass_eff: np.ndarray, inv_mass: np.ndarray,

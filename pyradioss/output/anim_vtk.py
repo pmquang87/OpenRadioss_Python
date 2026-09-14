@@ -102,6 +102,10 @@ def _shell_layers(group_name: str, group):
     like the kernels rotate their resultants (rot_stress_m2e)."""
     st = group.state
     sig, ep = st["sig"], st.get("epsp")
+    if sig.ndim == 2:
+        sig = sig[:, None, :]
+    if ep is not None and ep.ndim == 1:
+        ep = ep[:, None]
     lo = np.zeros((group.n, 3))
     up = np.zeros((group.n, 3))
     eplo = np.zeros(group.n)
@@ -214,7 +218,7 @@ def write_anim_state(path: str, model: Model, t: float,
     ncell = sum(g.n for _, g in groups)
     size = sum((1 + _get_cell_info(name, g)[1]) * g.n for name, g in groups)
 
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8", errors="replace") as fh:
         fh.write("# vtk DataFile Version 3.0\n")
         fh.write(f"pyradioss state t={t:.9E}\n")
         fh.write("ASCII\nDATASET UNSTRUCTURED_GRID\n")
@@ -304,6 +308,9 @@ def write_anim_state(path: str, model: Model, t: float,
                         s = g.state["sig"]
                         if s.ndim == 3:
                             s = s.mean(axis=1)
+                        if s.shape[1] < 6:
+                            pad = np.zeros((s.shape[0], 6 - s.shape[1]), dtype=s.dtype)
+                            s = np.hstack([s, pad])
                         rows = s[:, _VOIGT9]
                     else:
                         rows = np.zeros((g.n, 9))

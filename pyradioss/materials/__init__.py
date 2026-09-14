@@ -1759,6 +1759,91 @@ LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
     "MAT_LAW95": {"plane_stress": False, "solid": True, "shell": False},
     "MAT_BERGSTROM_BOYCE": {"plane_stress": False, "solid": True, "shell": False},
     "LAW95_BERGSTROM_BOYCE": {"plane_stress": False, "solid": True, "shell": False},
+    100: {"plane_stress": False, "solid": True, "shell": False},
+    "100": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW100": {"plane_stress": False, "solid": True, "shell": False},
+    "VISC_HYP": {"plane_stress": False, "solid": True, "shell": False},
+    "MNF": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_LAW100": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_VISC_HYP": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_MNF": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW100_VISC_HYP": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW100_MNF": {"plane_stress": False, "solid": True, "shell": False},
+    "SPOTWELD": {"plane_stress": False, "solid": True, "shell": False},
+    "STRUCTURAL_ADHESIVE": {"plane_stress": False, "solid": True, "shell": False},
+    101: {"plane_stress": False, "solid": True, "shell": False},
+    "101": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW101": {"plane_stress": False, "solid": True, "shell": False},
+    "PP": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_PP": {"plane_stress": False, "solid": True, "shell": False},
+    "PLAS_POLY": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_PLAS_POLY": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_LAW101": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW101_PP": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW101_PLAS_POLY": {"plane_stress": False, "solid": True, "shell": False},
+    102: {"plane_stress": False, "solid": True, "shell": False},
+    "102": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW102": {"plane_stress": False, "solid": True, "shell": False},
+    "DPRAG2": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_DPRAG2": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_LAW102": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW102_DPRAG2": {"plane_stress": False, "solid": True, "shell": False},
+    "DRUCKER_PRAGER_2": {"plane_stress": False, "solid": True, "shell": False},
+    103: {"plane_stress": False, "solid": True, "shell": False},
+    "103": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW103": {"plane_stress": False, "solid": True, "shell": False},
+    "HENSEL_SPITTEL": {"plane_stress": False, "solid": True, "shell": False},
+    "HENSEL-SPITTEL": {"plane_stress": False, "solid": True, "shell": False},
+    "PLAS_HENS": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_HENSEL_SPITTEL": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_PLAS_HENS": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_103": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_LAW103": {"plane_stress": False, "solid": True, "shell": False},
+    "HEN": {"plane_stress": False, "solid": True, "shell": False},
+    104: {"plane_stress": True, "solid": True, "shell": True},
+    "104": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW104": {"plane_stress": True, "solid": True, "shell": True},
+    "DRUCKER": {"plane_stress": True, "solid": True, "shell": True},
+    "JOHNS_VOCE_DRUCKER": {"plane_stress": True, "solid": True, "shell": True},
+    "JOHNS-VOCE-DRUCKER": {"plane_stress": True, "solid": True, "shell": True},
+    "PLAS_DRUCK": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_DRUCKER": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_JOHNS_VOCE_DRUCKER": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_PLAS_DRUCK": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_104": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_LAW104": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW104_DRUCKER": {"plane_stress": True, "solid": True, "shell": True},
+    105: {"plane_stress": False, "solid": True, "shell": False},
+    "105": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW105": {"plane_stress": False, "solid": True, "shell": False},
+    "POWDER_BURN": {"plane_stress": False, "solid": True, "shell": False},
+    "POWDERBURN": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_POWDER_BURN": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_POWDERBURN": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_105": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_LAW105": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW105_POWDER_BURN": {"plane_stress": False, "solid": True, "shell": False},
+    106: {"plane_stress": True, "solid": True, "shell": True},
+    "106": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW106": {"plane_stress": True, "solid": True, "shell": True},
+    "JCOOK_ALM": {"plane_stress": True, "solid": True, "shell": True},
+    "JOHNS_COOK_ALM": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_JCOOK_ALM": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_106": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_LAW106": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW106_JCOOK_ALM": {"plane_stress": True, "solid": True, "shell": True},
+    107: {"plane_stress": True, "solid": True, "shell": True},
+    "107": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW107": {"plane_stress": True, "solid": True, "shell": True},
+    "PAPER_LIGHT": {"plane_stress": True, "solid": True, "shell": True},
+    "PLAS_PAPER_LIGHT": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW107_PAPER_LIGHT": {"plane_stress": True, "solid": True, "shell": True},
+    "PFEIFFER": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_PFEIFFER": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_PAPER_LIGHT": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_PLAS_PAPER_LIGHT": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_107": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_LAW107": {"plane_stress": True, "solid": True, "shell": True},
     109: {"plane_stress": True, "solid": True, "shell": True},
     "109": {"plane_stress": True, "solid": True, "shell": True},
     "LAW109": {"plane_stress": True, "solid": True, "shell": True},
@@ -1767,6 +1852,17 @@ LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
     "MAT_LAW109": {"plane_stress": True, "solid": True, "shell": True},
     "MAT_TAB_PLAS": {"plane_stress": True, "solid": True, "shell": True},
     "MLAW109": {"plane_stress": True, "solid": True, "shell": True},
+    110: {"plane_stress": True, "solid": False, "shell": True},
+    "110": {"plane_stress": True, "solid": False, "shell": True},
+    "LAW110": {"plane_stress": True, "solid": False, "shell": True},
+    "VEGTER": {"plane_stress": True, "solid": False, "shell": True},
+    "PLAS_VEGTER": {"plane_stress": True, "solid": False, "shell": True},
+    "LAW110_VEGTER": {"plane_stress": True, "solid": False, "shell": True},
+    "MLAW110": {"plane_stress": True, "solid": False, "shell": True},
+    "MAT_LAW110": {"plane_stress": True, "solid": False, "shell": True},
+    "MAT_VEGTER": {"plane_stress": True, "solid": False, "shell": True},
+    "MAT_PLAS_VEGTER": {"plane_stress": True, "solid": False, "shell": True},
+    "MAT_110": {"plane_stress": True, "solid": False, "shell": True},
 }
 
 MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
@@ -1847,6 +1943,37 @@ MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
     "BERGSTROM_BOYCE": law95_solid_update, "BERGSTROM-BOYCE": law95_solid_update,
     "MAT_LAW95": law95_solid_update, "MAT_BERGSTROM_BOYCE": law95_solid_update,
     "LAW95_BERGSTROM_BOYCE": law95_solid_update,
+    100: law100_solid_update, "100": law100_solid_update, "LAW100": law100_solid_update,
+    "VISC_HYP": law100_solid_update, "MNF": law100_solid_update, "MAT_LAW100": law100_solid_update,
+    "MAT_VISC_HYP": law100_solid_update, "MAT_MNF": law100_solid_update, "LAW100_VISC_HYP": law100_solid_update,
+    "LAW100_MNF": law100_solid_update, "SPOTWELD": law100_solid_update, "STRUCTURAL_ADHESIVE": law100_solid_update,
+    101: law101_solid_update, "101": law101_solid_update, "LAW101": law101_solid_update,
+    "PP": law101_solid_update, "MAT_PP": law101_solid_update, "PLAS_POLY": law101_solid_update,
+    "MAT_PLAS_POLY": law101_solid_update, "MAT_LAW101": law101_solid_update, "LAW101_PP": law101_solid_update,
+    "LAW101_PLAS_POLY": law101_solid_update,
+    102: law102_solid_update, "102": law102_solid_update, "LAW102": law102_solid_update,
+    "DPRAG2": law102_solid_update, "MAT_DPRAG2": law102_solid_update, "MAT_LAW102": law102_solid_update,
+    "LAW102_DPRAG2": law102_solid_update, "DRUCKER_PRAGER_2": law102_solid_update,
+    103: law103_solid_update, "103": law103_solid_update, "LAW103": law103_solid_update,
+    "HENSEL_SPITTEL": law103_solid_update, "HENSEL-SPITTEL": law103_solid_update, "PLAS_HENS": law103_solid_update,
+    "MAT_HENSEL_SPITTEL": law103_solid_update, "MAT_PLAS_HENS": law103_solid_update, "MAT_103": law103_solid_update,
+    "MAT_LAW103": law103_solid_update, "HEN": law103_solid_update,
+    104: law104_solid_update, "104": law104_solid_update, "LAW104": law104_solid_update,
+    "DRUCKER": law104_solid_update, "JOHNS_VOCE_DRUCKER": law104_solid_update, "JOHNS-VOCE-DRUCKER": law104_solid_update,
+    "PLAS_DRUCK": law104_solid_update, "MAT_DRUCKER": law104_solid_update, "MAT_JOHNS_VOCE_DRUCKER": law104_solid_update,
+    "MAT_PLAS_DRUCK": law104_solid_update, "MAT_104": law104_solid_update, "MAT_LAW104": law104_solid_update,
+    "LAW104_DRUCKER": law104_solid_update,
+    105: law105_solid_update, "105": law105_solid_update, "LAW105": law105_solid_update,
+    "POWDER_BURN": law105_solid_update, "POWDERBURN": law105_solid_update, "MAT_POWDER_BURN": law105_solid_update,
+    "MAT_POWDERBURN": law105_solid_update, "MAT_105": law105_solid_update, "MAT_LAW105": law105_solid_update,
+    "LAW105_POWDER_BURN": law105_solid_update,
+    106: law106_solid_update, "106": law106_solid_update, "LAW106": law106_solid_update,
+    "JCOOK_ALM": law106_solid_update, "JOHNS_COOK_ALM": law106_solid_update, "MAT_JCOOK_ALM": law106_solid_update,
+    "MAT_106": law106_solid_update, "MAT_LAW106": law106_solid_update, "LAW106_JCOOK_ALM": law106_solid_update,
+    107: law107_solid_update, "107": law107_solid_update, "LAW107": law107_solid_update,
+    "PAPER_LIGHT": law107_solid_update, "PLAS_PAPER_LIGHT": law107_solid_update, "LAW107_PAPER_LIGHT": law107_solid_update,
+    "PFEIFFER": law107_solid_update, "MAT_PFEIFFER": law107_solid_update, "MAT_PAPER_LIGHT": law107_solid_update,
+    "MAT_PLAS_PAPER_LIGHT": law107_solid_update, "MAT_107": law107_solid_update, "MAT_LAW107": law107_solid_update,
     109: law109_solid_update, "109": law109_solid_update, "LAW109": law109_solid_update,
     "TAB_PLAS": law109_solid_update, "MAT_LAW109": law109_solid_update, "MAT_TAB_PLAS": law109_solid_update,
 }
@@ -1925,6 +2052,18 @@ MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
     94: law94_shell_update, "94": law94_shell_update, "LAW94": law94_shell_update,
     "YEOH": law94_shell_update, "MAT_LAW94": law94_shell_update,
     "MAT_YEOH": law94_shell_update, "LAW94_YEOH": law94_shell_update,
+    104: law104_shell_update, "104": law104_shell_update, "LAW104": law104_shell_update,
+    "DRUCKER": law104_shell_update, "JOHNS_VOCE_DRUCKER": law104_shell_update, "JOHNS-VOCE-DRUCKER": law104_shell_update,
+    "PLAS_DRUCK": law104_shell_update, "MAT_DRUCKER": law104_shell_update, "MAT_JOHNS_VOCE_DRUCKER": law104_shell_update,
+    "MAT_PLAS_DRUCK": law104_shell_update, "MAT_104": law104_shell_update, "MAT_LAW104": law104_shell_update,
+    "LAW104_DRUCKER": law104_shell_update,
+    106: law106_shell_update, "106": law106_shell_update, "LAW106": law106_shell_update,
+    "JCOOK_ALM": law106_shell_update, "JOHNS_COOK_ALM": law106_shell_update, "MAT_JCOOK_ALM": law106_shell_update,
+    "MAT_106": law106_shell_update, "MAT_LAW106": law106_shell_update, "LAW106_JCOOK_ALM": law106_shell_update,
+    107: law107_shell_update, "107": law107_shell_update, "LAW107": law107_shell_update,
+    "PAPER_LIGHT": law107_shell_update, "PLAS_PAPER_LIGHT": law107_shell_update, "LAW107_PAPER_LIGHT": law107_shell_update,
+    "PFEIFFER": law107_shell_update, "MAT_PFEIFFER": law107_shell_update, "MAT_PAPER_LIGHT": law107_shell_update,
+    "MAT_PLAS_PAPER_LIGHT": law107_shell_update, "MAT_107": law107_shell_update, "MAT_LAW107": law107_shell_update,
     109: law109_shell_update, "109": law109_shell_update, "LAW109": law109_shell_update,
     "TAB_PLAS": law109_shell_update, "MAT_LAW109": law109_shell_update, "MAT_TAB_PLAS": law109_shell_update,
     110: law110_shell_update, "110": law110_shell_update, "LAW110": law110_shell_update,
@@ -2034,6 +2173,17 @@ def register_materials():
     _register_law66()
     _register_law74()
     _register_law87()
+    _register_law88()
+    _register_law92()
+    _register_law93()
+    _register_law94()
+    _register_law95()
+    _register_law100()
+    _register_law101()
+    _register_law102()
+    _register_law103()
+    _register_law104()
+    _register_law105()
     _register_law106()
     _register_law107()
     _register_law109()
@@ -2213,10 +2363,20 @@ def extra_shapes(mat, nip=None):
         shapes.update(law94_extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in _LAW95_KEYS or getattr(mat, "law_name", None) in _LAW95_KEYS:
         shapes.update(law95_extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW100_KEYS or getattr(mat, "law_name", None) in _LAW100_KEYS:
+        shapes.update(law100_multi_network.extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in _LAW101_KEYS or getattr(mat, "law_name", None) in _LAW101_KEYS:
         shapes.update(law101_extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW102_KEYS or getattr(mat, "law_name", None) in _LAW102_KEYS:
+        shapes.update(law102_dprag2.extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW103_KEYS or getattr(mat, "law_name", None) in _LAW103_KEYS:
+        shapes.update(law103_hensel_spittel.extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW104_KEYS or getattr(mat, "law_name", None) in _LAW104_KEYS:
+        shapes.update(law104_drucker.extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in _LAW105_KEYS or getattr(mat, "law_name", None) in _LAW105_KEYS:
         shapes.update(law105_powder_burn.extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW106_KEYS or getattr(mat, "law_name", None) in _LAW106_KEYS:
+        shapes.update(law106_jcook_alm.extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in _LAW107_KEYS or getattr(mat, "law_name", None) in _LAW107_KEYS:
         shapes.update(law107_extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in _LAW109_KEYS or getattr(mat, "law_name", None) in _LAW109_KEYS:
@@ -3018,6 +3178,8 @@ def sound_speed(mat, rho=None, extra=None, is_shell: bool = False):
     if law in _LAW92_KEYS or law_name in _LAW92_KEYS:
         return law92_sound_speed(mat, rho=rho, extra=extra, is_shell=is_shell)
     if law in _LAW88_KEYS or law_name in _LAW88_KEYS:
+        if is_shell:
+            return law88_tab_hyp.sound_speed_shell(mat, rho=rho, extra=extra)
         return law88_sound_speed(mat, rho=rho, extra=extra)
     if law in (22, "22", "LAW22", "DAMA", "PLAS_DAMA") or law_name in ("22", "LAW22", "DAMA", "PLAS_DAMA"):
         return law22_dama.sound_speed(mat, rho=rho, extra=extra)
@@ -3079,6 +3241,7 @@ def sound_speed(mat, rho=None, extra=None, is_shell: bool = False):
         rho0 = float(getattr(mat, "rho0", 0.0) or (mat.params.get("rho", 0.0) if hasattr(mat, "params") else 0.0) or (mat.params.get("MAT_RHO", 0.0) if hasattr(mat, "params") else 0.0) or 1.0)
         e = float(getattr(mat, "E", 0.0) or getattr(mat, "e", 0.0) or (mat.params.get("e", 0.0) if hasattr(mat, "params") else 0.0) or (mat.params.get("MAT_E", 0.0) if hasattr(mat, "params") else 0.0) or 1.0)
         r = rho if rho is not None else rho0
+        return np.sqrt(e / np.maximum(r, 1e-20))
     if law in (60, "60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC") or law_name in ("60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC"):
         _get_law60()
         return law60_sound_speed(mat, rho=rho, extra=extra)
@@ -3266,6 +3429,7 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         res = law94_shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
         if isinstance(res, tuple):
             return res[0], res[1]
+        return res, epsp
     if getattr(mat, "law", None) in _LAW95_KEYS or getattr(mat, "law_name", None) in _LAW95_KEYS:
         raise NotImplementedError("LAW95 (/MAT/BERGSTROM_BOYCE) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in _LAW100_KEYS or getattr(mat, "law_name", None) in _LAW100_KEYS:

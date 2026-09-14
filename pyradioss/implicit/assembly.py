@@ -167,7 +167,75 @@ def assemble_mass(model, dof: DofMap, x_geom, log=None):
         vals.append(me[keep].ravel())
 
     # Point masses from /ADMAS (M5) and /ADMAS/NON_UNIFORM (M114) (AUD-026)
+    x_coords = x_geom if x_geom is not None else getattr(model, "x0", getattr(model, "x", None))
     for am in getattr(model, "admas", []):
+        if am.mass_type == 2:
+            surf = model.surfaces.get(am.grnod_id) if hasattr(model, "surfaces") else None
+            if surf is not None and surf.segments is not None and len(surf.segments) > 0 and x_coords is not None:
+                segs = np.asarray(surf.segments, dtype=np.int64)
+                areas = np.zeros(len(segs), dtype=float)
+                for si, seg in enumerate(segs):
+                    n1, n2, n3 = seg[0], seg[1], seg[2]
+                    n4 = seg[3] if len(seg) > 3 else seg[2]
+                    if n4 == n3 or n4 < 0:
+                        v1 = x_coords[n2] - x_coords[n1]
+                        v2 = x_coords[n3] - x_coords[n1]
+                        areas[si] = 0.5 * np.linalg.norm(np.cross(v1, v2))
+                    else:
+                        d1 = x_coords[n3] - x_coords[n1]
+                        d2 = x_coords[n4] - x_coords[n2]
+                        areas[si] = 0.5 * np.linalg.norm(np.cross(d1, d2))
+                tot_area = np.sum(areas)
+                if tot_area > 0.0:
+                    for si, seg in enumerate(segs):
+                        n1, n2, n3 = seg[0], seg[1], seg[2]
+                        n4 = seg[3] if len(seg) > 3 else seg[2]
+                        seg_m = am.mass * (areas[si] / tot_area)
+                        if n4 == n3 or n4 < 0:
+                            m_nod = seg_m / 3.0
+                            target_nodes = (n1, n2, n3)
+                        else:
+                            m_nod = seg_m / 4.0
+                            target_nodes = (n1, n2, n3, n4)
+                        for nid in target_nodes:
+                            if 0 <= nid < model.numnod:
+                                for d in range(3):
+                                    eq_num = dof.eq[nid * 6 + d]
+                                    if eq_num >= 0:
+                                        rows.append(np.array([eq_num], dtype=np.int64))
+                                        cols.append(np.array([eq_num], dtype=np.int64))
+                                        vals.append(np.array([m_nod], dtype=np.float64))
+                    continue
+        elif am.mass_type == 3:
+            grpart = model.egroups.get("PART", {}).get(am.grnod_id) if hasattr(model, "egroups") else None
+            pids = getattr(grpart, "part_ids_resolved", None) if grpart else None
+            if pids is None and grpart:
+                pids = getattr(grpart, "members", [])
+            if not pids and hasattr(model, "parts") and am.grnod_id in model.parts:
+                pids = [am.grnod_id]
+            if pids:
+                part_nodes = set()
+                elem_grps = model.element_groups() if hasattr(model, "element_groups") else []
+                for _, grp in elem_grps:
+                    p_ids = grp.state.get("part_ids")
+                    if p_ids is not None:
+                        mask = np.isin(p_ids, pids)
+                        if np.any(mask):
+                            conn = grp.state.get("mass_conn", grp.conn)[mask]
+                            valid = conn[conn >= 0]
+                            part_nodes.update(valid.tolist())
+                if part_nodes:
+                    m_per_node = am.mass / len(part_nodes)
+                    for n_idx in part_nodes:
+                        if 0 <= n_idx < model.numnod:
+                            for d in range(3):
+                                eq_num = dof.eq[n_idx * 6 + d]
+                                if eq_num >= 0:
+                                    rows.append(np.array([eq_num], dtype=np.int64))
+                                    cols.append(np.array([eq_num], dtype=np.int64))
+                                    vals.append(np.array([m_per_node], dtype=np.float64))
+                    continue
+
         g = model.node_groups.get(am.grnod_id)
         if g is None or g.node_idx is None:
             continue

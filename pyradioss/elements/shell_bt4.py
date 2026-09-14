@@ -351,7 +351,12 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
             # applies for the same material (M39 / M38-NEW-2).
             fac[sl] = 1.0
             continue
-        if getattr(mat, "law", 1) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
+        if getattr(mat, "law", 1) in (104, "104", "LAW104", 106, "106", "LAW106", 107, "107", "LAW107", 109, "109", "LAW109", 110, "110", "LAW110") or getattr(mat, "law_name", None) in ("104", "LAW104", "106", "LAW106", "107", "LAW107", "109", "LAW109", "110", "LAW110"):
+            try:
+                c = float(materials.sound_speed(mat, is_shell=True))
+            except Exception:
+                c = float(mat.sound_speed_shell()) if hasattr(mat, "sound_speed_shell") and getattr(mat, "rho0", 0.0) > 0.0 else 0.0
+        elif getattr(mat, "law", 1) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
             from ..materials import law57_barlat
             c = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
         elif getattr(mat, "law", 1) in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
@@ -372,8 +377,10 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
         elif getattr(mat, "law", 1) in (94, "94", "LAW94", "YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH"):
             from ..materials import law94_yeoh
             c = law94_yeoh.sound_speed_shell(mat, getattr(mat, "rho0", None))
-        else:
+        elif hasattr(mat, "sound_speed_shell") and getattr(mat, "rho0", 0.0) > 0.0:
             c = mat.sound_speed_shell()
+        else:
+            c = 0.0
         if c <= EM20:
             fac[sl] = 1.0
             continue
@@ -384,7 +391,7 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
         eig = np.linalg.eigvals(C[None, :, :] @ BBt[sl])
         w2max = (4.0 / mat.rho0) * eig.real.max(axis=1)
         w2bend = _bend_shear_omega2(B1, B2, area, sl, mat,
-                                    prop.params["thick"], 4, mat.rho0)
+                                    getattr(prop, "params", {}).get("thick", getattr(prop, "thick", 0.001)), 4, mat.rho0)
         w2max = np.maximum(w2max, w2bend)
         dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
         fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
@@ -635,7 +642,7 @@ def _init_material_state(group, nip_max=None, n=None):
 def _layer_extra(st, sl, k, area=None):
     """The ``extra`` dict for one layer of one part slice: views into the
     law-specific arrays plus the shared layer-failure flags."""
-    extra = {name: arr[sl, k] for name, arr in st["mat_extra"].items()}
+    extra = {name: (arr[sl, k] if arr.ndim >= 2 else arr[sl]) for name, arr in st["mat_extra"].items()}
     extra["layfail"] = st["layfail"][sl, k]
     if "uvar73" in st and "uvar73" not in extra:
         extra["uvar73"] = st["uvar73"][sl]
@@ -697,15 +704,17 @@ def _layer_failure(st, sl, mat, k, sig_k, epsp_old, deps_k, dt):
             broken = (sig_k[:, 0] > tenscut) | (sig_k[:, 1] > tenscut)
             if np.any(broken):
                 layf[broken] = 0.0
-    if "off52" in st["mat_extra"]:
+    law = getattr(mat, "law", 1)
+    law_name = getattr(mat, "law_name", None)
+    if (law in (52, "52", "LAW52", "GURSON", "PLAS_GURS") or law_name in ("52", "LAW52", "GURSON", "PLAS_GURS")) and "off52" in st["mat_extra"]:
         layf[st["mat_extra"]["off52"][sl, k] == 0.0] = 0.0
-    elif "off57" in st["mat_extra"]:
+    elif (law in (57, "57", "LAW57", "BARLAT", "BARLAT3") or law_name in ("57", "LAW57", "BARLAT", "BARLAT3")) and "off57" in st["mat_extra"]:
         layf[st["mat_extra"]["off57"][sl, k] == 0.0] = 0.0
-    elif "off73" in st["mat_extra"]:
+    elif (law in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL") or law_name in ("73", "LAW73", "HILL_THERM", "THERM_HILL")) and "off73" in st["mat_extra"]:
         layf[st["mat_extra"]["off73"][sl, k] <= 0.8] = 0.0
-    elif "off87" in st["mat_extra"]:
+    elif (law in (87, "87", "LAW87", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000") or law_name in ("87", "LAW87", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000")) and "off87" in st["mat_extra"]:
         layf[st["mat_extra"]["off87"][sl, k] <= 0.8] = 0.0
-    elif "off" in st["mat_extra"] and getattr(mat, "law", 1) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3", 73, "73", "LAW73", "HILL_THERM", "THERM_HILL", 87, "87", "LAW87", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000"):
+    elif "off" in st["mat_extra"] and (law in (52, "52", "LAW52", "GURSON", "PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3", 73, "73", "LAW73", "HILL_THERM", "THERM_HILL", 87, "87", "LAW87", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000") or law_name in ("52", "LAW52", "GURSON", "PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "73", "LAW73", "HILL_THERM", "THERM_HILL", "87", "LAW87", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000")):
         layf[st["mat_extra"]["off"][sl, k] == 0.0] = 0.0
     if getattr(mat, "law", 1) != 43:
         eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
@@ -727,6 +736,8 @@ def _element_deletion(st, nip_of):
     layfail = st["layfail"]
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         law = getattr(mat, "law", 1)
+        if law == 0 or isl >= len(nip_of):
+            continue
         if not (mat.fail is not None or law in (15, 22, 25, 27, 43, 48, 52, 57, 60, 66, 69, 73, 87)
                 or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "73", "LAW73", "HILL_THERM", "THERM_HILL", "87", "LAW87", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000")
                 or mat.params.get("eps_p_max", EP30) < 1e30
@@ -736,6 +747,8 @@ def _element_deletion(st, nip_of):
                 or mat.params.get("TENSCUT", 1e30) < 1e30):
             continue
         nip = nip_of[isl]
+        if nip <= 0:
+            continue
         nbroken = (layfail[sl, :nip] == 0.0).sum(axis=1)
         if law == 25:
             ratio = float(mat.params.get("ratio", 1.0))
@@ -932,6 +945,11 @@ def forces(group, x, v, vr, dt, fint, mint):
         for sl, mat, prop in st.get("slices", []):
             if getattr(mat, "law", 1) == 0:
                 is_void[sl] = True
+            if getattr(mat, "law", 1) in (104, "104", "LAW104", 106, "106", "LAW106", 107, "107", "LAW107", 109, "109", "LAW109", 110, "110", "LAW110") or getattr(mat, "law_name", None) in ("104", "LAW104", "106", "LAW106", "107", "LAW107", "109", "LAW109", "110", "LAW110"):
+                try:
+                    c[sl] = materials.sound_speed(mat, is_shell=True)
+                except Exception:
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") and getattr(mat, "rho0", 0.0) > 0.0 else 0.0
             elif getattr(mat, "law", 1) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
                 from ..materials import law52_gurson
                 c[sl] = law52_gurson.sound_speed_shell_law52(mat, getattr(mat, "rho0", None))
@@ -960,9 +978,11 @@ def forces(group, x, v, vr, dt, fint, mint):
                 from ..materials import law94_yeoh
                 c[sl] = law94_yeoh.sound_speed_shell(mat, getattr(mat, "rho0", None))
             elif getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
+                c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") and getattr(mat, "rho0", 0.0) > 0.0 else 0.0
+            elif hasattr(mat, "sound_speed_shell") and getattr(mat, "rho0", 0.0) > 0.0:
                 c[sl] = mat.sound_speed_shell()
             else:
-                c[sl] = mat.sound_speed_shell()
+                c[sl] = 0.0
         alive = st["off"] > 0.0
         dt_e = np.where(alive, st["dtfac"] * lc / np.maximum(c, EM20), EP30)
         return np.where(is_void, EP30, dt_e)
@@ -1140,6 +1160,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     ortho_all = st.get("ortho")                     # (n, 2) fiber cos/sin
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         if getattr(mat, "law", 1) == 0:
+            nip_of.append(0)
             continue
         zrel, wrel = st["zw"][isl]
         nip_of.append(len(zrel))
@@ -1174,7 +1195,12 @@ def forces(group, x, v, vr, dt, fint, mint):
                 if cs is not None else s_new        # fiber -> elem
             Nres[sl] += wk[:, None] * s_res
             Mres[sl] += (wk * zk)[:, None] * s_res
-        if getattr(mat, "law", 1) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
+        if getattr(mat, "law", 1) in (104, "104", "LAW104", 106, "106", "LAW106", 107, "107", "LAW107", 109, "109", "LAW109", 110, "110", "LAW110") or getattr(mat, "law_name", None) in ("104", "LAW104", "106", "LAW106", "107", "LAW107", "109", "LAW109", "110", "LAW110"):
+            try:
+                c[sl] = materials.sound_speed(mat, is_shell=True)
+            except Exception:
+                c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") and getattr(mat, "rho0", 0.0) > 0.0 else 0.0
+        elif getattr(mat, "law", 1) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
             from ..materials import law52_gurson
             c[sl] = law52_gurson.sound_speed_shell_law52(mat, getattr(mat, "rho0", None))
         elif getattr(mat, "law", 1) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A"):
@@ -1210,11 +1236,13 @@ def forces(group, x, v, vr, dt, fint, mint):
             from ..materials import law94_yeoh
             c[sl] = law94_yeoh.sound_speed_shell(mat, getattr(mat, "rho0", None))
         elif getattr(mat, "law", 1) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
-            c[sl] = mat.sound_speed_shell()
+            c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") and getattr(mat, "rho0", 0.0) > 0.0 else 0.0
             if "uvar66" in st and "uvar66" in st.get("mat_extra", {}):
                 st["uvar66"][sl] = st["mat_extra"]["uvar66"][sl, 0]
-        else:
+        elif hasattr(mat, "sound_speed_shell") and getattr(mat, "rho0", 0.0) > 0.0:
             c[sl] = mat.sound_speed_shell()
+        else:
+            c[sl] = 0.0
         # elastic transverse shear resultant stress (with 5/6 factor)
         qold = st["qshear"][sl].copy()
         g_val = getattr(mat, "G", 0.0) or getattr(mat, "g5", 0.0) or getattr(mat, "g0", 0.0)

@@ -120,7 +120,7 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     return dama >= 1.0
 
 
-def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
+def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     """Plane-stress damage step for one layer. sig (m, 3) = [xx, yy, xy]."""
     p = fail.params
     sm = (sig[:, 0] + sig[:, 1]) / 3.0            # sigma_zz = 0

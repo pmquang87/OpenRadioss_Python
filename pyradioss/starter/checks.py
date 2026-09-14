@@ -9479,4 +9479,12 @@ def check_model(model: Model, log: MessageLog) -> None:
         if pt.fct_id > 0 and pt.fct_id not in model.functions:
             log.error(f"/PERTURB/{pt.subtype}/{ptid}: function {pt.fct_id} not defined", "CROSS REF")
 
+    for mvid, mv in getattr(model, "monitored_volumes", {}).items():
+        surf_id = getattr(mv, "surf_id", 0)
+        if surf_id not in model.surfaces:
+            log.error(f"/MONVOL/{mvid}: surface {surf_id} not defined", "CROSS REF")
+        matid = getattr(mv, "matid", 0)
+        if matid not in model.materials:
+            log.error(f"/MONVOL/{mvid}: material {matid} not defined", "CROSS REF")
+
 

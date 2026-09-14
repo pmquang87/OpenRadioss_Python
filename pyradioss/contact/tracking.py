@@ -42,10 +42,13 @@ def alive_segment_mask(model: Model, seg_gtype: np.ndarray,
     for gname in np.unique(seg_gtype):
         if gname == "":
             continue
-        off = getattr(model, gname).state.get("off")
+        group = getattr(model, gname, None)
+        if group is None or getattr(group, "state", None) is None:
+            continue
+        off = group.state.get("off")
         if off is None:
             continue
-        sel = (seg_gtype == gname) & (seg_elem >= 0)
+        sel = (seg_gtype == gname) & (seg_elem >= 0) & (seg_elem < len(off))
         mask[sel] = off[seg_elem[sel]] > 0.0
     return mask
 
@@ -90,7 +93,7 @@ def node_reference_counts(model: Model, alive_only: bool) -> np.ndarray:
             if off is not None:
                 conn = conn[off > 0.0]
         flat = conn.reshape(-1)
-        valid = flat >= 0
+        valid = (flat >= 0) & (flat < model.numnod)
         np.add.at(cnt, flat[valid], 1)
     return cnt
 

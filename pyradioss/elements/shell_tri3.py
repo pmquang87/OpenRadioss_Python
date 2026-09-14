@@ -345,8 +345,99 @@ def forces(group, x, v, vr, dt, fint, mint):
     n = group.n
     if n == 0 or len(conn) == 0:
         return np.empty(0, dtype=float)
-    if dt < 0.0:
-        return np.full(n, EP30)
+    if dt is None or dt <= 0.0 or v is None:
+        xe = x[conn]
+        E, xl, area, B1, B2 = _local_geometry(xe)
+        area = np.maximum(area, EM20)
+        lc = _char_length(xl, area)
+        c = np.zeros(n)
+        for sl, mat, prop in st.get("slices", []):
+            is_law52 = getattr(mat, "law", None) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS")
+            is_law58 = getattr(mat, "law", None) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A")
+            is_law57 = getattr(mat, "law", None) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3")
+            is_law73 = getattr(mat, "law", None) in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL")
+            is_law87 = getattr(mat, "law", None) in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000") or getattr(mat, "law_name", None) in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000")
+            is_law88 = getattr(mat, "law", None) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP")
+            is_law92 = getattr(mat, "law", None) in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE") or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE")
+            is_law93 = getattr(mat, "law", None) in (93, "93", "LAW93", "ORTH_HILL") or getattr(mat, "law_name", None) in ("93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL")
+            is_law94 = getattr(mat, "law", None) in (94, "94", "LAW94", "YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH", "LAW94_YEOH")
+            is_law66 = getattr(mat, "law", None) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB")
+            is_law100_110 = getattr(mat, "law", None) in (100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+                                                           "100", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110",
+                                                           "LAW100", "LAW101", "LAW102", "LAW103", "LAW104", "LAW105", "LAW106", "LAW107", "LAW108", "LAW109", "LAW110") or \
+                            getattr(mat, "law_name", None) in ("100", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110",
+                                                               "LAW100", "LAW101", "LAW102", "LAW103", "LAW104", "LAW105", "LAW106", "LAW107", "LAW108", "LAW109", "LAW110")
+            has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58 or is_law52 or is_law57 or is_law73 or is_law66 or is_law87 or is_law88 or is_law92 or is_law93 or is_law94 or is_law100_110
+            if getattr(mat, "law", 1) == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or not has_stiff:
+                c[sl] = 0.0
+            else:
+                if is_law100_110:
+                    try:
+                        c[sl] = materials.sound_speed(mat, is_shell=True)
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law52:
+                    try:
+                        from ..materials import law52_gurson
+                        c[sl] = law52_gurson.sound_speed_shell_law52(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law58:
+                    try:
+                        from ..materials import law58_fabr_a
+                        c[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law57:
+                    try:
+                        from ..materials import law57_barlat
+                        c[sl] = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law73:
+                    try:
+                        from ..materials import law73_hill_therm
+                        c[sl] = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law87:
+                    try:
+                        from ..materials import law87_barlat2000
+                        c[sl] = law87_barlat2000.sound_speed(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law88:
+                    try:
+                        from ..materials import law88_tab_hyp
+                        c[sl] = law88_tab_hyp.sound_speed_shell(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law92:
+                    try:
+                        from ..materials import law92_arruda_boyce
+                        c[sl] = law92_arruda_boyce.sound_speed_shell(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law93:
+                    try:
+                        from ..materials import law93_orth_hill
+                        c[sl] = law93_orth_hill.sound_speed_shell(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law94:
+                    try:
+                        from ..materials import law94_yeoh
+                        c[sl] = law94_yeoh.sound_speed_shell(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law66:
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif hasattr(mat, "sound_speed_shell"):
+                    c[sl] = mat.sound_speed_shell()
+                else:
+                    c[sl] = 0.0
+        alive = st.get("off", np.ones(n)) > 0.0
+        return np.where(alive & (c > 0.0), st.get("dtfac", np.ones(n)) * lc / np.maximum(c, EM20), EP30)
     xe = x[conn]
     E, xl, area, B1, B2 = _local_geometry(xe)
     area = np.maximum(area, EM20)
@@ -433,70 +524,82 @@ def forces(group, x, v, vr, dt, fint, mint):
         is_law93 = getattr(mat, "law", None) in (93, "93", "LAW93", "ORTH_HILL") or getattr(mat, "law_name", None) in ("93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL")
         is_law94 = getattr(mat, "law", None) in (94, "94", "LAW94", "YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH", "LAW94_YEOH")
         is_law66 = getattr(mat, "law", None) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB")
-        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58 or is_law52 or is_law57 or is_law73 or is_law66 or is_law87 or is_law88 or is_law92 or is_law93 or is_law94
+        is_law100_110 = getattr(mat, "law", None) in (100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+                                                       "100", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110",
+                                                       "LAW100", "LAW101", "LAW102", "LAW103", "LAW104", "LAW105", "LAW106", "LAW107", "LAW108", "LAW109", "LAW110") or \
+                        getattr(mat, "law_name", None) in ("100", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110",
+                                                           "LAW100", "LAW101", "LAW102", "LAW103", "LAW104", "LAW105", "LAW106", "LAW107", "LAW108", "LAW109", "LAW110")
+        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58 or is_law52 or is_law57 or is_law73 or is_law66 or is_law87 or is_law88 or is_law92 or is_law93 or is_law94 or is_law100_110
         if getattr(mat, "law", 1) == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or not has_stiff:
             c[sl] = 0.0
         else:
-            if is_law52:
+            if is_law100_110:
+                try:
+                    c[sl] = materials.sound_speed(mat, is_shell=True)
+                except Exception:
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+            elif is_law52:
                 try:
                     from ..materials import law52_gurson
                     c[sl] = law52_gurson.sound_speed_shell_law52(mat, getattr(mat, "rho0", None))
                 except Exception:
-                    c[sl] = mat.sound_speed_shell()
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
             elif is_law58:
                 try:
                     from ..materials import law58_fabr_a
                     c[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))
                 except Exception:
-                    c[sl] = mat.sound_speed_shell()
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
             elif is_law57:
                 try:
                     from ..materials import law57_barlat
                     c[sl] = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
                 except Exception:
-                    c[sl] = mat.sound_speed_shell()
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
             elif is_law73:
                 try:
                     from ..materials import law73_hill_therm
                     c[sl] = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
                 except Exception:
-                    c[sl] = mat.sound_speed_shell()
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
             elif is_law87:
                 try:
                     from ..materials import law87_barlat2000
                     c[sl] = law87_barlat2000.sound_speed(mat, getattr(mat, "rho0", None))
                 except Exception:
-                    c[sl] = mat.sound_speed_shell()
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
             elif is_law88:
                 try:
                     from ..materials import law88_tab_hyp
                     c[sl] = law88_tab_hyp.sound_speed_shell(mat, getattr(mat, "rho0", None))
                 except Exception:
-                    c[sl] = mat.sound_speed_shell()
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
             elif is_law92:
                 try:
                     from ..materials import law92_arruda_boyce
                     c[sl] = law92_arruda_boyce.sound_speed_shell(mat, getattr(mat, "rho0", None))
                 except Exception:
-                    c[sl] = mat.sound_speed_shell()
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
             elif is_law93:
                 try:
                     from ..materials import law93_orth_hill
                     c[sl] = law93_orth_hill.sound_speed_shell(mat, getattr(mat, "rho0", None))
                 except Exception:
-                    c[sl] = mat.sound_speed_shell()
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
             elif is_law94:
                 try:
                     from ..materials import law94_yeoh
                     c[sl] = law94_yeoh.sound_speed_shell(mat, getattr(mat, "rho0", None))
                 except Exception:
-                    c[sl] = mat.sound_speed_shell()
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
             elif is_law66:
-                c[sl] = mat.sound_speed_shell()
+                c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
                 if "uvar66" in st and "uvar66" in st.get("mat_extra", {}):
                     st["uvar66"][sl] = st["mat_extra"]["uvar66"][sl, 0]
-            else:
+            elif hasattr(mat, "sound_speed_shell"):
                 c[sl] = mat.sound_speed_shell()
+            else:
+                c[sl] = 0.0
         if "uvar87" in st and "uvar87" in st.get("mat_extra", {}):
             u87 = st["mat_extra"]["uvar87"]
             st["uvar87"][sl] = u87[sl, 0] if u87.ndim == 3 else u87[sl]

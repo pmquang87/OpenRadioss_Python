@@ -268,7 +268,7 @@ def apply_incremental_stiffness(keys, k, v_rel, dt, normal, mu, fn, alpha, filt_
     # beta = min(1.0, mu * fn / ft_mag)
     # Handle division by zero where ft_mag is extremely small
     safe_mag = np.maximum(ft_mag, 1e-30)
-    beta = np.minimum(1.0, (mu * fn) / safe_mag)
+    beta = np.clip((mu * np.maximum(fn, 0.0)) / safe_mag, 0.0, 1.0)
     
     ft = f_trial_tan * beta[:, None]
     

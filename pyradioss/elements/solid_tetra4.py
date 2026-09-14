@@ -339,10 +339,35 @@ def forces(group, x, v, vr, dt, fint, mint):
     conn = group.conn
     if n == 0 or len(conn) == 0:
         return np.empty(0, dtype=float)
-    if dt < 0.0:
-        return np.full(n, EP30)
     st = group.state
     xe = x[conn]                                   # (n, 4, 3) gather
+    if dt is None or dt <= 0.0 or v is None:
+        dndx, vol = _geometry(xe)
+        vol = np.maximum(vol, EM20)
+        lc = _char_length(xe, vol)
+        rho = st["mass"] / vol
+        c = np.zeros(n)
+        is_void = np.zeros(n, dtype=bool)
+        for sl, mat, prop in st.get("slices", []):
+            if getattr(mat, "law", 1) == 0:
+                is_void[sl] = True
+            elif hasattr(mat, "sound_speed_solid"):
+                c[sl] = mat.sound_speed_solid()
+            else:
+                c_val = None
+                try:
+                    c_val = materials.sound_speed(mat, rho=rho[sl])
+                except Exception:
+                    pass
+                if c_val is not None:
+                    c[sl] = c_val
+                else:
+                    K = getattr(mat, "K", 0.0)
+                    G = getattr(mat, "G", 0.0)
+                    c[sl] = np.sqrt(np.maximum(K + 4.0 * G / 3.0, 0.0) / np.maximum(rho[sl], EM20))
+        alive = st.get("off", np.ones(n)) > 0.0
+        dt_e = np.where(alive & (c > 0.0), st.get("dtfac", np.ones(n)) * lc / np.maximum(c, EM20), EP30)
+        return np.where(is_void, EP30, dt_e)
     ve = np.zeros_like(xe) if v is None else v[conn]
 
     # ---- geometry (s4coor3) ----------------------------------------------
@@ -438,7 +463,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         F = np.einsum("nia,nib->nab", xe, st["dndx0"])
     for sl, mat, prop in st.get("slices", []):
         law = getattr(mat, "law", 1)
-        if law == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or (getattr(mat, "E", 0.0) <= 0.0 and law not in (5, "5", "LAW5", "JWL", 21, "21", "LAW21", "DPRAG", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "LAW50_VISC_HONEY", "LAW50_HYP_FOAM", 66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB", 74, "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "LAW74_HILL_3D", 79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", 88, "88", "LAW88", "HYP_TAB", "TAB_HYP", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TABULATED_HYP", "MAT_LAW88", 163, "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM") and getattr(mat, "law_name", None) not in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB", "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "LAW74_HILL_3D", "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", "88", "LAW88", "HYP_TAB", "TAB_HYP", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TABULATED_HYP", "MAT_LAW88", "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "LAW50_VISC_HONEY", "LAW50_HYP_FOAM", "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM")):
+        if law == 0 or getattr(mat, "rho0", 0.0) <= 0.0:
             sig[sl] = 0.0
             c[sl] = 0.0
             c_from_law[sl] = True
@@ -477,26 +502,11 @@ def forces(group, x, v, vr, dt, fint, mint):
             if "uvar88" not in st:
                 st["uvar88"] = np.zeros((group.n, 30))
             st["uvar88"][sl] = extra["uvar88"]
-        if "off28" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off28"])
-        elif "off38" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off38"])
-        elif "off12" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off12"])
-        elif "off14" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off14"])
-        elif "off43" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off43"])
-        elif "off60" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off60"])
-        elif "off48" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off48"])
-        elif "off52" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off52"])
-        elif "off79" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off79"])
-        elif "off50" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off50"])
+        law_id = getattr(mat, "law", None)
+        law_str = str(law_id).lower().replace("law", "") if law_id is not None else ""
+        off_key = f"off{law_str}"
+        if off_key in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra[off_key])
         elif "off" in extra:
             st["off"][sl] = np.minimum(st["off"][sl], extra["off"])
 
@@ -565,7 +575,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     qa = np.zeros(group.n)
     qb = np.zeros(group.n)
     for sl, mat, prop in st.get("slices", []):
-        if not c_from_law[sl.start]:
+        if sl.stop > sl.start and not c_from_law[sl.start]:
             rho0_sl = getattr(mat, "rho0", 0.0)
             if getattr(mat, "law", 1) == 0 or rho0_sl <= 0.0:
                 c[sl] = 0.0

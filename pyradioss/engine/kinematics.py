@@ -58,6 +58,10 @@ class LoadsAndConstraints:
                     log.warning(f"/BCS/{bc.id}: node group {bc.grnod_id} not found in model", "BCS INIT")
                 continue
             idx = model.node_groups[bc.grnod_id].node_idx
+            if idx is not None:
+                idx = idx[(idx >= 0) & (idx < model.numnod)]
+            if idx is None or len(idx) == 0:
+                continue
             row = getattr(bc, "skew_row", 0)
             if row:
                 self.skew_bcs.append((int(row), idx,
@@ -102,21 +106,35 @@ class LoadsAndConstraints:
             return _ConstantFunc(1.0)
 
         # resolved loads: (node_idx, direction, funct, scale)
-        def _grp(gid: int | None) -> np.ndarray:
+        def _grp(gid: int | None, allow_all: bool = False) -> np.ndarray:
             if gid in (None, 0):
-                return np.arange(model.numnod)
+                return np.arange(model.numnod) if allow_all else np.zeros(0, dtype=np.int64)
             ngroups = getattr(model, "node_groups", {})
             if gid in ngroups:
-                return ngroups[gid].node_idx
+                idx = ngroups[gid].node_idx
+                if idx is not None:
+                    idx = idx[(idx >= 0) & (idx < model.numnod)]
+                return idx if idx is not None else np.zeros(0, dtype=np.int64)
             if log is not None:
                 log.warning(f"Node group {gid} not found in model", "LOADS INIT")
             return np.zeros(0, dtype=np.int64)
 
-        self.gravity = [(_grp(g.grnod_id), g.direction, _get_func(g.funct_id),
-                         g.scale) for g in getattr(model, "gravity", [])]
+        self.gravity = []
+        for g in getattr(model, "gravity", []):
+            idx = _grp(g.grnod_id, allow_all=True)
+            if idx is None or len(idx) == 0:
+                continue
+            self.gravity.append((idx, g.direction, _get_func(g.funct_id), g.scale))
+
         # /CLOAD entries carry their /SENSOR id (M6): 0 = always active
-        self.cloads = [(_grp(c.grnod_id), c.direction, _get_func(c.funct_id),
-                        c.scale, c.sens_id, c.time_scale) for c in getattr(model, "cloads", [])]
+        self.cloads = []
+        for c in getattr(model, "cloads", []):
+            idx = _grp(c.grnod_id)
+            if idx is None or len(idx) == 0:
+                continue
+            self.cloads.append((idx, c.direction, _get_func(c.funct_id),
+                                c.scale, c.sens_id, c.time_scale))
+
         # /IMPVEL entries: (node_idx, dof, funct, Fscale_Y, 1/Ascale_x,
         # Tstart, Tstop) — the curve is evaluated at t/Ascale_x and the
         # condition only holds inside [Tstart, Tstop] (fixvel.F: FACX,
@@ -130,10 +148,17 @@ class LoadsAndConstraints:
         def _skewed(i):
             return bool(getattr(i, "skew_row", 0))
 
-        self.impvel = [(_grp(i.grnod_id), i.dof, _get_func(i.funct_id),
-                        i.scale, 1.0 / i.xscale if getattr(i, "xscale", 1.0) not in (0.0, None) else 1.0,
-                        i.tstart, i.tstop)
-                       for i in getattr(model, "impvel", []) if not _skewed(i)]
+        self.impvel = []
+        for i in getattr(model, "impvel", []):
+            if _skewed(i):
+                continue
+            idx = _grp(i.grnod_id)
+            if idx is None or len(idx) == 0:
+                continue
+            self.impvel.append((idx, i.dof, _get_func(i.funct_id),
+                                i.scale, 1.0 / i.xscale if getattr(i, "xscale", 1.0) not in (0.0, None) else 1.0,
+                                i.tstart, i.tstop))
+
         # /IMPDISP: like /IMPVEL, plus the base coordinate of each node so
         # the target position x0 + d(t) is exact (no velocity-integration
         # drift). Entries: (node_idx, dof, funct, scale, facx, tstart,
@@ -143,6 +168,8 @@ class LoadsAndConstraints:
             if _skewed(i):
                 continue
             idx = _grp(i.grnod_id)
+            if idx is None or len(idx) == 0:
+                continue
             # a ROTATIONAL /IMPDISP (dof 3..5, M39) has no base position to
             # correct against — x0d is left zero and the imposed ANGLE is
             # enforced as the finite-difference angular velocity in
@@ -164,16 +191,21 @@ class LoadsAndConstraints:
         for i in getattr(model, "impvel", []):
             row = getattr(i, "skew_row", 0)
             if row:
+                idx = _grp(i.grnod_id)
+                if idx is None or len(idx) == 0:
+                    continue
                 xscale = getattr(i, "xscale", 1.0)
                 facx = 1.0 / xscale if xscale not in (0.0, None) else 1.0
                 self.skew_impvel.append(
-                    (int(row), _grp(i.grnod_id), i.dof,
+                    (int(row), idx, i.dof,
                      _get_func(i.funct_id), i.scale, facx,
                      i.tstart, i.tstop, None))
         for i in getattr(model, "impdisp", []):
             row = getattr(i, "skew_row", 0)
             if row:
                 idx = _grp(i.grnod_id)
+                if idx is None or len(idx) == 0:
+                    continue
                 xscale = getattr(i, "xscale", 1.0)
                 facx = 1.0 / xscale if xscale not in (0.0, None) else 1.0
                 x0_sub = model.x0[idx].copy() if len(idx) > 0 else np.zeros((0, 3))

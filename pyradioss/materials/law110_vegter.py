@@ -988,14 +988,20 @@ def law110_consistent_shell_tangent(
     return c_ep
 
 
-def law110_sound_speed(mat: Any, rho: Optional[float] = None, is_shell: bool = True, **kwargs: Any) -> float:
+def law110_sound_speed(mat: Any, rho: Optional[Any] = None, is_shell: bool = True, **kwargs: Any) -> Any:
     """Calculate sound speed for /MAT/LAW110.
 
     c = sqrt(A_11 / rho) where A_11 = E / (1 - nu^2).
     """
     params = get_vegter_params(mat)
-    r = rho if rho is not None and rho > 0.0 else params.rho0
-    return math.sqrt(params.a11 / max(1.0e-12, r))
+    modulus = max(0.0, params.a11)
+    rho0 = params.rho0 if params.rho0 > 0.0 else 1.0
+    if rho is not None:
+        r = np.asarray(rho, dtype=np.float64)
+        r_val = np.where(r > 0.0, r, rho0)
+        c = np.sqrt(np.maximum(0.0, modulus / np.maximum(1.0e-12, r_val)))
+        return float(c) if r.ndim == 0 else c
+    return float(math.sqrt(np.maximum(0.0, modulus / max(1.0e-12, rho0))))
 
 
 def resolve(mat: Any, model: Any, log: Any = None) -> None:

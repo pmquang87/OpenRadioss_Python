@@ -695,6 +695,28 @@ def _geometry(xe, pts=None, wts=None):
     return dndx, vol_gp, vol_tot
 
 
+def _safe_sound_speed(mat):
+    c_cand = 0.0
+    try:
+        c_val = materials.sound_speed(mat, is_shell=False)
+        if c_val is not None:
+            c_cand = float(np.asarray(c_val).flat[0])
+    except Exception:
+        pass
+    if c_cand <= 0.0 and hasattr(mat, "sound_speed_solid") and getattr(mat, "rho0", 0.0) > 0.0:
+        try:
+            c_cand = float(mat.sound_speed_solid())
+        except Exception:
+            pass
+    if c_cand <= 0.0:
+        K = getattr(mat, "K", 0.0)
+        G = getattr(mat, "G", 0.0)
+        rho0 = getattr(mat, "rho0", 0.0)
+        if rho0 > 0.0 and (K > 0.0 or G > 0.0):
+            c_cand = float(np.sqrt(max(K + 4.0 * G / 3.0, 0.0) / max(rho0, 1e-20)))
+    return max(c_cand, 1e-20)
+
+
 def init_group(group, model, log):
     """Element buffer + lumped mass."""
     conn = group.conn
@@ -709,6 +731,7 @@ def init_group(group, model, log):
             zw=[],
             rho=np.zeros(0),
             vol=np.zeros(0),
+            vol0=np.zeros(0),
             mass=np.zeros(0),
             lc=np.zeros(0),
             chk_fail=False,
@@ -780,7 +803,7 @@ def init_group(group, model, log):
     vol = np.maximum(vol, 1e-20)
     lc = vol ** (1.0 / 3.0)
     for sl, mat, prop in group.state["slices"]:
-        c_snd = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / max(mat.rho0, 1e-20))
+        c_snd = _safe_sound_speed(mat)
         dtx[sl] = lc[sl] / max(c_snd, 1e-20)
         
     _init_mass(n, fill, rho, vol, dtx, dtelem, mass, mss, mssx, conn, stifn, deltax2)
@@ -794,6 +817,7 @@ def init_group(group, model, log):
         zw=zw,
         rho=rho,
         vol=vol,
+        vol0=vol.copy(),
         mass=mass,
         lc=lc,
         chk_fail=chk_fail,
@@ -908,7 +932,7 @@ def forces(group, x, v, vr, dt, fint, mint):
             if getattr(mat, "law", 1) == 0:
                 c_spd[sl] = 1e-20
             else:
-                c_spd[sl] = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / max(mat.rho0, 1e-20))
+                c_spd[sl] = _safe_sound_speed(mat)
         dt_crit = st.get("lc", np.ones(n)) / np.maximum(c_spd, 1e-20)
         alive = st.get("off", np.ones(n)) > 0.0
         return np.where(alive, dt_crit, EP30)
@@ -933,7 +957,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         ve_sl = ve[sl]
         n_sl = sl.stop - sl.start
         
-        c_sound_default = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / max(mat.rho0, 1e-20))
+        c_sound_default = _safe_sound_speed(mat)
         c_spd[sl] = c_sound_default
         
         for k, ((r, s, t), w) in enumerate(zip(pts, wts)):
@@ -946,8 +970,9 @@ def forces(group, x, v, vr, dt, fint, mint):
             epsp_k = st["epsp"][sl, k]
             epsp_old = epsp_k.copy() if st.get("chk_fail", False) else None
             
-            extra = st.get("mat_extra", {})
-            _, _, c_new = materials.solid_update(mat, sig_k, deps, epsp_k, dt, extra or None)
+            mat_extra = st.get("mat_extra", {})
+            extra = {name: (arr[sl, k] if arr.ndim >= 2 and arr.shape[1] == len(pts) else arr[sl]) for name, arr in mat_extra.items()} if mat_extra else None
+            _, _, c_new = materials.solid_update(mat, sig_k, deps, epsp_k, dt, extra)
             if c_new is not None:
                 c_spd[sl] = np.maximum(c_spd[sl], c_new)
             

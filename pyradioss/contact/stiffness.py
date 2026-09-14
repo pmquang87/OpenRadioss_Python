@@ -53,7 +53,7 @@ def _fallback_modulus(model: Model) -> float:
     """Stiffest Young modulus in the model — used for segments with no
     parent element (/SURF/SEG, /LINE/SEG). A safe upper bound: too stiff
     only costs time step, too soft lets nodes cross."""
-    return max((m.E for m in model.materials.values()), default=1.0)
+    return max((m.E for m in model.materials.values() if getattr(m, 'E', 0.0) > 0.0), default=1.0)
 
 
 def _per_element(group, getter) -> np.ndarray:
@@ -75,7 +75,7 @@ def _segment_areas(x0: np.ndarray, segments: np.ndarray) -> np.ndarray:
 
 
 _SHELL_GROUPS = ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18")
-_SOLID_GROUPS = ("bricks", "bricks_heph", "tetras", "tetra10s", "bric20s", "quads")
+_SOLID_GROUPS = ("bricks", "bricks_heph", "tetras", "tetra10s", "bric20s", "shel16s", "quads")
 
 
 # ----------------------------------------------------------------------------
@@ -112,7 +112,7 @@ def segment_stiffness_gap(model: Model, segments: np.ndarray,
         else:                       # 'bricks' / 'tetras' / 'quads' / etc.
             # K = Stfac * B * A^2 / V ;  solids contact on their real face
             B = _per_element(group, lambda m, p: m.K)[erow]
-            V = np.maximum(group.state["vol0"][erow], 1e-30)
+            V = np.maximum(np.nan_to_num(group.state["vol0"][erow], nan=1e-30), 1e-30)
             K[sel] = stfac * B * area[sel] ** 2 / V
     return K, gap
 
@@ -149,8 +149,11 @@ def node_stiffness_gap(model: Model, stfac: float, fscale_gap: float = 1.0):
             continue
         nn = group.conn.shape[1]
         for k in range(nn):        # max-scatter, once per corner column
-            np.maximum.at(K, group.conn[:, k], k_e)
-            np.maximum.at(gap, group.conn[:, k], g_e)
+            col = group.conn[:, k]
+            valid = (col >= 0) & (col < model.numnod)
+            if np.any(valid):
+                np.maximum.at(K, col[valid], k_e[valid])
+                np.maximum.at(gap, col[valid], g_e[valid])
     return K, gap
 
 

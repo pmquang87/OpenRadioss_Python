@@ -130,14 +130,18 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 if len(block.parts) >= 2:
                     ec.run_name = block.parts[1]
                 if block.cards:
-                    ec.t_end = block.cards[0].floats()[0]
+                    v = block.cards[0].floats()
+                    if v:
+                        ec.t_end = v[0]
                 else:
                     log.error("/RUN: missing T_stop card", block.source)
             elif key == "VERS":
                 pass  # input version — irrelevant to the port
             elif key == "TFILE":
                 if block.cards:
-                    ec.th_dt = block.cards[0].floats()[0]
+                    v = block.cards[0].floats()
+                    if v:
+                        ec.th_dt = v[0]
             elif key == "ANIM":
                 sub = block.parts[1].upper() if len(block.parts) > 1 else ""
                 sub2 = block.parts[2].upper() if len(block.parts) > 2 else ""
@@ -217,28 +221,33 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         "scale": scale_elem,
                         "dt_min": dt_min_elem,
                     }
-                if block.cards:
-                    vals = block.cards[0].floats()
-                    if vals:
-                        # a zero/blank scale means the DEFAULT 0.9 (the
-                        # reference reads dTsca=0 as 'use default' — the
-                        # RD-V-0220 oracle deck writes '0.0 1e-7'), and a
-                        # zero scale would divide the /DT/NODA/CST mass
-                        # target by zero (M37)
-                        ec.dt_scale = vals[0] if vals[0] > 0.0 else 0.9
-                    if len(vals) > 1:
-                        ec.dt_min = vals[1]
-                        
-                    # Advanced Mass Scaling parameters
-                    if ec.dt_ams:
-                        if len(block.cards) > 1:
-                            v1 = block.cards[1].floats()
-                            if v1:
-                                ec.dt_ams_tol = v1[0]
-                        if len(block.cards) > 2:
-                            v2 = block.cards[2].floats()
-                            if v2:
-                                ec.dt_ams_itmax = int(v2[0])
+                if sub in ("NODA", "", "CST"):
+                    if block.cards:
+                        vals = block.cards[0].floats()
+                        if vals:
+                            # a zero/blank scale means the DEFAULT 0.9 (the
+                            # reference reads dTsca=0 as 'use default' — the
+                            # RD-V-0220 oracle deck writes '0.0 1e-7'), and a
+                            # zero scale would divide the /DT/NODA/CST mass
+                            # target by zero (M37)
+                            ec.dt_scale = vals[0] if vals[0] > 0.0 else 0.9
+                        if len(vals) > 1:
+                            ec.dt_min = vals[1]
+                elif ec.dt_ams:
+                    if block.cards:
+                        vals = block.cards[0].floats()
+                        if vals:
+                            ec.dt_scale = vals[0] if vals[0] > 0.0 else 0.9
+                        if len(vals) > 1:
+                            ec.dt_min = vals[1]
+                    if len(block.cards) > 1:
+                        v1 = block.cards[1].floats()
+                        if v1:
+                            ec.dt_ams_tol = v1[0]
+                    if len(block.cards) > 2:
+                        v2 = block.cards[2].floats()
+                        if v2:
+                            ec.dt_ams_itmax = int(v2[0])
                 if ec.dt_noda == "CST" and ec.dt_min <= 0.0:
                     log.warning("/DT/NODA/CST without a positive dT_min "
                                 "adds no mass", block.source)
@@ -1149,7 +1158,10 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 # /PRINT/-100 → one listing line every 100 cycles (the minus
                 # sign is the Radioss convention for 'every n cycles').
                 if len(block.parts) > 1:
-                    ec.print_cycles = abs(int(block.parts[1]))
+                    try:
+                        ec.print_cycles = abs(int(block.parts[1]))
+                    except ValueError:
+                        pass
                 elif block.cards:
                     # Alternately, /PRINT \n N_print (M82)
                     v = block.cards[0].floats()

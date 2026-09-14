@@ -171,9 +171,9 @@ def compute_paper_light_constants(
     a21 = nu21 * young1 / denom
     a22 = young2 / denom
 
-    rho_pos = max(rho, _EM20)
-    max_mod_solid = max(a11, a12, a21, a22, young3, g12, g23, g31)
-    max_mod_shell = max(a11, a12, a21, a22, g12, g23, g31)
+    rho_pos = max(float(rho), _EM20) if np.isscalar(rho) else _EM20
+    max_mod_solid = max(0.0, a11, a12, a21, a22, young3, g12, g23, g31)
+    max_mod_shell = max(0.0, a11, a12, a21, a22, g12, g23, g31)
 
     ssp_solid = math.sqrt(max_mod_solid / rho_pos)
     ssp_shell = math.sqrt(max_mod_shell / rho_pos)
@@ -1230,29 +1230,41 @@ def shell_update(
     return sig_out, np.mean(dpla_out), pla_arr[:, 0], extra_out
 
 
-def sound_speed(mat: Any, rho: Optional[float] = None) -> float:
+def sound_speed(mat: Any, rho: Optional[Any] = None) -> Any:
     """Dilatational sound speed for 3D continuum solids."""
     p = build_law107(mat)
-    dens = rho if rho is not None and rho > 0.0 else p.rho
+    dens0 = p.rho if p.rho > 0.0 else 1.0
     c = compute_paper_light_constants(
-        p.young1, p.young2, p.young3, p.nu21, p.g12, p.g23, p.g31, dens
+        p.young1, p.young2, p.young3, p.nu21, p.g12, p.g23, p.g31, dens0
     )
-    return c.ssp_solid
+    max_mod = max(0.0, c.a11, c.a12, c.a21, c.a22, c.young3, c.g12, c.g23, c.g31)
+    if rho is not None:
+        r = np.asarray(rho, dtype=np.float64)
+        r_val = np.where(r > 0.0, r, dens0)
+        res = np.sqrt(np.maximum(0.0, max_mod / np.maximum(1e-20, r_val)))
+        return float(res) if r.ndim == 0 else res
+    return float(c.ssp_solid)
 
 
-def sound_speed_solid(mat: Any, rho: Optional[float] = None) -> float:
+def sound_speed_solid(mat: Any, rho: Optional[Any] = None) -> Any:
     """Synonym for sound_speed."""
     return sound_speed(mat, rho)
 
 
-def sound_speed_shell(mat: Any, rho: Optional[float] = None) -> float:
+def sound_speed_shell(mat: Any, rho: Optional[Any] = None) -> Any:
     """Plane-stress sound speed for 2D shells."""
     p = build_law107(mat)
-    dens = rho if rho is not None and rho > 0.0 else p.rho
+    dens0 = p.rho if p.rho > 0.0 else 1.0
     c = compute_paper_light_constants(
-        p.young1, p.young2, p.young3, p.nu21, p.g12, p.g23, p.g31, dens
+        p.young1, p.young2, p.young3, p.nu21, p.g12, p.g23, p.g31, dens0
     )
-    return c.ssp_shell
+    max_mod = max(0.0, c.a11, c.a12, c.a21, c.a22, c.g12, c.g23, c.g31)
+    if rho is not None:
+        r = np.asarray(rho, dtype=np.float64)
+        r_val = np.where(r > 0.0, r, dens0)
+        res = np.sqrt(np.maximum(0.0, max_mod / np.maximum(1e-20, r_val)))
+        return float(res) if r.ndim == 0 else res
+    return float(c.ssp_shell)
 
 
 def solid_tangent(

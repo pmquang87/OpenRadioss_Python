@@ -342,7 +342,63 @@ class Material:
                 return float(law95_bergstrom_boyce.sound_speed(self, self.rho0))
             except Exception:
                 pass
-        return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
+        if self.law in (100, "100", "LAW100", "VISC_HYP", "MNF") or getattr(self, "law_name", None) in ("100", "LAW100", "VISC_HYP", "MNF", "MAT_LAW100", "MAT_VISC_HYP", "MAT_MNF", "LAW100_VISC_HYP", "LAW100_MNF"):
+            try:
+                from ..materials import law100_multi_network
+                return float(law100_multi_network.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (101, "101", "LAW101", "PP", "PLAS_POLY") or getattr(self, "law_name", None) in ("101", "LAW101", "PP", "MAT_PP", "PLAS_POLY", "MAT_PLAS_POLY", "MAT_LAW101", "LAW101_PP", "LAW101_PLAS_POLY"):
+            try:
+                from ..materials import law101_plas_poly
+                return float(law101_plas_poly.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (102, "102", "LAW102", "DPRAG2") or getattr(self, "law_name", None) in ("102", "LAW102", "DPRAG2", "MAT_DPRAG2", "MAT_LAW102", "LAW102_DPRAG2", "DRUCKER_PRAGER_2"):
+            try:
+                from ..materials import law102_dprag2
+                return float(law102_dprag2.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (103, "103", "LAW103", "HENSEL_SPITTEL", "HENSEL-SPITTEL", "PLAS_HENS") or getattr(self, "law_name", None) in ("103", "LAW103", "HENSEL_SPITTEL", "HENSEL-SPITTEL", "PLAS_HENS", "MAT_HENSEL_SPITTEL", "MAT_PLAS_HENS", "MAT_103", "MAT_LAW103", "HEN"):
+            try:
+                from ..materials import law103_hensel_spittel
+                return float(law103_hensel_spittel.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (104, "104", "LAW104", "DRUCKER", "JOHNS_VOCE_DRUCKER", "PLAS_DRUCK") or getattr(self, "law_name", None) in ("104", "LAW104", "DRUCKER", "JOHNS_VOCE_DRUCKER", "JOHNS-VOCE-DRUCKER", "PLAS_DRUCK", "MAT_DRUCKER", "MAT_JOHNS_VOCE_DRUCKER", "MAT_PLAS_DRUCK", "MAT_104", "MAT_LAW104", "LAW104_DRUCKER"):
+            try:
+                from ..materials import law104_drucker
+                return float(law104_drucker.sound_speed_solid(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (105, "105", "LAW105", "POWDER_BURN", "POWDERBURN") or getattr(self, "law_name", None) in ("105", "LAW105", "POWDER_BURN", "POWDERBURN", "MAT_POWDER_BURN", "MAT_POWDERBURN", "MAT_105", "MAT_LAW105", "LAW105_POWDER_BURN"):
+            try:
+                from ..materials import law105_powder_burn
+                return float(law105_powder_burn.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (106, "106", "LAW106", "JCOOK_ALM", "JOHNS_COOK_ALM") or getattr(self, "law_name", None) in ("106", "LAW106", "JCOOK_ALM", "JOHNS_COOK_ALM", "MAT_JCOOK_ALM", "MAT_106", "MAT_LAW106", "LAW106_JCOOK_ALM"):
+            try:
+                from ..materials import law106_jcook_alm
+                return float(law106_jcook_alm.sound_speed_solid(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (107, "107", "LAW107", "PAPER_LIGHT", "PLAS_PAPER_LIGHT") or getattr(self, "law_name", None) in ("107", "LAW107", "PAPER_LIGHT", "PLAS_PAPER_LIGHT", "LAW107_PAPER_LIGHT", "PFEIFFER", "MAT_PFEIFFER", "MAT_PAPER_LIGHT", "MAT_PLAS_PAPER_LIGHT", "MAT_107", "MAT_LAW107"):
+            try:
+                from ..materials import law107_paper_light
+                return float(law107_paper_light.sound_speed_solid(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (109, "109", "LAW109", "TAB_PLAS", "ELASTO_PLAS_TAB") or getattr(self, "law_name", None) in ("109", "LAW109", "TAB_PLAS", "ELASTO_PLAS_TAB", "LAW109_TAB_PLAS", "MLAW109", "MAT_LAW109", "MAT_TAB_PLAS", "MAT_ELASTO_PLAS_TAB", "MAT_109"):
+            try:
+                from ..materials import law109_tab_plas
+                return float(law109_tab_plas.sound_speed(self, rho=self.rho0, is_shell=False))
+            except Exception:
+                pass
+        if self.rho0 <= 0.0:
+            return 0.0
+        return float(np.sqrt(max(0.0, (self.K + 4.0 * self.G / 3.0) / self.rho0)))
 
     def sound_speed_shell(self) -> float:
         """Plane-stress wave speed c = sqrt(E / (rho (1 - nu^2))).
@@ -438,7 +494,39 @@ class Material:
                 return float(law93_orth_hill.sound_speed_shell(self, self.rho0))
             except Exception:
                 pass
-        return float(np.sqrt(self.E / (self.rho0 * (1.0 - self.nu ** 2))))
+        if self.law in (104, "104", "LAW104", "DRUCKER", "JOHNS_VOCE_DRUCKER", "PLAS_DRUCK") or getattr(self, "law_name", None) in ("104", "LAW104", "DRUCKER", "JOHNS_VOCE_DRUCKER", "JOHNS-VOCE-DRUCKER", "PLAS_DRUCK", "MAT_DRUCKER", "MAT_JOHNS_VOCE_DRUCKER", "MAT_PLAS_DRUCK", "MAT_104", "MAT_LAW104", "LAW104_DRUCKER"):
+            try:
+                from ..materials import law104_drucker
+                return float(law104_drucker.sound_speed_shell(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (106, "106", "LAW106", "JCOOK_ALM", "JOHNS_COOK_ALM") or getattr(self, "law_name", None) in ("106", "LAW106", "JCOOK_ALM", "JOHNS_COOK_ALM", "MAT_JCOOK_ALM", "MAT_106", "MAT_LAW106", "LAW106_JCOOK_ALM"):
+            try:
+                from ..materials import law106_jcook_alm
+                return float(law106_jcook_alm.sound_speed_shell(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (107, "107", "LAW107", "PAPER_LIGHT", "PLAS_PAPER_LIGHT") or getattr(self, "law_name", None) in ("107", "LAW107", "PAPER_LIGHT", "PLAS_PAPER_LIGHT", "LAW107_PAPER_LIGHT", "PFEIFFER", "MAT_PFEIFFER", "MAT_PAPER_LIGHT", "MAT_PLAS_PAPER_LIGHT", "MAT_107", "MAT_LAW107"):
+            try:
+                from ..materials import law107_paper_light
+                return float(law107_paper_light.sound_speed_shell(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (109, "109", "LAW109", "TAB_PLAS", "ELASTO_PLAS_TAB") or getattr(self, "law_name", None) in ("109", "LAW109", "TAB_PLAS", "ELASTO_PLAS_TAB", "LAW109_TAB_PLAS", "MLAW109", "MAT_LAW109", "MAT_TAB_PLAS", "MAT_ELASTO_PLAS_TAB", "MAT_109"):
+            try:
+                from ..materials import law109_tab_plas
+                return float(law109_tab_plas.sound_speed(self, rho=self.rho0, is_shell=True))
+            except Exception:
+                pass
+        if self.law in (110, "110", "LAW110", "VEGTER", "PLAS_VEGTER") or getattr(self, "law_name", None) in ("110", "LAW110", "VEGTER", "PLAS_VEGTER", "LAW110_VEGTER", "MLAW110", "MAT_LAW110", "MAT_VEGTER", "MAT_PLAS_VEGTER", "MAT_110"):
+            try:
+                from ..materials import law110_vegter
+                return float(law110_vegter.sound_speed(self, rho=self.rho0, is_shell=True))
+            except Exception:
+                pass
+        if self.rho0 <= 0.0 or (1.0 - self.nu ** 2) <= 0.0:
+            return 0.0
+        return float(np.sqrt(max(0.0, self.E / (self.rho0 * (1.0 - self.nu ** 2)))))
 
     def __getstate__(self) -> Dict[str, Any]:
         state = self.__dict__.copy()

@@ -261,8 +261,14 @@ def init_group(group, model, log):
         thick[sl] = params.get("thick") if "thick" in params else getattr(prop, "thick", 0.0)
         rho0[sl] = getattr(mat, "rho0", 0.0)
         nu[sl] = getattr(mat, "nu", 0.3)
-        if getattr(mat, "rho0", 0.0) > 0.0 and getattr(mat, "E", 0.0) > 0.0 and getattr(mat, "law", 1) != 0:
-            ssp[sl] = mat.sound_speed_shell()
+        if getattr(mat, "rho0", 0.0) > 0.0 and getattr(mat, "law", 1) != 0:
+            try:
+                ssp[sl] = materials.sound_speed(mat, is_shell=True)
+            except Exception:
+                if hasattr(mat, "sound_speed_shell"):
+                    ssp[sl] = mat.sound_speed_shell()
+                else:
+                    ssp[sl] = 0.0
         else:
             ssp[sl] = 0.0
         dn_val = float(params.get("dn", 0.0)) if "dn" in params else float(getattr(prop, "dn", 0.0))
@@ -1250,7 +1256,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     for sl, mat, prop in st.get("slices", []):
         if getattr(mat, "law", 1) == 0:
             is_void[sl] = True
-    return np.where(alive & (~is_void), dt_e, EP30)
+    return np.where(alive & (~is_void) & (st["ssp0"] > 0.0), dt_e, EP30)
 
 
 def _fori_flat(vf, vm, g, bm, bc, cdet, npg, mpg, q_pg):

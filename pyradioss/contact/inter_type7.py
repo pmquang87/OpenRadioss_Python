@@ -525,7 +525,7 @@ class ContactType7:
         if cycle - self._last_refresh >= self.refresh:
             if self.deletable:
                 mask = tracking.tracked_node_mask(self.model, self.ref_total)
-                valid_m = self.nodes < len(mask)
+                valid_m = (self.nodes >= 0) & (self.nodes < len(mask))
                 tracked = np.zeros(len(self.nodes), dtype=bool)
                 tracked[valid_m] = mask[self.nodes[valid_m]]
                 self.nodes_tracked = self.nodes[tracked]
@@ -640,6 +640,7 @@ class ContactType7:
             gap_ref = float(np.mean(gap))
             vt = vrel - vn[:, None] * nvec
             vt_mag = norm3(vt)
+            Fn_pos = np.maximum(Fn, 0.0)
             if self.mfrot > 0:
                 # contact pressure p = Fn / (CURRENT main-segment area),
                 # the i7for3 AREA = 1/2 |(x3-x1) x (x4-x2)| — its FNI by
@@ -647,7 +648,7 @@ class ContactType7:
                 d13 = x[seg[:, 2]] - x[seg[:, 0]]
                 d24 = x[seg[:, 3]] - x[seg[:, 1]]
                 area = 0.5 * norm3(cross3(d13, d24))
-                pres = Fn / np.maximum(area, EM20)
+                pres = Fn_pos / np.maximum(area, EM20)
                 mu = friction.mu_kinetic(self.mfrot, self.fric,
                                          self.fric_c, pres, vt_mag)
             else:
@@ -657,12 +658,12 @@ class ContactType7:
                 alpha = friction.filter_alpha(self.ifq, self.xfiltr, dt)
                 keys = ni * max(len(self.segs), 1) + srow[active]
                 ftvec, self._filt_keys, self._filt_vals = friction.\
-                    apply_incremental_stiffness(keys, K, vrel, dt, nvec, mu, Fn,
+                    apply_incremental_stiffness(keys, K, vrel, dt, nvec, mu, Fn_pos,
                                                 alpha, self._filt_keys,
                                                 self._filt_vals)
                 ftvec = -ftvec  # oppose sliding (i7for3.F:1511: FNCONT(JG) -= FXI)
             else:
-                Ft = mu * Fn * vt_mag / (
+                Ft = mu * Fn_pos * vt_mag / (
                     vt_mag + 1e-3 * gap_ref / max(dt, EM20))
                 ftvec = -(Ft / np.maximum(vt_mag, EM20))[:, None] * vt
                 if self.ifq > 0:

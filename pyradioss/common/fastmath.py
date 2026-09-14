@@ -72,6 +72,9 @@ def det_inv33(J: np.ndarray):
     (different algorithm); the difference is at machine precision
     (measured ≲1e-16 relative on well-conditioned element Jacobians,
     which starter checks guarantee — vol > 0)."""
+    is_2d = (J.ndim == 2)
+    if is_2d:
+        J = J[None, :, :]
     a, b, c = J[:, 0, 0], J[:, 0, 1], J[:, 0, 2]
     d, e, f = J[:, 1, 0], J[:, 1, 1], J[:, 1, 2]
     g, h, i = J[:, 2, 0], J[:, 2, 1], J[:, 2, 2]
@@ -91,6 +94,8 @@ def det_inv33(J: np.ndarray):
     inv[:, 2, 0] = C * idet
     inv[:, 2, 1] = (b * g - a * h) * idet
     inv[:, 2, 2] = (a * e - b * d) * idet
+    if is_2d:
+        return float(det[0]), inv[0]
     return det, inv
 
 
@@ -122,8 +127,18 @@ def scatter_add3(target: np.ndarray, idx: np.ndarray,
     returns None and the bincount reference below runs unchanged (one dict
     lookup, the same negligible dispatch every kernel block already pays)."""
     
-    if len(idx) == 0:
+    if len(target) == 0 or len(idx) == 0:
         return
+
+    n = len(target)
+    valid = (idx >= 0) & (idx < n)
+    if not np.all(valid):
+        idx = idx[valid]
+        values = values[valid]
+        if len(idx) == 0:
+            return
+        color_indices = None
+        color_offsets = None
 
     if color_indices is not None and color_offsets is not None and len(color_indices) > 0:
         jit = _accel_get("scatter3_colored")
@@ -136,9 +151,7 @@ def scatter_add3(target: np.ndarray, idx: np.ndarray,
     if jit is not None:
         jit(target, idx, values)
         return
-        
-    n = len(target)
-    
+
     # If colored fallback to numpy (for correctness we could group by color here, but 
     # bincount is so fast in serial that we just run it linearly).
     target[:, 0] += np.bincount(idx, weights=values[:, 0], minlength=n)

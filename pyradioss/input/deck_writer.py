@@ -10853,12 +10853,14 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
     law = b.parts[1].upper()
     title, cards = _title_cards(b)
     mid = b.user_id
-    rho = cards[0].tokens()[0]
+    toks0 = cards[0].tokens() if cards else []
+    rho = toks0[0] if toks0 else "0.0"
+    toks1 = cards[1].tokens() if len(cards) > 1 else []
+    e = toks1[0] if len(toks1) > 0 else "0.0"
+    nu = toks1[1] if len(toks1) > 1 else "0.0"
     if law in ("LAW1", "ELAST"):
-        e, nu = cards[1].tokens()[:2]
         d.mat_law1(mid, title, rho, e, nu)
     elif law in ("LAW2", "PLAS_JOHNS"):
-        e, nu = cards[1].tokens()[:2]
         kw: Dict = {}
         if len(cards) >= 3:
             t = cards[2].floats() + [0.0] * 5
@@ -10873,17 +10875,16 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
                       ti=t[3] if t[3] else 298.0)
         d.mat_law2(mid, title, rho, e, nu, **kw)
     elif law in ("LAW27", "PLAS_BRIT"):
-        e, nu = cards[1].tokens()[:2]
-        d.mat_law27(mid, title, rho, e, nu, cards[2].floats(),
-                    cards[3].floats() if len(cards) >= 4 else None)
+        c2 = cards[2].floats() if len(cards) >= 3 else []
+        c3 = cards[3].floats() if len(cards) >= 4 else None
+        d.mat_law27(mid, title, rho, e, nu, c2, c3)
     elif law in ("LAW36", "PLAS_TAB"):
-        e, nu = cards[1].tokens()[:2]
-        v = cards[2].floats() + [0.0]
+        v = (cards[2].floats() if len(cards) >= 3 else []) + [0.0]
         nfun = int(v[0]) if v[0] > 0 else 1
-        fids = cards[3].ints()[:nfun]
+        fids = cards[3].ints()[:nfun] if len(cards) >= 4 else []
         rates = cards[4].floats()[:nfun] if (nfun > 1
                                              and len(cards) >= 5) else None
-        d.mat_law36(mid, title, rho, e, nu, fids, eps_p_max=v[1],
+        d.mat_law36(mid, title, rho, e, nu, fids, eps_p_max=v[1] if len(v) > 1 else 0.0,
                     rates=rates)
     elif law in ("LAW42", "OGDEN"):
         mu = cards[1].floats()[:5]
@@ -11618,9 +11619,9 @@ def _conv_prop(d: StarterDeck, b: KeywordBlock) -> None:
                 hf = t[1] or 0.01
                 hr = t[2] or 0.01
             if len(cards) >= 3:
-                t = cards[2].floats() + [0, 1.0]
-                nip = int(t[0]) or 3
-                thick = t[2] if len(cards[2].tokens()) > 2 else 1.0
+                fl2 = cards[2].floats()
+                nip = int(fl2[0]) if fl2 and fl2[0] else 3
+                thick = fl2[2] if len(fl2) > 2 else (fl2[1] if len(fl2) > 1 else 1.0)
         d.prop_shell(pid, title, thick, nip=nip, hm=hm, hf=hf, hr=hr,
                      ishell=ishell, ismstr=ismstr, ish3n=ish3n,
                      idrill=idrill)
@@ -11634,14 +11635,17 @@ def _conv_prop(d: StarterDeck, b: KeywordBlock) -> None:
                 break
         d.prop_solid(pid, title, qa, qb, h)
     elif kind in ("TRUSS", "TYPE2"):
-        d.prop_truss(pid, title, cards[0].floats()[0])
+        fl0 = cards[0].floats() if cards else []
+        area = fl0[0] if fl0 else 0.0
+        d.prop_truss(pid, title, area)
     elif kind in ("BEAM", "TYPE3"):
         data = [c for c in cards if not all(t.lstrip("+-").isdigit()
                                             for t in c.tokens())]
         t = (data[0] if data else cards[-1]).floats() + [0.0] * 4
         d.prop_beam(pid, title, t[0], t[1], t[2], t[3])
     elif kind in ("SPRING", "TYPE4"):
-        t = cards[0].floats() + [0.0] * 3
+        fl0 = cards[0].floats() if cards else []
+        t = fl0 + [0.0] * 3
         d.prop_spring(pid, title, t[0], t[1], t[2])
     elif kind in ("SH_ORTH", "TYPE9"):
         d.prop_sh_orth(pid, title, cards)

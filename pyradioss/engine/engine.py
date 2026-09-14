@@ -461,6 +461,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # is static in this port), so an impact on the very first cycles
         # is safe (a /SENSOR-gated interface claims nothing until it
         # fires — its NEAR accumulation pulls dt down when it does, M4)
+        if len(sensors):
+            sensors.update(0.0, log)
         for ct in contacts:
             if sensors.active(ct.itf.sens_id):
                 dt_next = min(dt_next, ct.dt_bound)
@@ -533,7 +535,10 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             break
 
         dt = min(dt, controls.t_end - state.t)  # land exactly on t_end
-        if controls.stop_tstop > 0 and state.t + dt > controls.stop_tstop:
+        if controls.stop_tstop > 0 and state.t + dt >= controls.stop_tstop:
+            if controls.stop_tstop - state.t <= 1e-14 * dt_ref:
+                state.stop_reason = f"/STOP/TSTOP REACHED (TIME {state.t:.5E})"
+                break
             dt = max(controls.stop_tstop - state.t, 0.0)
         model.t = state.t
 
@@ -661,6 +666,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # kinematic conditions, which override it where they act.
         if len(dampers):
             v_star = model.v.copy()          # pre-damping velocities
+            vr_star = model.vr.copy() if getattr(model, "vr", None) is not None else None
             state.e_damp += dampers.apply(state.t, dt, model.v, model.vr,
                                           model.mass, model.inertia)
             # attribution correction on the damped nodes: the force-stage
@@ -679,6 +685,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                           model.v[di] - 0.5 * (v_old[di] + v_star[di]))
                 + np.einsum("nb,nb->", fint[di],
                             0.5 * (model.v[di] - v_star[di]))) * dt
+            if getattr(model, "vr", None) is not None and vr_star is not None:
+                resid += float(np.einsum("nb,nb->", mint[di], 0.5 * (model.vr[di] - vr_star[di]))) * dt
             state.e_num += resid
 
         # ---- 5. kinematic conditions overwrite velocities -----------------
@@ -836,7 +844,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             if e["REF"] > _ENERGY_START_FLOOR:
                 if abs(e["ERR"]) > controls.energy_error_stop:
                     state.stop_reason = (
-                        f"ENERGY ERROR {e['ERR']:.1f}% EXCEEDS "
+                        f"/STOP/ENERGY ERROR {e['ERR']:.1f}% EXCEEDS "
                         f"LIMIT {controls.energy_error_stop}%")
                     break
                 # a strongly NEGATIVE numerical-dissipation ledger is
@@ -854,8 +862,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                         f"LIMIT {2.0 * controls.energy_error_stop}% — "
                         f"RUN UNSTABLE")
                     break
-            if not (np.isfinite(e["KE"]) and np.isfinite(e["IE"])
-                    and np.isfinite(e["HE"])):
+            if not all(np.isfinite(v) for v in (e["KE"], e["IE"], e["HE"], e["CE"], e["EW"], e["EN"], e["DE"], e["REF"])):
                 state.stop_reason = "NAN/INF DETECTED — RUN DIVERGED"
                 break
 

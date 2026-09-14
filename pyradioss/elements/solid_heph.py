@@ -539,7 +539,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     xe = x[conn]
 
     # Cycle 0 Courant step probe or evaluation without velocity
-    if dt <= 0.0 or v is None:
+    if dt is None or dt <= 0.0 or v is None:
         dndx, vol = _geometry(xe)
         lc = _char_length(xe, vol) * st.get("lc_scale", np.ones(n))
         rho = st["mass"] / np.maximum(vol, EM20)
@@ -599,16 +599,11 @@ def forces(group, x, v, vr, dt, fint, mint):
         for name in st["mat_extra"]:
             if name in extra and name != "eint":
                 st["mat_extra"][name][sl] = extra[name]
-        if "off25" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off25"])
-        elif "off28" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off28"])
-        elif "off38" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off38"])
-        elif "off60" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off60"])
-        elif "off48" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off48"])
+        law_id = getattr(mat, "law", None)
+        law_str = str(law_id).lower().replace("law", "") if law_id is not None else ""
+        off_key = f"off{law_str}"
+        if off_key in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra[off_key])
         elif "off" in extra:
             st["off"][sl] = np.minimum(st["off"][sl], extra["off"])
 
@@ -676,7 +671,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     for sl, mat, prop in st["slices"]:
         if getattr(mat, "law", 1) == 0:
             continue
-        if not c_from_law[sl.start]:
+        if sl.stop > sl.start and not c_from_law[sl.start]:
             c[sl] = np.sqrt((getattr(mat, "K", 0.0) + 4.0 * getattr(mat, "G", 0.0) / 3.0) / rho[sl])
         qa[sl] = getattr(prop, "params", {}).get("qa", 1.1)
         qb[sl] = getattr(prop, "params", {}).get("qb", 0.05)

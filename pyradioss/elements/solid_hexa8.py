@@ -684,7 +684,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     xe = x[conn]                                   # (n, 8, 3) gather
 
     # Cycle 0 Courant step probe or evaluation without velocity
-    if dt <= 0.0 or v is None:
+    if dt is None or dt <= 0.0 or v is None:
         dndx, vol = _geometry(xe)
         lc = _char_length(xe, vol) * st.get("lc_scale", np.ones(n))
         rho = st["mass"] / np.maximum(vol, EM20)
@@ -774,30 +774,11 @@ def forces(group, x, v, vr, dt, fint, mint):
             if "uvar88" not in st:
                 st["uvar88"] = np.zeros((group.n, 30))
             st["uvar88"][sl] = extra["uvar88"]
-        if "off25" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off25"])
-        elif "off28" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off28"])
-        elif "off38" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off38"])
-        elif "off22" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off22"])
-        elif "off12" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off12"])
-        elif "off14" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off14"])
-        elif "off43" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off43"])
-        elif "off60" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off60"])
-        elif "off48" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off48"])
-        elif "off52" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off52"])
-        elif "off79" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off79"])
-        elif "off50" in extra:
-            st["off"][sl] = np.minimum(st["off"][sl], extra["off50"])
+        law_id = getattr(mat, "law", None)
+        law_str = str(law_id).lower().replace("law", "") if law_id is not None else ""
+        off_key = f"off{law_str}"
+        if off_key in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra[off_key])
         elif "off" in extra:
             st["off"][sl] = np.minimum(st["off"][sl], extra["off"])
 
@@ -884,7 +865,7 @@ def forces(group, x, v, vr, dt, fint, mint):
             continue
         # current sound speed uses current density (stiffness constant);
         # laws that returned their own (nonlinear) c keep it
-        if not c_from_law[sl.start]:
+        if sl.stop > sl.start and not c_from_law[sl.start]:
             c[sl] = np.sqrt((getattr(mat, "K", 0.0) + 4.0 * getattr(mat, "G", 0.0) / 3.0) / rho[sl])
         qa[sl] = getattr(prop, "params", {}).get("qa", 1.1)
         qb[sl] = getattr(prop, "params", {}).get("qb", 0.05)

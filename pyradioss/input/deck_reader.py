@@ -364,7 +364,7 @@ def input_version(blocks: List[KeywordBlock]) -> int:
             toks = b.cards[1].tokens()
             if toks:
                 try:
-                    return int(toks[0])
+                    return int(float(toks[0]))
                 except ValueError:
                     return 0
         return 0

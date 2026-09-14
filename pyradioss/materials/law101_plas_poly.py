@@ -876,8 +876,13 @@ def sound_speed(
     if abs(denom) < 1e-6:
         denom = 1e-6 if denom >= 0 else -1e-6
     bulk = 2.0 * mu * (1.0 + params.nu) / (3.0 * denom)
-    rho_val = float(rho) if rho is not None and float(rho) > 0.0 else params.rho0
-    return math.sqrt(max(0.0, (bulk + (4.0 / 3.0) * mu) / max(1e-20, rho_val)))
+    stiff = bulk + (4.0 / 3.0) * mu
+    if rho is not None:
+        r = np.asarray(rho, dtype=np.float64)
+        r_val = np.where(r > 0.0, r, params.rho0)
+        c = np.sqrt(np.maximum(0.0, stiff / np.maximum(1e-20, r_val)))
+        return float(c) if r.ndim == 0 else c
+    return float(np.sqrt(np.maximum(0.0, stiff / max(1e-20, params.rho0))))
 
 
 def _solid_tangent_single(

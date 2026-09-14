@@ -913,3 +913,9 @@ def consistent_shell_tangent(
 
 
 shell_membrane_tangent = consistent_shell_tangent
+
+
+def extra_shapes(mat: Any = None, nip: Optional[int] = None) -> Dict[str, Tuple[int, ...]]:
+    """Extra history shapes needed for LAW104."""
+    return {"uvar104": (nip, 3) if nip else (3,)}
+

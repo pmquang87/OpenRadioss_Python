@@ -215,10 +215,12 @@ class AMSManager:
             return 0, 0.0
 
         # Preconditioner is 1 / M_diag (since diagonal is strictly positive due to rigid-body preservation)
+        M_diag_eff = np.where(M_diag > 1e-20, M_diag, 1.0)
         precond = np.zeros_like(acc)
-        precond[mask, 0] = 1.0 / M_diag[mask]
-        precond[mask, 1] = 1.0 / M_diag[mask]
-        precond[mask, 2] = 1.0 / M_diag[mask]
+        inv_m = 1.0 / M_diag_eff
+        precond[:, 0] = inv_m
+        precond[:, 1] = inv_m
+        precond[:, 2] = inv_m
 
         _, iters, rel_res = ams_pcg(
             acc, f, M_diag,
@@ -360,7 +362,18 @@ def ams_pcg(x: np.ndarray, b: np.ndarray, M_diag: np.ndarray,
     r = b - q
 
     # Preconditioned residual z = M^-1 * r
-    z = r * precond
+    z = np.empty_like(r)
+    if precond.ndim == 1:
+        for i in range(n):
+            pv = precond[i] if abs(precond[i]) > 1e-20 else 1.0
+            z[i, 0] = r[i, 0] * pv
+            z[i, 1] = r[i, 1] * pv
+            z[i, 2] = r[i, 2] * pv
+    else:
+        for i in range(n):
+            z[i, 0] = r[i, 0] * (precond[i, 0] if abs(precond[i, 0]) > 1e-20 else 1.0)
+            z[i, 1] = r[i, 1] * (precond[i, 1] if abs(precond[i, 1]) > 1e-20 else 1.0)
+            z[i, 2] = r[i, 2] * (precond[i, 2] if abs(precond[i, 2]) > 1e-20 else 1.0)
 
     # Initial search direction p = z
     p = z.copy()
@@ -399,6 +412,9 @@ def ams_pcg(x: np.ndarray, b: np.ndarray, M_diag: np.ndarray,
         for i in range(n):
             pq += p[i, 0]*q[i, 0] + p[i, 1]*q[i, 1] + p[i, 2]*q[i, 2]
 
+        if pq <= 1e-20:
+            break
+
         alpha = rz / max(pq, EM20)
 
         # x = x + alpha * p
@@ -413,10 +429,17 @@ def ams_pcg(x: np.ndarray, b: np.ndarray, M_diag: np.ndarray,
             r[i, 2] -= alpha * q[i, 2]
 
         # z = M^-1 * r
-        for i in range(n):
-            z[i, 0] = r[i, 0] * precond[i, 0]
-            z[i, 1] = r[i, 1] * precond[i, 1]
-            z[i, 2] = r[i, 2] * precond[i, 2]
+        if precond.ndim == 1:
+            for i in range(n):
+                pv = precond[i] if abs(precond[i]) > 1e-20 else 1.0
+                z[i, 0] = r[i, 0] * pv
+                z[i, 1] = r[i, 1] * pv
+                z[i, 2] = r[i, 2] * pv
+        else:
+            for i in range(n):
+                z[i, 0] = r[i, 0] * (precond[i, 0] if abs(precond[i, 0]) > 1e-20 else 1.0)
+                z[i, 1] = r[i, 1] * (precond[i, 1] if abs(precond[i, 1]) > 1e-20 else 1.0)
+                z[i, 2] = r[i, 2] * (precond[i, 2] if abs(precond[i, 2]) > 1e-20 else 1.0)
 
         # rz_new = r^T * z
         rz_new = 0.0

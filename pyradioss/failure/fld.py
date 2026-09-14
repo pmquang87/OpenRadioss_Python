@@ -101,7 +101,7 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     istrain = p.get("istrain", 0)
     if istrain == 1:
         # Engineering strain input: convert true minor strain to engineering
-        emin_eng = np.exp(emin) - 1.0
+        emin_eng = np.exp(np.clip(emin, -100.0, 100.0)) - 1.0
         em_eng = np.interp(emin_eng, func.x, func.y)
         em = np.log(np.maximum(em_eng + 1.0, _TINY))
     else:
@@ -111,7 +111,7 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     dam = emaj / np.maximum(em, _TINY)
     np.maximum(dama, dam, out=dama)
 
-    ifail_sh = p.get("ifail_sh", fail.ifail_sh)
+    ifail_sh = p.get("ifail_sh", getattr(fail, "ifail_sh", 1))
     if ifail_sh == 4:
         # Ifail_sh = 4: calculation only, no element deletion
         return np.zeros(len(dama), dtype=bool)

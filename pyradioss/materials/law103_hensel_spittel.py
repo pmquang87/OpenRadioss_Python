@@ -1024,3 +1024,9 @@ def solid_tangent(
     factor = (4.0 * g * g) / denom
     d_ep = d_e - factor * np.outer(n_vec, n_vec)
     return d_ep
+
+
+def extra_shapes(mat: Any = None, nip: Optional[int] = None) -> Dict[str, Tuple[int, ...]]:
+    """Extra history shapes needed for LAW103."""
+    return {"uvar103": (2,)}
+

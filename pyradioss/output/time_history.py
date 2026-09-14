@@ -51,7 +51,7 @@ class TimeHistory:
                     if th.kind == "NODE":
                         self._node_req.append(
                             (f"N{oid}_{var}", model.node_index(oid), var))
-                    elif th.kind == "SECT":
+                    elif th.kind in ("SECT", "SECTIO", "SECTION"):
                         self._sect_req.append((f"S{oid}_{var}", oid, var))
                     elif th.kind == "PART":
                         self._part_req.append((f"P{oid}_{var}", oid, var))
@@ -61,12 +61,6 @@ class TimeHistory:
         self._cols += [r[0] for r in self._part_req]
         self._cols += [r[0] for r in self._sect_req]
         self._cols += [r[0] for r in self._other_req]
-        # M39 output-path: the nodal DISPLACEMENT field (model.x - model.x0)
-        # is only read by a /TH/NODE 'D*' request. Building the whole (N, 3)
-        # difference every write when no such request exists is wasted work
-        # — a 72k-node global-only T-file (the gasket cliff deck) allocated
-        # and subtracted 1.7 MB per row for nothing. Resolve the need once.
-        self._need_disp = any(var[0] == "D" for _, _, var in self._node_req)
         self._fh.write("# pyradioss time history (T01 equivalent)\n")
         self._fh.write(",".join(self._cols) + "\n")
 
@@ -75,24 +69,34 @@ class TimeHistory:
         """IE/KE of one part, summed over its element groups."""
         model = self.model
         val = 0.0
+        var_upper = (var or "").strip().upper()
         for _, group in model.element_groups():
-            mask = group.state["part_ids"] == pid
+            part_ids = group.state.get("part_ids")
+            if part_ids is None:
+                continue
+            mask = part_ids == pid
             if not np.any(mask):
                 continue
-            if var == "IE":
-                val += float(group.state["eint"][mask].sum())
-            elif var == "KE":
+            if var_upper == "IE":
+                eint = group.state.get("eint")
+                if eint is not None:
+                    val += float(eint[mask].sum())
+            elif var_upper == "KE":
                 # kinetic energy of the element masses: 1/2 m_e <v^2>_nodes
                 # (beams store a reduced 'mass_conn' — their 3rd node is
                 # orientation only and carries no mass)
                 conn = group.state.get("mass_conn", group.conn)
+                if conn is None or conn.size == 0 or conn.shape[1] == 0:
+                    continue
                 safe_conn = np.maximum(conn[mask], 0)
                 ve = model.v[safe_conn]
                 v2 = np.einsum("nib,nib->n", ve, ve) / conn.shape[1]
-                ke_trans = 0.5 * (group.state["mass"][mask] * v2).sum()
+                mass = group.state.get("mass")
+                ke_trans = 0.5 * (mass[mask] * v2).sum() if mass is not None else 0.0
                 ke_rot = 0.0
-                if getattr(model, "vr", None) is not None:
-                    vre = model.vr[safe_conn]
+                vr = getattr(model, "vr", None)
+                if vr is not None and len(vr) > 0 and len(vr) >= len(model.v):
+                    vre = vr[safe_conn]
                     if "dt_iner" in group.state:
                         # Shells / beams: dt_iner is the per-node rotational
                         # inertia share (cbilan.F: IN25 * VA2 * HALF).
@@ -214,14 +218,17 @@ class TimeHistory:
                energies["CE"], energies["EN"], energies["DE"],
                energies["EW"], energies["ERR"], mass,
                momentum[0], momentum[1], momentum[2]]
-        disp = (model.x - model.x0) if self._need_disp else None
+        disp = None
         for _, idx, var in self._node_req:
-            comp = {"X": 0, "Y": 1, "Z": 2}.get(var[-1].upper(), 0)
-            if var[0] == "D":
+            var_upper = (var or "").strip().upper()
+            comp = {"X": 0, "Y": 1, "Z": 2}.get(var_upper[-1] if var_upper else "", 0)
+            if var_upper.startswith("D"):
+                if disp is None:
+                    disp = model.x - model.x0
                 row.append(disp[idx, comp])
-            elif var[0] == "V":
+            elif var_upper.startswith("V"):
                 row.append(model.v[idx, comp])
-            elif var[0] == "A":
+            elif var_upper.startswith("A"):
                 if hasattr(model, "a") and model.a is not None:
                     row.append(model.a[idx, comp])
                 else:
@@ -229,19 +236,25 @@ class TimeHistory:
                     fext_val = model.fext[idx, comp] if hasattr(model, "fext") and model.fext is not None else 0.0
                     fint_val = model.fint[idx, comp] if hasattr(model, "fint") and model.fint is not None else 0.0
                     row.append((fext_val - fint_val) / m if m > 0 else 0.0)
-            elif var[0] == "F":
+            elif var_upper.startswith("F"):
                 row.append(model.fint[idx, comp] if hasattr(model, "fint") and model.fint is not None else 0.0)
             else:
                 row.append(0.0)
         for _, pid, var in self._part_req:
             row.append(self._part_value(pid, var))
         for _, sid, var in self._sect_req:
-            comp = {"X": 0, "Y": 1, "Z": 2}.get(var[-1].upper(), 0)
+            var_upper = (var or "").strip().upper()
+            comp = {"X": 0, "Y": 1, "Z": 2}.get(var_upper[-1] if var_upper else "", 0)
             if sect_values is None or sid not in sect_values:
                 row.append(0.0)
             else:
                 F, M = sect_values[sid]
-                row.append(F[comp] if var[0] == "F" else M[comp])
+                if var_upper.startswith("F"):
+                    row.append(F[comp])
+                elif var_upper.startswith("M"):
+                    row.append(M[comp])
+                else:
+                    row.append(0.0)
         for _, kind, oid, var in self._other_req:
             row.append(self._other_value(kind, oid, var))
         self._fh.write(",".join(f"{x:.9E}" for x in row) + "\n")

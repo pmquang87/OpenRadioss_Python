@@ -95,7 +95,7 @@ def fit(params: dict) -> None:
         # write back the resolved params so they can be inspected
         params.update({"c1": c1, "c2": c2, "c4": c4, "c5": c5})
     else:
-        c1, c2, c4, c5 = (params[k] for k in ("c1", "c2", "c4", "c5"))
+        c1, c2, c4, c5 = (params.get(k, 0.0) for k in ("c1", "c2", "c4", "c5"))
 
     params["plow"] = _parabola(-1.0 / 3.0, c1, 0.0, c2, 1.0 / 3.0, c3)
     
@@ -133,17 +133,20 @@ def fit(params: dict) -> None:
 
 def eps_f(fail, triax: np.ndarray) -> np.ndarray:
     """Failure strain at the given triaxiality (vectorized)."""
-    al, bl, cl = fail.params["plow"]
+    params = getattr(fail, "params", fail)
+    if "plow" not in params:
+        fit(params)
+    al, bl, cl = params["plow"]
     low = triax <= 1.0 / 3.0
     
-    if "phigh" in fail.params:
-        ah, bh, ch = fail.params["phigh"]
+    if "phigh" in params:
+        ah, bh, ch = params["phigh"]
         e = np.where(low,
                      al * triax ** 2 + bl * triax + cl,
                      ah * triax ** 2 + bh * triax + ch)
     else:
-        ah1, bh1, ch1 = fail.params["phigh_1"]
-        ah2, bh2, ch2 = fail.params["phigh_2"]
+        ah1, bh1, ch1 = params["phigh_1"]
+        ah2, bh2, ch2 = params["phigh_2"]
         s1x = 1.0 / np.sqrt(3.0)
         high1 = (triax > 1.0 / 3.0) & (triax <= s1x)
         high2 = (triax > s1x)
@@ -160,7 +163,7 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     s0, s1, s2 = sig[:, 0] - sm, sig[:, 1] - sm, sig[:, 2] - sm
     vm = np.sqrt(1.5 * (s0 ** 2 + s1 ** 2 + s2 ** 2)
                  + 3.0 * (sig[:, 3] ** 2 + sig[:, 4] ** 2 + sig[:, 5] ** 2))
-    triax = sm / np.maximum(vm, _TINY)
+    triax = np.clip(sm / np.maximum(vm, _TINY), -2.0 / 3.0, 2.0 / 3.0)
     dama += np.maximum(d_epsp, 0.0) / eps_f(fail, triax)
     return dama >= 1.0
 
@@ -170,6 +173,6 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     sm = (sig[:, 0] + sig[:, 1]) / 3.0
     vm = np.sqrt(sig[:, 0] ** 2 - sig[:, 0] * sig[:, 1] + sig[:, 1] ** 2
                  + 3.0 * sig[:, 2] ** 2)
-    triax = sm / np.maximum(vm, _TINY)
+    triax = np.clip(sm / np.maximum(vm, _TINY), -2.0 / 3.0, 2.0 / 3.0)
     dama += np.maximum(d_epsp, 0.0) / eps_f(fail, triax)
     return dama >= 1.0

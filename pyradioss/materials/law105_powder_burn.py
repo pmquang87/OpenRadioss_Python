@@ -144,7 +144,7 @@ class PowderBurnParams:
     @property
     def sound_speed(self) -> float:
         r = self.refer_rho if self.refer_rho > 0.0 else (self.rho0 if self.rho0 > 0.0 else 1.0)
-        return math.sqrt(max(0.0, self.bulk / r))
+        return math.sqrt(max(0.0, max(0.0, self.bulk) / max(1e-20, r)))
 
     @property
     def sound_speed_solid(self) -> float:
@@ -528,10 +528,10 @@ def solid_update(
 
 def sound_speed(
     mat: Any,
-    rho: Optional[float] = None,
+    rho: Optional[Any] = None,
     extra: Optional[Dict[str, Any]] = None,
     is_shell: bool = False,
-) -> float:
+) -> Any:
     """Compute acoustic wave speed for /MAT/LAW105.
 
     If simulation is ongoing, returns mixture sound speed from extra if present,
@@ -539,10 +539,17 @@ def sound_speed(
     """
     params = build_law105(mat) if not isinstance(mat, PowderBurnParams) else mat
     if extra is not None and "sound_speed" in extra:
-        return float(extra["sound_speed"])
+        return extra["sound_speed"]
 
-    rho0 = params.rho0 if params.rho0 > 0.0 else (float(rho) if rho is not None and rho > 0.0 else 1.0)
-    return math.sqrt(max(0.0, params.bulk / rho0))
+    bulk = max(0.0, params.bulk)
+    if rho is not None:
+        r = np.asarray(rho, dtype=np.float64)
+        r_val = np.where(r > 0.0, r, (params.rho0 if params.rho0 > 0.0 else 1.0))
+        c = np.sqrt(np.maximum(0.0, bulk / np.maximum(1e-20, r_val)))
+        return float(c) if r.ndim == 0 else c
+
+    rho0 = params.rho0 if params.rho0 > 0.0 else 1.0
+    return float(math.sqrt(max(0.0, bulk / max(1e-20, rho0))))
 
 
 def solid_tangent(

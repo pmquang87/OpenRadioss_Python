@@ -657,7 +657,10 @@ def read_part(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     t = cards[0].ints()
     model.parts[block.user_id] = Part(
-        id=block.user_id, prop_id=t[0], mat_id=t[1], title=title)
+        id=block.user_id,
+        prop_id=t[0] if len(t) > 0 else 0,
+        mat_id=t[1] if len(t) > 1 else 0,
+        title=title)
 
 
 def _law2_iflag1_to_abn(sig_y: float, uts: float, euts: float, young: float,
@@ -10605,18 +10608,21 @@ def read_cload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/CLOAD/{block.user_id}: missing data card", block.source)
         return
     t = cards[0].tokens()
+    if len(t) < 3:
+        log.error(f"/CLOAD/{block.user_id}: data card requires at least funct_id, direction, grnod_id", block.source)
+        return
     model.cloads.append(ConcentratedLoad(
-        id=block.user_id, funct_id=int(t[0]), direction=_direction(t[1]),
-        grnod_id=int(t[2]), scale=float(t[3]) if len(t) > 3 else 1.0,
-        sens_id=int(float(t[4])) if len(t) > 4 else 0, title=title))
+        id=block.user_id, funct_id=_ival(t[0]), direction=_direction(t[1]),
+        grnod_id=_ival(t[2]), scale=_fval(t[3], 1.0) if len(t) > 3 else 1.0,
+        sens_id=_ival(t[4]) if len(t) > 4 else 0, title=title))
     from ..model.entities import LoadCload
     model.load_cloads[block.user_id] = LoadCload(
         id=block.user_id,
-        curve_id=int(t[0]) if len(t) > 0 else 0,
+        curve_id=_ival(t[0]),
         dir=t[1].strip() if len(t) > 1 else "X",
-        grnod_id=int(t[2]) if len(t) > 2 else 0,
-        magnitude=float(t[3]) if len(t) > 3 else 1.0,
-        sens_id=int(float(t[4])) if len(t) > 4 else 0,
+        grnod_id=_ival(t[2]),
+        magnitude=_fval(t[3], 1.0) if len(t) > 3 else 1.0,
+        sens_id=_ival(t[4]) if len(t) > 4 else 0,
         title=title,
     )
 
