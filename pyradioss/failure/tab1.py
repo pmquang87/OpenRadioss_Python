@@ -30,9 +30,10 @@ def _accumulate(fail, dama, d_epsp, eps_f):
     p = fail.params
     # Pre-calculated damage scale DP:
     dn = p.get("n", 1.0)
-    if dn != 0.0 and dn != 1.0:
-        exp = 1.0 - 1.0 / dn
-        dp = np.where(dama > 0.0, dn * np.maximum(dama, 1e-12) ** exp, 1.0)
+    dd = p.get("d", 0.0)
+    # Fortran: DP(I) = DN*DD**(ONE-ONE/DN)
+    if dn != 0.0 and dd > 0.0:
+        dp = dn * (dd ** (1.0 - 1.0 / dn))
     else:
         dp = 1.0
 

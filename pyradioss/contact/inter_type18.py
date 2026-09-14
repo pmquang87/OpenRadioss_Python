@@ -234,7 +234,7 @@ def _t18_forces(x, v, mass, sec_nodes, main_nodes, stfval, gap, stiff_dc, cand_p
     # Viscous damping (i18for3.F line 327)
     if stiff_dc > 0.0:
         damp = np.where(
-            vn < 0.0,
+            vn > 0.0,
             np.where(gap > EM20, stiff_dc * (pene / gap) * vn, stiff_dc * vn),
             0.0
         )
