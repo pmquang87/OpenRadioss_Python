@@ -250,7 +250,7 @@ class RigidBodyEngine:
             idx, dof, fct, scale = entry[0], entry[1], entry[2], entry[3]
             if self.master in idx:
                 if dof < 3:
-                    self.drives.append((dof, fct, scale))
+                    self.drives.append((dof, fct, scale) + entry[4:7])
                 else:
                     self.rot_drives.append((dof - 3, fct, scale) + entry[4:7])
             hit = np.isin(idx, self.nodes)
@@ -484,8 +484,10 @@ class RigidBodyEngine:
         if not self.pivot:
             a = F / self.M
             self.v_ref = self.v_ref + a * dt
-            for dof, fct, scale in self.drives:      # moving rigid die
-                vimp = scale * fct.eval(t_next)
+            for dof, fct, scale, facx, t0, t1 in self.drives:      # moving rigid die
+                if t_next < t0 or t_next > t1:
+                    continue
+                vimp = scale * fct.eval(t_next * facx)
                 dv = vimp - self.v_ref[dof]
                 wext += self.M * dv * vimp           # J . v_imp, as /IMPVEL
                 self.v_ref[dof] = vimp

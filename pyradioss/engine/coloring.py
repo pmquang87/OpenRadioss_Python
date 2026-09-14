@@ -32,7 +32,10 @@ def compute_element_colors(conn: np.ndarray, num_nodes: int) -> Tuple[np.ndarray
     node_degree = np.zeros(num_nodes, dtype=np.int32)
     for e in range(num_elems):
         for i in range(conn.shape[1]):
-            node_degree[conn[e, i]] += 1
+            n_id = conn[e, i]
+            if n_id < 0 or n_id >= num_nodes:
+                continue
+            node_degree[n_id] += 1
             
     node_offset = np.zeros(num_nodes + 1, dtype=np.int32)
     for i in range(num_nodes):
@@ -44,6 +47,8 @@ def compute_element_colors(conn: np.ndarray, num_nodes: int) -> Tuple[np.ndarray
     for e in range(num_elems):
         for i in range(conn.shape[1]):
             n_id = conn[e, i]
+            if n_id < 0 or n_id >= num_nodes:
+                continue
             node_elems[current_offset[n_id]] = e
             current_offset[n_id] += 1
             
@@ -57,6 +62,8 @@ def compute_element_colors(conn: np.ndarray, num_nodes: int) -> Tuple[np.ndarray
     for e in range(num_elems):
         for i in range(conn.shape[1]):
             n_id = conn[e, i]
+            if n_id < 0 or n_id >= num_nodes:
+                continue
             for j in range(node_offset[n_id], node_offset[n_id + 1]):
                 nbr = node_elems[j]
                 c = elem_color[nbr]

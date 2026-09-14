@@ -233,7 +233,7 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             ec.dt_scale = vals[0] if vals[0] > 0.0 else 0.9
                         if len(vals) > 1:
                             ec.dt_min = vals[1]
-                elif ec.dt_ams:
+                elif sub == "AMS":
                     if block.cards:
                         vals = block.cards[0].floats()
                         if vals:
