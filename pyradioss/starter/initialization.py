@@ -1444,6 +1444,14 @@ def resolve_skews(model: Model, log: MessageLog) -> None:
                         f"(N1->N2); the physics DEVIATES when the skew is "
                         f"not aligned with it", "PROP CHECK")
 
+    # ---- /INIVEL: skew transformation (M39) --------------------------
+    for iv in model.inivel:
+        if getattr(iv, "iskew", 0) and getattr(iv, "kind", "") in ("TRANS", "TRA") and not getattr(iv, "_v_is_global", False):
+            row = model.skews.index("SKEW", iv.iskew)
+            if row is not None and row >= 0:
+                iv.v = model.skews.to_global(row, iv.v)
+                iv._v_is_global = True
+
     # ---- /INIVEL/AXIS: the rotation axis + origin come from the /FRAME --
     for iv in model.inivel:
         if iv.kind != "AXIS" or not iv.frame_id:
@@ -1456,7 +1464,9 @@ def resolve_skews(model: Model, log: MessageLog) -> None:
         # Vxt/Vyt/Vzt are components IN the frame, rotated to global.
         iv.axis = model.skews.axes[row][iv.dir - 1].copy()
         iv.origin = model.skews.origins[row].copy()
-        iv.v = model.skews.to_global(row, iv.v)
+        if not getattr(iv, "_v_is_global", False):
+            iv.v = model.skews.to_global(row, iv.v)
+            iv._v_is_global = True
         sf = next((s for s in model.skews.entries
                    if s.kind == "FRAME" and s.id == iv.frame_id), None)
         if sf is not None and sf.imov != 0:

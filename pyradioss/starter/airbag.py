@@ -37,7 +37,11 @@ def initialize_monitored_volumes(model: Model) -> None:
         x3 = x[n3]
         x4 = x[n4]
         
-        xx = 0.5 * (x1 + x2)
+        # Detect triangular facets (node 3 == node 4)
+        mask_tri = (n4 == n3) if n4 is not None else np.zeros(len(x1), dtype=bool)
+        xx = np.where(mask_tri[:, None],
+                      (x1 + x2 + x3) / 3.0,
+                      (x1 + x2 + x3 + x4) / 4.0)
         
         d13 = x3 - x1
         d24 = x4 - x2

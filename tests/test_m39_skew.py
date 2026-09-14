@@ -759,3 +759,45 @@ def test_no_skew_model_is_bit_identical(tmp_path):
     assert np.allclose(model.skews.axes[0], np.eye(3))
     assert not model.skews.has_moving()
     assert np.abs(model.v).max() < 1e-12          # fully clamped
+
+
+def test_inivel_resolve_skews_idempotent(tmp_path):
+    """resolve_skews called a second time (e.g. after transforms) must not double-rotate INIVEL vectors."""
+    from pyradioss.starter.initialization import resolve_skews, initialize_elements_and_mass
+    from pyradioss.model.entities import InitialVelocity
+    d = _cube_deck("IVIDEM", "")
+    d.node([(99, 0.0, 0.0, 0.0)])
+    d.grnod_node(2, "probe", [99])
+    d.lines.extend((_skew_fix(1, (0, 0, 0), (0, 1, 1), (0, -1, 1),
+                              kind="FRAME")).splitlines())
+    d.lines.extend((_skew_fix(2, (0, 0, 0), (0, 1, 1), (0, -1, 1),
+                              kind="SKEW")).splitlines())
+    d.lines.extend([
+        "/INIVEL/AXIS/1", "translate in the frame",
+        fmt_str("X") + fmt_int(1) + fmt_int(2),
+        _v3(0.0, 5.0, 0.0) + fmt_float(0.0)])
+    p = tmp_path / "IVIDEM_0000.rad"
+    d.write(str(p))
+    log = MessageLog()
+    with contextlib.redirect_stdout(io.StringIO()):
+        model = run_starter(str(p), log)
+    expected_v = np.array([0.0, 5.0 * SQ, 5.0 * SQ])
+    iv = model.inivel[0]
+    assert np.allclose(iv.v, expected_v)
+
+    # Add a TRANS inivel with iskew=2
+    iv_trans = InitialVelocity(id=2, grnod_id=2, v=np.array([0.0, 5.0, 0.0]),
+                               kind="TRANS", iskew=2)
+    model.inivel.append(iv_trans)
+
+    # Calling resolve_skews again (simulating transform pass)
+    resolve_skews(model, log)
+    assert np.allclose(iv.v, expected_v), "AXIS vector was rotated a second time!"
+    assert np.allclose(iv_trans.v, expected_v), "TRANS vector failed skew conversion or was double-rotated!"
+
+    # Calling resolve_skews a third time
+    resolve_skews(model, log)
+    assert np.allclose(iv.v, expected_v), "AXIS vector was rotated on 3rd pass!"
+    assert np.allclose(iv_trans.v, expected_v), "TRANS vector was rotated on 3rd pass!"
+
+

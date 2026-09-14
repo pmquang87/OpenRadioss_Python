@@ -866,6 +866,7 @@ class InitialVelocity:
     origin: Optional[np.ndarray] = None  # (3,) point on the axis (AXIS)
     frame_id: int = 0                    # /FRAME (AXIS); 0 = global
     dir: int = 1                         # IDIR 1/2/3 = the frame's X'/Y'/Z'
+    iskew: int = 0
 
 
 @dataclass
