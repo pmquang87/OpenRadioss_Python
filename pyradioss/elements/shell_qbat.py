@@ -966,7 +966,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     nip_max = st["nip_max"]
 
     # Cycle 0 or velocity-free forces evaluation:
-    if dt <= 0.0 or v is None or vr is None:
+    if dt is None or dt <= 0.0 or v is None or vr is None:
         xe = x[conn]
         E, det = _frame(xe)
         area = 0.25 * det
@@ -1664,12 +1664,13 @@ def kgeo(group, x):
         t_sl = thick[sl]
         zrel, wrel = st["zw"][isl]
         nip = len(zrel)
+        nip_max = st["nip_max"]
 
         # 4-GP membrane resultants: shape (m, 4, 3)
         Nres = np.zeros((m, 4, 3), dtype=float)
         for g in range(4):
             for k in range(nip):
-                idx = g * nip + k
+                idx = g * nip_max + k
                 wk = wrel[k] * t_sl
                 Nres[:, g, :] += wk[:, None] * st["sig"][sl, idx, :3]
 

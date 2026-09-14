@@ -112,6 +112,18 @@ class TestRateFactor:
 
         np.testing.assert_allclose(r_shell, r_solid, rtol=1e-10)
 
+    def test_eps_dot_0_zero_or_missing_guard(self):
+        """eps_dot_0 = 0.0 or missing is guarded against ZeroDivisionError."""
+        fail_zero = _Fail(D4=0.05, eps_dot_0=0.0)
+        deps = np.array([[0.1, -0.05, -0.05, 0.0, 0.0, 0.0]])
+        res_zero = _rate_factor(fail_zero, deps, dt=0.001, dev_from_6=True)
+        assert np.all(res_zero > 1.0)
+
+        fail_missing = _Fail(D4=0.05)
+        del fail_missing.params["eps_dot_0"]
+        res_missing = _rate_factor(fail_missing, deps, dt=0.001, dev_from_6=True)
+        assert np.all(res_missing > 1.0)
+
 
 # ======================================================================
 # _thermal_factor — 1 + D5*T*
@@ -438,6 +450,18 @@ class TestSolidStep:
         expected = 0.01 / 0.15
         assert dama[0] == pytest.approx(expected, rel=1e-10)
 
+    def test_triaxiality_exponent_clamp(self):
+        """Extreme triaxiality exponent is clamped to prevent exp overflow in solid_step."""
+        fail = _Fail(D1=0.1, D2=0.2, D3=10.0, D4=0.0)
+        # Very high hydrostatic tension -> large positive triax
+        sig = np.array([[1e6, 1e6, 1e6, 0.0, 0.0, 0.0]])
+        d_epsp = np.array([0.01])
+        deps = np.zeros((1, 6))
+        dama = np.zeros(1)
+        solid_step(fail, sig, d_epsp, deps, dt=1.0, dama=dama)
+        assert np.isfinite(dama[0])
+        assert dama[0] >= 0.0
+
 
 class TestShellStep:
     """shell_step: plane-stress damage step."""
@@ -469,3 +493,15 @@ class TestShellStep:
 
         expected = 0.01 / 0.15
         assert dama[0] == pytest.approx(expected, rel=1e-10)
+
+    def test_triaxiality_exponent_clamp(self):
+        """Extreme triaxiality exponent is clamped to prevent exp overflow in shell_step."""
+        fail = _Fail(D1=0.1, D2=0.2, D3=10.0, D4=0.0)
+        # High biaxial tension
+        sig = np.array([[1e6, 1e6, 0.0]])
+        d_epsp = np.array([0.01])
+        deps = np.zeros((1, 3))
+        dama = np.zeros(1)
+        shell_step(fail, sig, d_epsp, deps, dt=1.0, dama=dama)
+        assert np.isfinite(dama[0])
+        assert dama[0] >= 0.0

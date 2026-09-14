@@ -124,6 +124,9 @@ def buckling_factors(model, nev=4, log=None, constraints=None, contacts=None):
             from .contact import build_implicit_contacts
             contacts = build_implicit_contacts(model, silent)
 
+    if not constraints:
+        constraints = None
+
     dof = DofMap(model, log, constraints=constraints)
     Km = assemble(model, dof, x_geom)
     if contacts:

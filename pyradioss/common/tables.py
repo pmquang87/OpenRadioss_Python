@@ -27,6 +27,8 @@ class FunctTable:
     def __init__(self, fct_id: int, x, y, title: str = ""):
         x = np.asarray(x, dtype=float)
         y = np.asarray(y, dtype=float)
+        if x.ndim != 1 or y.ndim != 1 or x.size != y.size:
+            raise ValueError(f"/FUNCT/{fct_id}: x and y must be 1D arrays of identical length")
         if x.size < 2:
             raise ValueError(f"/FUNCT/{fct_id}: needs at least 2 points")
         if np.any(np.diff(x) <= 0):
@@ -43,6 +45,8 @@ class FunctTable:
         """Apply a /MOVE_FUNCT scale and shift to the curve in place.
         If scx < 0, reverses the point order so abscissae stay strictly
         increasing (matching hm_read_move_funct.F)."""
+        if abs(scx) < 1.0e-20:
+            raise ValueError(f"/MOVE_FUNCT/{self.id}: X scale factor cannot be zero")
         if scx < 0.0:
             self.x = self.x[::-1] * scx + shx
             self.y = self.y[::-1] * scy + shy

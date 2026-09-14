@@ -164,7 +164,7 @@ class TimeHistory:
                     elif var_upper in ("E", "IE", "ENERGY"):
                         return float(st["eint"][r]) if "eint" in st else 0.0
 
-        elif kind in ("SHEL", "SHELL", "BRIC", "BRICK", "SH3N", "TETR"):
+        elif kind in ("SHEL", "SHELL", "BRIC", "BRICK", "SH3N", "TETR", "QUAD", "BEAM", "TRUS"):
             for attr in ("shells", "shells_qbat", "shells_qeph", "bricks", "bricks_heph", "tetras", "sh3n", "sh3n_dkt18", "bric20s", "shel16s", "tetra10s", "quads"):
                 g = getattr(model, attr, None)
                 if g is not None and oid in g.ids:
@@ -188,13 +188,21 @@ class TimeHistory:
                                 s_elem = sig[r]
                                 if s_elem.ndim > 1:
                                     s_elem = s_elem.mean(axis=0)
-                                return float(s_elem[idx_map[var_upper]])
+                                if len(s_elem) == 3:
+                                    shell_map = {"SIGXX": 0, "SIGYY": 1, "SIGXY": 2}
+                                    if var_upper in shell_map:
+                                        return float(s_elem[shell_map[var_upper]])
+                                    return 0.0  # SIGZZ, SIGYZ, SIGZX are 0.0 in plane stress
+                                else:
+                                    return float(s_elem[idx_map[var_upper]])
                         elif var_upper in ("P", "PRESSURE"):
                             sig = st.get("sig")
                             if sig is not None:
                                 s_elem = sig[r]
                                 if s_elem.ndim > 1:
                                     s_elem = s_elem.mean(axis=0)
+                                if len(s_elem) == 3:
+                                    return float(-(s_elem[0] + s_elem[1]) / 3.0)
                                 return float(-np.mean(s_elem[:3]))
         return 0.0
 
@@ -208,7 +216,7 @@ class TimeHistory:
                momentum[0], momentum[1], momentum[2]]
         disp = (model.x - model.x0) if self._need_disp else None
         for _, idx, var in self._node_req:
-            comp = {"X": 0, "Y": 1, "Z": 2}[var[-1]]
+            comp = {"X": 0, "Y": 1, "Z": 2}.get(var[-1].upper(), 0)
             if var[0] == "D":
                 row.append(disp[idx, comp])
             elif var[0] == "V":
@@ -228,7 +236,7 @@ class TimeHistory:
         for _, pid, var in self._part_req:
             row.append(self._part_value(pid, var))
         for _, sid, var in self._sect_req:
-            comp = {"X": 0, "Y": 1, "Z": 2}[var[-1]]
+            comp = {"X": 0, "Y": 1, "Z": 2}.get(var[-1].upper(), 0)
             if sect_values is None or sid not in sect_values:
                 row.append(0.0)
             else:
@@ -241,3 +249,13 @@ class TimeHistory:
 
     def close(self) -> None:
         self._fh.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def __del__(self):
+        if hasattr(self, "_fh") and not self._fh.closed:
+            self._fh.close()

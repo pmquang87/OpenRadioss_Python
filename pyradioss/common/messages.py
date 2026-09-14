@@ -43,6 +43,7 @@ class MessageLog:
         print(text)
         if self._listing is not None:
             self._listing.write(text + "\n")
+            self._listing.flush()
 
     def info(self, text: str) -> None:
         self._emit(text)

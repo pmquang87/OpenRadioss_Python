@@ -902,7 +902,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         return np.zeros(0)
     
     # Cycle 0 Courant step calculation / velocity-free evaluation
-    if dt <= 0.0 or v is None:
+    if dt is None or dt <= 0.0 or v is None:
         c_spd = np.zeros(n)
         for sl, mat, prop in st.get("slices", []):
             if getattr(mat, "law", 1) == 0:

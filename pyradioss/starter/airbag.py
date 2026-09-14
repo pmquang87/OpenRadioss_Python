@@ -23,10 +23,14 @@ def initialize_monitored_volumes(model: Model) -> None:
             
         x = model.x0
         
-        n1 = surf.segments[:, 0]
-        n2 = surf.segments[:, 1]
-        n3 = surf.segments[:, 2]
-        n4 = surf.segments[:, 3]
+        segs = surf.segments
+        if segs.shape[1] == 3:
+            n1, n2, n3 = segs[:, 0], segs[:, 1], segs[:, 2]
+            n4 = n3
+        else:
+            n1, n2, n3, n4 = segs[:, 0], segs[:, 1], segs[:, 2], segs[:, 3]
+            mask_tri = (n4 < 0) | (n4 == n3)
+            n4 = np.where(mask_tri, n3, n4)
         
         x1 = x[n1]
         x2 = x[n2]

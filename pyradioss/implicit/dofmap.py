@@ -88,11 +88,11 @@ class DofMap:
         over (warned at the constraint scan)."""
         self.model = model
         n = model.numnod
-        extra = (constraints.extra if constraints is not None
+        extra = (constraints.extra if constraints
                  else np.zeros((n, DOFS_PER_NODE), dtype=bool))
-        unfreeze = (constraints.unfreeze if constraints is not None
+        unfreeze = (constraints.unfreeze if constraints
                     else np.zeros(n, dtype=bool))
-        bcs_ignore = (constraints.bcs_ignore if constraints is not None
+        bcs_ignore = (constraints.bcs_ignore if constraints
                       else np.zeros(n, dtype=bool))
 
         # ---- which nodes carry rotational stiffness ----------------------

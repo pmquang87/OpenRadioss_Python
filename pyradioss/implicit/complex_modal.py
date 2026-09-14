@@ -152,6 +152,9 @@ def _reduced_pencil(model, nev, log, constraints, contacts, prestress,
             from .contact import build_implicit_contacts
             contacts = build_implicit_contacts(model, silent)
 
+    if not constraints:
+        constraints = None
+
     dof = DofMap(model, log, constraints=constraints)
     # STIFFNESS (+ geometric stiffness for a prestressed spectrum), the same
     # tangent M16 forms

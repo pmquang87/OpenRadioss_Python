@@ -96,7 +96,7 @@ def _ival(s: str, default: int = 0) -> int:
     try:
         return int(s_clean)
     except ValueError:
-        return int(float(s_clean))
+        return int(float(s_clean.replace("D", "E").replace("d", "e")))
 
 
 def _fval(s: str, default: float = 0.0) -> float:
@@ -9705,12 +9705,15 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     else:
         if block.fixed:
             f = cards[0].cut("BCS")
-            flags = f[0].split()
-            if len(flags) < 2:
-                log.error(f"/BCS/{block.user_id}: Trarot field needs "
-                          f"'TTT RRR' flags, got '{f[0]}'", block.source)
+            s_flags = f[0].strip()
+            if len(s_flags.split()) >= 2:
+                tra, rot = s_flags.split()[:2]
+            elif len(s_flags) == 6 and all(c in "01" for c in s_flags):
+                tra, rot = s_flags[:3], s_flags[3:]
+            else:
+                log.error(f"/BCS/{block.user_id}: Trarot field needs 6 flags or 'TTT RRR', got '{f[0]}'", block.source)
                 return
-            tra, rot, skew, grnod = flags[0], flags[1], _ival(f[1]), _ival(f[2])
+            tra, rot, skew, grnod = tra, rot, _ival(f[1]), _ival(f[2])
         else:
             t = cards[0].tokens()
             if len(t) < 4:

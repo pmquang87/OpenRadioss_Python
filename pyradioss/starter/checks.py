@@ -8567,7 +8567,7 @@ def check_model(model: Model, log: MessageLog) -> None:
         if fl.surf_id and fl.surf_id not in model.surfaces:
             log.error(f"/IMPFLUX/{fl.id}: surface {fl.surf_id} not defined",
                       "CROSS REF")
-        if fl.grbric_id and ("bricks", fl.grbric_id) not in model.element_groups:
+        if fl.grbric_id and fl.grbric_id not in model.egroups.get("BRIC", {}):
             log.error(f"/IMPFLUX/{fl.id}: brick group {fl.grbric_id} not defined",
                       "CROSS REF")
     for itemp in model.initemp:
@@ -8582,7 +8582,7 @@ def check_model(model: Model, log: MessageLog) -> None:
                 log.error(f"/INIVOL/{iv.id}: container surface/group {c.surf_id} not defined",
                           "CROSS REF")
     solid_ids = set()
-    for name in ("bricks", "tetra4", "tetra10"):
+    for name in ("bricks", "bricks_heph", "tetras", "tetra10s", "bric20s"):
         grp = getattr(model, name, None)
         if grp is not None and hasattr(grp, "ids") and len(grp.ids) > 0:
             solid_ids.update(grp.ids.tolist())
@@ -8592,7 +8592,7 @@ def check_model(model: Model, log: MessageLog) -> None:
                       "CROSS REF")
 
     shell_ids = set()
-    for name in ("shells", "sh3n", "quads"):
+    for name in ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18", "quads", "shel16s"):
         grp = getattr(model, name, None)
         if grp is not None and hasattr(grp, "ids") and len(grp.ids) > 0:
             shell_ids.update(grp.ids.tolist())
@@ -8811,7 +8811,7 @@ def check_model(model: Model, log: MessageLog) -> None:
 
     fail_ids = {mat_id for mat_id, _, _ in getattr(model, "raw_fails", [])}
     for m in model.materials.values():
-        if getattr(m, "failure", None) is not None:
+        if getattr(m, "fail", None) is not None or bool(getattr(m, "fail_models", None)):
             fail_ids.add(m.id)
     for pid, pf in getattr(model, "perturb_fails", {}).items():
         if pf.fail_id > 0 and pf.fail_id not in fail_ids:
@@ -9358,15 +9358,16 @@ def check_model(model: Model, log: MessageLog) -> None:
         if el.grnod_id > 0 and el.grnod_id not in model.node_groups:
             log.error(f"/EXTERN/LINK/{lid}: node group {el.grnod_id} not defined", "CROSS REF")
 
+    part_groups = model.egroups.get("PART", {})
     for fid, fm in getattr(model, "friction_models", {}).items():
         for p in fm.pairs:
             if p.part_id1 > 0 and p.part_id1 not in model.parts:
                 log.error(f"/FRICTION/{fid}: part {p.part_id1} not defined", "CROSS REF")
             if p.part_id2 > 0 and p.part_id2 not in model.parts:
                 log.error(f"/FRICTION/{fid}: part {p.part_id2} not defined", "CROSS REF")
-            if p.grpart_id1 > 0 and p.grpart_id1 not in getattr(model, "part_groups", {}):
+            if p.grpart_id1 > 0 and p.grpart_id1 not in part_groups and p.grpart_id1 not in model.parts:
                 log.error(f"/FRICTION/{fid}: part group {p.grpart_id1} not defined", "CROSS REF")
-            if p.grpart_id2 > 0 and p.grpart_id2 not in getattr(model, "part_groups", {}):
+            if p.grpart_id2 > 0 and p.grpart_id2 not in part_groups and p.grpart_id2 not in model.parts:
                 log.error(f"/FRICTION/{fid}: part group {p.grpart_id2} not defined", "CROSS REF")
 
     for bid, nb in getattr(model, "nbcs_blocks", {}).items():

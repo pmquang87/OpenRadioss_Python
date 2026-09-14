@@ -201,6 +201,8 @@ def _get_cell_info(name: str, g):
     ctype, nn = _VTK_CELL[name]
     if name == "tetra10s" and (g.conn[:, :nn] < 0).any():
         return (10, 4)  # degenerate/slaved tetra10 write 4 corner nodes
+    if name == "bric20s" and (g.conn[:, :nn] < 0).any():
+        return (12, 8)  # slaved bric20 write 8 corner nodes
     return (ctype, nn)
 
 

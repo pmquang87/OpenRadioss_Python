@@ -25,7 +25,7 @@ each carrying:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -127,6 +127,7 @@ from .entities import (
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
     MaterialSprSeatbelt, MaterialShSeatbelt, MaterialTapo, MaterialPlasRate, MaterialCdpm2,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
+    Ply, Laminate, Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
 )
 from ..common.tables import FunctTable
 from .skew import SkewSet
@@ -1318,7 +1319,6 @@ class Model:
         self.mat_law74s: Dict[int, MatLaw74] = {}                   # /MAT/LAW74, /MAT/HILL_3D, /MAT/ORTH_PLAS, /MAT/THERM_HILL (M193, M563)
         self.mat_hill_3ds = self.mat_law74s
         self.mat_orth_plass = self.mat_law74s
-        self.mat_hill_therms = self.mat_law74s
         self.mat_law82s: Dict[int, MatLaw82] = {}                   # /MAT/LAW82, /MAT/OGDEN (M193)
         self.mat_ogdens = self.mat_law82s
         self.prop_int_beams: Dict[int, PropType18] = {}             # /PROP/TYPE18, /PROP/INT_BEAM (M193)
@@ -1336,7 +1336,7 @@ class Model:
         self.mat_concr_subs = self.mat_law40s
         self.mat_law80s: Dict[int, MaterialLaw80] = {}              # /MAT/LAW80, /MAT/TRANSFO (M170/M194)
         self.mat_law102s: Dict[int, MatLaw102] = {}                 # /MAT/LAW102 (M194)
-        self.mat_hill_48s = self.mat_law102s
+        self.mat_hill_48s = self.mat_law32s
         self.mat_nlocals: Dict[int, MatNLocal] = {}                 # /MAT/NLOCAL (M194)
         self.prop_spr_pulls: Dict[int, PropType13] = {}             # /PROP/TYPE13, /PROP/SPR_PULL (M194)
         self.prop_type13s = self.prop_spr_pulls
@@ -1361,8 +1361,7 @@ class Model:
         # M196 additions
         self.mat_law113s: Dict[int, Any] = {}                       # /MAT/LAW113, /MAT/SPR_BEAM (M196)
         self.mat_spr_beams = self.mat_law113s
-        self.mat_law95s: Dict[int, Any] = {}                        # /MAT/LAW95, /MAT/SEW (M196)
-        self.mat_sews = self.mat_law95s
+        self.mat_sews: Dict[int, Any] = {}                          # /MAT/SEW (M196)
         self.mat_law48s: Dict[int, Any] = {}                        # /MAT/LAW48, /MAT/ZHAO (M196)
         self.mat_zhaos = self.mat_law48s
         self.mat_steinbs = self.mat_law49s
@@ -1379,7 +1378,7 @@ class Model:
         self.mat_law92s: Dict[int, Any] = {}                        # /MAT/LAW92, /MAT/ARRUDA_BOYCE (M173, M566)
         self.mat_arruda_boyces = self.mat_law92s
         self.mat_arrudas = self.mat_law92s
-        self.mat_hill_orths = self.mat_law92s
+        self.mat_hill_orths = self.mat_law93s
         self.mat_law94s: Dict[int, Any] = {}                        # /MAT/LAW94, /MAT/YEOH (M173, M567)
         self.mat_yeohs = self.mat_law94s
         self.mat_law95s: Dict[int, Any] = {}                        # /MAT/LAW95, /MAT/BERGSTROM_BOYCE (M569)

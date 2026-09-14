@@ -610,7 +610,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         elif "off48" in extra:
             st["off"][sl] = np.minimum(st["off"][sl], extra["off48"])
         elif "off" in extra:
-            st["off"][sl] = extra["off"]
+            st["off"][sl] = np.minimum(st["off"][sl], extra["off"])
 
         if mat.eos is not None:
             from ..materials import eos as eos_mod

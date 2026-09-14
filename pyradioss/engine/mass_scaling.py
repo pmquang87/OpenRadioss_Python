@@ -314,7 +314,7 @@ class NodalTimeStep:
                 self.stifr[:] = 0.0
             return dt_rb
 
-        if self.cst and self.dt_min > 0.0:
+        if self.cst and self.dt_min > 0.0 and self.dt_sca > 0.0:
             # mass needed so that dt_sca * sqrt(2 M / K) >= dt_min
             m_req = self.stifn[loaded] * (self.dt_min / self.dt_sca) ** 2 \
                 / 2.0

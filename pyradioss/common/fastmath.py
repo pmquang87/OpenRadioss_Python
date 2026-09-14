@@ -79,7 +79,8 @@ def det_inv33(J: np.ndarray):
     B = f * g - d * i
     C = d * h - e * g
     det = a * A + b * B + c * C
-    idet = 1.0 / det
+    safe_det = np.where(np.abs(det) < 1.0e-20, np.where(det >= 0.0, 1.0e-20, -1.0e-20), det)
+    idet = 1.0 / safe_det
     inv = np.empty_like(J)
     inv[:, 0, 0] = A * idet
     inv[:, 0, 1] = (c * h - b * i) * idet
@@ -121,9 +122,12 @@ def scatter_add3(target: np.ndarray, idx: np.ndarray,
     returns None and the bincount reference below runs unchanged (one dict
     lookup, the same negligible dispatch every kernel block already pays)."""
     
-    if color_indices is not None and color_offsets is not None:
+    if len(idx) == 0:
+        return
+
+    if color_indices is not None and color_offsets is not None and len(color_indices) > 0:
         jit = _accel_get("scatter3_colored")
-        if jit is not None:
+        if jit is not None and len(idx) % len(color_indices) == 0:
             npe = len(idx) // len(color_indices)
             jit(target, idx, values, color_indices, color_offsets, npe)
             return

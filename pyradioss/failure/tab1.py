@@ -32,7 +32,10 @@ def _accumulate(fail, dama, d_epsp, eps_f):
     dn = p["n"]
     dd = p["d"]
     # Fortran: DP(I) = DN*DD**(ONE-ONE/DN)
-    dp = dn * (dd ** (1.0 - 1.0 / dn)) if dn != 0.0 else 1.0
+    if dn != 0.0 and dd > 0.0:
+        dp = dn * (dd ** (1.0 - 1.0 / dn))
+    else:
+        dp = 1.0
 
     grow = eps_f > 0.0
     # Fortran: IF (EPSF > ZERO) UVAR = UVAR + DP * DPLA / EPSF

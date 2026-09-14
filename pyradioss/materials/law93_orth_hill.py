@@ -925,8 +925,8 @@ def shell_update(
     if has_transverse:
         # Transverse shear (elastically integrated with shear factor SHF = 5/6)
         shf = 5.0 / 6.0
-        sign[:, 3] = sig_old[:, 3] + shf * p.g23 * deps[:, 3]
-        sign[:, 4] = sig_old[:, 4] + shf * p.g13 * deps[:, 4]
+        sign[:, 3] = sig_arr[:, 3] + shf * p.g23 * deps_arr[:, 3]
+        sign[:, 4] = sig_arr[:, 4] + shf * p.g13 * deps_arr[:, 4]
 
     # 2. Hill plane-stress equivalent stress: sigeps93c.F:260-262
     # sig_hl = sqrt((FF+HH)*yy^2 + (GG+HH)*xx^2 - 2*HH*xx*yy + 2*NN*xy^2)

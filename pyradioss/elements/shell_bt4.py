@@ -924,7 +924,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     thick = st["thick"]
 
     # Cycle 0 Courant step probe or evaluation without velocity
-    if dt <= 0.0 or v is None:
+    if dt is None or dt <= 0.0 or v is None:
         E, xl, area, B1, B2 = _local_geometry(xe)
         lc = _char_length(xl, area)
         c = np.zeros(n)

@@ -323,8 +323,7 @@ class Material:
                 from ..materials import law50_visc_honey
                 return float(law50_visc_honey.sound_speed_solid(self, rho=self.rho0))
             except Exception:
-                g = self.G
-                e = self.E
+                pass
         if self.law in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB") or getattr(self, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB"):
             try:
                 from ..materials import law66_plas_tab
@@ -1421,9 +1420,7 @@ class Interface:
     title: str = ""
     # ---- TYPE18 (M60) / TYPE10 / TYPE19 / TYPE21 / GUIDED_CABLE ---------
     ibag: int = 0
-    multimp: int = 4
     idel18: int = 0
-    idel10: int = 0       # type 10: segment deletion flag
     idel: int = 0         # type 19: deletion flag
     icurv: int = 0        # type 19: curve geometry flag
     iadm: int = 0         # type 21: admission flag
@@ -1431,19 +1428,12 @@ class Interface:
     istiff: int = 1       # guided cable: stiffness formulation flag
     gap_scale: float = 1.0 # type 19/21/25: scale factor for gap
     gap_min: float = 0.0   # type 19: min gap
-    tstart: float = 0.0   # type 10: activation time
-    tstop: float = 1e30   # type 10: deactivation time
-    inactiv: int = 0      # type 10: initial penetration treatment
-    stiff_dc: float = 0.0
-    sort_fact: float = 0.2
     isym: int = 0         # type 20: symmetric contact flag
     iedge: int = 0        # type 20: edge contact flag
     edge_angle: float = 0.0 # type 20: edge angle
     iload: int = 0        # type 14: load formulation flag
     fun_id1: int = 0      # type 14: fct_ID1
     fun_id2: int = 0      # type 14: fct_ID2
-    fscale_gap: float = 1.0 # type 23: gap scale
-    idel: int = 0         # type 23: element deletion flag
     tol: float = 0.0      # type 12: tolerance
     visc: float = 0.0     # type 9: damping viscosity
     radius: float = 0.0   # type 17: contact radius

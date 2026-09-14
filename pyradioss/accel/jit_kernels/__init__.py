@@ -1194,3 +1194,6 @@ def tetra10_post(xe, dndx, vol, vol_tot, lc, rho, trD, deps, sig, sig_old,
 
 from .shells_qbat import qbat_pre_flat, qbat_post_flat, qbat_pre, qbat_post
 
+# Contact narrow phase alias: TYPE24 uses the same algorithm and signature as TYPE7
+t24_narrow = t7_narrow
+

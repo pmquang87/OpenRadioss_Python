@@ -84,7 +84,7 @@ def _slice_frame(prop, xe, log, skews=None):
                     np.tile(a[2], (m, 1)))
         elif log is not None:
             log.warning(f"/PROP/TYPE8/{getattr(prop, 'id', '?')}: "
-                        f"skew_row={skew_row} out of bounds for skews ({getattr(skews, 'axes', len)})",
+                        f"skew_row={skew_row} out of bounds for skews (total {len(getattr(skews, 'axes', []))})",
                         "SPRING INIT")
     if ptype == 13 and skew_id == 0:
         # element frame: e1 along the element, default perpendicular e2/e3

@@ -371,9 +371,9 @@ def parse_spr_pre(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
             params["ilock"] = _iv(h[3])
         else:
             toks = head.tokens()
-            params["mass"] = float(toks[0]) if len(toks) > 0 else 0.0
-            params["sens_id"] = int(float(toks[1])) if len(toks) > 1 else 0
-            params["ilock"] = int(float(toks[2])) if len(toks) > 2 else 0
+            params["mass"] = _fv(toks[0]) if len(toks) > 0 else 0.0
+            params["sens_id"] = _iv(toks[1]) if len(toks) > 1 else 0
+            params["ilock"] = _iv(toks[2]) if len(toks) > 2 else 0
 
     stif0 = f1 = d1 = e1 = stif1 = 0.0
     stif = _get(cards, 1)
@@ -398,11 +398,11 @@ def parse_spr_pre(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
             if len(f) > 5: fscal = _fv(f[5])
         else:
             toks = fct.tokens()
-            if len(toks) > 0: fct_id1 = int(float(toks[0]))
-            if len(toks) > 1: fct_id2 = int(float(toks[1]))
-            if len(toks) > 2: tscal = float(toks[2])
-            if len(toks) > 3: dscal = float(toks[3])
-            if len(toks) > 4: fscal = float(toks[4])
+            if len(toks) > 0: fct_id1 = _iv(toks[0])
+            if len(toks) > 1: fct_id2 = _iv(toks[1])
+            if len(toks) > 2: tscal = _fv(toks[2])
+            if len(toks) > 3: dscal = _fv(toks[3])
+            if len(toks) > 4: fscal = _fv(toks[4])
 
     # Default scales
     if tscal == 0.0: tscal = 1.0
@@ -496,18 +496,18 @@ def parse_spr_tab(block: KeywordBlock, log: MessageLog) -> Property:
                 alpha1 = _fv(f2[3]) if len(f2) > 3 else 0.0
         else:
             t1 = cards[0].tokens()
-            mass = float(t1[0]) if len(t1) > 0 else 0.0
-            sens_id = int(float(t1[1])) if len(t1) > 1 else 0
-            isflag = int(float(t1[2])) if len(t1) > 2 else 0
-            ileng = int(float(t1[3])) if len(t1) > 3 else 0
-            nfunc = int(float(t1[4])) if len(t1) > 4 else 0
-            nraten = int(float(t1[5])) if len(t1) > 5 else 0
+            mass = _fv(t1[0]) if len(t1) > 0 else 0.0
+            sens_id = _iv(t1[1]) if len(t1) > 1 else 0
+            isflag = _iv(t1[2]) if len(t1) > 2 else 0
+            ileng = _iv(t1[3]) if len(t1) > 3 else 0
+            nfunc = _iv(t1[4]) if len(t1) > 4 else 0
+            nraten = _iv(t1[5]) if len(t1) > 5 else 0
             if len(cards) > 1 and not cards[1].is_blank:
                 t2 = cards[1].tokens()
-                scale = float(t2[0]) if len(t2) > 0 else 1.0
-                stiff0 = float(t2[1]) if len(t2) > 1 else 0.0
-                dmax = float(t2[2]) if len(t2) > 2 else 0.0
-                alpha1 = float(t2[3]) if len(t2) > 3 else 0.0
+                scale = _fv(t2[0], 1.0) if len(t2) > 0 else 1.0
+                stiff0 = _fv(t2[1]) if len(t2) > 1 else 0.0
+                dmax = _fv(t2[2]) if len(t2) > 2 else 0.0
+                alpha1 = _fv(t2[3]) if len(t2) > 3 else 0.0
     params.update({
         "mass": mass, "sens_id": sens_id, "isflag": isflag, "ileng": ileng,
         "nfunc": nfunc, "nraten": nraten, "scale": scale, "stiff0": stiff0,
@@ -979,7 +979,7 @@ def parse_connect(block: KeywordBlock, log: MessageLog) -> Property:
                 if params["ismstr"] == 10:
                     params["ismstr"] = 4
             if len(t) > 1:
-                params["thick"] = float(t[1])
+                params["thick"] = _fv(t[1])
         except ValueError:
             pass
             

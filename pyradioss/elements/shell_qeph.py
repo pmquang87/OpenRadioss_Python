@@ -1108,7 +1108,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     alive = st["off"] > 0.0
 
     # Cycle 0 or velocity-free evaluation (e.g. initial time step estimate)
-    if dt <= 0.0 or v is None:
+    if dt is None or dt <= 0.0 or v is None:
         G = _geometry(xe)
         viscdt = np.sqrt(1.0 + st["amu"] ** 2) - st["amu"]
         # cndt3.F: dt = (sqrt(1+dn^2)-dn) * LL / SSP

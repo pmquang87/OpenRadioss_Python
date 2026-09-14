@@ -241,7 +241,9 @@ def assemble_kgeo(model, dof: DofMap, x_geom):
         kernel = KERNELS[name]
         kg, edofs = kernel.kgeo(group, x_geom)
         n, d, _ = kg.shape
-        eq = dof.eq[edofs]
+        valid_dof = edofs >= 0
+        eq = np.full_like(edofs, -1)
+        eq[valid_dof] = dof.eq[edofs[valid_dof]]
         row_eq = np.repeat(eq[:, :, None], d, axis=2)
         col_eq = np.repeat(eq[:, None, :], d, axis=1)
         keep = (row_eq >= 0) & (col_eq >= 0)

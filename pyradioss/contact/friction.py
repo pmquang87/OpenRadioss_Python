@@ -99,6 +99,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..common.constants import EM20
+
 #: the mu floor of i7for3.F (XMU = MAX(XMU, EM30))
 _MU_FLOOR = 1e-30
 
@@ -137,7 +139,8 @@ def mu_kinetic(mfrot, mu0, c, p, v):
         xi = (v[mid] - vc1) / (vc2 - vc1)
         mu[mid] = c[2] + (c[3] - c[2]) * (3.0 - 2.0 * xi) * xi * xi
         dmu = c[1] - c[3]
-        mu[hi] = c[1] - dmu / (1.0 + dmu * (v[hi] - vc2) ** 2)
+        denom = 1.0 + dmu * (v[hi] - vc2) ** 2
+        mu[hi] = c[1] - dmu / np.maximum(denom, EM20)
     elif mfrot == 4:
         # exponential decay (static -> dynamic) — i7for3 MFROT==4
         mu = c[0] + (mu0 - c[0]) * np.exp(-c[1] * v)

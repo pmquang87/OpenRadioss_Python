@@ -291,7 +291,7 @@ def solid_update(
 
     n = sig.shape[0]
     if n == 0:
-        return sig, np.zeros(0, dtype=np.float64)
+        return sig, np.zeros(0, dtype=np.float64), np.zeros(0, dtype=np.float64)
 
     # 1. Build symmetric 3x3 strain tensor for each element: sigeps82.F:137-144
     A = np.zeros((n, 3, 3), dtype=np.float64)

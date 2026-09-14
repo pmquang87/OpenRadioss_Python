@@ -461,7 +461,7 @@ def consistent_solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=Non
     # Set base elastic moduli
     for i in range(n):
         szz = sig[i, 2] if sig is not None and sig.ndim == 2 and sig.shape[1] > 2 else 1.0
-        E_cur = E if (szz > 0.0 or icomp not in (0, 1)) else E_comp
+        E_cur = E if (szz > 0.0 or icomp != 1) else E_comp
         D[i, 2, 2] = E_cur
         D[i, 4, 4] = G
         D[i, 5, 5] = G

@@ -1263,8 +1263,8 @@ def _register() -> None:
     """Register LAW73 in pyradioss MAT_PHYSICS_REGISTRY."""
     try:
         from ..input.mat_reader import MAT_PHYSICS_REGISTRY
-        for k in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM",
-                  "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "LAW73_HILL_THERM"):
+        for k in (73, "73", "LAW73", "HILL_THERM",
+                  "MAT_LAW73", "MAT_HILL_THERM", "LAW73_HILL_THERM"):
             MAT_PHYSICS_REGISTRY[k] = build_law73
     except Exception:
         pass

@@ -154,7 +154,7 @@ def eps_f(fail, triax: np.ndarray) -> np.ndarray:
     return np.maximum(e, _FLOOR)
 
 
-def solid_step(fail, sig, d_epsp, deps, dt, dama):
+def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     """3-D damage step (deps/dt unused: no rate term in BIQUAD)."""
     sm = (sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0
     s0, s1, s2 = sig[:, 0] - sm, sig[:, 1] - sm, sig[:, 2] - sm
@@ -165,7 +165,7 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama):
     return dama >= 1.0
 
 
-def shell_step(fail, sig, d_epsp, deps, dt, dama):
+def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     """Plane-stress damage step for one layer."""
     sm = (sig[:, 0] + sig[:, 1]) / 3.0
     vm = np.sqrt(sig[:, 0] ** 2 - sig[:, 0] * sig[:, 1] + sig[:, 1] ** 2

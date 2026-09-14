@@ -381,7 +381,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     SAME kinematics; the explicit call is bit-identical)."""
     if group is None or getattr(group, "n", 0) == 0 or len(getattr(group, "conn", [])) == 0:
         return np.zeros(0)
-    if dt <= 0.0:
+    if dt is None or dt <= 0.0:
         return group.state.get("dt0", np.zeros(group.n))
     if v is None:
         v = np.zeros_like(x)

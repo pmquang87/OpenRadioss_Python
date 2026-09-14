@@ -346,6 +346,16 @@ class TestSolidStep:
         assert not broken[0]
         assert dama[0] == pytest.approx(0.5)
 
+    def test_solid_step_signature_accepts_tstar(self, fail_obj):
+        """solid_step signature accepts tstar for compatibility across failure criteria."""
+        sig = np.array([[100.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+        d_epsp = np.array([0.05])
+        dama = np.zeros(1)
+        tstar = np.array([0.5])
+        broken = biquad.solid_step(fail_obj, sig, d_epsp, deps=None, dt=1e-4, dama=dama, tstar=tstar)
+        assert not broken[0]
+        assert dama[0] == pytest.approx(0.25)
+
 
 # ============================================================================
 # 6. Plane-Stress Shell Damage Step (shell_step)
@@ -396,6 +406,20 @@ class TestShellStep:
 
         assert not broken[0]
         # 0.075 / 0.15 = 0.50
+        assert dama[0] == pytest.approx(0.50)
+
+    def test_shell_step_signature_accepts_tstar_and_eps_tot(self, fail_obj):
+        """shell_step signature accepts tstar and eps_tot for compatibility."""
+        sig = np.array([[100.0, 100.0, 0.0]])
+        d_epsp = np.array([0.075])
+        dama = np.zeros(1)
+        tstar = np.array([0.5])
+        eps_tot = np.array([[0.01, 0.01, 0.0]])
+        broken = biquad.shell_step(
+            fail_obj, sig, d_epsp, deps=None, dt=1e-4, dama=dama,
+            tstar=tstar, eps_tot=eps_tot
+        )
+        assert not broken[0]
         assert dama[0] == pytest.approx(0.50)
 
 

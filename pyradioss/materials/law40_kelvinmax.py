@@ -141,7 +141,7 @@ def build_law40(rec) -> Material:
     params = {
         "E": e, "nu": nu,
         "K": ak, "G": gsum,
-        "K40": ak, "G_inf": g_inf, "G": gs, "beta": betas,
+        "K40": ak, "G_inf": g_inf, "G_branches": gs, "beta": betas,
         "astas": astas if astas > 1e-20 else _INF,
         "bstas": bstas if bstas > 1e-20 else _INF,
         "vmisk": vmisk if vmisk > 1e-20 else _INF,
@@ -226,7 +226,8 @@ def solid_update(mat, sig, deps, *args, **kwargs):
 
     ak = p["K40"]
     g0 = 2.0 * p["G_inf"]
-    gt = g0 + 2.0 * sum(p["G"])
+    g_branches = p.get("G_branches", p["G"])
+    gt = g0 + 2.0 * sum(g_branches)
 
     # deviatoric total strain (tensor shears) and deviatoric strain rate
     ev = (eps[:, 0] + eps[:, 1] + eps[:, 2]) / 3.0
@@ -255,7 +256,7 @@ def solid_update(mat, sig, deps, *args, **kwargs):
 
         # exact branch integration (the jbm037 block, verbatim)
         for j in range(5):
-            gj = 2.0 * p["G"][j]
+            gj = 2.0 * g_branches[j]
             if gj == 0.0:
                 continue
             beta = p["beta"][j]
@@ -277,7 +278,7 @@ def solid_update(mat, sig, deps, *args, **kwargs):
     else:
         s = g0 * ed
         for j in range(5):
-            if p["G"][j] != 0.0:
+            if g_branches[j] != 0.0:
                 s += uv[:, 10 + 6 * j:16 + 6 * j]
 
         sig[:] = s
@@ -322,8 +323,9 @@ def consistent_solid_tangent(mat: Material, sig: np.ndarray, epsp=None,
     else:
         dt_val = float(dt) if dt is not None else 0.0
     g_eff = g_inf
+    g_branches = p.get("G_branches", p["G"])
     for j in range(5):
-        gj = p["G"][j]
+        gj = g_branches[j]
         if gj == 0.0:
             continue
         beta = p["beta"][j]

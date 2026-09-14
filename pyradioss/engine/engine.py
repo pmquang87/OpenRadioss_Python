@@ -390,7 +390,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     # their inertia in its 6-DOF EOM (see rigid_body.finalize_mass)
     for rb in rbodies:
         rb.finalize_mass(mass_eff)
-    inv_mass = 1.0 / mass_eff
+    inv_mass = np.where(mass_eff > 0.0, 1.0 / np.maximum(mass_eff, 1e-30), 0.0)
     has_inertia = model.inertia > 0.0
     inv_inertia = np.where(has_inertia, 1.0 / np.maximum(model.inertia, 1e-30),
                            0.0)

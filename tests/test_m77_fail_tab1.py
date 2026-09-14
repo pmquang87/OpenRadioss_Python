@@ -42,3 +42,16 @@ def test_fail_tab1_parse():
     finally:
         os.remove(path)
 
+
+def test_tab1_zero_base_power_guard():
+    """Zero base with negative exponent in DP = DN * DD**(1 - 1/DN) guarded."""
+    import numpy as np
+    from types import SimpleNamespace
+    from pyradioss.failure import tab1
+
+    # If dn = 0.5, 1 - 1/dn = -1.0. If dd = 0, 0**(-1) would raise ZeroDivisionError.
+    fail = SimpleNamespace(params={"n": 0.5, "d": 0.0, "xscale1": 1.0})
+    dama = np.zeros(1)
+    tab1._accumulate(fail, dama, np.array([0.02]), np.array([0.1]))
+    assert dama[0] == pytest.approx(0.2)
+

@@ -188,7 +188,7 @@ def load_t01(path: str) -> T01Data:
     """
     columns: List[str] = []
     rows: List[List[float]] = []
-    with open(path, "r") as fh:
+    with open(path, "r", encoding="utf-8", errors="replace") as fh:
         for raw in fh:
             line = raw.strip()
             if not line or line.startswith("#"):
@@ -356,7 +356,7 @@ class GuiConfig:
 
     def load(self) -> "GuiConfig":
         try:
-            with open(self.path, "r") as fh:
+            with open(self.path, "r", encoding="utf-8", errors="replace") as fh:
                 stored = json.load(fh)
             if isinstance(stored, dict):
                 for key in self.DEFAULTS:
@@ -368,8 +368,10 @@ class GuiConfig:
 
     def save(self) -> None:
         try:
-            os.makedirs(os.path.dirname(self.path), exist_ok=True)
-            with open(self.path, "w") as fh:
+            dirname = os.path.dirname(self.path)
+            if dirname:
+                os.makedirs(dirname, exist_ok=True)
+            with open(self.path, "w", encoding="utf-8", errors="replace") as fh:
                 json.dump(self.data, fh, indent=2)
         except OSError:
             pass  # a read-only home must not crash the GUI

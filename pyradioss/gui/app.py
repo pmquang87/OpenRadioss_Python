@@ -332,8 +332,8 @@ class PyradiossGUI:
         self.post_runner = postproc.PostProcRunner(
             run_dir, [action], exec_dir=self.exec_dir_var.get().strip()
             or None, python_exe=None)
-        self.refresh_artifacts()                # greys the buttons (busy)
         self.post_runner.start()
+        self.refresh_artifacts()                # greys the buttons (busy)
 
     # ------------------------------------------------------------------
     # Job panel actions
@@ -363,9 +363,14 @@ class PyradiossGUI:
         if self.runner is not None and self.runner.is_running():
             messagebox.showinfo("pyradioss", "A job is already running.")
             return
+        try:
+            nthread = max(0, int(self.nthread_var.get()))
+        except (ValueError, tk.TclError):
+            messagebox.showerror("pyradioss", "Thread count must be a non-negative integer.")
+            return
         # persist current selections
         self.config.set("backend", self.backend_var.get())
-        self.config.set("nthread", int(self.nthread_var.get()))
+        self.config.set("nthread", nthread)
         self._persist_post_opts()
 
         post_actions = []
@@ -386,7 +391,7 @@ class PyradiossGUI:
 
         self.runner = JobRunner(
             deck, backend=self.backend_var.get(),
-            nthread=int(self.nthread_var.get()),
+            nthread=nthread,
             post_actions=post_actions,
             exec_dir=self.exec_dir_var.get().strip() or None)
         self.runner.start()
@@ -490,6 +495,8 @@ class PyradiossGUI:
 
     def _post_all_done(self, results: dict) -> None:
         self.status_var.set("Post-processing finished.")
+        if self.post_runner is not None:
+            self.post_runner = None
         self.refresh_artifacts()
 
     # ------------------------------------------------------------------

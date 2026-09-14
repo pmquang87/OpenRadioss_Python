@@ -45,7 +45,7 @@ def alive_segment_mask(model: Model, seg_gtype: np.ndarray,
         off = getattr(model, gname).state.get("off")
         if off is None:
             continue
-        sel = seg_gtype == gname
+        sel = (seg_gtype == gname) & (seg_elem >= 0)
         mask[sel] = off[seg_elem[sel]] > 0.0
     return mask
 

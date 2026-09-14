@@ -218,7 +218,7 @@ def _forces_axial(group, x, v, dt, fint, idx):
 
     # elastic part of the work goes to internal energy; damping work too
     # (the original books spring damping into internal energy as well).
-    if dt > 0.0:
+    if dt is not None and dt > 0.0:
         st["eint"][idx] += 0.5 * (F_old + F) * Ldot * dt
 
     mass = np.maximum(st["mass"][idx], EM20)
@@ -348,7 +348,7 @@ def _forces_axial_type32(group, x, v, dt, fint, idx):
             uvar3[mask] = cur_uvar3
 
     F_old = st["force"][idx].copy()
-    if dt > 0.0:
+    if dt is not None and dt > 0.0:
         st["eint"][idx] += 0.5 * (F_old + F) * Ldot * dt
     st["force"][idx] = F
     st["uvar1"][idx] = uvar1

@@ -1759,7 +1759,7 @@ LAYOUTS: Dict[str, List[int]] = {
     #                                          DIR, FRAME_ID, GRNOD_ID)
     "INIVEL_AXIS_1": [10, 10, 10],
     # LOADS/inivel_axis.cfg: CARD("%20lg"*4, Vxt, Vyt, Vzt, VR)
-    "INIVEL_AXIS_2": [20, 20, 20, 20] * 4,
+    "INIVEL_AXIS_2": [20, 20, 20, 20],
     # LOADS/grav.cfg (radioss51): fct DIR skew sens grnod <blank>
     #                             Ascale_x Fscale_Y
     "MOVE_FUNCT": [20] * 4,

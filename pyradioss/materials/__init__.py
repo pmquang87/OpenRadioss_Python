@@ -1222,8 +1222,8 @@ def _register_law73():
         from ..input.mat_reader import MAT_PHYSICS_REGISTRY
         builder = getattr(law73_hill_therm, "build_law73", None)
         if builder is not None:
-            for k in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL",
-                      "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL",
+            for k in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL",
+                      "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL",
                       "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
                 MAT_PHYSICS_REGISTRY[k] = builder
     except Exception:
@@ -1269,8 +1269,8 @@ def _register_law87():
         from ..input.mat_reader import MAT_PHYSICS_REGISTRY
         builder = getattr(law87_barlat2000, "build_law87", None)
         if builder is not None:
-            for k in (87, "87", "LAW87", "BARLAT_2000", "BARLAT2000_2D",
-                      "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT_2000",
+            for k in (87, "87", "LAW87", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D",
+                      "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT2000", "MAT_BARLAT_2000",
                       "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000", "LAW87_BARLAT2000"):
                 MAT_PHYSICS_REGISTRY[k] = builder
     except Exception:
@@ -1807,8 +1807,8 @@ MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
     "MAT_LAW163": solid_update_law163, "MAT_CRUSHABLE_FOAM": solid_update_law163,
     "MAT_CRUSH_FOAM": solid_update_law163, "LAW163_CRUSHABLE_FOAM": solid_update_law163,
     73: solid_update_law73, "73": solid_update_law73, "LAW73": solid_update_law73,
-    "BARLAT2000": solid_update_law73, "HILL_THERM": solid_update_law73, "THERM_HILL": solid_update_law73,
-    "MAT_LAW73": solid_update_law73, "MAT_BARLAT2000": solid_update_law73,
+    "HILL_THERM": solid_update_law73, "THERM_HILL": solid_update_law73,
+    "MAT_LAW73": solid_update_law73,
     "MAT_HILL_THERM": solid_update_law73, "MAT_THERM_HILL": solid_update_law73,
     "LAW73_HILL_THERM": solid_update_law73, "LAW73_THERM_HILL": solid_update_law73,
     66: solid_update_law66, "66": solid_update_law66, "LAW66": solid_update_law66,
@@ -1821,9 +1821,9 @@ MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
     "MAT_LAW74": solid_update_law74, "MAT_HILL_3D": solid_update_law74,
     "MAT_ORTH_PLAS": solid_update_law74, "LAW74_HILL_3D": solid_update_law74,
     87: solid_update_law87, "87": solid_update_law87, "LAW87": solid_update_law87,
-    "BARLAT_2000": solid_update_law87, "BARLAT2000_2D": solid_update_law87,
+    "BARLAT2000": solid_update_law87, "BARLAT_2000": solid_update_law87, "BARLAT2000_2D": solid_update_law87,
     "BARLAT_YLD2000": solid_update_law87, "MAT_LAW87": solid_update_law87,
-    "MAT_BARLAT_2000": solid_update_law87, "MAT_BARLAT2000_2D": solid_update_law87,
+    "MAT_BARLAT2000": solid_update_law87, "MAT_BARLAT_2000": solid_update_law87, "MAT_BARLAT2000_2D": solid_update_law87,
     "MAT_BARLAT_YLD2000": solid_update_law87, "LAW87_BARLAT2000": solid_update_law87,
     88: solid_update_law88, "88": solid_update_law88, "LAW88": solid_update_law88,
     "HYP_TAB": solid_update_law88, "TAB_HYP": solid_update_law88,
@@ -1889,8 +1889,8 @@ MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
     "MAT_LAW163": shell_update_law163, "MAT_CRUSHABLE_FOAM": shell_update_law163,
     "MAT_CRUSH_FOAM": shell_update_law163, "LAW163_CRUSHABLE_FOAM": shell_update_law163,
     73: shell_update_law73, "73": shell_update_law73, "LAW73": shell_update_law73,
-    "BARLAT2000": shell_update_law73, "HILL_THERM": shell_update_law73, "THERM_HILL": shell_update_law73,
-    "MAT_LAW73": shell_update_law73, "MAT_BARLAT2000": shell_update_law73,
+    "HILL_THERM": shell_update_law73, "THERM_HILL": shell_update_law73,
+    "MAT_LAW73": shell_update_law73,
     "MAT_HILL_THERM": shell_update_law73, "MAT_THERM_HILL": shell_update_law73,
     "LAW73_HILL_THERM": shell_update_law73, "LAW73_THERM_HILL": shell_update_law73,
     66: shell_update_law66, "66": shell_update_law66, "LAW66": shell_update_law66,
@@ -1903,9 +1903,9 @@ MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
     "MAT_LAW74": shell_update_law74, "MAT_HILL_3D": shell_update_law74,
     "MAT_ORTH_PLAS": shell_update_law74, "LAW74_HILL_3D": shell_update_law74,
     87: shell_update_law87, "87": shell_update_law87, "LAW87": shell_update_law87,
-    "BARLAT_2000": shell_update_law87, "BARLAT2000_2D": shell_update_law87,
+    "BARLAT2000": shell_update_law87, "BARLAT_2000": shell_update_law87, "BARLAT2000_2D": shell_update_law87,
     "BARLAT_YLD2000": shell_update_law87, "MAT_LAW87": shell_update_law87,
-    "MAT_BARLAT_2000": shell_update_law87, "MAT_BARLAT2000_2D": shell_update_law87,
+    "MAT_BARLAT2000": shell_update_law87, "MAT_BARLAT_2000": shell_update_law87, "MAT_BARLAT2000_2D": shell_update_law87,
     "MAT_BARLAT_YLD2000": shell_update_law87, "LAW87_BARLAT2000": shell_update_law87,
     88: shell_update_law88, "88": shell_update_law88, "LAW88": shell_update_law88,
     "HYP_TAB": shell_update_law88, "TAB_HYP": shell_update_law88,
