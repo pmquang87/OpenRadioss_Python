@@ -108,27 +108,29 @@ def fit(params: dict) -> None:
             s_flag = 2
 
     if s_flag == 2:
-        # P1 = (1/3, c3), S1 = (1/sqrt(3), S1Y) from raw curve
+        # P1 = (1/3, c3), S1 = (1/sqrt(3), c4), P2 = (2/3, c5)
+        # matching biquad_coefficients.F and fail_biquad_s.F:180-202
         sqr3 = np.sqrt(3.0)
-        raw_ah, raw_bh, raw_ch = _parabola(1.0 / 3.0, c3, 2.0 / 3.0, c4, 1.0, c5)
         s1x = 1.0 / sqr3
+        raw_ah, raw_bh, raw_ch = _parabola(1.0 / 3.0, c3, s1x, c4, 2.0 / 3.0, c5)
         s1y = raw_ah * s1x**2 + raw_bh * s1x + raw_ch
         
-        # Parabola 2a through P1 with zero slope at S1
+        # Parabola 2a through P1=(1/3, c3) with zero slope at S1=(s1x, s1y)
         p1x, p1y = 1.0 / 3.0, c3
         a1 = (p1y - s1y) / (p1x - s1x)**2
         b1 = -2.0 * a1 * s1x
         c1_c = a1 * s1x**2 + s1y
         params["phigh_1"] = (a1, b1, c1_c)
         
-        # Parabola 2b through P2 with zero slope at S1
-        p2x, p2y = 2.0 / 3.0, c4
+        # Parabola 2b through P2=(2/3, c5) with zero slope at S1=(s1x, s1y)
+        p2x, p2y = 2.0 / 3.0, c5
         a2 = (p2y - s1y) / (p2x - s1x)**2
         b2 = -2.0 * a2 * s1x
         c2_c = a2 * s1x**2 + s1y
         params["phigh_2"] = (a2, b2, c2_c)
     else:
-        params["phigh"] = _parabola(1.0 / 3.0, c3, 2.0 / 3.0, c4, 1.0, c5)
+        sqr3 = np.sqrt(3.0)
+        params["phigh"] = _parabola(1.0 / 3.0, c3, 1.0 / sqr3, c4, 2.0 / 3.0, c5)
 
 
 def eps_f(fail, triax: np.ndarray) -> np.ndarray:
@@ -163,8 +165,9 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     s0, s1, s2 = sig[:, 0] - sm, sig[:, 1] - sm, sig[:, 2] - sm
     vm = np.sqrt(1.5 * (s0 ** 2 + s1 ** 2 + s2 ** 2)
                  + 3.0 * (sig[:, 3] ** 2 + sig[:, 4] ** 2 + sig[:, 5] ** 2))
-    triax = np.clip(sm / np.maximum(vm, _TINY), -2.0 / 3.0, 2.0 / 3.0)
+    triax = sm / np.maximum(vm, _TINY)
     dama += np.maximum(d_epsp, 0.0) / eps_f(fail, triax)
+    np.minimum(dama, 1.0, out=dama)
     return dama >= 1.0
 
 
@@ -173,6 +176,7 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     sm = (sig[:, 0] + sig[:, 1]) / 3.0
     vm = np.sqrt(sig[:, 0] ** 2 - sig[:, 0] * sig[:, 1] + sig[:, 1] ** 2
                  + 3.0 * sig[:, 2] ** 2)
-    triax = np.clip(sm / np.maximum(vm, _TINY), -2.0 / 3.0, 2.0 / 3.0)
+    triax = sm / np.maximum(vm, _TINY)
     dama += np.maximum(d_epsp, 0.0) / eps_f(fail, triax)
+    np.minimum(dama, 1.0, out=dama)
     return dama >= 1.0

@@ -52,18 +52,11 @@ def _get_state(fail, dama):
         snc_cache = _get_state._snc
 
     if base_id not in snc_cache:
-        # If there's a single existing entry of matching length, migrate it (for state copy / restart)
-        if len(snc_cache) == 1:
-            old_id, old_entry = next(iter(snc_cache.items()))
-            if isinstance(old_entry, dict) and "epsp" in old_entry and old_entry["epsp"].shape[0] == n:
-                snc_cache[base_id] = old_entry
-                del snc_cache[old_id]
-        if base_id not in snc_cache:
-            snc_cache[base_id] = {
-                "epsp": np.zeros(n, dtype=np.float64),
-                "pla1": np.zeros(n, dtype=np.float64),
-                "pla2": np.zeros(n, dtype=np.float64),
-            }
+        snc_cache[base_id] = {
+            "epsp": np.zeros(n, dtype=np.float64),
+            "pla1": np.zeros(n, dtype=np.float64),
+            "pla2": np.zeros(n, dtype=np.float64),
+        }
 
     snc = snc_cache[base_id]
     if snc["epsp"].shape[0] != n:

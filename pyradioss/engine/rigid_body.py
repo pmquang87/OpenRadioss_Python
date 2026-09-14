@@ -405,7 +405,8 @@ class RigidBodyEngine:
                     e = axes[d]
                     w -= e * float(w @ e)
 
-    def _apply_skew_drives(self, x: np.ndarray, t: float, dt: float) -> float:
+    def _apply_skew_drives(self, x: np.ndarray, t: float, dt: float,
+                           v_ref_old: Optional[np.ndarray] = None) -> float:
         """Impose a skewed /IMPVEL or /IMPDISP that drives the master, on
         the body's reference velocity (M39); returns its external work.
 
@@ -425,7 +426,7 @@ class RigidBodyEngine:
                 continue
             e = self.skews.axes[row][dof]
             if x0 is None:                                   # /IMPVEL
-                vimp = scale * fct.eval(t * facx)
+                vimp = scale * fct.eval((t - 0.5 * dt) * facx)
             else:                                            # /IMPDISP
                 if dt <= 0.0:
                     continue
@@ -435,7 +436,8 @@ class RigidBodyEngine:
             vref_new = vimp - float(
                 cross3(self.w, x[self.master] - self.x_ref) @ e)
             dv = vref_new - float(self.v_ref @ e)
-            wext += self.M * dv * vref_new
+            v_old_e = float(v_ref_old @ e) if v_ref_old is not None else float(self.v_ref @ e)
+            wext += self.M * dv * 0.5 * (v_old_e + vref_new)
             self.v_ref += e * dv
         return wext
 
@@ -481,15 +483,17 @@ class RigidBodyEngine:
         self.m_res = T.copy()
 
         wext = 0.0
+        v_ref_old = self.v_ref.copy()
         if not self.pivot:
             a = F / self.M
             self.v_ref = self.v_ref + a * dt
+            t_mid = t_next - 0.5 * dt
             for dof, fct, scale, facx, t0, t1 in self.drives:      # moving rigid die
                 if t_next < t0 or t_next > t1:
                     continue
-                vimp = scale * fct.eval(t_next * facx)
+                vimp = scale * fct.eval(t_mid * facx)
                 dv = vimp - self.v_ref[dof]
-                wext += self.M * dv * vimp           # J . v_imp, as /IMPVEL
+                wext += self.M * dv * 0.5 * (v_ref_old[dof] + vimp)           # J . v_imp, as /IMPVEL
                 self.v_ref[dof] = vimp
             # master /IMPDISP (M37): the master dof lands on x0 + d(t)
             # exactly — velocity from the CURRENT master position, with
@@ -503,12 +507,12 @@ class RigidBodyEngine:
                 vref_new = vimp - cross3(
                     self.w, x[self.master] - self.x_ref)[dof]
                 dv = vref_new - self.v_ref[dof]
-                wext += self.M * dv * vref_new       # J . v_imp booking
+                wext += self.M * dv * 0.5 * (v_ref_old[dof] + vref_new)       # J . v_imp booking
                 self.v_ref[dof] = vref_new
             # the same drives named in a /SKEW (M39) — imposed along the
             # skew axis, before /BCS (which wins, as in the reference where
             # bcs10 runs after fixvel)
-            wext += self._apply_skew_drives(x, t_next, dt)
+            wext += self._apply_skew_drives(x, t_next, dt, v_ref_old)
             self.v_ref[self.fix_tra] = 0.0
 
         # angular momentum update + spin from the co-rotated inertia

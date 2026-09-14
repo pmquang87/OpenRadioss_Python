@@ -611,28 +611,43 @@ def qbat_pre_warp(xe, ve, vre, dt):
     return E, area, lc, vdef3, cdet_w, vdef_w2, bmw_w, bmfw_w, bfw_w, bcq_w, tc_w, vqn_w, corel_w, di_w, x13n_w, x24n_w, y13n_w, y24n_w
     
 def qbat_post_warp(n, E, off, thick, volg, forpg, mompg, for_mean, cdet_w, bmw_w, bmfw_w, bfw_w, bcq_w, tc_w, vqn_w, corel_w, di_w, x13n, x24n, y13n, y24n):
-    from pyradioss.elements.shell_qbat import _fori_warp
+    from pyradioss.elements.shell_qbat import _fori_warp, _cbaproj
     vf = np.zeros((n, 3, 4))
     vm = np.zeros((n, 2, 4))
-    
+
     g = {
+        "n": n,
+        "i_w": np.arange(n),
+        "i_f": np.empty(0, dtype=np.int64),
         "E": E, "area": volg / np.maximum(thick, 1e-20), "thick": thick,
         "vqn": vqn_w, "corel": corel_w, "di": di_w,
         "x13n": x13n, "x24n": x24n, "y13n": y13n, "y24n": y24n
     }
-    
-    ops = []
+
     for ng in range(4):
-        ops.append((bmw_w[:, ng], bmfw_w[:, ng], bfw_w[:, ng], bcq_w[:, ng], tc_w[:, ng]))
-        
-    _fori_warp(vf, vm, g, ops, cdet_w, forpg, mompg, forpg[:, :, 3:5]) # q_pg is forpg[..., 3:5]! wait, check shell_qbat.py!
-    
-    # vf (n, 3, 4) -> fg (n, 4, 3)
-    # vm (n, 2, 4) -> mg (n, 4, 3)
-    
-    from pyradioss.elements.shell_qbat import _cbaproj
+        ops = (bmw_w[:, ng], bmfw_w[:, ng], bfw_w[:, ng], bcq_w[:, ng], tc_w[:, ng])
+        npg = forpg[:, ng, :3] * thick[:, None]
+        mpg = mompg[:, ng] * (thick[:, None] ** 2)
+        q_pg = np.column_stack([forpg[:, ng, 4] * thick, forpg[:, ng, 3] * thick])
+        _fori_warp(vf, vm, g, ops, cdet_w[:, ng], npg, mpg, q_pg)
+
+    thoff = volg * for_mean[:, 2] * off
+    sx1 = -thoff * x24n
+    sy1 = thoff * y24n
+    sx2 = thoff * x13n
+    sy2 = -thoff * y13n
+    vf[:, 0, 0] += sx1
+    vf[:, 1, 0] += sy1
+    vf[:, 0, 1] += sx2
+    vf[:, 1, 1] += sy2
+    vf[:, 0, 2] -= sx1
+    vf[:, 1, 2] -= sy1
+    vf[:, 0, 3] -= sx2
+    vf[:, 1, 3] -= sy2
+
     fg, mg = _cbaproj(g, vf, vm, off)
     return fg, mg
+
 
 
 

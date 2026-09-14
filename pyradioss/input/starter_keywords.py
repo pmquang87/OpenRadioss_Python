@@ -5258,8 +5258,11 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     params: Dict[str, float] = {}
 
     if ptype == 1:  # SHELL
+        def_sh = getattr(model, "def_shell", {}) or {}
         params = {"thick": 1.0, "nip": 3, "hm": 0.01, "hf": 0.01, "hr": 0.01,
-                  "ishell": 0}
+                  "ishell": def_sh.get("ishell", 0)}
+        if "ish3n" in def_sh:
+            params["ish3n"] = def_sh["ish3n"]
         if block.fixed:
             # REAL layout (cfg prop_p1_shell.cfg radioss2020; M37):
             # flags / Hm Hf Hr Dm Dn / N Istrain Thick Ashear Ithick
@@ -5269,8 +5272,9 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             # missing' guard when the hourglass card was blank)
             if cards and not cards[0].is_blank:
                 f = cards[0].cut("PROP_SHELL_FLAGS")
-                params["ishell"] = _ival(f[0])
-                if len(f) > 2:
+                if f[0].strip():
+                    params["ishell"] = _ival(f[0])
+                if len(f) > 2 and f[2].strip():
                     params["ish3n"] = _ival(f[2])
             hm_d, hf_d, hr_d = _hourglass_defaults(params["ishell"])
             if len(cards) >= 2 and not cards[1].is_blank:
@@ -5426,7 +5430,13 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 log.error(f"/PROP/SPRING/{block.user_id}: data card missing",
                           block.source)
                 return
-            m, k, c = _floats(cards[0], 3)
+            if len(cards) >= 2 and len(cards[0].tokens()) <= 2:
+                m = _floats(cards[0], 1)[0]
+                f1 = _floats(cards[1], 2)
+                k = f1[0] if len(f1) > 0 else 0.0
+                c = f1[1] if len(f1) > 1 else 0.0
+            else:
+                m, k, c = _floats(cards[0], 3)
             params = {"mass": m, "k": k, "c": c}
     elif ptype == 5:  # RIVET
         wflag = 0
@@ -5575,22 +5585,26 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         }
     elif ptype == 14:  # SOLID
         from ..common.constants import DEFAULT_HOURGLASS, DEFAULT_QA, DEFAULT_QB
-        params = {"qa": DEFAULT_QA, "qb": DEFAULT_QB, "h": DEFAULT_HOURGLASS}
+        def_so = getattr(model, "def_solid", {}) or {}
+        params = {"qa": DEFAULT_QA, "qb": DEFAULT_QB, "h": DEFAULT_HOURGLASS,
+                  "isolid": def_so.get("isolid", 14),
+                  "ismstr": def_so.get("ismstr", 0)}
         if block.fixed:
             if cards and not cards[0].is_blank:
                 c0 = [cards[0].raw[i:i+10] for i in range(0, min(80, len(cards[0].raw)), 10)]
-                params["isolid"] = _ival(c0[0]) if len(c0) > 0 and c0[0].strip() else 14
-                params["ismstr"] = _ival(c0[1]) if len(c0) > 1 and c0[1].strip() else 0
-                params["icpre"] = _ival(c0[2]) if len(c0) > 2 and c0[2].strip() else 0
-                params["inpts_r"] = _ival(c0[3]) if len(c0) > 3 and c0[3].strip() else 1
-                params["inpts_s"] = _ival(c0[4]) if len(c0) > 4 and c0[4].strip() else 1
-                params["inpts_t"] = _ival(c0[5]) if len(c0) > 5 and c0[5].strip() else 1
+                if len(c0) > 0 and c0[0].strip():
+                    params["isolid"] = _ival(c0[0])
+                if len(c0) > 1 and c0[1].strip():
+                    params["ismstr"] = _ival(c0[1])
+                params["icpre"] = _ival(c0[3]) if len(c0) > 3 and c0[3].strip() else 0
+                nbp = _ival(c0[5]) if len(c0) > 5 and c0[5].strip() else 1
+                params["inpts_r"] = nbp
+                params["inpts_s"] = nbp
+                params["inpts_t"] = nbp
                 params["i_rot"] = _ival(c0[6]) if len(c0) > 6 and c0[6].strip() else 0
                 params["iframe"] = _ival(c0[7]) if len(c0) > 7 and c0[7].strip() else 0
                 if len(cards[0].raw) > 80:
                     params["dn"] = _fval(cards[0].raw[80:100])
-                if len(cards[0].raw) >= 70:
-                    params["itetra4"] = _ival(cards[0].raw[60:70])
             if len(cards) >= 2 and not cards[1].is_blank:
                 f = cards[1].cut("F20X5")
                 params["qa"] = _fval(f[0]) or DEFAULT_QA
@@ -5608,15 +5622,18 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         else:
             if len(cards) >= 3:
                 t0 = cards[0].tokens()
-                params["isolid"] = int(float(t0[0])) if len(t0) > 0 else 14
-                params["ismstr"] = int(float(t0[1])) if len(t0) > 1 else 0
+                if len(t0) > 0:
+                    params["isolid"] = int(float(t0[0]))
+                if len(t0) > 1:
+                    params["ismstr"] = int(float(t0[1]))
                 params["icpre"] = int(float(t0[2])) if len(t0) > 2 else 0
-                params["inpts_r"] = int(float(t0[3])) if len(t0) > 3 else 1
-                params["inpts_s"] = int(float(t0[4])) if len(t0) > 4 else 1
-                params["inpts_t"] = int(float(t0[5])) if len(t0) > 5 else 1
-                params["i_rot"] = int(float(t0[6])) if len(t0) > 6 else 0
-                params["iframe"] = int(float(t0[7])) if len(t0) > 7 else 0
-                params["dn"] = float(t0[8]) if len(t0) > 8 else 0.0
+                nbp = int(float(t0[3])) if len(t0) > 3 else 1
+                params["inpts_r"] = nbp
+                params["inpts_s"] = nbp
+                params["inpts_t"] = nbp
+                params["i_rot"] = int(float(t0[4])) if len(t0) > 4 else 0
+                params["iframe"] = int(float(t0[5])) if len(t0) > 5 else 0
+                params["dn"] = float(t0[6]) if len(t0) > 6 else 0.0
 
                 t1 = cards[1].tokens()
                 params["qa"] = float(t1[0]) if len(t1) > 0 else DEFAULT_QA

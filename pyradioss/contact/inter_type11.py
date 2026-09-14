@@ -146,6 +146,7 @@ class ContactType11:
         self._filt_keys = np.zeros(0, dtype=np.int64)
         self._filt_vals = np.zeros((0, 3))
         self.dt_bound = np.inf
+        self.idel = int(getattr(self.itf, "idel", 0) or 0)
         self.deletable = False
         self.es_alive = np.zeros(0, dtype=bool)
         self.em_alive = np.zeros(0, dtype=bool)
@@ -241,8 +242,10 @@ class ContactType11:
         self.dt_bound = self._compute_dt_bound(m_phys)
 
         # ---- deletion bookkeeping ------------------------------------------
-        self.deletable = (tracking.any_deletable(model, self.es_gtype)
-                          or tracking.any_deletable(model, self.em_gtype))
+        self.idel = int(getattr(itf, "idel", 0) or 0)
+        self.deletable = (self.idel >= 1 and
+                          (tracking.any_deletable(model, self.es_gtype)
+                           or tracking.any_deletable(model, self.em_gtype)))
         self.es_alive = np.ones(len(self.es), dtype=bool)
         self.em_alive = np.ones(len(self.em), dtype=bool)
 
@@ -346,8 +349,10 @@ class ContactType11:
         contract as ContactType7.forces (the Engine books the exact
         midstep contact energy from ``fcont``, see engine.py; ``stifn``
         is the /DT/NODA nodal-stiffness accumulation, M6)."""
-        if len(self.es) == 0 or len(self.em) == 0 or dt <= 0.0:
+        if len(self.es) == 0 or len(self.em) == 0:
             return 0.0, np.inf
+        if dt <= 0.0:
+            return 0.0, self.dt_bound if hasattr(self, "dt_bound") else np.inf
 
         if t is not None:
             if t < self.tstart or t > self.tstop:
@@ -477,8 +482,8 @@ class ContactType11:
                                          self.fric_c, pres, vt_mag)
             else:
                 mu = self.fric
-            Ft = mu * Fn_pos * vt_mag / (
-                vt_mag + 1e-3 * gap_ref / max(dt, EM20))
+            v_ref = np.maximum(1e-3 * gap_ref / max(dt, EM20), EM20)
+            Ft = mu * Fn_pos * vt_mag / (vt_mag + v_ref)
             ftvec = -(Ft / np.maximum(vt_mag, EM20))[:, None] * vt
             if self.ifq > 0:
                 alpha = friction.filter_alpha(self.ifq, self.xfiltr, dt)

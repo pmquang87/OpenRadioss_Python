@@ -789,6 +789,7 @@ def init_group(group, model, log):
         pts, wts = zw[isl]
         xe_sl = xe[sl]
         n_sl = len(xe_sl)
+        vol_sl = np.zeros(n_sl)
         for (r, s, t), w in zip(pts, wts):
             ni, dnidr, dnids, dnidt = s16rst(r, s, t)
             for i in range(n_sl):
@@ -798,7 +799,8 @@ def init_group(group, model, log):
                     xx[1, node_i] = xe_sl[i, node_i, 1]
                     xx[2, node_i] = xe_sl[i, node_i, 2]
                 _, _, _, det = s16deri3(xx, dnidr, dnids, dnidt)
-                vol[sl.start + i] += det * w
+                vol_sl[i] += det * w
+        vol[sl] += vol_sl
 
     vol = np.maximum(vol, 1e-20)
     lc = vol ** (1.0 / 3.0)
@@ -955,7 +957,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         pts, wts = st["zw"][isl]
         xe_sl = xe[sl]
         ve_sl = ve[sl]
-        n_sl = sl.stop - sl.start
+        n_sl = len(xe_sl)
         
         c_sound_default = _safe_sound_speed(mat)
         c_spd[sl] = c_sound_default
@@ -1016,7 +1018,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         conn_flat = conn.reshape(-1)
         fint_e_flat = fint_e.reshape(-1, 3)
         valid = conn_flat >= 0
-        scatter_add3(fint, conn_flat[valid], fint_e_flat[valid], st.get('color_indices'), st.get('color_offsets'))
+        scatter_add3(fint, conn_flat[valid], -fint_e_flat[valid], st.get('color_indices'), st.get('color_offsets'))
     
     # Calculate stable time step
     dt_crit = st["lc"] / np.maximum(c_spd, 1e-20)

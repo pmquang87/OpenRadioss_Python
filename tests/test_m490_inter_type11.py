@@ -555,6 +555,7 @@ def test_forces_element_deletion_release():
     model.lines[1].seg_gtype = np.array(["shells"], dtype="<U8")
     model.lines[1].seg_elem = np.array([0], dtype=np.int64)
 
+    itf.idel = 1
     ct = ContactType11(itf, model, MessageLog())
     assert ct.deletable is True
 

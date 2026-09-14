@@ -1130,8 +1130,8 @@ def forces(group, x, v, vr, dt, fint, mint):
         py1 = B2[idx, 0] * area[idx]
         py2 = B2[idx, 1] * area[idx]
 
-        dm[idx, 0] += exz2
-        dm[idx, 1] += eyz2
+        dm[idx, 0] -= exz2
+        dm[idx, 1] -= eyz2
 
         corr_x = np.zeros((np.count_nonzero(mask4), 4))
         corr_x[:, 0] = -exzz2 - exz2 * py2

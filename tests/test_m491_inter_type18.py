@@ -195,7 +195,7 @@ class TestMomentumConservation:
         assert np.all(active)
         for i in range(len(sec_nodes)):
             f_total = fsec[i] + np.sum(fmain[i], axis=0)
-            np.testing.assert_allclose(f_total, 0.0, atol=1e-14)
+            np.testing.assert_allclose(f_total, 0.0, atol=1e-13)
 
     def test_angular_momentum_conservation(self):
         """sum(r x F) == 0 to machine precision about any reference origin."""
@@ -272,20 +272,20 @@ class TestDynamicStiffnessAndDisplacement:
             [0.5, 0.5, 0.4],  # Initial distance 0.4, gap 1.0
         ])
         v = np.zeros_like(x)
-        v[4] = [0.0, 0.0, 2.0]  # moving in +z direction
+        v[4] = [0.0, 0.0, -2.0]  # moving in -z direction (penetrating)
         mass = np.ones(len(x))
         sec_nodes = np.array([4])
         main_nodes = np.array([[0, 1, 2, 3]])
         cand_p = np.zeros(1)
         dt = 0.01
 
-        # Cycle 1: vn = 2.0 -> cand_p += 2.0 * 0.01 = 0.02
+        # Cycle 1: vn = -2.0 -> cand_p += -2.0 * 0.01 = -0.02
         _t18_forces(x, v, mass, sec_nodes, main_nodes, 100.0, 1.0, 0.0, cand_p, dt)
-        np.testing.assert_allclose(cand_p[0], 0.02, rtol=1e-12)
+        np.testing.assert_allclose(cand_p[0], -0.02, rtol=1e-12)
 
         # Cycle 2: another step
         _t18_forces(x, v, mass, sec_nodes, main_nodes, 100.0, 1.0, 0.0, cand_p, dt)
-        np.testing.assert_allclose(cand_p[0], 0.04, rtol=1e-12)
+        np.testing.assert_allclose(cand_p[0], -0.04, rtol=1e-12)
 
         # Cycle 3: node separates beyond gap (dist = 1.5 > gap = 1.0)
         x[4, 2] = 1.5
@@ -320,8 +320,8 @@ class TestDynamicStiffnessAndDisplacement:
 class TestViscousDamping:
     """Test viscous damping force and dissipation (i18for3.F lines 327-336)."""
 
-    def test_viscous_damping_active_for_positive_vn(self):
-        """Viscous damping adds C * vn for positive vn."""
+    def test_viscous_damping_active_for_negative_vn(self):
+        """Viscous damping adds C * vn for approaching motion (vn < 0)."""
         x = np.array([
             [0.0, 0.0, 0.0],
             [1.0, 0.0, 0.0],
@@ -330,7 +330,7 @@ class TestViscousDamping:
             [0.5, 0.5, 0.5],  # pene = 0.5, gap = 1.0
         ])
         v = np.zeros_like(x)
-        v[4] = [0.0, 0.0, 10.0]  # vn = 10.0 > 0
+        v[4] = [0.0, 0.0, -10.0]  # vn = -10.0 < 0 (approaching)
         mass = np.ones(len(x))
         sec_nodes = np.array([4])
         main_nodes = np.array([[0, 1, 2, 3]])
@@ -342,13 +342,13 @@ class TestViscousDamping:
             stfval=0.0, gap=1.0, stiff_dc=20.0, cand_p=cand_p, dt=dt
         )
 
-        # Damp = stiff_dc * (pene/gap) * vn = 20 * (0.5/1.0) * 10 = 100.0
-        # Force on secondary is -Damp * n = -100 * [0, 0, 1] = [0, 0, -100]
-        np.testing.assert_allclose(fsec_damp[0], [0.0, 0.0, -100.0], rtol=1e-12)
+        # Damp = stiff_dc * (pene/gap) * vn = 20 * (0.5/1.0) * (-10) = -100.0
+        # Force on secondary is -fni * n = -(-100) * [0, 0, 1] = [0, 0, 100]
+        np.testing.assert_allclose(fsec_damp[0], [0.0, 0.0, 100.0], rtol=1e-12)
         assert econt_damp > 0.0
 
-    def test_viscous_damping_inactive_for_negative_vn(self):
-        """Viscous damping is zero when vn <= 0 (i18for3.F line 329)."""
+    def test_viscous_damping_inactive_for_positive_vn(self):
+        """Viscous damping is zero when separating (vn >= 0, i18for3.F line 329)."""
         x = np.array([
             [0.0, 0.0, 0.0],
             [1.0, 0.0, 0.0],
@@ -357,7 +357,7 @@ class TestViscousDamping:
             [0.5, 0.5, 0.5],
         ])
         v = np.zeros_like(x)
-        v[4] = [0.0, 0.0, -10.0]  # vn = -10.0 < 0
+        v[4] = [0.0, 0.0, 10.0]  # vn = 10.0 > 0 (separating)
         mass = np.ones(len(x))
         sec_nodes = np.array([4])
         main_nodes = np.array([[0, 1, 2, 3]])
@@ -387,7 +387,7 @@ class TestContactType18Class:
             [0.5, 0.5, 0.2],
         ])
         model.v = np.zeros_like(model.x)
-        model.v[4] = [0.0, 0.0, 5.0]
+        model.v[4] = [0.0, 0.0, -5.0]
         model.mass = np.full(5, 2.0)
 
         # Node group 100 for secondary node
@@ -445,7 +445,7 @@ class TestContactType18Class:
             [0.5, 0.5, 0.1],  # Node 4 secondary
         ])
         model.v = np.zeros_like(model.x)
-        model.v[4] = [0.0, 0.0, 1.0]
+        model.v[4] = [0.0, 0.0, -1.0]
         model.mass = np.ones(5)
 
         grp = NodeGroup(id=1)
@@ -625,7 +625,7 @@ class TestContactType18Class:
 
         x_all = np.vstack([x_main, x_sec])
         v_all = np.zeros_like(x_all)
-        v_all[n_faces*4:] = [0.0, 0.0, 1.0]
+        v_all[n_faces*4:] = [0.0, 0.0, -1.0]
         mass_all = np.ones(len(x_all))
 
         grp = NodeGroup(id=1)

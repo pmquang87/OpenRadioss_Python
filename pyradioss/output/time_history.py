@@ -31,6 +31,16 @@ import numpy as np
 from ..model.model import Model
 
 
+_STRESS_MAP = {
+    "SIGXX": 0, "SIGX": 0, "SX": 0, "SXX": 0, "SIG11": 0, "S11": 0,
+    "SIGYY": 1, "SIGY": 1, "SY": 1, "SYY": 1, "SIG22": 1, "S22": 1,
+    "SIGZZ": 2, "SIGZ": 2, "SZ": 2, "SZZ": 2, "SIG33": 2, "S33": 2,
+    "SIGXY": 3, "SXY": 3, "SIG12": 3, "S12": 3, "SIGYX": 3, "SYX": 3, "SIG21": 3, "S21": 3,
+    "SIGYZ": 4, "SYZ": 4, "SIG23": 4, "S23": 4, "SIGZY": 4, "SZY": 4, "SIG32": 4, "S32": 4,
+    "SIGZX": 5, "SZX": 5, "SIGXZ": 5, "SXZ": 5, "SIG31": 5, "S31": 5, "SIG13": 5, "S13": 5,
+}
+
+
 class TimeHistory:
     def __init__(self, path: str, model: Model, log):
         self.path = path
@@ -185,20 +195,20 @@ class TimeHistory:
                         elif var_upper in ("VM", "VONM", "VON_MISES"):
                             from .anim_vtk import _von_mises
                             return float(_von_mises(attr, g)[r])
-                        elif var_upper in ("SIGXX", "SIGYY", "SIGZZ", "SIGXY", "SIGYZ", "SIGZX"):
-                            idx_map = {"SIGXX": 0, "SIGYY": 1, "SIGZZ": 2, "SIGXY": 3, "SIGYZ": 4, "SIGZX": 5}
+                        elif var_upper in _STRESS_MAP:
+                            c_idx = _STRESS_MAP[var_upper]
                             sig = st.get("sig")
                             if sig is not None:
                                 s_elem = sig[r]
                                 if s_elem.ndim > 1:
                                     s_elem = s_elem.mean(axis=0)
                                 if len(s_elem) == 3:
-                                    shell_map = {"SIGXX": 0, "SIGYY": 1, "SIGXY": 2}
-                                    if var_upper in shell_map:
-                                        return float(s_elem[shell_map[var_upper]])
+                                    shell_map = {0: 0, 1: 1, 3: 2}
+                                    if c_idx in shell_map:
+                                        return float(s_elem[shell_map[c_idx]])
                                     return 0.0  # SIGZZ, SIGYZ, SIGZX are 0.0 in plane stress
                                 else:
-                                    return float(s_elem[idx_map[var_upper]])
+                                    return float(s_elem[c_idx])
                         elif var_upper in ("P", "PRESSURE"):
                             sig = st.get("sig")
                             if sig is not None:
@@ -235,7 +245,7 @@ class TimeHistory:
                     m = model.mass[idx]
                     fext_val = model.fext[idx, comp] if hasattr(model, "fext") and model.fext is not None else 0.0
                     fint_val = model.fint[idx, comp] if hasattr(model, "fint") and model.fint is not None else 0.0
-                    row.append((fext_val - fint_val) / m if m > 0 else 0.0)
+                    row.append((fext_val + fint_val) / m if m > 0 else 0.0)
             elif var_upper.startswith("F"):
                 row.append(model.fint[idx, comp] if hasattr(model, "fint") and model.fint is not None else 0.0)
             else:

@@ -205,7 +205,7 @@ def assemble_mass(model, dof: DofMap, x_geom, log=None):
                                         rows.append(np.array([eq_num], dtype=np.int64))
                                         cols.append(np.array([eq_num], dtype=np.int64))
                                         vals.append(np.array([m_nod], dtype=np.float64))
-                    continue
+            continue
         elif am.mass_type == 3:
             grpart = model.egroups.get("PART", {}).get(am.grnod_id) if hasattr(model, "egroups") else None
             pids = getattr(grpart, "part_ids_resolved", None) if grpart else None
@@ -234,7 +234,7 @@ def assemble_mass(model, dof: DofMap, x_geom, log=None):
                                     rows.append(np.array([eq_num], dtype=np.int64))
                                     cols.append(np.array([eq_num], dtype=np.int64))
                                     vals.append(np.array([m_per_node], dtype=np.float64))
-                    continue
+            continue
 
         g = model.node_groups.get(am.grnod_id)
         if g is None or g.node_idx is None:

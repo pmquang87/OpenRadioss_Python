@@ -75,7 +75,7 @@ _SHELL_FAMILIES = ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18")
 # zx], row-major: [s0 s3 s4 / s3 s1 s5 / s4 s5 s2].  yz lands at (0,2)
 # and zx at (1,2) — NOT the textbook placement, but the official tool's,
 # and the VTK->d3plot converter maps the slots back purely by position.
-_VOIGT9 = [0, 3, 4, 3, 1, 5, 4, 5, 2]
+_VOIGT9 = [0, 3, 5, 3, 1, 4, 5, 4, 2]
 
 
 def _plane_rows(s3: np.ndarray) -> np.ndarray:

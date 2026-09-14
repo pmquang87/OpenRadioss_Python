@@ -289,16 +289,16 @@ def _fmt9(a):
 
 def test_solid_tensor_placement_and_zero_fill(tmp_path):
     """Voigt [xx,yy,zz,xy,yz,zx] -> anim_to_vtk 3x3 rows
-    [s0 s3 s4 / s3 s1 s5 / s4 s5 s2]; the shell cell's row is exact zeros."""
+    [s0 s3 s5 / s3 s1 s4 / s5 s4 s2]; the shell cell's row is exact zeros."""
     model = _starter_model(tmp_path, STARTER_BS)
     model.bricks.state["sig"][0] = [11.0, 22.0, 33.0, 12.0, 23.0, 31.0]
     model.bricks.state["epsp"][0] = 0.25
     doc = _write_parse(tmp_path, model)
     t3 = doc["arrays"]["3DELEM_Stress"]
     assert t3.shape == (2, 3, 3)
-    assert t3[0].tolist() == [[11.0, 12.0, 23.0],
-                              [12.0, 22.0, 31.0],
-                              [23.0, 31.0, 33.0]]
+    assert t3[0].tolist() == [[11.0, 12.0, 31.0],
+                              [12.0, 22.0, 23.0],
+                              [31.0, 23.0, 33.0]]
     assert t3[1].tolist() == [[0.0] * 3] * 3
     assert doc["arrays"]["3DELEM_Plastic_Strain"].tolist() == [0.25, 0.0]
 
@@ -453,7 +453,7 @@ def test_engine_solid_tensor_roundtrip(engine_run):
     t = doc["arrays"]["3DELEM_Stress"][0]
     assert np.array_equal(t, t.T), "emitted tensor must be symmetric"
     assert _fmt9([t[0, 0], t[1, 1], t[2, 2],
-                  t[0, 1], t[0, 2], t[1, 2]]) == _fmt9(s6)
+                  t[0, 1], t[1, 2], t[0, 2]]) == _fmt9(s6)
     ep = doc["arrays"]["3DELEM_Plastic_Strain"]
     assert model.bricks.state["epsp"][0] > 1.0e-4, "brick must yield"
     assert _fmt9(ep[:1]) == _fmt9(model.bricks.state["epsp"][:1])

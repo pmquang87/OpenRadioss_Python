@@ -81,9 +81,10 @@ def test_rbody_impvel_time_window_and_facx():
     assert rbe.v_ref[0] == 0.0
 
     # Cycle at t_next = 0.2 (within [0.1, 0.5]): drive active with facx scaling
-    # vimp = scale * fct.eval(t_next * facx) = 2.0 * (1.0 + 2.0 * (0.2 * 3.0)) = 2.0 * (1.0 + 1.2) = 4.4
+    # Wave 2 fix: evaluated at t_mid = t_next - 0.5*dt = 0.2 - 0.005 = 0.195
+    # vimp = scale * fct.eval(t_mid * facx) = 2.0 * (1.0 + 2.0 * (0.195 * 3.0)) = 4.34
     rbe.advance(fint, fext, fcont, mint, v, vr, x, dt, t_next=0.2)
-    assert np.isclose(rbe.v_ref[0], 4.4)
+    assert np.isclose(rbe.v_ref[0], 4.34)
 
     # Cycle at t_next = 0.6 (> t1 = 0.5): drive must NOT be active
     rbe.v_ref[0] = 0.0

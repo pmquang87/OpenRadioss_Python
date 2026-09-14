@@ -224,6 +224,8 @@ class ContactType7:
         self.gap_bound = 0.0
         self.gap_min = 0.0
         self.gap_max = np.inf
+        self.stmin = float(getattr(getattr(self, "itf", None), "stmin", 0.0) or 0.0)
+        self.stmax = float(getattr(getattr(self, "itf", None), "stmax", 0.0) or 0.0)
         self.fric = float(getattr(self.itf, "fric", 0.0))
         self.mfrot = int(getattr(self.itf, "mfrot", 0))
         self.iform = int(getattr(self.itf, "iform", 0))
@@ -353,6 +355,8 @@ class ContactType7:
             self.gap_const = gap_floor
             self.gap_bound = gap_floor
         self.fric = itf.fric
+        self.stmin = float(getattr(itf, "stmin", 0.0) or 0.0)
+        self.stmax = float(getattr(itf, "stmax", 0.0) or 0.0)
 
         # --- friction MODELS + IFQ filter state (M15) -----------------------
         # mfrot/ifq = 0 leaves every M4 path untouched (bit-identical).
@@ -552,6 +556,7 @@ class ContactType7:
 
         # ---- per-pair gap (Igap) ------------------------------------------
         loc = np.searchsorted(self.nodes, ni)    # nodes is sorted (init)
+        loc = np.clip(loc, 0, max(len(self.nodes) - 1, 0))
         if self.itf.igap in (1, 2, 3):
             # gap_s is aligned with self.nodes; loc maps global -> local
             gap = self.gap_s[loc] + self.gap_m[srow]
@@ -590,6 +595,10 @@ class ContactType7:
 
         K = combine_stiffness(self.itf.istf, self.itf.stfac,
                               self.Km[srow], self.Ks[loc])
+        if self.stmin > 0.0:
+            K = np.maximum(K, self.stmin)
+        if self.stmax > 0.0:
+            K = np.minimum(K, self.stmax)
         # per-node spring-stiffness sums (bincount = the fast add.at, M7):
         # full K on the secondary node, full K on each corner (weight <= 1)
         n_nod = len(fcont)
@@ -601,8 +610,9 @@ class ContactType7:
         Knode += np.bincount(seg_flat[valid_sf], weights=K_rep[valid_sf],
                              minlength=n_nod)
         loaded = Knode > 0.0
+        m_loaded = np.maximum(mass[loaded], EM20)
         dt_int = min(self.dt_bound, float(
-            np.sqrt(2.0 * mass[loaded] / Knode[loaded]).min()))
+            np.sqrt(2.0 * m_loaded / Knode[loaded]).min()))
         if stifn is not None:                    # /DT/NODA accumulation
             stifn[loaded] += Knode[loaded]
 
@@ -709,7 +719,7 @@ class LagmulType7:
         """
         # Run broad/narrow phases using the penalty handler's logic
         handler = self.penalty_handler
-        x = self.model.x0 + self.model.u # current position
+        x = getattr(self.model, "x", self.model.x0) # current position
         v = self.model.v
         dt = self.model.dt
         
@@ -816,11 +826,10 @@ class LagmulType7:
             for dof, n_dof in enumerate((nx, ny, nz)):
                 # Master nodes (+Hk * n)
                 for k in range(4):
-                    if s_nodes[k] != s_nodes[k-1]: # handle 3-node segments where node 3==4
-                        data.append(n_dof * wseg_f[i, k])
-                        nodes.append(s_nodes[k])
-                        dofs.append(dof)
-                        eq_ids.append(i)
+                    data.append(n_dof * wseg_f[i, k])
+                    nodes.append(s_nodes[k])
+                    dofs.append(dof)
+                    eq_ids.append(i)
                         
                 # Secondary node (-n)
                 data.append(-n_dof)

@@ -220,6 +220,9 @@ class ContactType24:
         self.gap_const = 0.0
         self.gap_bound = 0.0
         self.fric = float(getattr(self.itf, "fric", 0.0))
+        self.iform = int(getattr(self.itf, "iform", 0))
+        self.stmin = float(getattr(getattr(self, "itf", None), "stmin", 0.0) or 0.0)
+        self.stmax = float(getattr(getattr(self, "itf", None), "stmax", 0.0) or 0.0)
         self.mfrot = int(getattr(self.itf, "mfrot", 0))
         self.ifq = int(getattr(self.itf, "ifq", 0))
         self.xfiltr = float(getattr(self.itf, "xfiltr", 0.0))
@@ -340,6 +343,9 @@ class ContactType24:
             self.gap_const = gap_floor
             self.gap_bound = gap_floor
         self.fric = float(itf.fric)
+        self.stmin = float(getattr(itf, "stmin", 0.0) or 0.0)
+        self.stmax = float(getattr(itf, "stmax", 0.0) or 0.0)
+        self.iform = int(getattr(itf, "iform", 0))
 
         # --- friction MODELS + IFQ filter state (M15) -----------------------
         # mfrot/ifq = 0 leaves every M4 path untouched (bit-identical).
@@ -555,6 +561,10 @@ class ContactType24:
 
         K = combine_stiffness(self.itf.istf, self.itf.stfac,
                               self.Km[srow], self.Ks[loc])
+        if self.stmin > 0.0:
+            K = np.maximum(K, self.stmin)
+        if self.stmax > 0.0:
+            K = np.minimum(K, self.stmax)
                               
         # per-node spring-stiffness sums:
         # full K on the secondary node, full K on each corner (weight <= 1)
@@ -624,15 +634,24 @@ class ContactType24:
                                          self.fric_c, pres, vt_mag)
             else:
                 mu = self.fric
-            v_ref = np.maximum(1e-3 * gap_ref / max(dt, EM20), EM20)
-            Ft = mu * Fn_pos * vt_mag / (vt_mag + v_ref)
-            ftvec = -(Ft / np.maximum(vt_mag, EM20))[:, None] * vt
-            if self.ifq > 0:
+            if self.iform == 2 or self.ifq >= 10:
                 alpha = friction.filter_alpha(self.ifq, self.xfiltr, dt)
                 keys = ni * max(len(self.segs), 1) + srow[active]
                 ftvec, self._filt_keys, self._filt_vals = friction.\
-                    apply_filter(keys, ftvec, alpha, self._filt_keys,
-                                 self._filt_vals)
+                    apply_incremental_stiffness(keys, K, vrel, dt, nvec, mu, Fn_pos,
+                                                alpha, self._filt_keys,
+                                                self._filt_vals)
+                ftvec = -ftvec  # oppose sliding (i7for3.F:1511: FNCONT(JG) -= FXI)
+            else:
+                v_ref = np.maximum(1e-3 * gap_ref / max(dt, EM20), EM20)
+                Ft = mu * Fn_pos * vt_mag / (vt_mag + v_ref)
+                ftvec = -(Ft / np.maximum(vt_mag, EM20))[:, None] * vt
+                if self.ifq > 0:
+                    alpha = friction.filter_alpha(self.ifq, self.xfiltr, dt)
+                    keys = ni * max(len(self.segs), 1) + srow[active]
+                    ftvec, self._filt_keys, self._filt_vals = friction.\
+                        apply_filter(keys, ftvec, alpha, self._filt_keys,
+                                     self._filt_vals)
             Fvec += ftvec
 
         # scatter: action on the node, exact opposite reaction on the

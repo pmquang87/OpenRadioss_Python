@@ -56,6 +56,20 @@ def _fallback_modulus(model: Model) -> float:
     return max((m.E for m in model.materials.values() if getattr(m, 'E', 0.0) > 0.0), default=1.0)
 
 
+def _bulk_modulus(m, p=None) -> float:
+    """Bulk modulus getter with fallback to E / (3*(1 - 2*nu)) or E."""
+    k = getattr(m, "K", None) if m is not None else None
+    if k is not None:
+        return float(k)
+    E = getattr(m, "E", None) if m is not None else None
+    nu = getattr(m, "nu", None) if m is not None else None
+    if E is not None and nu is not None:
+        return float(E) / (3.0 * max(1.0 - 2.0 * float(nu), 1e-6))
+    if E is not None:
+        return float(E)
+    return 0.0
+
+
 def _per_element(group, getter) -> np.ndarray:
     """Evaluate ``getter(mat, prop) -> float`` per element from the
     per-part slices (the port's NGROUP analogue)."""
@@ -111,7 +125,7 @@ def segment_stiffness_gap(model: Model, segments: np.ndarray,
             gap[sel] = 0.5 * t * fscale_gap
         else:                       # 'bricks' / 'tetras' / 'quads' / etc.
             # K = Stfac * B * A^2 / V ;  solids contact on their real face
-            B = _per_element(group, lambda m, p: m.K)[erow]
+            B = _per_element(group, _bulk_modulus)[erow]
             V = np.maximum(np.nan_to_num(group.state["vol0"][erow], nan=1e-30), 1e-30)
             K[sel] = stfac * B * area[sel] ** 2 / V
     return K, gap
@@ -138,7 +152,7 @@ def node_stiffness_gap(model: Model, stfac: float, fscale_gap: float = 1.0):
             k_e = 0.5 * stfac * E * group.state["thick"]
             g_e = 0.5 * group.state["thick"] * fscale_gap
         elif gname in _SOLID_GROUPS:
-            B = _per_element(group, lambda m, p: m.K)
+            B = _per_element(group, _bulk_modulus)
             k_e = stfac * B * np.maximum(group.state["vol0"], 0.0) ** (1.0 / 3.0)
             g_e = np.zeros(group.n)
         else:
@@ -213,9 +227,9 @@ def edge_stiffness_gap(model: Model, edges: np.ndarray,
             K[sel] = 0.5 * stfac * E * t
             gap[sel] = 0.5 * t
         else:
-            B = _per_element(group, lambda m, p: m.K)[erow]
-            V = group.state["vol0"][erow]
-            K[sel] = stfac * B * np.maximum(V, 0.0) ** (1.0 / 3.0)
+            B = _per_element(group, _bulk_modulus)[erow]
+            V = np.maximum(np.nan_to_num(group.state["vol0"][erow], nan=1e-30), 1e-30)
+            K[sel] = stfac * B * V ** (1.0 / 3.0)
     return K, gap
 
 
@@ -245,13 +259,14 @@ def combine_stiffness(istf: int, stfac: float, K_m: np.ndarray,
         return np.full_like(K_m, stfac)
     if istf == 0:
         return K_m.copy()
-    Ks = np.where(K_s > 0.0, K_s, K_m)
+    Km_eff = np.where(K_m > 0.0, K_m, K_s)
+    Ks_eff = np.where(K_s > 0.0, K_s, K_m)
     if istf == 2:
-        return 0.5 * (K_m + Ks)
+        return 0.5 * (Km_eff + Ks_eff)
     if istf == 3:
-        return np.maximum(K_m, Ks)
+        return np.maximum(Km_eff, Ks_eff)
     if istf == 4:
-        return np.minimum(K_m, Ks)
+        return np.minimum(Km_eff, Ks_eff)
     if istf == 5:
-        return K_m * Ks / np.maximum(K_m + Ks, 1e-30)
+        return Km_eff * Ks_eff / np.maximum(Km_eff + Ks_eff, 1e-30)
     raise ValueError(f"Istf={istf}")

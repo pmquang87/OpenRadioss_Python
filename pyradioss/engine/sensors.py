@@ -41,6 +41,7 @@ class Sensors:
         self.model = model
         self.defs = {}                    # id -> (kind, params...)
         self.fire_time: Dict[int, float] = {}   # id -> t_fire (latched/active)
+        self.crit_time: Dict[int, float] = {}   # id -> t_crit (threshold first crossed)
         self.status: Dict[int, bool] = {}       # id -> active status bool
         for sn in model.sensors:
             if sn.kind == "TIME":
@@ -102,22 +103,26 @@ class Sensors:
                              f"{t:12.5E}")
             elif kind == "DISP":
                 dmin, ni, tdelay = defn[1], defn[2], defn[3]
-                if t >= tdelay:
+                if sid not in self.crit_time:
                     d = self.model.x[ni] - self.model.x0[ni]
                     if float(d @ d) >= dmin * dmin:
-                        self.fire_time[sid] = t
-                        self.status[sid] = True
-                        log.info(f" -- /SENSOR/{sid} ACTIVATED AT TIME "
-                                 f"{t:12.5E} (DISPLACEMENT CRITERION)")
+                        self.crit_time[sid] = t
+                if sid in self.crit_time and t >= self.crit_time[sid] + tdelay:
+                    self.fire_time[sid] = self.crit_time[sid] + tdelay
+                    self.status[sid] = True
+                    log.info(f" -- /SENSOR/{sid} ACTIVATED AT TIME "
+                             f"{self.fire_time[sid]:12.5E} (DISPLACEMENT CRITERION)")
             elif kind == "VEL":
                 vmax, ni, tdelay, fcut = defn[1], defn[2], defn[3], defn[4]
-                if t >= tdelay:
+                if sid not in self.crit_time:
                     v = self.model.v[ni]
                     if float(v @ v) >= vmax * vmax:
-                        self.fire_time[sid] = t
-                        self.status[sid] = True
-                        log.info(f" -- /SENSOR/{sid} ACTIVATED AT TIME "
-                                 f"{t:12.5E} (VELOCITY CRITERION)")
+                        self.crit_time[sid] = t
+                if sid in self.crit_time and t >= self.crit_time[sid] + tdelay:
+                    self.fire_time[sid] = self.crit_time[sid] + tdelay
+                    self.status[sid] = True
+                    log.info(f" -- /SENSOR/{sid} ACTIVATED AT TIME "
+                             f"{self.fire_time[sid]:12.5E} (VELOCITY CRITERION)")
 
         # 2. Update logical sensors (iterate to handle cascaded dependencies)
         changed = True

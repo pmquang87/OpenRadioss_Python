@@ -55,10 +55,13 @@ def fmt_float(v, width: int = 20) -> str:
     v = float(v)
     s = repr(v)
     if len(s) > width:
-        for prec in (16, 12, 8):
+        for prec in (16, 14, 12, 10, 8, 6, 4):
             s = f"{v:.{prec}G}"
             if len(s) <= width:
                 break
+        if len(s) > width:
+            exp_prec = max(1, width - 7)
+            s = f"{v:.{exp_prec}E}"
     return f"{s:>{width}}"
 
 

@@ -398,7 +398,7 @@ def test_fail_biquad_hits_the_five_anchor_points():
     params = {"c1": 0.9, "c2": 0.55, "c3": 0.35, "c4": 0.25, "c5": 0.30, "s_flag": 0}
     biquad.fit(params)
     fail = FailureModel(type="BIQUAD", params=params)
-    tri = np.array([-1 / 3, 0.0, 1 / 3, 2 / 3, 1.0])
+    tri = np.array([-1 / 3, 0.0, 1 / 3, 1 / np.sqrt(3), 2 / 3])
     ef = biquad.eps_f(fail, tri)
     for k, key in enumerate(("c1", "c2", "c3", "c4", "c5")):
         assert ef[k] == pytest.approx(params[key], rel=1e-12)

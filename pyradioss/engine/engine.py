@@ -100,6 +100,7 @@ class EngineState:
         self.e_booked_prev = 0.0   # helper for the e_num ledger
         self.e_madd = 0.0      # kinetic energy from /DT/NODA/CST mass (M6)
         self.e_damp = 0.0      # /DAMP dissipation (M6)
+        self.dt_prev = None    # previous cycle time step for leapfrog dt12
         self.stop_reason = ""
 
 
@@ -169,6 +170,10 @@ def _energies(model: Model, state: EngineState) -> dict:
     if getattr(model, "inertia", None) is not None and getattr(model, "vr", None) is not None:
         real_rot = model.inertia < 1e29
         ke += float(0.5 * (model.inertia[real_rot, None] * model.vr[real_rot] ** 2).sum())
+    if hasattr(model, "rigid_bodies") and model.rigid_bodies:
+        for rb in model.rigid_bodies.values():
+            J = rb.R @ rb.J0 @ rb.R.T
+            ke += float(0.5 * rb.w @ J @ rb.w)
     total = ie + ke + he + state.econt + state.e_num + state.e_damp
     # the error reference is the ENERGY SCALE OF THE RUN: the largest of
     # the initial energy, external work, current energies and the running
@@ -345,7 +350,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     noda = NodalTimeStep(model, controls, log) if controls.dt_noda else None
     if noda is not None:
         for rb in rbodies:
-            noda.set_prescribed(rb.nodes)
+            slave_mask = rb.nodes != rb.master
+            noda.set_prescribed(rb.nodes[slave_mask])
             # ...but transport their member stiffness to the master so the
             # body still claims a nodal dt (rgbodfp.F/dtnoda.F — otherwise a
             # stiff shell welded into the body never constrains dt; the
@@ -410,6 +416,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         for key in ("t", "cycle", "wext", "econt", "epeak", "ndel",
                     "e_num", "e_madd", "e_damp"):
             setattr(state, key, saved[key])
+        state.dt_prev = saved.get("dt_prev", None)
         _energies.e0 = saved["e0"]
         dt = saved["dt"]
         next_th = saved["next_th"]
@@ -423,6 +430,10 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         if getattr(model, "inertia", None) is not None and getattr(model, "vr", None) is not None:
             real_rot = model.inertia < 1e29
             ke0 += float(0.5 * (model.inertia[real_rot, None] * model.vr[real_rot] ** 2).sum())
+        if hasattr(model, "rigid_bodies") and model.rigid_bodies:
+            for rb in model.rigid_bodies.values():
+                J = rb.R @ rb.J0 @ rb.R.T
+                ke0 += float(0.5 * rb.w @ J @ rb.w)
         _energies.e0 = ke0 + _element_energy_sum(model)
 
         # ---- priming pass: dt=0 'cycle' just to collect the initial
@@ -493,6 +504,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             "econt": state.econt, "epeak": state.epeak, "ndel": state.ndel,
             "e_num": state.e_num, "e_madd": state.e_madd,
             "e_damp": state.e_damp, "e0": _energies.e0, "dt": dt,
+            "dt_prev": state.dt_prev,
             "next_th": next_th, "next_anim": next_anim, "anim_no": anim_no,
             "sensors": dict(sensors.fire_time),
             "sensors_status": dict(sensors.status),
@@ -656,9 +668,14 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             state.ams_iters = getattr(state, "ams_iters", 0) + iters
         else:
             acc = f_total * inv_mass[:, None]
+        model.fint = fint
+        model.fext = fext
         model.a = acc
-        model.v += acc * dt
-        model.vr += mint * inv_inertia[:, None] * dt
+        dt_prev = state.dt_prev if state.dt_prev is not None else dt
+        dt12 = 0.5 * (dt_prev + dt)
+        model.v += acc * dt12
+        model.vr += mint * inv_inertia[:, None] * dt12
+        state.dt_prev = dt
 
         # ---- 4b. /DAMP mass damping (M6): exact integrating factor on the
         # freshly updated velocities; dissipation booked exactly from the
@@ -728,10 +745,9 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             state.econt -= float(np.einsum(
                 "nb,nb->", fcont, 0.5 * (v_old + model.v))) * dt
 
-        # external work of the loads: force x actual displacement, i.e. the
-        # POST-enforcement midstep velocity (f^n does its work over
-        # x^{n+1}-x^n = v^{n+1/2} dt — consistent leap-frog bookkeeping)
-        state.wext += float(np.einsum("nb,nb->", fext, model.v)) * dt
+        # external work of the loads: force x actual displacement, booked with
+        # midstep average velocity (resol.F:6289, force.F90:322)
+        state.wext += float(np.einsum("nb,nb->", fext, 0.5 * (v_old + model.v))) * dt
 
         # ---- 6. position update -------------------------------------------
         model.x += model.v * dt
@@ -782,7 +798,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         #   law that misbooks its own work now surfaces in EN instead of
         #   ERR; EN is printed in the listing and T01 so it cannot hide.
         e_booked = _element_energy_sum(model)
-        w_leave = -0.5 * dt * (
+        w_leave = -0.5 * dt12 * (
             float(np.einsum("nb,nb->", fint, v_old + model.v))
             + float(np.einsum("nb,nb->", mint, vr_old + model.vr)))
         state.e_num += w_leave - (e_booked - state.e_booked_prev)

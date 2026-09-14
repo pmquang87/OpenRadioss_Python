@@ -582,7 +582,10 @@ def solid_update_single(
         dgamv_iter = min(dgamv_iter, 1.0e6)
 
         # Plastic strain rate tensor: D_v = (dgamv / (dt * sqrt(2))) * N_v
-        dv_vec = (dgamv_iter / (dt * math.sqrt(2.0))) * nv_vec
+        if dt > 1.0e-20:
+            dv_vec = (dgamv_iter / (dt * math.sqrt(2.0))) * nv_vec
+        else:
+            dv_vec = np.zeros(6, dtype=np.float64)
         dv = _vec6_to_mat3x3(dv_vec)
 
     # 5. Evolution of Internal State Variables (sigeps101.F lines 845-878)

@@ -209,8 +209,8 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
     if sig.shape[1] >= 5 and deps.shape[1] >= 5:
         g23 = p.get("G23", g12)
         g31 = p.get("G31", g12)
-        sig[:, 3] = g23 * deps[:, 3]
-        sig[:, 4] = g31 * deps[:, 4]
+        sig[:, 3] += g23 * deps[:, 3]
+        sig[:, 4] += g31 * deps[:, 4]
 
     return sig, epsp
 

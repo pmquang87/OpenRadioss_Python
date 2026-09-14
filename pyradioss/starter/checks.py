@@ -7982,6 +7982,20 @@ _MAT_CHECKS: dict[Any, Any] = {
 def check_model(model: Model, log: MessageLog) -> None:
     if model.numnod == 0:
         log.error("model has no nodes", "MODEL CHECK")
+    elif len(model.node_ids) > 0:
+        u_ids, counts = np.unique(model.node_ids, return_counts=True)
+        if np.any(counts > 1):
+            dups = u_ids[counts > 1]
+            log.error(f"Duplicate node ID detected: {dups[:5]}", "NODE CHECK")
+
+    for attr in ("solids", "tetra10", "bric20"):
+        group = getattr(model, attr, None)
+        if group is not None and hasattr(group, "vol0"):
+            neg = group.vol0 <= 0.0
+            if np.any(neg):
+                bad_ids = group.ids[neg]
+                log.error(f"Negative or null volume detected in {len(bad_ids)} solid element(s): {bad_ids[:5]}", "GEOMETRY CHECK")
+
     if not any(True for _ in model.element_groups()):
         log.warning("model has no elements (deck may use only unported "
                     "element types)", "MODEL CHECK")

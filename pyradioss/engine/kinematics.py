@@ -417,7 +417,8 @@ class LoadsAndConstraints:
         for idx, dof, fct, scale, facx, tstart, tstop in self.impvel:
             if len(idx) == 0 or t < tstart or t > tstop:
                 continue
-            vimp = scale * fct.eval(t * facx)
+            t_mid = t - 0.5 * dt
+            vimp = scale * fct.eval(t_mid * facx)
             if dof < 3:
                 w += _book(v, mass, v_old, dof, vimp, idx)
             else:
@@ -467,7 +468,8 @@ class LoadsAndConstraints:
             gold = vr_old if rot else v_old
             vn = vel[idx] @ e                         # VV: current comp along e
             if x0 is None:                            # /IMPVEL: v(t) given
-                vimp = scale * fct.eval(t * facx)
+                t_mid = t - 0.5 * dt
+                vimp = scale * fct.eval(t_mid * facx)
             else:                                     # /IMPDISP: d(t) given
                 if dt <= 0.0:
                     continue
@@ -491,6 +493,8 @@ class LoadsAndConstraints:
         # ---- fixed DOFs: zero velocity (no work — see docstring) ---------
         v[self.fix_tra] = 0.0
         vr[self.fix_rot] = 0.0
+        if getattr(self.model, "a", None) is not None:
+            self.model.a[self.fix_tra] = 0.0
         # ---- /BCS in a /SKEW (bcs1v, the "USER SYSTEM" branch) -----------
         # Each constrained skew axis has its component PROJECTED OUT of the
         # velocity: VV = e.V ; V -= e VV.  The reference does the same to
@@ -507,6 +511,8 @@ class LoadsAndConstraints:
                 if ftra[d]:
                     e = axes[d]
                     v[idx] -= np.outer(v[idx] @ e, e)
+                    if getattr(self.model, "a", None) is not None:
+                        self.model.a[idx] -= np.outer(self.model.a[idx] @ e, e)
                 if frot[d]:
                     e = axes[d]
                     vr[idx] -= np.outer(vr[idx] @ e, e)
