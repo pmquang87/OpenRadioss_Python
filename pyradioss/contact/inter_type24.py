@@ -624,8 +624,8 @@ class ContactType24:
                                          self.fric_c, pres, vt_mag)
             else:
                 mu = self.fric
-            Ft = mu * Fn_pos * vt_mag / (
-                vt_mag + 1e-3 * gap_ref / max(dt, EM20))
+            v_ref = np.maximum(1e-3 * gap_ref / max(dt, EM20), EM20)
+            Ft = mu * Fn_pos * vt_mag / (vt_mag + v_ref)
             ftvec = -(Ft / np.maximum(vt_mag, EM20))[:, None] * vt
             if self.ifq > 0:
                 alpha = friction.filter_alpha(self.ifq, self.xfiltr, dt)
