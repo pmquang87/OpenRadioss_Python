@@ -140,8 +140,8 @@ def build_law40(rec) -> Material:
 
     params = {
         "E": e, "nu": nu,
-        "K": ak, "G": gsum,
-        "K40": ak, "G_inf": g_inf, "G_branches": gs, "beta": betas,
+        "K": ak, "G_sum": gsum,
+        "K40": ak, "G_inf": g_inf, "G": gs, "G_branches": gs, "beta": betas,
         "astas": astas if astas > 1e-20 else _INF,
         "bstas": bstas if bstas > 1e-20 else _INF,
         "vmisk": vmisk if vmisk > 1e-20 else _INF,
