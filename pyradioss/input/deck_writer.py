@@ -7619,6 +7619,272 @@ class StarterDeck:
         kwargs.setdefault("law_name", "ELASTO_PLAS_TAB")
         return self.mat_law109(*args, **kwargs)
 
+    def mat_law110(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho: float = 0.0,
+        refer_rho: float = 0.0,
+        young: float = 0.0,
+        nu: float = 0.0,
+        ires: int = 2,
+        icrit: int = 1,
+        tab_yld: int = 0,
+        xscale: float = 1.0,
+        yscale: float = 1.0,
+        fbi: float = 1.0,
+        rhobi: float = 1.0,
+        sigma_r: float = 0.0,
+        dsigm: float = 0.0,
+        beta: float = 0.0,
+        omega: float = 0.0,
+        hard_n: float = 0.0,
+        eps0: float = 0.0,
+        sigs: float = 0.0,
+        dg0: float = 0.0,
+        deps0: float = 0.0,
+        m: float = 0.0,
+        tini: float = 293.0,
+        chard: float = 0.0,
+        fcut: float = 1.0e20,
+        vp: int = 2,
+        ismooth: int = 1,
+        tab_temp: int = 0,
+        rm_0: float = 0.0,
+        rm_45: float = 0.0,
+        rm_90: float = 0.0,
+        ag_0: float = 0.0,
+        ag_45: float = 0.0,
+        ag_90: float = 0.0,
+        r_0: float = 1.0,
+        r_45: float = 1.0,
+        r_90: float = 1.0,
+        angles_data: Any = None,
+        law_name: str = "LAW110",
+        unit_id: Optional[int] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW110`` (/MAT/VEGTER / /MAT/PLAS_VEGTER) Vegter anisotropic yield locus model (M579).
+
+        Card 1: RHO_I [, Refer_Rho] (%20lg[%20lg])
+        Card 2: E, Nu, Ires (%20lg%20lg%10d)
+        Card 3: Icrit, TAB_YLD, MAT_Xscale, MAT_Yscale, fBI, rhoBI (%10d%10d%20lg%20lg%20lg%20lg)
+        Card 4: SIGMA_r, DSIGM, BETA, OMEGA, n (%20lg%20lg%20lg%20lg%20lg)
+        Card 5: EPS0, SIGS, DG0, Deps0, m (%20lg%20lg%20lg%20lg%20lg)
+        Card 6: TINI, C_HARD, F_CUT, VP, Ismooth, TAB_TEMP (%20lg%20lg%20lg%10d%10d%10d)
+        Cards 7+:
+          - Icrit=1/2/4: angle tables (%20lg...)
+          - Icrit=3: RM_0..AG_45, AG_90..R_90
+        """
+        mat_obj = None
+        if hasattr(mid, "id") or hasattr(mid, "rho_i") or hasattr(mid, "icrit") or hasattr(mid, "tab_yld"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+        elif len(args) > 0 and not isinstance(args[0], (int, float, str)):
+            mat_obj = args[0]
+        elif "mat_obj" in kwargs:
+            mat_obj = kwargs["mat_obj"]
+        elif "mat" in kwargs:
+            mat_obj = kwargs["mat"]
+        elif "material" in kwargs:
+            mat_obj = kwargs["material"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho_i", getattr(mat_obj, "rho0", getattr(mat_obj, "rho", rho)))
+            refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", refer_rho))
+            young = getattr(mat_obj, "e", getattr(mat_obj, "young", getattr(mat_obj, "E", young)))
+            nu = getattr(mat_obj, "nu", getattr(mat_obj, "Nu", nu))
+            ires = getattr(mat_obj, "ires", ires)
+            icrit = getattr(mat_obj, "icrit", icrit)
+            tab_yld = getattr(mat_obj, "tab_yld", getattr(mat_obj, "tab_id_h", tab_yld))
+            xscale = getattr(mat_obj, "xscale", xscale)
+            yscale = getattr(mat_obj, "yscale", yscale)
+            fbi = getattr(mat_obj, "fbi", getattr(mat_obj, "fBI", fbi))
+            rhobi = getattr(mat_obj, "rhobi", getattr(mat_obj, "rhoBI", rhobi))
+            sigma_r = getattr(mat_obj, "sigma_r", getattr(mat_obj, "sig0", sigma_r))
+            dsigm = getattr(mat_obj, "dsigm", dsigm)
+            beta = getattr(mat_obj, "beta", beta)
+            omega = getattr(mat_obj, "omega", omega)
+            hard_n = getattr(mat_obj, "hard_n", getattr(mat_obj, "n", hard_n))
+            eps0 = getattr(mat_obj, "eps0", eps0)
+            sigs = getattr(mat_obj, "sigs", sigs)
+            dg0 = getattr(mat_obj, "dg0", dg0)
+            deps0 = getattr(mat_obj, "deps0", deps0)
+            m = getattr(mat_obj, "m", m)
+            tini = getattr(mat_obj, "tini", getattr(mat_obj, "t_initial", tini))
+            chard = getattr(mat_obj, "chard", chard)
+            fcut = getattr(mat_obj, "fcut", fcut)
+            vp = getattr(mat_obj, "vp", getattr(mat_obj, "vflag", vp))
+            ismooth = getattr(mat_obj, "ismooth", ismooth)
+            tab_temp = getattr(mat_obj, "tab_temp", tab_temp)
+            rm_0 = getattr(mat_obj, "rm_0", rm_0)
+            rm_45 = getattr(mat_obj, "rm_45", rm_45)
+            rm_90 = getattr(mat_obj, "rm_90", rm_90)
+            ag_0 = getattr(mat_obj, "ag_0", ag_0)
+            ag_45 = getattr(mat_obj, "ag_45", ag_45)
+            ag_90 = getattr(mat_obj, "ag_90", ag_90)
+            r_0 = getattr(mat_obj, "r_0", r_0)
+            r_45 = getattr(mat_obj, "r_45", r_45)
+            r_90 = getattr(mat_obj, "r_90", r_90)
+            angles_data = getattr(mat_obj, "angles_data", angles_data)
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("material_id", "mat_id", "id", "mid"):
+                mid = int(v)
+            elif kl == "title":
+                title = str(v)
+            elif kl in ("rho", "rho0", "rho_i", "density", "mat_rho"):
+                rho = float(v)
+            elif kl in ("refer_rho", "rhor", "ref_rho"):
+                refer_rho = float(v)
+            elif kl in ("young", "e", "mat_e"):
+                young = float(v)
+            elif kl in ("nu", "mat_nu"):
+                nu = float(v)
+            elif kl in ("ires", "mat_ires"):
+                ires = int(v)
+            elif kl in ("icrit", "mat_icrit"):
+                icrit = int(v)
+            elif kl in ("tab_yld", "mat_tab_yld"):
+                tab_yld = int(v)
+            elif kl in ("xscale", "mat_xscale"):
+                xscale = float(v)
+            elif kl in ("yscale", "mat_yscale"):
+                yscale = float(v)
+            elif kl in ("fbi", "mat_fbi"):
+                fbi = float(v)
+            elif kl in ("rhobi", "mat_rhobi"):
+                rhobi = float(v)
+            elif kl in ("sigma_r", "sig0", "mat_sigma_r", "yld0"):
+                sigma_r = float(v)
+            elif kl in ("dsigm", "mat_dsigm"):
+                dsigm = float(v)
+            elif kl in ("beta", "mat_beta"):
+                beta = float(v)
+            elif kl in ("omega", "mat_omega"):
+                omega = float(v)
+            elif kl in ("hard_n", "n", "mat_hard"):
+                hard_n = float(v)
+            elif kl in ("eps0", "epsilon_0"):
+                eps0 = float(v)
+            elif kl in ("sigs", "mat_sigs"):
+                sigs = float(v)
+            elif kl in ("dg0", "mat_dg0"):
+                dg0 = float(v)
+            elif kl in ("deps0", "mat_deps0"):
+                deps0 = float(v)
+            elif kl in ("m", "mat_strainrate_m"):
+                m = float(v)
+            elif kl in ("tini", "t_initial"):
+                tini = float(v)
+            elif kl in ("chard", "mat_chard", "fisokin"):
+                chard = float(v)
+            elif kl in ("fcut", "asrate"):
+                fcut = float(v)
+            elif kl in ("vp", "vflag"):
+                vp = int(v)
+            elif kl in ("ismooth", "mat_ismooth"):
+                ismooth = int(v)
+            elif kl in ("tab_temp", "mat_tab_temp"):
+                tab_temp = int(v)
+            elif kl in ("rm_0", "mat_rm_0"):
+                rm_0 = float(v)
+            elif kl in ("rm_45", "mat_rm_45"):
+                rm_45 = float(v)
+            elif kl in ("rm_90", "mat_rm_90"):
+                rm_90 = float(v)
+            elif kl in ("ag_0", "mat_ag_0"):
+                ag_0 = float(v)
+            elif kl in ("ag_45", "mat_ag_45"):
+                ag_45 = float(v)
+            elif kl in ("ag_90", "mat_ag_90"):
+                ag_90 = float(v)
+            elif kl in ("r_0", "mat_r_0"):
+                r_0 = float(v)
+            elif kl in ("r_45", "mat_r_45"):
+                r_45 = float(v)
+            elif kl in ("r_90", "mat_r_90"):
+                r_90 = float(v)
+            elif kl == "angles_data":
+                angles_data = v
+
+        if data_cards is not None and len(data_cards) > 0:
+            hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+            self.lines.append(hdr)
+            self._title(title)
+            for cd in data_cards:
+                self.lines.append(cd if isinstance(cd, str) else str(cd))
+            return self
+
+        hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+        self.lines.append(hdr)
+        self._title(title)
+
+        # Card 1: RHO_I [, Refer_Rho]
+        if refer_rho > 0.0 and refer_rho != rho:
+            self.lines.append(fmt_float(rho) + fmt_float(refer_rho))
+        else:
+            self.lines.append(fmt_float(rho))
+
+        # Card 2: E, Nu, Ires
+        self.lines.append(fmt_float(young) + fmt_float(nu) + fmt_int(ires, 10))
+
+        # Card 3: Icrit, TAB_YLD, MAT_Xscale, MAT_Yscale, fBI, rhoBI
+        self.lines.append(
+            fmt_int(icrit, 10) + fmt_int(tab_yld, 10)
+            + fmt_float(xscale) + fmt_float(yscale)
+            + fmt_float(fbi) + fmt_float(rhobi)
+        )
+
+        # Card 4: SIGMA_r, DSIGM, BETA, OMEGA, n
+        self.lines.append(
+            fmt_float(sigma_r) + fmt_float(dsigm) + fmt_float(beta)
+            + fmt_float(omega) + fmt_float(hard_n)
+        )
+
+        # Card 5: EPS0, SIGS, DG0, Deps0, m
+        self.lines.append(
+            fmt_float(eps0) + fmt_float(sigs) + fmt_float(dg0)
+            + fmt_float(deps0) + fmt_float(m)
+        )
+
+        # Card 6: TINI, C_HARD, F_CUT, VP, Ismooth, TAB_TEMP
+        self.lines.append(
+            fmt_float(tini) + fmt_float(chard) + fmt_float(fcut)
+            + fmt_int(vp, 10) + fmt_int(ismooth, 10) + fmt_int(tab_temp, 10)
+        )
+
+        # Cards 7+
+        if icrit == 3:
+            self.lines.append(
+                fmt_float(rm_0) + fmt_float(rm_45) + fmt_float(rm_90)
+                + fmt_float(ag_0) + fmt_float(ag_45)
+            )
+            self.lines.append(
+                fmt_float(ag_90) + fmt_float(r_0) + fmt_float(r_45) + fmt_float(r_90)
+            )
+        elif angles_data:
+            for row in angles_data:
+                self.lines.append("".join(fmt_float(x) for x in row))
+
+        return self
+
+    def mat_vegter(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/VEGTER`` — synonym for ``/MAT/LAW110``."""
+        kwargs.setdefault("law_name", "VEGTER")
+        return self.mat_law110(*args, **kwargs)
+
+    def mat_plas_vegter(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/PLAS_VEGTER`` — synonym for ``/MAT/LAW110``."""
+        kwargs.setdefault("law_name", "PLAS_VEGTER")
+        return self.mat_law110(*args, **kwargs)
+
+
 
     def mat_law93(
         self,
@@ -11320,6 +11586,8 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law107(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     elif law in ("109", "LAW109", "TAB_PLAS", "ELASTO_PLAS_TAB", "LAW109_TAB_PLAS", "MLAW109", "MAT_LAW109", "MAT_TAB_PLAS", "MAT_ELASTO_PLAS_TAB", "MAT_109"):
         d.mat_law109(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
+    elif law in ("110", "LAW110", "VEGTER", "PLAS_VEGTER", "LAW110_VEGTER", "MLAW110", "MAT_LAW110", "MAT_VEGTER", "MAT_PLAS_VEGTER", "MAT_110"):
+        d.mat_law110(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")

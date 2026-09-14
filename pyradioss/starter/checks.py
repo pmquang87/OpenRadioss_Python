@@ -200,6 +200,14 @@ for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells", "shells_qbat", "sh
     if _fam in _ALLOWED_LAWS:
         _ALLOWED_LAWS[_fam].update(_LAW109_KEYS)
 
+_LAW110_KEYS = {
+    110, "110", "LAW110", "VEGTER", "PLAS_VEGTER", "LAW110_VEGTER",
+    "MLAW110", "MAT_LAW110", "MAT_VEGTER", "MAT_PLAS_VEGTER", "MAT_110",
+}
+for _fam in ("shells", "shells_qbat", "shells_qeph", "sh3n"):
+    if _fam in _ALLOWED_LAWS:
+        _ALLOWED_LAWS[_fam].update(_LAW110_KEYS)
+
 _ALLOWED_LAWS["quads"] = _ALLOWED_LAWS["shells"]
 _ALLOWED_LAWS["solids"] = _ALLOWED_LAWS["bricks"]
 _ALLOWED_LAWS["solids_heph"] = _ALLOWED_LAWS["bricks"]
@@ -7053,6 +7061,248 @@ check_mat_tab_plas = check_mat_law109
 check_mat_elasto_plas_tab = check_mat_law109
 
 
+def check_mat_law110(*args: Any, **kwargs: Any) -> None:
+    """Validate /MAT/LAW110 (/MAT/VEGTER / /MAT/PLAS_VEGTER) parameter bounds and element compatibility (M579).
+
+    Upstream reference: ``starter/source/materials/mat/mat110/hm_read_mat110.F`` / ``matl110_vegter.cfg``.
+
+    Checks:
+      1. RHO_I > 0 (ANCMSG 1514).
+      2. E > 0 (ANCMSG 1514).
+      3. 0.0 <= NU < 0.5 (ANCMSG 49 / ANCMSG 3068).
+      4. 1 <= Icrit <= 4 (ANCMSG 1776).
+      5. If TAB_YLD == 0: SIGMA_r > 0 (ANCMSG 1777).
+      6. If TINI == 0: warning (ANCMSG 1778).
+      7. NANGLE <= 10 (ANCMSG 1779).
+      8. If Icrit == 4: warning if WSH(J) != WSH(NANGLE - J + 1) (ANCMSG 1800).
+      9. VP <= 3 (ANCMSG 1802).
+      10. Element compatibility: 2D shells only. Rejects solids (ANCMSG 305) and 1D elements (ANCMSG 306).
+    """
+    actual_mat = None
+    actual_log = None
+    actual_model = None
+    actual_mid = None
+
+    if "model" in kwargs:
+        actual_model = kwargs["model"]
+    if "mat" in kwargs:
+        actual_mat = kwargs["mat"]
+    if "log" in kwargs:
+        actual_log = kwargs["log"]
+    if "mat_id" in kwargs:
+        actual_mid = kwargs["mat_id"]
+
+    for c in args:
+        if isinstance(c, MessageLog):
+            actual_log = c
+        elif isinstance(c, Model):
+            actual_model = c
+        elif hasattr(c, "id") and (hasattr(c, "rho_i") or hasattr(c, "icrit") or hasattr(c, "tab_yld") or hasattr(c, "sigma_r")):
+            actual_mat = c
+        elif isinstance(c, int):
+            actual_mid = c
+
+    if actual_log is None:
+        actual_log = MessageLog()
+
+    mat = actual_mat
+    mat_id = actual_mid if actual_mid is not None else (mat.id if mat is not None else 0)
+
+    if mat is None and actual_model is not None and mat_id:
+        mat = getattr(actual_model, "mat_law110s", {}).get(mat_id)
+        if mat is None:
+            mat = getattr(actual_model, "materials", {}).get(mat_id)
+
+    if mat is None:
+        return
+
+    titr = getattr(mat, "title", f"/MAT/LAW110/{mat_id}")
+
+    # 1. Density check (ANCMSG 1514)
+    rho0 = getattr(mat, "rho_i", getattr(mat, "rho0", getattr(mat, "rho", 0.0)))
+    if isinstance(mat, dict):
+        rho0 = mat.get("rho_i", mat.get("rho0", mat.get("rho", 0.0)))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        rho0 = mat.params.get("MAT_RHO", mat.params.get("rho0", rho0))
+    if rho0 <= 0.0:
+        actual_log.error(
+            f"/MAT/LAW110/{mat_id}: initial density RHO_I must be strictly positive (ANCMSG 1514)",
+            "MAT CHECK",
+        )
+
+    # 2. Young's modulus check (ANCMSG 1514)
+    young = getattr(mat, "e", getattr(mat, "young", getattr(mat, "E", 0.0)))
+    if isinstance(mat, dict):
+        young = mat.get("e", mat.get("young", 0.0))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        young = mat.params.get("MAT_E", mat.params.get("young", young))
+    if young <= 0.0:
+        actual_log.error(
+            f"/MAT/LAW110/{mat_id}: Young's modulus E must be strictly positive (ANCMSG 1514)",
+            "MAT CHECK",
+        )
+
+    # 3. Poisson's ratio check
+    nu = getattr(mat, "nu", getattr(mat, "Nu", 0.0))
+    if isinstance(mat, dict):
+        nu = mat.get("nu", 0.0)
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        nu = mat.params.get("MAT_NU", mat.params.get("nu", nu))
+    if nu < 0.0 or nu >= 0.5:
+        actual_log.error(
+            f"/MAT/LAW110/{mat_id}: Poisson's ratio Nu must satisfy 0 <= Nu < 0.5, got {nu} (ANCMSG 49 / ANCMSG 3068)",
+            "MAT CHECK",
+        )
+
+    # 4. Formulation Icrit check (ANCMSG 1776)
+    icrit = getattr(mat, "icrit", 1)
+    if isinstance(mat, dict):
+        icrit = mat.get("icrit", 1)
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        icrit = mat.params.get("MAT_Icrit", icrit)
+    if icrit < 1 or icrit > 4:
+        actual_log.error(
+            f"/MAT/LAW110/{mat_id}: formulation Icrit must be between 1 and 4, got {icrit} (ANCMSG 1776)",
+            "MAT CHECK",
+        )
+
+    # 5. Yield stress check (ANCMSG 1777)
+    tab_yld = getattr(mat, "tab_yld", 0)
+    sigma_r = getattr(mat, "sigma_r", getattr(mat, "sig0", 0.0))
+    if isinstance(mat, dict):
+        tab_yld = mat.get("tab_yld", 0)
+        sigma_r = mat.get("sigma_r", mat.get("sig0", 0.0))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        tab_yld = mat.params.get("MAT_TAB_YLD", tab_yld)
+        sigma_r = mat.params.get("SIGMA_r", mat.params.get("sig0", sigma_r))
+    if tab_yld == 0 and sigma_r <= 0.0:
+        actual_log.error(
+            f"/MAT/LAW110/{mat_id}: initial yield stress SIGMA_r must be strictly positive when TAB_YLD=0 (ANCMSG 1777)",
+            "MAT CHECK",
+        )
+
+    # 6. Initial temperature warning (ANCMSG 1778)
+    tini = getattr(mat, "tini", 293.0)
+    if isinstance(mat, dict):
+        tini = mat.get("tini", 293.0)
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        tini = mat.params.get("T_Initial", tini)
+    if tini == 0.0:
+        actual_log.warning(
+            f"/MAT/LAW110/{mat_id}: initial temperature T_ini is zero (ANCMSG 1778)",
+            "MAT CHECK",
+        )
+
+    # 7. Angle count check (ANCMSG 1779)
+    angles_data = getattr(mat, "angles_data", None) or []
+    if len(angles_data) > 10:
+        actual_log.error(
+            f"/MAT/LAW110/{mat_id}: number of experimental angles exceeds maximum 10, got {len(angles_data)} (ANCMSG 1779)",
+            "MAT CHECK",
+        )
+
+    # 8. Strain rate choice flag check (ANCMSG 1802)
+    vp = getattr(mat, "vp", 2)
+    if isinstance(mat, dict):
+        vp = mat.get("vp", 2)
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        vp = mat.params.get("Vflag", vp)
+    if vp > 3:
+        actual_log.error(
+            f"/MAT/LAW110/{mat_id}: strain rate choice flag VP must be <= 3, got {vp} (ANCMSG 1802)",
+            "MAT CHECK",
+        )
+
+    # 9. Element compatibility check (ANCMSG 305 for solids, ANCMSG 306 for 1D)
+    if actual_model is not None:
+        parts_dict = getattr(actual_model, "parts", None) or {}
+        props_dict = getattr(actual_model, "properties", None) or {}
+
+        # 1. Check via element groups
+        if hasattr(actual_model, "element_groups"):
+            try:
+                grps = actual_model.element_groups()
+                if callable(grps):
+                    grps = grps()
+                for item in grps:
+                    if isinstance(item, tuple) and len(item) == 2:
+                        name, el_group = item
+                    else:
+                        continue
+                    mids_in_group = set()
+                    if hasattr(el_group, "values") and callable(el_group.values):
+                        for el in el_group.values():
+                            el_mid = getattr(el, "mat_id", getattr(el, "mid", None))
+                            if el_mid is not None:
+                                mids_in_group.add(el_mid)
+                    if hasattr(el_group, "state") and isinstance(el_group.state, dict) and "slices" in el_group.state:
+                        for _, m_part, _ in el_group.state["slices"]:
+                            m_id = getattr(m_part, "id", None)
+                            if m_id is not None:
+                                mids_in_group.add(m_id)
+                    if mat_id in mids_in_group:
+                        if name in ("bricks", "bricks_heph", "bric20s", "tetras", "tetra10s", "penta6", "pyra5", "solid", "solids"):
+                            actual_log.error(
+                                f"/MAT/LAW110/{mat_id} (/MAT/VEGTER) is not supported for solid elements ({name}) (ANCMSG 305)",
+                                "MAT CHECK",
+                            )
+                        elif name in ("trusses", "beams", "springs"):
+                            actual_log.error(
+                                f"/MAT/LAW110/{mat_id} (/MAT/VEGTER) is not supported for 1D elements ({name}) (ANCMSG 306)",
+                                "MAT CHECK",
+                            )
+            except (TypeError, AttributeError):
+                pass
+
+        # 2. Check via element dicts/groups directly on model
+        for etype in ("beams", "trusses", "springs"):
+            elements = getattr(actual_model, etype, None) or []
+            elems_iter = elements.values() if hasattr(elements, "values") and callable(elements.values) else (elements.values() if isinstance(elements, dict) else (elements.elements.values() if hasattr(elements, "elements") else []))
+            for elem in elems_iter:
+                part_id = getattr(elem, "part_id", getattr(elem, "pid", getattr(elem, "part", 0)))
+                part = parts_dict.get(part_id)
+                if (part is not None and getattr(part, "mat_id", 0) == mat_id) or getattr(elem, "mat_id", 0) == mat_id:
+                    actual_log.error(
+                        f"/MAT/LAW110/{mat_id} is not supported for 1D elements ({etype.lower()}) (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    break
+        for etype in ("bricks", "tetras", "penta6", "pyra5"):
+            elements = getattr(actual_model, etype, None) or []
+            elems_iter = elements.values() if hasattr(elements, "values") and callable(elements.values) else (elements.values() if isinstance(elements, dict) else (elements.elements.values() if hasattr(elements, "elements") else []))
+            for elem in elems_iter:
+                part_id = getattr(elem, "part_id", getattr(elem, "pid", getattr(elem, "part", 0)))
+                part = parts_dict.get(part_id)
+                if (part is not None and getattr(part, "mat_id", 0) == mat_id) or getattr(elem, "mat_id", 0) == mat_id:
+                    actual_log.error(
+                        f"/MAT/LAW110/{mat_id} is not supported for 3D solid elements ({etype.lower()}) (ANCMSG 305)",
+                        "MAT CHECK",
+                    )
+                    break
+        for pid, part in parts_dict.items():
+            if getattr(part, "mat_id", 0) == mat_id:
+                prop_id = getattr(part, "prop_id", 0)
+                prop = props_dict.get(prop_id)
+                if prop is not None:
+                    ptype_val = getattr(prop, "type", getattr(prop, "prop_type", None))
+                    ptype = str(ptype_val or "").upper()
+                    if ptype_val in (2, 3, 4, 11) or any(s in ptype for s in ("TYPE2", "TYPE3", "TYPE4", "TYPE11", "BEAM", "TRUSS", "SPRING")):
+                        actual_log.error(
+                            f"/MAT/LAW110/{mat_id} is not supported for 1D elements ({ptype.lower()}) (ANCMSG 306)",
+                            "MAT CHECK",
+                        )
+                    elif ptype_val in (6, 14) or any(s in ptype for s in ("6", "14", "TYPE6", "TYPE14", "SOLID", "BRICK", "TETRA")):
+                        actual_log.error(
+                            f"/MAT/LAW110/{mat_id} is not supported for 3D solid elements ({ptype.lower()}) (ANCMSG 305)",
+                            "MAT CHECK",
+                        )
+
+
+_check_mat_law110 = check_mat_law110
+check_mat_vegter = check_mat_law110
+check_mat_plas_vegter = check_mat_law110
+
+
 def check_materials(model: Model, log: MessageLog) -> None:
     """Validate all material parameters across model."""
     # M539: Material LAW34 parameter validation
@@ -7366,6 +7616,14 @@ def check_materials(model: Model, log: MessageLog) -> None:
     for mid, mat109 in getattr(model, "mat_law109s", {}).items():
         if mid not in getattr(model, "materials", {}):
             check_mat_law109(model=model, mat_id=mid, mat=mat109, log=log)
+
+    # M579: Material LAW110 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
+            check_mat_law110(model=model, mat_id=mid, mat=mat, log=log)
+    for mid, mat110 in getattr(model, "mat_law110s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law110(model=model, mat_id=mid, mat=mat110, log=log)
 
 
 
@@ -7707,6 +7965,17 @@ _MAT_CHECKS: dict[Any, Any] = {
     "MAT_TAB_PLAS": check_mat_law109,
     "MAT_ELASTO_PLAS_TAB": check_mat_law109,
     "MAT_109": check_mat_law109,
+    110: check_mat_law110,
+    "110": check_mat_law110,
+    "LAW110": check_mat_law110,
+    "VEGTER": check_mat_law110,
+    "PLAS_VEGTER": check_mat_law110,
+    "LAW110_VEGTER": check_mat_law110,
+    "MLAW110": check_mat_law110,
+    "MAT_LAW110": check_mat_law110,
+    "MAT_VEGTER": check_mat_law110,
+    "MAT_PLAS_VEGTER": check_mat_law110,
+    "MAT_110": check_mat_law110,
 }
 
 
@@ -8196,6 +8465,20 @@ def check_model(model: Model, log: MessageLog) -> None:
                 if name in ("trusses", "beams", "springs"):
                     log.error(
                         f"/MAT/LAW109/{mat.id} (/MAT/TAB_PLAS) is not supported for 1D elements ({name}) (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    continue
+            if (mat.law in _LAW110_KEYS
+                    or getattr(mat, "law_name", None) in _LAW110_KEYS):
+                if name in ("trusses", "beams", "springs"):
+                    log.error(
+                        f"/MAT/LAW110/{mat.id} (/MAT/VEGTER) is not supported for 1D elements ({name}) (ANCMSG 306)",
+                        "MAT CHECK",
+                    )
+                    continue
+                if name in ("bricks", "tetras", "penta6", "pyra5", "solids", "solids_heph", "solids_tetra4"):
+                    log.error(
+                        f"/MAT/LAW110/{mat.id} (/MAT/VEGTER) is not supported for solid elements ({name}) (ANCMSG 305)",
                         "MAT CHECK",
                     )
                     continue

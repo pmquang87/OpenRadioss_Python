@@ -948,7 +948,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW107", "PAPER_LIGHT", "PLAS_PAPER_LIGHT", "LAW107_PAPER_LIGHT", "PFEIFFER", "MAT_PFEIFFER", "MAT_PAPER_LIGHT", "MAT_107"):
         read_mat_law107(block, model, log)
         return
-    if lawname in ("LAW110", "VEGTER", "PLAS_VEGTER", "LAW110_VEGTER"):
+    if lawname in ("LAW110", "110", "VEGTER", "PLAS_VEGTER", "LAW110_VEGTER", "MAT_LAW110", "MAT_VEGTER", "MAT_PLAS_VEGTER", "MLAW110", "MAT_110"):
         read_mat_law110(block, model, log)
         return
     if lawname in ("LAW115", "DESHPANDE_FLECK", "DESHFLECK", "FOAM_DESHPANDE", "LAW115_DESHPANDE_FLECK"):
@@ -30938,17 +30938,20 @@ def read_mat_law110(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     f_ang = cut(valid_cards[c_idx].raw, "MAT_LAW110_7_1")
                     angles_data.append([_f(x) for x in f_ang])
     else:
+        def _toks(c):
+            return [p.strip() for p in c.raw.replace(",", " ").split() if p.strip()]
+
         if len(valid_cards) > 0:
-            toks1 = valid_cards[0].tokens()
+            toks1 = _toks(valid_cards[0])
             rho0 = float(toks1[0]) if len(toks1) > 0 else 0.0
             rhor = float(toks1[1]) if len(toks1) > 1 else rho0
         if len(valid_cards) > 1:
-            toks2 = valid_cards[1].tokens()
+            toks2 = _toks(valid_cards[1])
             young = float(toks2[0]) if len(toks2) > 0 else 0.0
             nu = float(toks2[1]) if len(toks2) > 1 else 0.0
             ires = int(toks2[2]) if len(toks2) > 2 else 0
         if len(valid_cards) > 2:
-            toks3 = valid_cards[2].tokens()
+            toks3 = _toks(valid_cards[2])
             icrit = int(toks3[0]) if len(toks3) > 0 else 1
             tab_yld = int(toks3[1]) if len(toks3) > 1 else 0
             xscale = float(toks3[2]) if len(toks3) > 2 else 1.0
@@ -30956,21 +30959,21 @@ def read_mat_law110(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             fbi = float(toks3[4]) if len(toks3) > 4 else 0.0
             rhobi = float(toks3[5]) if len(toks3) > 5 else 0.0
         if len(valid_cards) > 3:
-            toks4 = valid_cards[3].tokens()
+            toks4 = _toks(valid_cards[3])
             sigma_r = float(toks4[0]) if len(toks4) > 0 else 0.0
             dsigm = float(toks4[1]) if len(toks4) > 1 else 0.0
             beta = float(toks4[2]) if len(toks4) > 2 else 0.0
             omega = float(toks4[3]) if len(toks4) > 3 else 0.0
             hard_n = float(toks4[4]) if len(toks4) > 4 else 0.0
         if len(valid_cards) > 4:
-            toks5 = valid_cards[4].tokens()
+            toks5 = _toks(valid_cards[4])
             eps0 = float(toks5[0]) if len(toks5) > 0 else 0.0
             sigs = float(toks5[1]) if len(toks5) > 1 else 0.0
             dg0 = float(toks5[2]) if len(toks5) > 2 else 0.0
             deps0 = float(toks5[3]) if len(toks5) > 3 else 0.0
             m = float(toks5[4]) if len(toks5) > 4 else 0.0
         if len(valid_cards) > 5:
-            toks6 = valid_cards[5].tokens()
+            toks6 = _toks(valid_cards[5])
             tini = float(toks6[0]) if len(toks6) > 0 else 0.0
             chard = float(toks6[1]) if len(toks6) > 1 else 0.0
             fcut = float(toks6[2]) if len(toks6) > 2 else 0.0
@@ -30979,21 +30982,21 @@ def read_mat_law110(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             tab_temp = int(toks6[5]) if len(toks6) > 5 else 0
         if icrit == 3:
             if len(valid_cards) > 6:
-                toks7 = valid_cards[6].tokens()
+                toks7 = _toks(valid_cards[6])
                 rm_0 = float(toks7[0]) if len(toks7) > 0 else 0.0
                 rm_45 = float(toks7[1]) if len(toks7) > 1 else 0.0
                 rm_90 = float(toks7[2]) if len(toks7) > 2 else 0.0
                 ag_0 = float(toks7[3]) if len(toks7) > 3 else 0.0
                 ag_45 = float(toks7[4]) if len(toks7) > 4 else 0.0
             if len(valid_cards) > 7:
-                toks8 = valid_cards[7].tokens()
+                toks8 = _toks(valid_cards[7])
                 ag_90 = float(toks8[0]) if len(toks8) > 0 else 0.0
                 r_0 = float(toks8[1]) if len(toks8) > 1 else 1.0
                 r_45 = float(toks8[2]) if len(toks8) > 2 else 1.0
                 r_90 = float(toks8[3]) if len(toks8) > 3 else 1.0
         else:
             for c_idx in range(6, len(valid_cards)):
-                toks_ang = valid_cards[c_idx].tokens()
+                toks_ang = _toks(valid_cards[c_idx])
                 angles_data.append([float(x) for x in toks_ang])
 
     m110 = MaterialLaw110(
@@ -31008,6 +31011,7 @@ def read_mat_law110(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         ag_0=ag_0, ag_45=ag_45, ag_90=ag_90,
         r_0=r_0, r_45=r_45, r_90=r_90,
         angles_data=angles_data,
+        unit_system=block.unit_id,
     )
     model.mat_law110s[mat_id] = m110
     from .mat_reader import GenericMaterialRecord
@@ -31027,11 +31031,19 @@ def read_mat_law110(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "MAT_R_0": r_0, "MAT_R_45": r_45, "MAT_R_90": r_90,
         }
     )
+    mat110.law_name = "VEGTER"
+    mat110.m110 = m110
+    mat110.angles_data = angles_data
     mat110.record = GenericMaterialRecord(
         law_name="LAW110", law_number=110, id=mat_id, title=title,
         params=mat110.params, density=rho0, unit_id=block.unit_id,
     )
     model.materials[mat_id] = mat110
+
+
+read_mat_vegter = read_mat_law110
+read_mat_plas_vegter = read_mat_law110
+read_mat_law110_vegter = read_mat_law110
 
 
 def read_mat_law115(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -94664,6 +94676,14 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "TAB_PLAS": read_mat_law109,
     "ELASTO_PLAS_TAB": read_mat_law109,
     "MLAW109": read_mat_law109,
+    "MAT_LAW110": read_mat_law110,
+    "MAT_VEGTER": read_mat_law110,
+    "MAT_PLAS_VEGTER": read_mat_law110,
+    "LAW110": read_mat_law110,
+    "VEGTER": read_mat_law110,
+    "PLAS_VEGTER": read_mat_law110,
+    "MLAW110": read_mat_law110,
+    "LAW110_VEGTER": read_mat_law110,
 }
 
 
@@ -94710,6 +94730,14 @@ MATERIAL_DISPATCH: Dict[str, Any] = {
     "TAB_PLAS": read_mat_law109,
     "ELASTO_PLAS_TAB": read_mat_law109,
     "MLAW109": read_mat_law109,
+    "MAT_LAW110": read_mat_law110,
+    "MAT_VEGTER": read_mat_law110,
+    "MAT_PLAS_VEGTER": read_mat_law110,
+    "LAW110": read_mat_law110,
+    "VEGTER": read_mat_law110,
+    "PLAS_VEGTER": read_mat_law110,
+    "MLAW110": read_mat_law110,
+    "LAW110_VEGTER": read_mat_law110,
 }
 
 

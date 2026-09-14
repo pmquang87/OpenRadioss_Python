@@ -8076,24 +8076,26 @@ MatLaw109TabPlas = MaterialLaw109
 MaterialLaw109TabPlas = MaterialLaw109
 
 
+@dataclass
 class MaterialLaw110:
-    """/MAT/LAW110 or /MAT/VEGTER (M176): Vegter anisotropic yield locus material model.
+    """/MAT/LAW110 or /MAT/VEGTER (M176 / M579): Vegter anisotropic yield locus material model for 2D shells.
 
     Fortran origin: ``starter/source/materials/mat/mat110/hm_read_mat110.F`` / CFG ``matl110_vegter.cfg``.
+    Engine origin: ``engine/source/materials/mat/mat110/sigeps110c.F`` (plane stress shells).
     """
-    id: int
+    id: int = 0
     title: str = ""
     rho0: float = 0.0
     rhor: float = 0.0
     young: float = 0.0
     nu: float = 0.0
-    ires: int = 0
+    ires: int = 2
     icrit: int = 1
     tab_yld: int = 0
     xscale: float = 1.0
     yscale: float = 1.0
-    fbi: float = 0.0
-    rhobi: float = 0.0
+    fbi: float = 1.0
+    rhobi: float = 1.0
     sigma_r: float = 0.0
     dsigm: float = 0.0
     beta: float = 0.0
@@ -8104,11 +8106,11 @@ class MaterialLaw110:
     dg0: float = 0.0
     deps0: float = 0.0
     m: float = 0.0
-    tini: float = 0.0
+    tini: float = 293.0
     chard: float = 0.0
-    fcut: float = 0.0
-    vp: int = 0
-    ismooth: int = 0
+    fcut: float = 1.0e20
+    vp: int = 2
+    ismooth: int = 1
     tab_temp: int = 0
     rm_0: float = 0.0
     rm_45: float = 0.0
@@ -8120,6 +8122,154 @@ class MaterialLaw110:
     r_45: float = 1.0
     r_90: float = 1.0
     angles_data: list = field(default_factory=list)
+    unit_system: Optional[int] = None
+    comments: list[str] = field(default_factory=list)
+    law: int = 110
+    law_name: str = "VEGTER"
+    curve_yld: Any = None
+    curve_temp: Any = None
+
+    def __init__(
+        self,
+        id: int = 0,
+        title: str = "",
+        rho0: float = 0.0,
+        rhor: float = 0.0,
+        young: float = 0.0,
+        nu: float = 0.0,
+        ires: int = 2,
+        icrit: int = 1,
+        tab_yld: int = 0,
+        xscale: float = 1.0,
+        yscale: float = 1.0,
+        fbi: float = 1.0,
+        rhobi: float = 1.0,
+        sigma_r: float = 0.0,
+        dsigm: float = 0.0,
+        beta: float = 0.0,
+        omega: float = 0.0,
+        hard_n: float = 0.0,
+        eps0: float = 0.0,
+        sigs: float = 0.0,
+        dg0: float = 0.0,
+        deps0: float = 0.0,
+        m: float = 0.0,
+        tini: float = 293.0,
+        chard: float = 0.0,
+        fcut: float = 1.0e20,
+        vp: int = 2,
+        ismooth: int = 1,
+        tab_temp: int = 0,
+        rm_0: float = 0.0,
+        rm_45: float = 0.0,
+        rm_90: float = 0.0,
+        ag_0: float = 0.0,
+        ag_45: float = 0.0,
+        ag_90: float = 0.0,
+        r_0: float = 1.0,
+        r_45: float = 1.0,
+        r_90: float = 1.0,
+        angles_data: Optional[list] = None,
+        unit_system: Optional[int] = None,
+        comments: Optional[list] = None,
+        law: int = 110,
+        law_name: str = "VEGTER",
+        **kwargs: Any,
+    ) -> None:
+        self.id = int(kwargs.get("mid", id))
+        self.title = str(kwargs.get("title", title))
+        self.rho0 = float(kwargs.get("rho_i", kwargs.get("rho", rho0)))
+        self.rhor = float(kwargs.get("refer_rho", rhor))
+        self.young = float(kwargs.get("e", kwargs.get("E", young)))
+        self.nu = float(kwargs.get("Nu", nu))
+        self.ires = int(kwargs.get("ires", ires))
+        self.icrit = int(kwargs.get("icrit", icrit))
+        self.tab_yld = int(kwargs.get("tab_yld", tab_yld))
+        self.xscale = float(kwargs.get("xscale", xscale))
+        self.yscale = float(kwargs.get("yscale", yscale))
+        self.fbi = float(kwargs.get("fbi", fbi))
+        self.rhobi = float(kwargs.get("rhobi", rhobi))
+        self.sigma_r = float(kwargs.get("sigma_r", kwargs.get("sig0", sigma_r)))
+        self.dsigm = float(kwargs.get("dsigm", dsigm))
+        self.beta = float(kwargs.get("beta", beta))
+        self.omega = float(kwargs.get("omega", omega))
+        self.hard_n = float(kwargs.get("hard_n", kwargs.get("n", hard_n)))
+        self.eps0 = float(kwargs.get("eps0", eps0))
+        self.sigs = float(kwargs.get("sigs", sigs))
+        self.dg0 = float(kwargs.get("dg0", dg0))
+        self.deps0 = float(kwargs.get("deps0", deps0))
+        self.m = float(kwargs.get("m", m))
+        self.tini = float(kwargs.get("tini", tini))
+        self.chard = float(kwargs.get("chard", chard))
+        self.fcut = float(kwargs.get("fcut", fcut))
+        self.vp = int(kwargs.get("vp", vp))
+        self.ismooth = int(kwargs.get("ismooth", ismooth))
+        self.tab_temp = int(kwargs.get("tab_temp", tab_temp))
+        self.rm_0 = float(kwargs.get("rm_0", rm_0))
+        self.rm_45 = float(kwargs.get("rm_45", rm_45))
+        self.rm_90 = float(kwargs.get("rm_90", rm_90))
+        self.ag_0 = float(kwargs.get("ag_0", ag_0))
+        self.ag_45 = float(kwargs.get("ag_45", ag_45))
+        self.ag_90 = float(kwargs.get("ag_90", ag_90))
+        self.r_0 = float(kwargs.get("r_0", r_0))
+        self.r_45 = float(kwargs.get("r_45", r_45))
+        self.r_90 = float(kwargs.get("r_90", r_90))
+        self.angles_data = list(angles_data) if angles_data is not None else list(kwargs.get("angles_data", []))
+        self.unit_system = unit_system
+        self.comments = list(comments) if comments is not None else []
+        self.law = int(law)
+        self.law_name = str(law_name)
+        self.curve_yld = kwargs.get("curve_yld", None)
+        self.curve_temp = kwargs.get("curve_temp", None)
+
+    @property
+    def mid(self) -> int:
+        return self.id
+
+    @mid.setter
+    def mid(self, value: int) -> None:
+        self.id = value
+
+    @property
+    def rho_i(self) -> float:
+        return self.rho0
+
+    @rho_i.setter
+    def rho_i(self, value: float) -> None:
+        self.rho0 = value
+
+    @property
+    def refer_rho(self) -> float:
+        return self.rhor
+
+    @refer_rho.setter
+    def refer_rho(self, value: float) -> None:
+        self.rhor = value
+
+    @property
+    def e(self) -> float:
+        return self.young
+
+    @e.setter
+    def e(self, value: float) -> None:
+        self.young = value
+
+    @property
+    def nangle(self) -> int:
+        return len(self.angles_data)
+
+    @nangle.setter
+    def nangle(self, value: int) -> None:
+        pass
+
+
+MatLaw110 = MaterialLaw110
+MatVegter = MaterialLaw110
+MaterialVegter = MaterialLaw110
+MatPlasVegter = MaterialLaw110
+MaterialPlasVegter = MaterialLaw110
+MatLaw110Vegter = MaterialLaw110
+MaterialLaw110Vegter = MaterialLaw110
 
 
 @dataclass

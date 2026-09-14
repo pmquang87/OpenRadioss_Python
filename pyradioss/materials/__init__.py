@@ -86,8 +86,17 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                law106_jcook_alm,
                law107_paper_light,
                law109_tab_plas,
+               law110_vegter,
                law163_crush_foam,
                mat_gas, mat_void)
+from .law110_vegter import (
+    VegterParams,
+    build_law110,
+    shell_update as law110_shell_update,
+    sound_speed as law110_sound_speed,
+    consistent_shell_tangent as law110_consistent_shell_tangent,
+    extra_shapes as law110_extra_shapes,
+)
 from .law109_tab_plas import (
     Law109Params,
     build_law109,
@@ -1542,6 +1551,30 @@ _LAW109_KEYS = (
 )
 
 
+def _register_law110():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law110_vegter, "build_law110", None)
+        if builder is not None:
+            for k in (
+                110, "110", "LAW110", "VEGTER", "PLAS_VEGTER",
+                "LAW110_VEGTER", "MLAW110", "MAT_LAW110", "MAT_VEGTER",
+                "MAT_PLAS_VEGTER", "MAT_110",
+            ):
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law110()
+
+_LAW110_KEYS = (
+    110, "110", "LAW110", "VEGTER", "PLAS_VEGTER",
+    "LAW110_VEGTER", "MLAW110", "MAT_LAW110", "MAT_VEGTER",
+    "MAT_PLAS_VEGTER", "MAT_110",
+)
+
+
 
 
 _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
@@ -1894,6 +1927,11 @@ MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
     "MAT_YEOH": law94_shell_update, "LAW94_YEOH": law94_shell_update,
     109: law109_shell_update, "109": law109_shell_update, "LAW109": law109_shell_update,
     "TAB_PLAS": law109_shell_update, "MAT_LAW109": law109_shell_update, "MAT_TAB_PLAS": law109_shell_update,
+    110: law110_shell_update, "110": law110_shell_update, "LAW110": law110_shell_update,
+    "VEGTER": law110_shell_update, "PLAS_VEGTER": law110_shell_update,
+    "LAW110_VEGTER": law110_shell_update, "MLAW110": law110_shell_update,
+    "MAT_LAW110": law110_shell_update, "MAT_VEGTER": law110_shell_update,
+    "MAT_PLAS_VEGTER": law110_shell_update, "MAT_110": law110_shell_update,
 }
 
 
@@ -1999,6 +2037,7 @@ def register_materials():
     _register_law106()
     _register_law107()
     _register_law109()
+    _register_law110()
 
 
 def extra_shapes(mat, nip=None):
@@ -2182,6 +2221,8 @@ def extra_shapes(mat, nip=None):
         shapes.update(law107_extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in _LAW109_KEYS or getattr(mat, "law_name", None) in _LAW109_KEYS:
         shapes.update(law109_extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
+        shapes.update(law110_extra_shapes(mat, nip=nip))
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
         shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
     return shapes
@@ -2931,6 +2972,8 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
             except Exception:
                 pass
         return sig, epsp_out, c
+    if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
+        raise NotImplementedError("material LAW110 (VEGTER) is only supported for shells")
     raise NotImplementedError(f"material LAW{mat.law} not ported for solids")
 
 
@@ -2938,6 +2981,8 @@ def sound_speed(mat, rho=None, extra=None, is_shell: bool = False):
     """Dispatch sound speed calculation to material law."""
     law = getattr(mat, "law", None)
     law_name = getattr(mat, "law_name", None)
+    if law in _LAW110_KEYS or law_name in _LAW110_KEYS:
+        return law110_sound_speed(mat, rho=rho, is_shell=is_shell)
     if law in _LAW109_KEYS or law_name in _LAW109_KEYS:
         return law109_sound_speed(mat, rho=rho, is_shell=is_shell)
     if law in _LAW105_KEYS or law_name in _LAW105_KEYS:
@@ -3272,6 +3317,32 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
             except Exception:
                 pass
         return s_out, ep_out
+    if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
+        extra_dict = extra if extra is not None else {}
+        if epsp is not None and "pla" not in extra_dict:
+            extra_dict = dict(extra_dict)
+            extra_dict["pla"] = epsp
+        res = law110_shell_update(mat, deps=deps, sigo=sig, extra=extra_dict, dt=dt)
+        if isinstance(res, tuple):
+            s_out = res[0]
+            extra_out = res[1] if len(res) > 1 else {}
+            ep_out = extra_out.get("pla", epsp) if isinstance(extra_out, dict) else epsp
+            if isinstance(extra, dict) and isinstance(extra_out, dict):
+                extra.update(extra_out)
+        else:
+            s_out = res
+            ep_out = epsp
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = s_out
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = ep_out
+            except Exception:
+                pass
+        return s_out, ep_out
     raise NotImplementedError(f"material LAW{mat.law} not ported for shells")
 
 
@@ -3480,6 +3551,8 @@ def solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
         return law107_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     if getattr(mat, "law", None) in _LAW109_KEYS or getattr(mat, "law_name", None) in _LAW109_KEYS:
         return law109_solid_tangent(mat, sig=sig, extra=extra)
+    if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
+        raise NotImplementedError("material LAW110 (VEGTER) is only supported for shells")
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
         f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW34, LAW35, LAW36, LAW38, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
@@ -3491,6 +3564,10 @@ consistent_solid_tangent = solid_tangent
 
 def resolve_curves(mat, model, log=None):
     """Wire curve resolution hook for /FUNCT references so model.curves can be accessed by the kernel."""
+    if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
+        if hasattr(law110_vegter, "resolve"):
+            return law110_vegter.resolve(mat, model, log)
+
     if getattr(mat, "law", None) in _LAW109_KEYS or getattr(mat, "law_name", None) in _LAW109_KEYS:
         if hasattr(law109_tab_plas, "resolve"):
             return law109_tab_plas.resolve(mat, model, log)
@@ -3821,6 +3898,8 @@ def shell_layer_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
         return law107_consistent_shell_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     if getattr(mat, "law", None) in _LAW109_KEYS or getattr(mat, "law_name", None) in _LAW109_KEYS:
         return law109_consistent_shell_tangent(mat, stress=sig, extra=extra)
+    if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
+        return law110_consistent_shell_tangent(mat, stress=sig, extra=extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 "
         f"elastic, LAW2, LAW3, LAW36 and LAW44 elastoplastic, LAW27 brittle cracking, "

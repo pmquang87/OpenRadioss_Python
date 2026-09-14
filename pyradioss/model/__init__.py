@@ -32,5 +32,6 @@ from .entities import (  # noqa: F401
     MatLaw87, MatBarlat2000, MatBarlat20002D, MaterialLaw87,
     MaterialLaw88, MatLaw88, MatTabulatedHyperelastic, MatHyperElas, MatTabHyp,
     MaterialLaw109, MatLaw109, MatTabPlas, MaterialTabPlas, MatElastoPlasTab, MatLaw109TabPlas,
+    MaterialLaw110, MatLaw110, MatVegter, MaterialVegter, MatPlasVegter, MaterialPlasVegter,
 )
 
