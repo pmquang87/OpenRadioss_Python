@@ -3271,8 +3271,12 @@ def sound_speed(mat, rho=None, extra=None, is_shell: bool = False):
         return law74_sound_speed(mat, rho=rho, extra=extra)
     if law in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000", "LAW87_BARLAT2000") or law_name in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000", "LAW87_BARLAT2000"):
         return law87_sound_speed(mat, rho0=rho)
+    if is_shell and hasattr(mat, "sound_speed_shell"):
+        return mat.sound_speed_shell()
     if hasattr(mat, "sound_speed_solid"):
         return mat.sound_speed_solid()
+    if hasattr(mat, "sound_speed_shell"):
+        return mat.sound_speed_shell()
     raise NotImplementedError(f"material LAW{law} does not implement sound_speed")
 
 

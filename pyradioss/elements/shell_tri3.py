@@ -345,7 +345,9 @@ def forces(group, x, v, vr, dt, fint, mint):
     n = group.n
     if n == 0 or len(conn) == 0:
         return np.empty(0, dtype=float)
-    if dt is None or dt <= 0.0 or v is None:
+    if dt is not None and dt < 0.0:
+        return np.full(n, EP30)
+    if dt is None or dt == 0.0 or v is None:
         xe = x[conn]
         E, xl, area, B1, B2 = _local_geometry(xe)
         area = np.maximum(area, EM20)

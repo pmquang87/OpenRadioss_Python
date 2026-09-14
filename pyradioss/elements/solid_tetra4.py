@@ -339,9 +339,11 @@ def forces(group, x, v, vr, dt, fint, mint):
     conn = group.conn
     if n == 0 or len(conn) == 0:
         return np.empty(0, dtype=float)
+    if dt is not None and dt < 0.0:
+        return np.full(n, EP30)
     st = group.state
     xe = x[conn]                                   # (n, 4, 3) gather
-    if dt is None or dt <= 0.0 or v is None:
+    if dt is None or dt == 0.0 or v is None:
         dndx, vol = _geometry(xe)
         vol = np.maximum(vol, EM20)
         lc = _char_length(xe, vol)
