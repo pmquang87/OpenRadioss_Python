@@ -190,8 +190,8 @@ def cdkcoor3(xe, ve, re, dt1):
         v21x = vlx1
         v31x = vlx2
         
-        ddrz1 = dt05 * vly1 / xl2_val if xl2_val != 0.0 else 0.0
-        ddrz2 = dt05 * v31x / yl3_val if yl3_val != 0.0 else 0.0
+        ddrz1 = dt05 * vly1 / xl2_val if abs(xl2_val) > 1e-10 else 0.0
+        ddrz2 = dt05 * v31x / yl3_val if abs(yl3_val) > 1e-10 else 0.0
         
         vlx[e, 0] = vlx1 - ddry * vlz1 - ddrz1 * vly1
         vlx[e, 1] = vlx2 - ddry * vlz2 - ddrz1 * vly2

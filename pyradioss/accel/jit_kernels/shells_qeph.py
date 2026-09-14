@@ -235,6 +235,7 @@ def qeph_pre(xe, ve, vre, dt, npt1, alive):
         plat[e] = is_plat
         if is_plat:
             c_z1 = 0.0
+            z1[e] = 0.0
         else:
             z2 = c_z1 * c_z1
             a_4 = 0.25 * c_area
