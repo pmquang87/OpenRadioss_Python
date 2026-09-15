@@ -14,6 +14,7 @@ compared here are short and smooth, so 1e-8 is comfortable)."""
 
 import contextlib
 import io
+import os
 import warnings
 
 import numpy as np
@@ -93,6 +94,10 @@ def test_env_var_selects_backend(monkeypatch):
 
 
 @needs_numba
+@pytest.mark.skipif(
+    os.environ.get("PYRADIOSS_BACKEND", "") != "",
+    reason="PYRADIOSS_BACKEND is pinned — numba selection blocked",
+)
 def test_numba_backend_provides_kernels():
     assert accel.select_backend("numba") == "numba"
     for k in ("hexa_pre", "hexa_post", "shell_pre", "shell_post",

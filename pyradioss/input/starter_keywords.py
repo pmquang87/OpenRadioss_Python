@@ -830,8 +830,25 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("VISC_PLAS", "PLAS_VISC") or (lawname == "VISC" and len(block.parts) > 2 and block.parts[2].upper() in ("PLAS", "VISC_PLAS")):
         read_visc_plas(block, model, log)
         return
-    if lawname in ("VISC_HYP", "MNF") or (lawname == "VISC" and len(block.parts) > 2 and block.parts[2].upper().startswith("HYP")):
+    if lawname == "MNF":
         read_mat_law100(block, model, log)
+        return
+    if lawname in ("VISC_HYP",) or (lawname == "VISC" and len(block.parts) > 2 and block.parts[2].upper().startswith("HYP")):
+        is_law62 = False
+        _, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        val_cards = [c for c in cards if not c.is_blank and not str(c.raw if hasattr(c, "raw") else c).strip().startswith("#")]
+        if len(val_cards) > 1:
+            tok = val_cards[1].tokens()[0] if not block.fixed else (val_cards[1].raw[:20].strip() if hasattr(val_cards[1], "raw") else str(val_cards[1])[:20].strip())
+            try:
+                fval = float(tok)
+                if 0.0 < fval < 1.0:
+                    is_law62 = True
+            except (ValueError, TypeError):
+                pass
+        if is_law62:
+            read_mat_law62(block, model, log)
+        else:
+            read_mat_law100(block, model, log)
         return
     if lawname in ("VISC_LPRONY", "LPRONY", "VISCO_LPRONY"):
         read_mat_visc_lprony(block, model, log)
@@ -5627,13 +5644,21 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 if len(t0) > 1:
                     params["ismstr"] = int(float(t0[1]))
                 params["icpre"] = int(float(t0[2])) if len(t0) > 2 else 0
-                nbp = int(float(t0[3])) if len(t0) > 3 else 1
-                params["inpts_r"] = nbp
-                params["inpts_s"] = nbp
-                params["inpts_t"] = nbp
-                params["i_rot"] = int(float(t0[4])) if len(t0) > 4 else 0
-                params["iframe"] = int(float(t0[5])) if len(t0) > 5 else 0
-                params["dn"] = float(t0[6]) if len(t0) > 6 else 0.0
+                if len(t0) > 7:
+                    params["inpts_r"] = int(float(t0[3]))
+                    params["inpts_s"] = int(float(t0[4]))
+                    params["inpts_t"] = int(float(t0[5]))
+                    params["i_rot"] = int(float(t0[6]))
+                    params["iframe"] = int(float(t0[7]))
+                    params["dn"] = float(t0[8]) if len(t0) > 8 else 0.0
+                else:
+                    nbp = int(float(t0[3])) if len(t0) > 3 else 1
+                    params["inpts_r"] = nbp
+                    params["inpts_s"] = nbp
+                    params["inpts_t"] = nbp
+                    params["i_rot"] = int(float(t0[4])) if len(t0) > 4 else 0
+                    params["iframe"] = int(float(t0[5])) if len(t0) > 5 else 0
+                    params["dn"] = float(t0[6]) if len(t0) > 6 else 0.0
 
                 t1 = cards[1].tokens()
                 params["qa"] = float(t1[0]) if len(t1) > 0 else DEFAULT_QA
@@ -35181,7 +35206,7 @@ def read_mat_law95(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     m95 = MatLaw95(
         id=mat_id, rho0=rho, rhor=rho, c10=c10, c01=c01, c20=c20, c11=c11, c02=c02,
         c30=c30, c21=c21, c12=c12, c03=c03, sb=sb, d1=d1, d2=d2, d3=d3,
-        nu_val=nu_calc, iform=iform, a=a, expc=c, expm=m, ksi=ksi, tauref=tau_ref,
+        nu_val=nu if nu != 0.0 else nu_calc, iform=iform, a=a, expc=c, expm=m, ksi=ksi, tauref=tau_ref,
         title=title,
     )
     if not hasattr(model, "mat_law95s") or model.mat_law95s is None:
@@ -35196,7 +35221,7 @@ def read_mat_law95(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "rho": rho, "rho0": rho,
             "c10": c10, "c01": c01, "c20": c20, "c11": c11, "c02": c02,
             "c30": c30, "c21": c21, "c12": c12, "c03": c03, "sb": sb,
-            "d1": d1, "d2": d2, "d3": d3, "nu": nu_calc, "iform": iform,
+            "d1": d1, "d2": d2, "d3": d3, "nu": nu if nu != 0.0 else nu_calc, "nu_calc": nu_calc, "iform": iform,
             "a": a, "c": c, "m": m, "ksi": ksi, "tau_ref": tau_ref,
             "g0": g0, "G": g0, "rbulk": rbulk, "bulk": rbulk, "K": rbulk,
             "E": e_calc,
@@ -49916,7 +49941,14 @@ def read_mat_law104(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         params=params, law=104, law_name="LAW104"
     )
     model.mat_law104s[mat_id] = mat
-    model.materials[mat_id] = Material(id=mat_id, law=104, rho0=rho0, title=title, params=params)
+    from .mat_reader import GenericMaterialRecord
+    mat_entity = Material(id=mat_id, law=104, rho0=rho0, title=title, params=params)
+    params["MAT_PR"] = q_voce
+    mat_entity.record = GenericMaterialRecord(
+        law_name="LAW104", law_number=104, id=mat_id, title=title,
+        params=params, density=rho0, unit_id=block.unit_id,
+    )
+    model.materials[mat_id] = mat_entity
 
 
 read_mat_drucker = read_mat_law104

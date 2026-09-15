@@ -115,7 +115,7 @@ jobs:
         # dedicated M40 step below), so pinning here loses no coverage.
         env:
           PYRADIOSS_BACKEND: numpy
-        run: python -m pytest tests -q -m "not slow" -n auto --durations=15
+        run: python -m pytest tests -q -m "not slow" -n auto --durations=15 --deselect tests/test_m40_auto_backend.py
 
       - name: Exercise the M40 'auto' backend path (numba leg only)
         # numba is installed only on this leg, so ONLY here can the 'auto'

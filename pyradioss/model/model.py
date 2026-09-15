@@ -1077,6 +1077,8 @@ class Model:
         self.mat_law129s: Dict[int, MaterialLaw129] = {}           # /MAT/LAW129, /MAT/THERM_CREEP (M175)
         self.mat_law123s: Dict[int, MaterialLaw123] = {}           # /MAT/LAW123, /MAT/DAIMLER_PINHO (M175)
         self.mat_law132s: Dict[int, MaterialLaw132] = {}           # /MAT/LAW132, /MAT/DAIMLER_CAMANHO (M175)
+        self.mat_law134s: Dict[int, MaterialLaw134] = {}           # /MAT/LAW134, /MAT/VISCOUS_FOAM (M175)
+        self.mat_viscous_foams = self.mat_law134s
         self.mat_law104s: Dict[int, MaterialLaw104] = {}           # /MAT/LAW104, /MAT/JOHNS_VOCE_DRUCKER (M176/M574)
         self.mat_druckers = self.mat_law104s
         self.mat_johns_voce_druckers = self.mat_law104s

@@ -10345,7 +10345,7 @@ class MatLaw87:
 
     @property
     def alpha_vol(self) -> float:
-        return self.alpha
+        return float(self.alpha)
 
     @property
     def n_hard(self) -> float:

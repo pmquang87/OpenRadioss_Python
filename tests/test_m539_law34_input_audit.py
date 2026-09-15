@@ -59,6 +59,10 @@ from pyradioss.starter.initialization import build_element_groups, resolve_mater
 # 1. CFG Catalogue & Card Layout Audit
 # =============================================================================
 
+@pytest.mark.skipif(
+    not os.path.isdir(r"C:\OpenRadioss\hm_cfg_files"),
+    reason="C:\\OpenRadioss not available (CI / non-Windows)",
+)
 class TestLaw34CfgCatalogueAudit:
     """Audit C:\\OpenRadioss\\hm_cfg_files\\config\\CFG\\radioss110\\MAT\\matl34_boltzman.cfg
 
