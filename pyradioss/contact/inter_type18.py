@@ -33,6 +33,7 @@ import numpy as np
 from ..common.constants import EM20
 from ..common.fastmath import cross3, norm3
 from ..model.model import Model
+from . import tracking
 from .inter_type7 import _closest_point_on_triangle
 
 
@@ -264,6 +265,7 @@ class ContactType18:
 
     def __init__(self, itf, model: Model, log):
         self.itf = itf
+        self.model = model
         self.id = getattr(itf, "id", 0)
         self.title = getattr(itf, "title", f"TYPE18_{self.id}")
 
@@ -295,8 +297,17 @@ class ContactType18:
             log.error(f"/INTER/TYPE18/{self.id}: main surface {self.surf} "
                       f"not found or empty in model", "CONTACT INIT")
             self.main_faces = np.zeros((0, 4), dtype=np.int64)
+            self.seg_gtype = np.zeros(0, dtype="<U8")
+            self.seg_elem = np.zeros(0, dtype=np.int64)
         else:
-            self.main_faces = np.array(surf.segments, dtype=np.int64)
+            faces = np.array(surf.segments, dtype=np.int64)
+            if faces.ndim == 2 and faces.shape[1] == 3:
+                faces = np.column_stack([faces, np.full(len(faces), -1, dtype=np.int64)])
+            self.main_faces = faces
+            self.seg_gtype = (surf.seg_gtype if getattr(surf, "seg_gtype", None) is not None
+                              else np.zeros(len(self.main_faces), dtype="<U8"))
+            self.seg_elem = (surf.seg_elem if getattr(surf, "seg_elem", None) is not None
+                             else np.full(len(self.main_faces), -1, dtype=np.int64))
 
         if len(self.sec_nodes) == 0 or len(self.main_faces) == 0:
             self._init_empty()
@@ -311,6 +322,8 @@ class ContactType18:
         """Initialize empty state for inactive or missing interfaces."""
         self.sec_nodes = np.zeros(0, dtype=np.int64)
         self.main_faces = np.zeros((0, 4), dtype=np.int64)
+        self.seg_gtype = np.zeros(0, dtype="<U8")
+        self.seg_elem = np.zeros(0, dtype=np.int64)
         self.cand_p = np.zeros(0, dtype=float)
         self.dt_bound = np.inf
         self.tstart = float(getattr(self.itf, "tstart", 0.0) or 0.0)
@@ -358,13 +371,21 @@ class ContactType18:
             if t < self.tstart or t > self.tstop:
                 return 0.0, self.dt_bound
 
+        # Filter out master faces of deleted elements
+        alive = tracking.alive_segment_mask(self.model, self.seg_gtype, self.seg_elem)
+        if not np.any(alive):
+            return 0.0, self.dt_bound
+
+        live_faces = self.main_faces[alive]
+        n_main = len(live_faces)
+
         xs = x[self.sec_nodes]
 
-        # Centers of all main faces
-        mn1 = self.main_faces[:, 0]
-        mn2 = self.main_faces[:, 1]
-        mn3 = self.main_faces[:, 2]
-        mn4 = self.main_faces[:, 3]
+        # Centers of all alive main faces
+        mn1 = live_faces[:, 0]
+        mn2 = live_faces[:, 1]
+        mn3 = live_faces[:, 2]
+        mn4 = live_faces[:, 3]
         mn4_safe = np.maximum(mn4, 0)
         is_tri = (mn4 == mn3) | (mn4 < 0)
 
@@ -382,7 +403,7 @@ class ContactType18:
             dist_sq = np.sum(diff ** 2, axis=-1)
             closest_idx[start:end] = np.argmin(dist_sq, axis=1)
 
-        closest_faces = self.main_faces[closest_idx]
+        closest_faces = live_faces[closest_idx]
 
         fsec, fmain, active, stif, H, econt = _t18_forces(
             x, v, mass, self.sec_nodes, closest_faces,

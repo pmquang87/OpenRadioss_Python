@@ -596,8 +596,24 @@ class ContactType24:
         K = K[active]                            # per-pair stiffness (Istf)
         gap = gap[active]
         pen = pen[active]
-        d = np.maximum(best_d[active], EM20)
+
+        # oriented face normal
+        d13 = x[seg[:, 2]] - x[seg[:, 0]]
+        d24 = x[seg[:, 3]] - x[seg[:, 1]]
+        n_seg_raw = cross3(d13, d24)
+        n_seg_norm = norm3(n_seg_raw)
+        n_seg = np.where(
+            (n_seg_norm > EM20)[:, None],
+            n_seg_raw / np.maximum(n_seg_norm, EM20)[:, None],
+            np.array([0.0, 0.0, 1.0]),
+        )
+
+        dist = best_d[active]
+        d = np.maximum(dist, EM20)
         nvec = (x[ni] - best_pt[active]) / d[:, None]    # push-out direction
+        dot_n = np.einsum("nb,nb->n", nvec, n_seg)
+        fallback = (dist <= EM20) | (dot_n < 0.0)
+        nvec = np.where(fallback[:, None], n_seg, nvec)
         wseg = best_w[active]
 
         # relative velocity node vs interpolated segment point
@@ -607,7 +623,7 @@ class ContactType24:
 
         # normal force: spring + damper (only damp approaching motion)
         m_ni = np.maximum(mass[ni], 0.0) if len(ni) else np.zeros(0)
-        C = 2.0 * self.visc * np.sqrt(K * m_ni)
+        C = self.visc * np.sqrt(2.0 * K * m_ni)
         Fn = K * pen - C * np.minimum(vn, 0.0)
         Fvec = Fn[:, None] * nvec
 

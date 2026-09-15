@@ -110,6 +110,10 @@ def _closest_points_on_segments(p1, q1, p2, q2):
     s = np.where(tlo, np.clip(-c / np.maximum(a, EM20), 0.0, 1.0), s)
     s = np.where(thi, np.clip((b - c) / np.maximum(a, EM20), 0.0, 1.0), s)
 
+    deg2 = e <= EM20
+    s = np.where(deg2, np.clip(-c / np.maximum(a, EM20), 0.0, 1.0), s)
+    t = np.where(deg2, 0.0, t)
+
     cA = p1 + s[:, None] * d1
     cB = p2 + t[:, None] * d2
     return s, t, cA, cB
@@ -145,6 +149,11 @@ class ContactType11:
         self.fric_c = np.asarray(getattr(self.itf, "fric_c", (0.0,) * 6), dtype=float)
         self._filt_keys = np.zeros(0, dtype=np.int64)
         self._filt_vals = np.zeros((0, 3))
+        self.stmin = float(getattr(getattr(self, "itf", None), "stmin", 0.0) or 0.0)
+        self.stmax = float(getattr(getattr(self, "itf", None), "stmax", 0.0) or 0.0)
+        self.visc = float(getattr(getattr(self, "itf", None), "viss", getattr(getattr(self, "itf", None), "stiff_dc", 0.05)) or 0.05)
+        if self.visc <= 0.0:
+            self.visc = 0.05
         self.dt_bound = np.inf
         self.idel = int(getattr(self.itf, "idel", 0) or 0)
         self.deletable = False
@@ -255,6 +264,11 @@ class ContactType11:
         self.refresh = 20
         self.tstart = float(getattr(itf, "tstart", 0.0) or 0.0)
         self.tstop = float(getattr(itf, "tstop", np.inf) or np.inf)
+        self.stmin = float(getattr(itf, "stmin", 0.0) or 0.0)
+        self.stmax = float(getattr(itf, "stmax", 0.0) or 0.0)
+        self.visc = float(getattr(itf, "viss", getattr(itf, "stiff_dc", 0.05)) or 0.05)
+        if self.visc <= 0.0:
+            self.visc = 0.05
         if self.tstop <= 0.0:
             self.tstop = np.inf
 
@@ -405,6 +419,10 @@ class ContactType11:
 
         K = combine_stiffness(self.itf.istf, self.itf.stfac,
                               self.Km[pm], self.Ks[ps])
+        if self.stmin > 0.0:
+            K = np.maximum(K, self.stmin)
+        if self.stmax > 0.0:
+            K = np.minimum(K, self.stmax)
         # per-node spring-stiffness sums (bincount = the fast add.at, M7)
         n_nod = len(fcont)
         ea_flat = ea.reshape(-1)
@@ -457,7 +475,7 @@ class ContactType11:
         # normal force: spring + damper (mass of the lighter secondary end
         # node sizes the damper, as the node mass does in TYPE7)
         m_ref = mass[ea].min(axis=1)
-        C = 2.0 * _VISC * np.sqrt(K * m_ref)
+        C = self.visc * np.sqrt(2.0 * K * m_ref)
         Fn = K * pen - C * np.minimum(vn, 0.0)
         Fvec = Fn[:, None] * nvec
 

@@ -763,3 +763,63 @@ class TestStarterAndBuildContactsIntegration:
             # Simple kinematic step forward
             x += v * dt
 
+
+def test_inter_type18_dead_segment_filtering():
+    """Verify that deleted master elements (off == 0) are excluded from TYPE18 contact."""
+    model = Model()
+    log = MessageLog()
+
+    # 2 quads side by side: quad 0 (elem 0) and quad 1 (elem 1)
+    # quad 0: [0, 1, 2, 3] at x in [0, 1]
+    # quad 1: [1, 4, 5, 2] at x in [1, 2]
+    coords = np.array([
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [2.0, 0.0, 0.0],
+        [2.0, 1.0, 0.0],
+        [0.5, 0.5, 0.05],  # secondary node 6 over quad 0
+    ])
+    model.x = coords.copy()
+    model.v = np.zeros_like(coords)
+    model.v[6] = [0.0, 0.0, -10.0]
+    model.mass = np.ones(len(coords))
+
+    grp = NodeGroup(id=1)
+    grp.node_idx = [6]
+    model.node_groups[1] = grp
+
+    surf = Surface(id=2)
+    surf.segments = np.array([[0, 1, 2, 3], [1, 4, 5, 2]])
+    surf.seg_gtype = np.array(["shells", "shells"])
+    surf.seg_elem = np.array([0, 1])
+    model.surfaces[2] = surf
+
+    class DummyShells:
+        state = {"off": np.array([1.0, 1.0])}
+
+    model.shells = DummyShells()
+
+    itf = Interface(id=1, type=18)
+    itf.grnod_id = 1
+    itf.surf_id = 2
+    itf.stfac = 1000.0
+    itf.gap = 0.1
+    model.interfaces.append(itf)
+
+    ct = ContactType18(itf, model, log)
+    fcont = np.zeros_like(coords)
+    econt, dt_b = ct.forces(model.x, model.v, model.mass, 1e-4, fcont, cycle=0)
+    # Node 6 is over quad 0, so contact force is positive in z on node 6
+    assert fcont[6, 2] > 0.0
+
+    # Now kill elem 0 (quad 0)
+    model.shells.state["off"][0] = 0.0
+    fcont2 = np.zeros_like(coords)
+    econt2, dt_b2 = ct.forces(model.x, model.v, model.mass, 1e-4, fcont2, cycle=1)
+    # Node 6 now pairs with quad 1 (which is at x in [1, 2], dist > gap=0.1)
+    # So node 6 is no longer penetrating
+    assert fcont2[6, 2] == 0.0
+
+

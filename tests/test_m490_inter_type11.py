@@ -644,3 +644,30 @@ def test_build_contacts_factory():
     assert len(penalty) == 1
     assert len(tied) == 0
     assert isinstance(penalty[0], ContactType11)
+
+
+def test_closest_points_degenerate_edge2():
+    from pyradioss.contact.inter_type11 import _closest_points_on_segments
+    # Segment 1: from (0, 0, 0) to (2, 0, 0) -> projection of (1, 1, 0) should be s=0.5
+    p1 = np.array([[0.0, 0.0, 0.0]])
+    q1 = np.array([[2.0, 0.0, 0.0]])
+    p2 = np.array([[1.0, 1.0, 0.0]])
+    q2 = np.array([[1.0, 1.0, 0.0]])
+    s, t, cA, cB = _closest_points_on_segments(p1, q1, p2, q2)
+    assert s[0] == pytest.approx(0.5)
+    assert t[0] == pytest.approx(0.0)
+    np.testing.assert_allclose(cA[0], [1.0, 0.0, 0.0])
+    np.testing.assert_allclose(cB[0], [1.0, 1.0, 0.0])
+
+
+def test_type11_stiffness_clamping():
+    coords = np.array([[-1.0, 0.0, 0.02], [1.0, 0.0, 0.02], [0.0, -1.0, -0.02], [0.0, 1.0, -0.02]])
+    model, itf = make_type11_model(coords, [[0, 1]], [[2, 3]], stfac=100.0, istf=1, gap=0.1)
+    itf.stmin = 500.0
+    itf.stmax = 1000.0
+    ct = ContactType11(itf, model, MessageLog())
+    stifn = np.zeros(4)
+    fcont = np.zeros((4, 3))
+    ct.forces(model.x, model.v, model.mass, 1e-4, fcont, cycle=0, stifn=stifn)
+    np.testing.assert_allclose(stifn, 500.0, atol=1e-12)
+
