@@ -51,8 +51,6 @@ hm_read_mat19's PM table.
 
 Documented deviations of the port
 ---------------------------------
-* the /SENSOR-driven TSTART is not wired (the corpus decks use
-  SENS_ID = 0): a nonzero ISENSOR parses but TSTART stays 0.0;
 * the QEPH ZCFAC stiffness-reduction feedback (FLAG_ZCFAC) has no port
   equivalent (the port shells are BT4/C3-style);
 * if G23 != G31 the kernel's single transverse modulus uses their max
@@ -97,27 +95,59 @@ class FabricMaterial(Material):
     @property
     def G(self) -> float:                       # PM(22)
         p = self.params
-        return max(p["G12"], p["G23"], p["G31"])
+        return max(p.get("G12", 0.0), p.get("G23", 0.0), p.get("G31", 0.0))
 
     def sound_speed_shell(self) -> float:       # PM(27)
         return float(np.sqrt(self.params["E"] / self.rho0))
 
 
 def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
-                 epsp, dt: float, extra: dict):
+                 epsp=None, dt: float = 0.0, extra: dict = None):
     """One layer update (vectorized over the part slice) — sigeps19c.F.
     Total-strain law: the incoming (Jaumann-rotated) stress is only used
     as SIGO by the zerostress relaxation; the new stress is rebuilt from
     the accumulated strain."""
+    n = sig.shape[0]
+    if n == 0:
+        return sig, epsp if epsp is not None else np.empty(0)
+
     p = mat.params
     a11, a22, a12 = p["A11"], p["A22"], p["A12"]
     g12 = p["G12"]
-    rcomp = p["RCOMP"]
-    zerostress = p["ZEROSTRESS"]
-    tstart = p.get("TSTART", 0.0)
+    rcomp = p.get("RCOMP", 1.0)
+    zerostress = p.get("ZEROSTRESS", 0.0)
+    isens = p.get("ISENSOR", 0)
+    tstart = 0.0
+    if isens > 0 and getattr(mat, "sensors", None) is not None:
+        if mat.sensors.active(isens):
+            tstart = mat.sensors.fire_time.get(isens, 0.0)
+        else:
+            tstart = 1e20
+    else:
+        tstart = p.get("TSTART", 0.0)
 
-    eps = extra["eps19"]                    # (m, 3) accumulated strain
-    eps += deps
+    if extra is None:
+        extra = {}
+    eps = extra.get("eps19")
+    if eps is None:
+        eps = np.zeros((n, 3))
+        extra["eps19"] = eps
+    sigi = extra.get("sigi19")
+    if sigi is None:
+        sigi = np.zeros((n, 3))
+        extra["sigi19"] = sigi
+    tt = extra.get("t19")
+    if tt is None:
+        tt = np.zeros(n)
+        extra["t19"] = tt
+
+    if deps.ndim == 1:
+        deps = deps.reshape(1, -1)
+    if deps.shape[1] >= 3:
+        eps += deps[:, :3]
+    else:
+        eps[:, :deps.shape[1]] += deps
+
     sigo = sig.copy()                       # SIGOXX/SIGOYY/SIGOXY
 
     # ---- elastic total-strain stress in the orthotropy frame -------------
@@ -133,7 +163,8 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
     p2 = s + r
     mixed = (p1 < 0.0) & (p2 > 0.0)
     if np.any(mixed):
-        beta = 0.5 * ((1.0 - rcomp) * s[mixed] / r[mixed] + 1.0 + rcomp)
+        r_safe = np.maximum(r[mixed], 1e-20)
+        beta = 0.5 * ((1.0 - rcomp) * s[mixed] / r_safe + 1.0 + rcomp)
         p2m = p2[mixed]
         sxx[mixed] = beta * (sxx[mixed] - p2m) + p2m
         syy[mixed] = beta * (syy[mixed] - p2m) + p2m
@@ -146,8 +177,6 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
 
     # ---- REF-STATE zerostress option --------------------------------------
     if zerostress != 0.0:
-        sigi = extra["sigi19"]
-        tt = extra["t19"]                   # per-element accumulated time
         hold = tt <= tstart
         if np.any(hold):
             sigi[hold, 0] = sxx[hold]
@@ -169,12 +198,95 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
             sxx[rest] -= sigi[rest, 0]
             syy[rest] -= sigi[rest, 1]
             sxy[rest] -= sigi[rest, 2]
-        tt += dt
+        if dt > 0.0:
+            tt += dt
 
     sig[:, 0] = sxx
     sig[:, 1] = syy
     sig[:, 2] = sxy
+
+    # Transverse shear (G23/G31) if 5-component tensor passed
+    if sig.shape[1] >= 5 and deps.shape[1] >= 5:
+        g23 = p.get("G23", g12)
+        g31 = p.get("G31", g12)
+        sig[:, 3] += g23 * deps[:, 3]
+        sig[:, 4] += g31 * deps[:, 4]
+
     return sig, epsp
+
+
+def solid_update(mat, sig, deps, dt=0.0, extra=None):
+    """LAW19 is defined strictly for shell elements.
+    OpenRadioss starter rejects it on solids (starter/source/materials/mat/mat019/hm_read_mat19.F).
+    """
+    raise NotImplementedError("LAW19 (fabric) is implemented for shell elements only.")
+
+
+def shell_membrane_tangent(mat):
+    """(3, 3) unreduced elastic plane-stress orthotropic membrane tangent."""
+    p = mat.params
+    a11 = p.get("A11", p.get("E", 1.0))
+    a22 = p.get("A22", p.get("E", 1.0))
+    a12 = p.get("A12", 0.0)
+    g12 = p.get("G12", p.get("G", 0.0))
+    return np.array([
+        [a11, a12, 0.0],
+        [a12, a22, 0.0],
+        [0.0, 0.0, g12],
+    ], dtype=float)
+
+
+def consistent_shell_tangent(mat, extra=None):
+    """(n, 3, 3) consistent plane-stress shell tangent tensor for LAW19 fabric.
+    Accounts for reduced compression stiffness scaling (RCOMP) and mixed tension/compression
+    scaling (beta).
+    """
+    p = mat.params
+    a11 = p.get("A11", p.get("E", 1.0))
+    a22 = p.get("A22", p.get("E", 1.0))
+    a12 = p.get("A12", 0.0)
+    g12 = p.get("G12", p.get("G", 0.0))
+    rcomp = p.get("RCOMP", 1.0)
+    C_el = np.array([
+        [a11, a12, 0.0],
+        [a12, a22, 0.0],
+        [0.0, 0.0, g12],
+    ], dtype=float)
+
+    if extra is None or "eps19" not in extra:
+        return np.empty((0, 3, 3))
+    eps = extra["eps19"]
+    n = eps.shape[0]
+    if n == 0:
+        return np.empty((0, 3, 3))
+
+    # Evaluate unreduced orthotropic stress state
+    sxx = a11 * eps[:, 0] + a12 * eps[:, 1]
+    syy = a12 * eps[:, 0] + a22 * eps[:, 1]
+    sxy = g12 * eps[:, 2]
+
+    s = 0.5 * (sxx + syy)
+    d = 0.5 * (sxx - syy)
+    r = np.sqrt(sxy ** 2 + d * d)
+    p1 = s - r
+    p2 = s + r
+
+    # Default: pure tension (P1 >= 0) -> full elastic stiffness C_el
+    D = np.broadcast_to(C_el, (n, 3, 3)).copy()
+
+    # Bi-compression (P1 < 0 and P2 <= 0) -> scaled by RCOMP
+    bicomp = (p1 < 0.0) & (p2 <= 0.0)
+    if np.any(bicomp):
+        D[bicomp] *= rcomp
+
+    # Mixed tension/compression (P1 < 0 and P2 > 0) -> continuous beta scaling
+    mixed = (p1 < 0.0) & (p2 > 0.0)
+    if np.any(mixed):
+        r_safe = np.maximum(r[mixed], 1e-20)
+        beta = 0.5 * ((1.0 - rcomp) * s[mixed] / r_safe + 1.0 + rcomp)
+        D[mixed] *= beta[:, None, None]
+
+    return D
 
 
 # ----------------------------------------------------------------------------
@@ -185,19 +297,19 @@ def build_fabric(rec) -> FabricMaterial:
     """hm_read_mat19.F: cfg attributes -> derived constants -> Material.
     Raises ValueError on the upstream fatal checks (ANCMSG 306/307)."""
     p = rec.params
-    e11 = float(p.get("MAT_EA", 0.0) or 0.0)
-    e22 = float(p.get("MAT_EB", 0.0) or 0.0)
-    n12 = float(p.get("MAT_PRAB", 0.0) or 0.0)
-    g12 = float(p.get("MAT_GAB", 0.0) or 0.0)
-    g23 = float(p.get("MAT_GBC", 0.0) or 0.0)
-    g31 = float(p.get("MAT_GCA", 0.0) or 0.0)
-    rcomp = float(p.get("MAT_REDFACT", 0.0) or 0.0)
-    zerostress = float(p.get("M58_Zerostress", 0.0) or 0.0)
-    porosity = float(p.get("MAT_POROS", 0.0) or 0.0)
-    isens = int(p.get("ISENSOR", 0) or 0)
+    e11 = float(p.get("MAT_EA") or p.get("E11") or 0.0)
+    e22 = float(p.get("MAT_EB") or p.get("E22") or 0.0)
+    n12 = float(p.get("MAT_PRAB") or p.get("NU12") or 0.0)
+    g12 = float(p.get("MAT_GAB") or p.get("G12") or 0.0)
+    g23 = float(p.get("MAT_GBC") or p.get("G23") or 0.0)
+    g31 = float(p.get("MAT_GCA") or p.get("G31") or 0.0)
+    rcomp = float(p.get("MAT_REDFACT") or p.get("RCOMP") or 0.0)
+    zerostress = float(p.get("M58_Zerostress") or p.get("ZEROSTRESS") or 0.0)
+    porosity = float(p.get("MAT_POROS") or p.get("POROSITY") or 0.0)
+    isens = int(p.get("ISENSOR") or 0)
 
-    if e11 == 0.0 or e22 == 0.0 or g12 == 0.0 or g23 == 0.0 or g31 == 0.0:
-        raise ValueError("E11, E22, G12, G23 and G31 must all be nonzero "
+    if e11 <= 0.0 or e22 <= 0.0 or g12 <= 0.0 or g23 <= 0.0 or g31 <= 0.0:
+        raise ValueError("E11, E22, G12, G23 and G31 must all be nonzero and positive "
                          "(hm_read_mat19 error 306)")
     n21 = n12 * e22 / e11
     detc = 1.0 - n12 * n21
@@ -220,7 +332,7 @@ def build_fabric(rec) -> FabricMaterial:
         "A11": a11, "A22": a22, "A12": a12,
         "RCOMP": rcomp, "ZEROSTRESS": zerostress,
         "POROSITY": porosity, "ISENSOR": isens,
-        "TSTART": 0.0,     # /SENSOR wiring not ported (documented cut)
+        "TSTART": float(p.get("TSTART", 0.0) or 0.0),
     }
     return FabricMaterial(id=rec.id, law=19, rho0=rec.density,
                           title=rec.title, params=params)

@@ -1,0 +1,29 @@
+[
+ {
+  "example": "tetra10_0",
+  "runname": "Cantilever_beam",
+  "implicit": false,
+  "fortran": {
+   "mode": "real-format",
+   "starter_rc": 0,
+   "starter_time": 0.46,
+   "engine_rc": -9,
+   "engine_time": 900.03,
+   "n_nodes": 4404,
+   "n_elements": 2166,
+   "starter_elapsed_self": 0.4,
+   "status": "engine-partial",
+   "csv": "scratch_parity\\fortran\\tetra10_0\\Cantilever_beamT01.csv"
+  },
+  "pyradioss": {
+   "starter_rc": 0,
+   "starter_time": 0.82,
+   "engine_rc": -9,
+   "engine_time": 899.21,
+   "n_nodes": 4404,
+   "starter_elapsed_self": 0.333,
+   "status": "timeout"
+  },
+  "class": "SKIPPED-SLOW"
+ }
+]

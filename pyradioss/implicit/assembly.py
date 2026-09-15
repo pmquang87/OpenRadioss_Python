@@ -45,8 +45,7 @@ from .dofmap import DofMap
 #: beam and the TYPE4 spring: every element family of the port. The gate
 #: stays (a future un-ported family must still fail loudly here, never be
 #: silently ignored).
-_TANGENT_KERNELS = ("bricks", "tetras", "shells", "sh3n", "trusses",
-                    "springs", "beams")
+_TANGENT_KERNELS = tuple(KERNELS.keys())
 
 
 def element_triplets(name, group, x_geom, dof: DofMap, epsp_incr=None,
@@ -76,8 +75,10 @@ def element_triplets(name, group, x_geom, dof: DofMap, epsp_incr=None,
         ke = ke + kg
     # ke: (n, d, d)   edofs: (n, d) global scalar slot ids
     n, d, _ = ke.shape
-    # map each local DOF to its equation index (-1 = condensed/fixed)
-    eq = dof.eq[edofs]                        # (n, d)
+    # map each local DOF to its equation index (-1 = condensed/fixed/virtual)
+    valid_dof = edofs >= 0
+    eq = np.full_like(edofs, -1)
+    eq[valid_dof] = dof.eq[edofs[valid_dof]]           # (n, d)
     # broadcast to all (i, j) local pairs
     row_eq = np.repeat(eq[:, :, None], d, axis=2)     # (n, d, d) row eqns
     col_eq = np.repeat(eq[:, None, :], d, axis=1)     # (n, d, d) col eqns
@@ -155,13 +156,132 @@ def assemble_mass(model, dof: DofMap, x_geom, log=None):
         kernel = KERNELS[name]
         me, edofs = kernel.consistent_mass(group, x_geom)
         n, d, _ = me.shape
-        eq = dof.eq[edofs]
+        valid_dof = edofs >= 0
+        eq = np.full_like(edofs, -1)
+        eq[valid_dof] = dof.eq[edofs[valid_dof]]
         row_eq = np.repeat(eq[:, :, None], d, axis=2)
         col_eq = np.repeat(eq[:, None, :], d, axis=1)
         keep = (row_eq >= 0) & (col_eq >= 0)          # drop condensed DOFs
         rows.append(row_eq[keep].ravel())
         cols.append(col_eq[keep].ravel())
         vals.append(me[keep].ravel())
+
+    # Point masses from /ADMAS (M5) and /ADMAS/NON_UNIFORM (M114) (AUD-026)
+    x_coords = x_geom if x_geom is not None else getattr(model, "x0", getattr(model, "x", None))
+    for am in getattr(model, "admas", []):
+        if am.mass_type == 2:
+            surf = model.surfaces.get(am.grnod_id) if hasattr(model, "surfaces") else None
+            if surf is not None and surf.segments is not None and len(surf.segments) > 0 and x_coords is not None:
+                segs = np.asarray(surf.segments, dtype=np.int64)
+                areas = np.zeros(len(segs), dtype=float)
+                for si, seg in enumerate(segs):
+                    n1, n2, n3 = seg[0], seg[1], seg[2]
+                    n4 = seg[3] if len(seg) > 3 else seg[2]
+                    if n4 == n3 or n4 < 0:
+                        v1 = x_coords[n2] - x_coords[n1]
+                        v2 = x_coords[n3] - x_coords[n1]
+                        areas[si] = 0.5 * np.linalg.norm(np.cross(v1, v2))
+                    else:
+                        d1 = x_coords[n3] - x_coords[n1]
+                        d2 = x_coords[n4] - x_coords[n2]
+                        areas[si] = 0.5 * np.linalg.norm(np.cross(d1, d2))
+                tot_area = np.sum(areas)
+                if tot_area > 0.0:
+                    for si, seg in enumerate(segs):
+                        n1, n2, n3 = seg[0], seg[1], seg[2]
+                        n4 = seg[3] if len(seg) > 3 else seg[2]
+                        seg_m = am.mass * (areas[si] / tot_area)
+                        if n4 == n3 or n4 < 0:
+                            m_nod = seg_m / 3.0
+                            target_nodes = (n1, n2, n3)
+                        else:
+                            m_nod = seg_m / 4.0
+                            target_nodes = (n1, n2, n3, n4)
+                        for nid in target_nodes:
+                            if 0 <= nid < model.numnod:
+                                for d in range(3):
+                                    eq_num = dof.eq[nid * 6 + d]
+                                    if eq_num >= 0:
+                                        rows.append(np.array([eq_num], dtype=np.int64))
+                                        cols.append(np.array([eq_num], dtype=np.int64))
+                                        vals.append(np.array([m_nod], dtype=np.float64))
+            continue
+        elif am.mass_type == 3:
+            grpart = model.egroups.get("PART", {}).get(am.grnod_id) if hasattr(model, "egroups") else None
+            pids = getattr(grpart, "part_ids_resolved", None) if grpart else None
+            if pids is None and grpart:
+                pids = getattr(grpart, "members", [])
+            if not pids and hasattr(model, "parts") and am.grnod_id in model.parts:
+                pids = [am.grnod_id]
+            if pids:
+                part_nodes = set()
+                elem_grps = model.element_groups() if hasattr(model, "element_groups") else []
+                for _, grp in elem_grps:
+                    p_ids = grp.state.get("part_ids")
+                    if p_ids is not None:
+                        mask = np.isin(p_ids, pids)
+                        if np.any(mask):
+                            conn = grp.state.get("mass_conn", grp.conn)[mask]
+                            valid = conn[conn >= 0]
+                            part_nodes.update(valid.tolist())
+                if part_nodes:
+                    m_per_node = am.mass / len(part_nodes)
+                    for n_idx in part_nodes:
+                        if 0 <= n_idx < model.numnod:
+                            for d in range(3):
+                                eq_num = dof.eq[n_idx * 6 + d]
+                                if eq_num >= 0:
+                                    rows.append(np.array([eq_num], dtype=np.int64))
+                                    cols.append(np.array([eq_num], dtype=np.int64))
+                                    vals.append(np.array([m_per_node], dtype=np.float64))
+            continue
+
+        g = model.node_groups.get(am.grnod_id)
+        if g is None or g.node_idx is None:
+            continue
+        m_per_node = am.mass if am.mass_type == 0 else (am.mass / max(1, len(g.node_idx)))
+        for n_idx in g.node_idx:
+            for d in range(3):
+                eq_num = dof.eq[n_idx * 6 + d]
+                if eq_num >= 0:
+                    rows.append(np.array([eq_num], dtype=np.int64))
+                    cols.append(np.array([eq_num], dtype=np.int64))
+                    vals.append(np.array([m_per_node], dtype=np.float64))
+
+    for an in getattr(model, "admas_non_uniforms", {}).values():
+        if an.kind == "NODE":
+            for item in getattr(an, "items", []):
+                try:
+                    n_idx = model.node_index(item.entity_id)
+                except (KeyError, ValueError):
+                    continue
+                for d in range(3):
+                    eq_num = dof.eq[n_idx * 6 + d]
+                    if eq_num >= 0:
+                        rows.append(np.array([eq_num], dtype=np.int64))
+                        cols.append(np.array([eq_num], dtype=np.int64))
+                        vals.append(np.array([item.mass], dtype=np.float64))
+        elif an.kind == "PART":
+            for item in getattr(an, "items", []):
+                part_id = item.entity_id
+                part_nodes = set()
+                for _, grp in model.element_groups():
+                    mask = grp.state.get("part_ids") == part_id
+                    if np.any(mask):
+                        conn = grp.state.get("mass_conn", grp.conn)[mask]
+                        valid = conn[conn >= 0]
+                        part_nodes.update(valid.tolist())
+                if not part_nodes:
+                    continue
+                m_per_node = item.mass / len(part_nodes)
+                for n_idx in part_nodes:
+                    for d in range(3):
+                        eq_num = dof.eq[n_idx * 6 + d]
+                        if eq_num >= 0:
+                            rows.append(np.array([eq_num], dtype=np.int64))
+                            cols.append(np.array([eq_num], dtype=np.int64))
+                            vals.append(np.array([m_per_node], dtype=np.float64))
+
     rows = np.concatenate(rows) if rows else np.zeros(0, dtype=np.int64)
     cols = np.concatenate(cols) if cols else np.zeros(0, dtype=np.int64)
     vals = np.concatenate(vals) if vals else np.zeros(0)
@@ -189,7 +309,9 @@ def assemble_kgeo(model, dof: DofMap, x_geom):
         kernel = KERNELS[name]
         kg, edofs = kernel.kgeo(group, x_geom)
         n, d, _ = kg.shape
-        eq = dof.eq[edofs]
+        valid_dof = edofs >= 0
+        eq = np.full_like(edofs, -1)
+        eq[valid_dof] = dof.eq[edofs[valid_dof]]
         row_eq = np.repeat(eq[:, :, None], d, axis=2)
         col_eq = np.repeat(eq[:, None, :], d, axis=1)
         keep = (row_eq >= 0) & (col_eq >= 0)

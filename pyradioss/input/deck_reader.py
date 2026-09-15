@@ -71,7 +71,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence, Union
 
 from .card_layouts import LAYOUTS, split_fixed
 
@@ -104,10 +104,12 @@ class Card:
         line = self.raw.rstrip("\n")
         return [line[i * width:(i + 1) * width].strip() for i in range(n)]
 
-    def cut(self, layout_key: str) -> List[str]:
+    def cut(self, layout_key: Union[str, Sequence[int]]) -> List[str]:
         """Cut the raw line at the column widths of the shared
         :data:`card_layouts.LAYOUTS` entry ``layout_key`` (M37) — the way
         packed real cards with NO whitespace between fields are split."""
+        if isinstance(layout_key, (list, tuple)):
+            return split_fixed(self.raw, layout_key)
         return split_fixed(self.raw, LAYOUTS[layout_key])
 
     @property
@@ -119,19 +121,32 @@ class Card:
     # -- typed helpers used by the keyword parsers ---------------------------
     def ints(self) -> List[int]:
         """All tokens parsed as ints (for connectivity cards)."""
-        return [int(t) for t in self.tokens()]
+        return [_to_int(t) for t in self.tokens()]
 
     def floats(self) -> List[float]:
         """All tokens parsed as floats (Fortran-style '1.0D3' accepted)."""
         return [_to_float(t) for t in self.tokens()]
 
 
+def parse_fortran_float(s: str) -> float:
+    """Centralized Fortran scientific notation normalizer: handles D/d exponents
+    and omitted-E sign notation (e.g., '1.5-3' -> '1.5E-3')."""
+    cleaned = s.strip().rstrip(",")
+    return float(re.sub(r'(?<=[0-9.])([+-])(?=[0-9])', r'E\1', cleaned.replace('D', 'E').replace('d', 'e').strip()))
+
+
 def _to_float(tok: str) -> float:
-    """Parse a Fortran-flavoured real: allows D exponents ('1.5D-3')."""
+    """Parse a Fortran-flavoured real: allows D exponents ('1.5D-3') and omitted-E notation."""
+    return parse_fortran_float(tok)
+
+
+def _to_int(tok: str) -> int:
+    """Parse an integer: allows float strings by truncating them (e.g., '500.0' -> 500)."""
+    s = tok.strip().rstrip(",")
     try:
-        return float(tok)
+        return int(s)
     except ValueError:
-        return float(tok.replace("D", "E").replace("d", "e"))
+        return int(parse_fortran_float(s))
 
 
 @dataclass
@@ -174,7 +189,7 @@ class KeywordBlock:
         what the real fixed reader sees (a blank card = every field at
         its default), so per-layout card indices line up exactly."""
         if not self.blank_slots:
-            return self.cards
+            return list(self.cards)
         out: List[Card] = []
         slots, si = self.blank_slots, 0          # ascending by construction
         for i, c in enumerate(self.cards):
@@ -250,7 +265,23 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
                 if current is not None:
                     blocks.append(current)
                     current = None
-                blocks.extend(read_deck(inc_path, _depth + 1))
+                try:
+                    blocks.extend(read_deck(inc_path, _depth + 1))
+                except FileNotFoundError:
+                    # Record a synthetic error block so the caller sees the
+                    # failure (the Fortran starter also flags missing includes
+                    # and continues).  We append a block with keyword
+                    # "__INCLUDE_ERROR__" so read_all_blocks can log it.
+                    err_block = KeywordBlock(
+                        keyword="__INCLUDE_ERROR__",
+                        parts=["__INCLUDE_ERROR__"],
+                        user_id=0,
+                        cards=[],
+                        source=f"{path}:{lineno}",
+                        fixed=False,
+                    )
+                    err_block._include_path = inc_path
+                    blocks.append(err_block)
                 continue
 
             if _is_comment(stripped):
@@ -285,13 +316,13 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
                 kw_parts = parts
                 if len(parts) > 1:
                     try:
-                        user_id = int(parts[-1])
+                        user_id = _to_int(parts[-1])
                         kw_parts = parts[:-1]
                     except ValueError:
                         user_id = None
                 if user_id is not None and len(parts) > 2:
                     try:
-                        first = int(parts[-2])
+                        first = _to_int(parts[-2])
                     except ValueError:
                         first = None
                     if first is not None:
@@ -337,7 +368,7 @@ def input_version(blocks: List[KeywordBlock]) -> int:
             toks = b.cards[1].tokens()
             if toks:
                 try:
-                    return int(toks[0])
+                    return int(float(toks[0]))
                 except ValueError:
                     return 0
         return 0

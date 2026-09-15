@@ -1,0 +1,13 @@
+#RADIOSS ENGINE
+/RUN/RUBBER/1
+3.5
+/DT
+0.9  0.0
+/TFILE
+0.01
+/ANIM/DT
+0.0  0.1
+/ANIM/VECT/VEL
+/ANIM/ELEM/VONM
+/PRINT/-100
+# /STOP 15.0 (port energy-error abort) omitted: the real Engine reader cannot read the block (M35, forrtl severe 24); the port uses its default 15% guard

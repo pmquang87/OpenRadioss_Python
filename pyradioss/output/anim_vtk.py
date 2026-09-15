@@ -50,18 +50,32 @@ from ..model.model import Model
 
 # group name -> (VTK cell type id, node count written). Beams write only
 # their two end nodes (the 3rd is the orientation node, not geometry).
-_VTK_CELL = {"bricks": (12, 8), "tetras": (10, 4), "shells": (9, 4),
-             "shells_qbat": (9, 4), "shells_qeph": (9, 4), "sh3n": (5, 3),
-             "trusses": (3, 2), "springs": (3, 2), "beams": (3, 2)}
+_VTK_CELL = {
+    "bricks": (12, 8),
+    "bricks_heph": (12, 8),
+    "bric20s": (25, 20),
+    "shel16s": (12, 8),
+    "tetras": (10, 4),
+    "tetra10s": (24, 10),
+    "shells": (9, 4),
+    "shells_qbat": (9, 4),
+    "shells_qeph": (9, 4),
+    "sh3n": (5, 3),
+    "sh3n_dkt18": (5, 3),
+    "quads": (9, 4),
+    "trusses": (3, 2),
+    "springs": (3, 2),
+    "beams": (3, 2),
+}
 
-_SOLID_FAMILIES = ("bricks", "tetras")
-_SHELL_FAMILIES = ("shells", "shells_qbat", "shells_qeph", "sh3n")
+_SOLID_FAMILIES = ("bricks", "bricks_heph", "tetras", "tetra10s", "bric20s", "shel16s", "quads")
+_SHELL_FAMILIES = ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18")
 
 # anim_to_vtk's symmetric-3x3 fill of the solid Voigt 6 [xx,yy,zz,xy,yz,
 # zx], row-major: [s0 s3 s4 / s3 s1 s5 / s4 s5 s2].  yz lands at (0,2)
 # and zx at (1,2) — NOT the textbook placement, but the official tool's,
 # and the VTK->d3plot converter maps the slots back purely by position.
-_VOIGT9 = [0, 3, 4, 3, 1, 5, 4, 5, 2]
+_VOIGT9 = [0, 3, 5, 3, 1, 4, 5, 4, 2]
 
 
 def _plane_rows(s3: np.ndarray) -> np.ndarray:
@@ -88,6 +102,10 @@ def _shell_layers(group_name: str, group):
     like the kernels rotate their resultants (rot_stress_m2e)."""
     st = group.state
     sig, ep = st["sig"], st.get("epsp")
+    if sig.ndim == 2:
+        sig = sig[:, None, :]
+    if ep is not None and ep.ndim == 1:
+        ep = ep[:, None]
     lo = np.zeros((group.n, 3))
     up = np.zeros((group.n, 3))
     eplo = np.zeros(group.n)
@@ -148,15 +166,19 @@ def _write_block(fh, arr, fmt: str) -> None:
 
 def _von_mises(group_name: str, group) -> np.ndarray:
     st = group.state
-    if group_name in ("bricks", "tetras"):
+    if group_name in ("bricks", "bricks_heph", "tetras", "tetra10s", "bric20s", "shel16s", "quads"):
         s = st["sig"]
+        if s.ndim == 3:
+            s = s.mean(axis=1)
         return np.sqrt(0.5 * ((s[:, 0] - s[:, 1]) ** 2
                               + (s[:, 1] - s[:, 2]) ** 2
                               + (s[:, 2] - s[:, 0]) ** 2)
                        + 3.0 * (s[:, 3] ** 2 + s[:, 4] ** 2 + s[:, 5] ** 2))
-    if group_name in ("shells", "shells_qbat", "shells_qeph", "sh3n"):
+    if group_name in ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18"):
         # (n, nip, 3); QBAT stores (n, 4*nip, 3) GP-major — same reduction
         s = st["sig"]
+        if s.ndim == 2:
+            s = s[:, None, :]
         vm = np.sqrt(s[:, :, 0] ** 2 - s[:, :, 0] * s[:, :, 1]
                      + s[:, :, 1] ** 2 + 3.0 * s[:, :, 2] ** 2)
         return vm.max(axis=1)
@@ -176,7 +198,16 @@ def _epsp(group_name: str, group) -> np.ndarray:
     if "epsp" not in st:
         return np.zeros(group.n)
     e = st["epsp"]
-    return e.max(axis=1) if e.ndim == 2 else e
+    return e.max(axis=1) if e.ndim >= 2 else e
+
+
+def _get_cell_info(name: str, g):
+    ctype, nn = _VTK_CELL[name]
+    if name == "tetra10s" and (g.conn[:, :nn] < 0).any():
+        return (10, 4)  # degenerate/slaved tetra10 write 4 corner nodes
+    if name == "bric20s" and (g.conn[:, :nn] < 0).any():
+        return (12, 8)  # slaved bric20 write 8 corner nodes
+    return (ctype, nn)
 
 
 def write_anim_state(path: str, model: Model, t: float,
@@ -185,9 +216,9 @@ def write_anim_state(path: str, model: Model, t: float,
     n = model.numnod
     groups = list(model.element_groups())
     ncell = sum(g.n for _, g in groups)
-    size = sum((1 + _VTK_CELL[name][1]) * g.n for name, g in groups)
+    size = sum((1 + _get_cell_info(name, g)[1]) * g.n for name, g in groups)
 
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8", errors="replace") as fh:
         fh.write("# vtk DataFile Version 3.0\n")
         fh.write(f"pyradioss state t={t:.9E}\n")
         fh.write("ASCII\nDATASET UNSTRUCTURED_GRID\n")
@@ -200,13 +231,14 @@ def write_anim_state(path: str, model: Model, t: float,
         _write_block(fh, model.x, "%.9E")
         fh.write(f"CELLS {ncell} {size}\n")
         for name, g in groups:
-            nn = _VTK_CELL[name][1]
+            _, nn = _get_cell_info(name, g)
             block = np.hstack([np.full((g.n, 1), nn, dtype=np.int64),
                                g.conn[:, :nn]])
             _write_block(fh, block, "%d")
         fh.write(f"CELL_TYPES {ncell}\n")
         for name, g in groups:
-            _write_block(fh, np.full(g.n, _VTK_CELL[name][0], dtype=np.int64),
+            ctype, _ = _get_cell_info(name, g)
+            _write_block(fh, np.full(g.n, ctype, dtype=np.int64),
                          "%d")
 
         fh.write(f"POINT_DATA {n}\n")
@@ -216,6 +248,9 @@ def write_anim_state(path: str, model: Model, t: float,
         if "VEL" in vect:
             fh.write("VECTORS VELOCITY double\n")
             _write_block(fh, model.v, "%.9E")
+        if ("ACC" in vect or "ACCEL" in vect) and hasattr(model, "a") and model.a is not None:
+            fh.write("VECTORS ACCELERATION double\n")
+            _write_block(fh, model.a, "%.9E")
         # user node ids (ITAB), row-aligned with POINTS — appended after the
         # vectors so parsers reading the historical prefix keep working
         fh.write("SCALARS NODE_ID int 1\nLOOKUP_TABLE default\n")
@@ -272,13 +307,22 @@ def write_anim_state(path: str, model: Model, t: float,
             if any(name in _SOLID_FAMILIES for name, g in groups):
                 fh.write("TENSORS 3DELEM_Stress double\n")
                 for name, g in groups:
-                    rows = g.state["sig"][:, _VOIGT9] \
-                        if name in _SOLID_FAMILIES else np.zeros((g.n, 9))
+                    if name in _SOLID_FAMILIES:
+                        s = g.state["sig"]
+                        if s.ndim == 3:
+                            s = s.mean(axis=1)
+                        if s.shape[1] < 6:
+                            pad = np.zeros((s.shape[0], 6 - s.shape[1]), dtype=s.dtype)
+                            s = np.hstack([s, pad])
+                        rows = s[:, _VOIGT9]
+                    else:
+                        rows = np.zeros((g.n, 9))
                     _write_block(fh, rows, "%.9E")
                 fh.write("SCALARS 3DELEM_Plastic_Strain double 1\n"
                          "LOOKUP_TABLE default\n")
                 for name, g in groups:
-                    arr = g.state.get("epsp") \
-                        if name in _SOLID_FAMILIES else None
+                    arr = g.state.get("epsp") if name in _SOLID_FAMILIES else None
+                    if arr is not None and arr.ndim >= 2:
+                        arr = arr.max(axis=1)
                     _write_block(fh, arr if arr is not None
                                  else np.zeros(g.n), "%.9E")

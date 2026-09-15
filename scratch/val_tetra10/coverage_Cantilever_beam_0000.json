@@ -1,0 +1,138 @@
+{
+ "deck": "C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tests\\data\\rd_decks\\rd_v_elements\\RD-V-0020_Cantilever_Beam\\0020_beam\\explicit\\tetra10_0\\Cantilever_beam_0000.rad",
+ "starter_rc": 0,
+ "elapsed": 1.0,
+ "rows": [
+  {
+   "keyword": "BCS",
+   "blocks": 3,
+   "dispatch": "ported",
+   "message": ""
+  },
+  {
+   "keyword": "BEGIN",
+   "blocks": 1,
+   "dispatch": "ported",
+   "message": ""
+  },
+  {
+   "keyword": "CLOAD",
+   "blocks": 3,
+   "dispatch": "ported",
+   "message": "** WARNING     3 IN Cantilever_beam_0000.rad:8831     /CLOAD/1: real-format fields not ported \u2014 ignored: Ascale_x=.1"
+  },
+  {
+   "keyword": "DEF_SHELL",
+   "blocks": 1,
+   "dispatch": "UNKNOWN",
+   "message": "** WARNING     1 IN Cantilever_beam_0000.rad:14     keyword /DEF_SHELL not ported \u2014 block skipped"
+  },
+  {
+   "keyword": "DEF_SOLID",
+   "blocks": 1,
+   "dispatch": "UNKNOWN",
+   "message": "** WARNING     2 IN Cantilever_beam_0000.rad:18     keyword /DEF_SOLID not ported \u2014 block skipped"
+  },
+  {
+   "keyword": "END",
+   "blocks": 1,
+   "dispatch": "ported",
+   "message": ""
+  },
+  {
+   "keyword": "FUNCT_SMOOTH",
+   "blocks": 1,
+   "dispatch": "ported",
+   "message": ""
+  },
+  {
+   "keyword": "GRNOD/NODE",
+   "blocks": 9,
+   "dispatch": "ported",
+   "message": ""
+  },
+  {
+   "keyword": "MAT/ELAST",
+   "blocks": 1,
+   "dispatch": "ported",
+   "message": ""
+  },
+  {
+   "keyword": "NODE",
+   "blocks": 1,
+   "dispatch": "ported",
+   "message": ""
+  },
+  {
+   "keyword": "PART",
+   "blocks": 1,
+   "dispatch": "ported",
+   "message": ""
+  },
+  {
+   "keyword": "PROP/SOLID",
+   "blocks": 1,
+   "dispatch": "ported",
+   "message": ""
+  },
+  {
+   "keyword": "RBODY",
+   "blocks": 3,
+   "dispatch": "ported",
+   "message": "** WARNING     6 IN Cantilever_beam_0000.rad:8857     /RBODY/1: ICoG=3 approximated as 0 (port: 1 = master moved to COG, 0 = kept in place)"
+  },
+  {
+   "keyword": "TETRA10",
+   "blocks": 1,
+   "dispatch": "ported",
+   "message": ""
+  },
+  {
+   "keyword": "TH/NODE",
+   "blocks": 1,
+   "dispatch": "ported",
+   "message": ""
+  },
+  {
+   "keyword": "TH/RBODY",
+   "blocks": 1,
+   "dispatch": "ported",
+   "message": "** WARNING     9 IN Cantilever_beam_0000.rad:8915     /TH/RBODY not ported (NODE, PART, SECT supported)"
+  },
+  {
+   "keyword": "TITLE",
+   "blocks": 1,
+   "dispatch": "ported",
+   "message": ""
+  }
+ ],
+ "other_messages": {
+  "DEF_SHELL": [
+   "** WARNING     1 IN Cantilever_beam_0000.rad:14     keyword /DEF_SHELL not ported \u2014 block skipped",
+   "** WARNING     1 IN Cantilever_beam_0000.rad:14     keyword /DEF_SHELL not ported \u2014 block skipped"
+  ],
+  "DEF_SOLID": [
+   "** WARNING     2 IN Cantilever_beam_0000.rad:18     keyword /DEF_SOLID not ported \u2014 block skipped",
+   "** WARNING     2 IN Cantilever_beam_0000.rad:18     keyword /DEF_SOLID not ported \u2014 block skipped"
+  ],
+  "CLOAD": [
+   "** WARNING     3 IN Cantilever_beam_0000.rad:8831     /CLOAD/1: real-format fields not ported \u2014 ignored: Ascale_x=.1",
+   "** WARNING     4 IN Cantilever_beam_0000.rad:8839     /CLOAD/2: real-format fields not ported \u2014 ignored: Ascale_x=.1",
+   "** WARNING     5 IN Cantilever_beam_0000.rad:8847     /CLOAD/3: real-format fields not ported \u2014 ignored: Ascale_x=.1"
+  ],
+  "RBODY": [
+   "** WARNING     6 IN Cantilever_beam_0000.rad:8857     /RBODY/1: ICoG=3 approximated as 0 (port: 1 = master moved to COG, 0 = kept in place)",
+   "** WARNING     7 IN Cantilever_beam_0000.rad:8871     /RBODY/2: ICoG=3 approximated as 0 (port: 1 = master moved to COG, 0 = kept in place)",
+   "** WARNING     8 IN Cantilever_beam_0000.rad:8886     /RBODY/3: ICoG=3 approximated as 0 (port: 1 = master moved to COG, 0 = kept in place)"
+  ],
+  "TH": [
+   "** WARNING     9 IN Cantilever_beam_0000.rad:8915     /TH/RBODY not ported (NODE, PART, SECT supported)",
+   "** WARNING     9 IN Cantilever_beam_0000.rad:8915     /TH/RBODY not ported (NODE, PART, SECT supported)"
+  ],
+  "?": [
+   "** WARNING    10 IN MASS INIT     3 node(s) carry no mass (not referenced by any element); they are frozen.",
+   "** WARNING    10 IN MASS INIT     3 node(s) carry no mass (not referenced by any element); they are frozen."
+  ]
+ },
+ "tail": " are frozen.\n     /RBODY/1: 9 SLAVE NODE(S), MASS =  2.60000E-06, COG =  6.25000E+00  1.68000E+03  5.62500E+01\n       PRINCIPAL INERTIA . . . . :  1.40625E-04  1.48750E-04  1.89375E-04\n     /RBODY/2: 15 SLAVE NODE(S), MASS =  2.60000E-06, COG =  6.25000E+00  1.68000E+03  5.62500E+00\n       PRINCIPAL INERTIA . . . . :  1.27186E-04  1.44923E-04  1.72109E-04\n     /RBODY/3: 45 SLAVE NODE(S), MASS =  1.30000E-06, COG =  5.62500E+00  1.68000E+03 -4.46875E+01\n       PRINCIPAL INERTIA . . . . :  1.11523E-04  1.13740E-04  1.25264E-04\n\n                       MODEL SUMMARY\n                       -------------\n     TITLE . . . . . . . . . . . . . . : Cantilever_beam\n     NUMBER OF NODES . . . . . . . . . : 4404\n     NUMBER OF PARTS . . . . . . . . . : 1\n     NUMBER OF MATERIALS . . . . . . . : 1\n     TOTAL MASS  . . . . . . . . . . . :  4.4459999E-04\n     CENTER OF GRAVITY . . . . . . . . :  5.0000000E+00  1.7749960E+03  5.0000000E+00\n\n     MATERIALS\n       MAT        1  LAW1       RHO= 7.80000E-09  Elastic Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n             10 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.403 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\scratch\\val_tetra10\\coverage\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n"
+}

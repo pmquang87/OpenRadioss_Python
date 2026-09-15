@@ -1,11 +1,12 @@
 """
 Contact bookkeeping against element deletion (/FAIL, M3).
 
-Fortran origin: the ``IDEL`` option of the interfaces — ``resol.F`` and
-the interface force routines consult the element ``GBUF%OFF`` flags and
-remove the segments of deleted elements from the candidate lists
-(``engine/source/interfaces/interf/int_checksum / intfop2`` bookkeeping,
-and ``i7for3``'s dead-segment skip).
+Fortran origin: the ``IDEL`` option of the interfaces —
+``engine/source/interfaces/interf/intfop2.F`` (segment bookkeeping after
+element deletion), ``engine/source/interfaces/int07/i7for3.F`` (dead-segment
+skip: segments with parent ``GBUF%OFF <= 0`` are skipped in the force loop),
+and ``engine/source/interfaces/interf/int_checksum.F`` (contact-surface
+integrity checks).
 
 Why this matters physically: when a /FAIL criterion deletes an element,
 its former faces become *free surface* — crack faces. If the contact kept
@@ -41,24 +42,43 @@ def alive_segment_mask(model: Model, seg_gtype: np.ndarray,
     for gname in np.unique(seg_gtype):
         if gname == "":
             continue
-        off = getattr(model, gname).state.get("off")
+        group = getattr(model, gname, None)
+        if group is None or getattr(group, "state", None) is None:
+            continue
+        off = group.state.get("off")
         if off is None:
             continue
-        sel = seg_gtype == gname
+        sel = (seg_gtype == gname) & (seg_elem >= 0) & (seg_elem < len(off))
         mask[sel] = off[seg_elem[sel]] > 0.0
     return mask
 
 
-def any_deletable(model: Model, seg_gtype: np.ndarray) -> bool:
+def any_deletable(model: Model, seg_gtype: np.ndarray,
+                   sec_nodes: np.ndarray | None = None) -> bool:
     """False when no referenced group can ever delete an element — lets
-    the per-cycle mask refresh be skipped entirely for plain models."""
+    the per-cycle mask refresh be skipped entirely for plain models.
+
+    When *sec_nodes* is given, also check all element groups that contain
+    any of those nodes (the secondary side).  This catches the case where
+    only secondary-side elements carry a /FAIL criterion.
+    """
+    # Main-surface check (original logic)
     for gname in np.unique(seg_gtype):
         if gname == "":
             continue
-        group = getattr(model, gname)
-        if group.state.get("off") is not None and group.state.get(
+        group = getattr(model, gname, None)
+        if group is not None and group.state.get("off") is not None and group.state.get(
                 "chk_fail", False):
             return True
+    # Secondary-node check: scan all element groups for any that contain
+    # a secondary node AND have failure capability.
+    if sec_nodes is not None and len(sec_nodes) > 0 and hasattr(model, "element_groups"):
+        for gname, group in model.element_groups():
+            if group.state.get("off") is None or not group.state.get(
+                    "chk_fail", False):
+                continue
+            if np.isin(group.conn, sec_nodes).any():
+                return True
     return False
 
 
@@ -72,7 +92,9 @@ def node_reference_counts(model: Model, alive_only: bool) -> np.ndarray:
             off = group.state.get("off")
             if off is not None:
                 conn = conn[off > 0.0]
-        np.add.at(cnt, conn.reshape(-1), 1)
+        flat = conn.reshape(-1)
+        valid = (flat >= 0) & (flat < model.numnod)
+        np.add.at(cnt, flat[valid], 1)
     return cnt
 
 

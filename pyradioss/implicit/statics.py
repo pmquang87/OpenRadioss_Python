@@ -1033,6 +1033,8 @@ def _solve_increment(model, controls, log, dof, loads, solver,
         # against tol*inf — accepting a NaN state as "converged")
         if not np.isfinite(rnorm):
             break
+        if it > 0 and rnorm > 1e4 * ref:
+            break
         if it == 0:
             # the residual reference: the larger of the applied load and the
             # INITIAL out-of-balance (the latter carries the reaction scale of
@@ -1069,7 +1071,7 @@ def _solve_increment(model, controls, log, dof, loads, solver,
                     solver.solve(constr.reduce_matrix(K), R))
             else:
                 du_eq = solver.solve(K, R)
-        except RuntimeError:
+        except (RuntimeError, ValueError):
             # an EXACTLY singular trial tangent (e.g. a perfectly-plastic
             # H = 0 state where a too-large increment spuriously yields
             # enough elements to form a mechanism — the M15 beam-hinge
@@ -1370,7 +1372,11 @@ def _solve_increment_arc(model, ip, dof, solver, committed, x_ref, lam, dl,
     for name, group in model.element_groups():
         _restore(group, committed[name])
     K0 = _arc_tangent(model, dof, x_ref, None, constr, contacts, model.x)
-    duT = solver.solve(K0, q_eq)
+    try:
+        duT = solver.solve(K0, q_eq)
+    except (RuntimeError, ValueError):
+        inc = IncrementResult(load_factor=lam, converged=False, iterations=0)
+        return inc, (np.zeros_like(q_eq), 0.0), np.zeros((n, 3)), np.zeros((n, 3))
     # continue along the previous increment's direction (the standard
     # predictor-sign rule: it flips exactly where the path folds back).
     # dir_prev carries the previous (Delta_u, Delta_lambda) so the metric
@@ -1404,6 +1410,10 @@ def _solve_increment_arc(model, ip, dof, solver, committed, x_ref, lam, dl,
         inc.residuals.append(rnorm)
         inc.iterations = it + 1
         inc.load_factor = lam_t
+        if not np.isfinite(rnorm):
+            break
+        if it > 0 and rnorm > 1e4 * ref:
+            break
         # reference: the load level actually applied (never below the
         # predictor's own step, so a near-zero crossing of lambda cannot
         # make the tolerance impossible)
@@ -1415,8 +1425,12 @@ def _solve_increment_arc(model, ip, dof, solver, committed, x_ref, lam, dl,
         epsp_incr = _epsp_increments(model, epsp0)
         K = _arc_tangent(model, dof, x_ref + u, epsp_incr, constr,
                          contacts, model.x + u)
-        du_bar = solver.solve(K, R)
-        du_t = solver.solve(K, q_eq)
+        try:
+            du_bar = solver.solve(K, R)
+            du_t = solver.solve(K, q_eq)
+        except (RuntimeError, ValueError):
+            inc.converged = False
+            return inc, (Du, dlam_tot), u, ur
 
         # constraint quadratic (spherical metric, see module docstring):
         # ||Du + du_bar + r*du_t||^2 + wlam*(dlam_tot + r)^2 = dl^2

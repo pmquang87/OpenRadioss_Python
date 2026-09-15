@@ -1,0 +1,19 @@
+/ANIM/DT
+#   TSTART     TFREQ
+0.000000 500.000000
+/DT
+0.900000 0.000000
+/MON/ON
+/PRINT/-1000
+/RUN/SNAP_EXP/1
+                3050
+/TFILE/4
+#            dT_HIS
+50.000000
+/TITLE
+SnapRoof_explicit                                                                                   
+/VERS/140
+/ANIM/VECT/VEL
+/ANIM/SHELL/TENS/STRESS/MEMB
+/ABF
+50. 1e30

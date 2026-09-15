@@ -23,4 +23,15 @@ from .entities import (  # noqa: F401
     Material, Property, Part, NodeGroup, Surface, BoundaryCondition,
     InitialVelocity, Gravity, ConcentratedLoad, ImposedVelocity,
     RigidWall, Interface, Line, THRequest, Box,
+    MatLaw25, MatCompPlas, MatCompsh, MatTsaiWu, MatCrasurv, MatCompositePlas,
+    MatLaw58, MatFabrA, MatFabricA,
+    MatLaw52, MatGurson, MatPlasGurs,
+    MatLaw21, MatDprag,
+    MatLaw49, MatSteinb, MatSteinberg, MatSteinbergGuinan,
+    MatLaw79, MatJohnHolm, MatJohnsonHolmquist, MatJH2,
+    MatLaw87, MatBarlat2000, MatBarlat20002D, MaterialLaw87,
+    MaterialLaw88, MatLaw88, MatTabulatedHyperelastic, MatHyperElas, MatTabHyp,
+    MaterialLaw109, MatLaw109, MatTabPlas, MaterialTabPlas, MatElastoPlasTab, MatLaw109TabPlas,
+    MaterialLaw110, MatLaw110, MatVegter, MaterialVegter, MatPlasVegter, MaterialPlasVegter,
 )
+

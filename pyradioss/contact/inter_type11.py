@@ -80,8 +80,12 @@ _VISC = 0.05  # normal damping ratio, as TYPE7
 
 def _closest_points_on_segments(p1, q1, p2, q2):
     """Vectorized exact closest points between segments [p1,q1] and
-    [p2,q2] (Ericson §5.1.9). All args (n,3). Returns (s, t, cA, cB):
-    parameters in [0,1] and the closest points on each segment."""
+    [p2,q2] (Ericson §5.1.9, Fortran origin: i11dst3.F). All args (n,3).
+    Returns (s, t, cA, cB): parameters in [0,1] and the closest points
+    on each segment."""
+    if len(p1) == 0:
+        return (np.zeros(0, dtype=float), np.zeros(0, dtype=float),
+                np.zeros((0, 3), dtype=float), np.zeros((0, 3), dtype=float))
     d1 = q1 - p1
     d2 = q2 - p2
     r = p1 - p2
@@ -106,30 +110,92 @@ def _closest_points_on_segments(p1, q1, p2, q2):
     s = np.where(tlo, np.clip(-c / np.maximum(a, EM20), 0.0, 1.0), s)
     s = np.where(thi, np.clip((b - c) / np.maximum(a, EM20), 0.0, 1.0), s)
 
+    deg2 = e <= EM20
+    s = np.where(deg2, np.clip(-c / np.maximum(a, EM20), 0.0, 1.0), s)
+    t = np.where(deg2, 0.0, t)
+
     cA = p1 + s[:, None] * d1
     cB = p2 + t[:, None] * d2
     return s, t, cA, cB
 
 
 class ContactType11:
-    """One /INTER/TYPE11 interface, engine-side."""
+    """One /INTER/TYPE11 interface, engine-side.
+
+    Fortran origin: engine/source/interfaces/int11/ (i11main_tri.F, i11buce.F,
+    i11dst3.F, i11for3.F) and starter/source/interfaces/inter3d1/i11sti3.F.
+    """
+
+    def _init_empty(self):
+        """Initialize empty state for inactive or missing interfaces."""
+        self.es = np.zeros((0, 2), dtype=np.int64)
+        self.em = np.zeros((0, 2), dtype=np.int64)
+        self.es_gtype = np.zeros(0, dtype="<U8")
+        self.es_elem = np.zeros(0, dtype=np.int64)
+        self.em_gtype = np.zeros(0, dtype="<U8")
+        self.em_elem = np.zeros(0, dtype=np.int64)
+        self.Ks = np.zeros(0, dtype=float)
+        self.Km = np.zeros(0, dtype=float)
+        self.gap_s = np.zeros(0, dtype=float)
+        self.gap_m = np.zeros(0, dtype=float)
+        self.gap_const = 0.0
+        self.gap_min = 0.0
+        self.gap_max = np.inf
+        self.gap_bound = 0.0
+        self.fric = float(getattr(self.itf, "fric", 0.0))
+        self.mfrot = int(getattr(self.itf, "mfrot", 0))
+        self.ifq = int(getattr(self.itf, "ifq", 0))
+        self.xfiltr = float(getattr(self.itf, "xfiltr", 0.0))
+        self.fric_c = np.asarray(getattr(self.itf, "fric_c", (0.0,) * 6), dtype=float)
+        self._filt_keys = np.zeros(0, dtype=np.int64)
+        self._filt_vals = np.zeros((0, 3))
+        self.stmin = float(getattr(getattr(self, "itf", None), "stmin", 0.0) or 0.0)
+        self.stmax = float(getattr(getattr(self, "itf", None), "stmax", 0.0) or 0.0)
+        self.visc = float(getattr(getattr(self, "itf", None), "viss", getattr(getattr(self, "itf", None), "stiff_dc", 0.05)) or 0.05)
+        if self.visc <= 0.0:
+            self.visc = 0.05
+        self.dt_bound = np.inf
+        self.idel = int(getattr(self.itf, "idel", 0) or 0)
+        self.deletable = False
+        self.es_alive = np.zeros(0, dtype=bool)
+        self.em_alive = np.zeros(0, dtype=bool)
+        self.pairs_s = np.zeros(0, dtype=np.int64)
+        self.pairs_m = np.zeros(0, dtype=np.int64)
+        self._last_refresh = -10**9
+        self.refresh = 20
+        self.tstart = float(getattr(self.itf, "tstart", 0.0) or 0.0)
+        self.tstop = float(getattr(self.itf, "tstop", np.inf) or np.inf)
+        if self.tstop <= 0.0:
+            self.tstop = np.inf
 
     def __init__(self, itf, model: Model, log):
         self.itf = itf
         self.model = model
 
         def _line(lid, side):
-            ln = model.lines[lid]
+            ln = model.lines.get(lid)
+            if ln is None:
+                log.error(f"/INTER/TYPE11/{itf.id}: {side} line {lid} not found in model", "CONTACT INIT")
+                return (np.zeros((0, 2), dtype=np.int64),
+                        np.zeros(0, dtype="<U8"), np.zeros(0, dtype=np.int64))
             if ln.segments is None or len(ln.segments) == 0:
                 log.warning(f"/INTER/TYPE11/{itf.id}: {side} line {lid} is "
                             f"empty — interface inactive", "CONTACT INIT")
                 return (np.zeros((0, 2), dtype=np.int64),
                         np.zeros(0, dtype="<U8"), np.zeros(0, dtype=np.int64))
-            return ln.segments, ln.seg_gtype, ln.seg_elem
+            seg_gtype = (ln.seg_gtype if ln.seg_gtype is not None
+                         else np.zeros(len(ln.segments), dtype="<U8"))
+            seg_elem = (ln.seg_elem if ln.seg_elem is not None
+                        else np.full(len(ln.segments), -1, dtype=np.int64))
+            return ln.segments, seg_gtype, seg_elem
 
         self.es, self.es_gtype, self.es_elem = _line(itf.line_id1,
                                                      "secondary")
         self.em, self.em_gtype, self.em_elem = _line(itf.line_id2, "main")
+
+        if len(self.es) == 0 or len(self.em) == 0:
+            self._init_empty()
+            return
 
         # ---- per-edge stiffness and gap (i11sti3) --------------------------
         scale = itf.stfac if itf.istf != 1 else 1.0
@@ -179,12 +245,16 @@ class ContactType11:
         # ---- interface time step bound -------------------------------------
         # physical pre-mass-scaling masses: conservative and
         # restart-invariant (M6), like inter_type7
-        self.dt_bound = self._compute_dt_bound(
-            getattr(model, "mass0", model.mass))
+        m_phys = getattr(model, "mass0", None)
+        if m_phys is None or len(m_phys) != len(model.mass):
+            m_phys = model.mass
+        self.dt_bound = self._compute_dt_bound(m_phys)
 
         # ---- deletion bookkeeping ------------------------------------------
-        self.deletable = (tracking.any_deletable(model, self.es_gtype)
-                          or tracking.any_deletable(model, self.em_gtype))
+        self.idel = int(getattr(itf, "idel", 0) or 0)
+        self.deletable = (self.idel >= 1 and
+                          (tracking.any_deletable(model, self.es_gtype)
+                           or tracking.any_deletable(model, self.em_gtype)))
         self.es_alive = np.ones(len(self.es), dtype=bool)
         self.em_alive = np.ones(len(self.em), dtype=bool)
 
@@ -192,6 +262,15 @@ class ContactType11:
         self.pairs_m = np.zeros(0, dtype=np.int64)   # main edge rows
         self._last_refresh = -10**9
         self.refresh = 20
+        self.tstart = float(getattr(itf, "tstart", 0.0) or 0.0)
+        self.tstop = float(getattr(itf, "tstop", np.inf) or np.inf)
+        self.stmin = float(getattr(itf, "stmin", 0.0) or 0.0)
+        self.stmax = float(getattr(itf, "stmax", 0.0) or 0.0)
+        self.visc = float(getattr(itf, "viss", getattr(itf, "stiff_dc", 0.05)) or 0.05)
+        if self.visc <= 0.0:
+            self.visc = 0.05
+        if self.tstop <= 0.0:
+            self.tstop = np.inf
 
     # ------------------------------------------------------------------
     def _compute_dt_bound(self, mass) -> float:
@@ -200,7 +279,7 @@ class ContactType11:
             return np.inf
         itf = self.itf
         K_s = combine_stiffness(itf.istf, itf.stfac,
-                                np.full(len(self.es), self.Km.max()),
+                                np.full(len(self.es), self.Km.max() if len(self.Km) > 0 else 0.0),
                                 self.Ks)
         dt_s = np.sqrt(2.0 * mass[self.es].min(axis=1)
                        / np.maximum(K_s, EM20)).min()
@@ -278,7 +357,7 @@ class ContactType11:
         self.pairs_m = pm
 
     # ------------------------------------------------------------------
-    def forces(self, x, v, mass, dt, fcont, cycle, stifn=None):
+    def forces(self, x, v, mass, dt, fcont, cycle=0, stifn=None, t=None, **kwargs):
         """Penalty forces for one cycle, scattered into ``fcont``.
         Returns (contact_work_increment, dt_interface) — the same
         contract as ContactType7.forces (the Engine books the exact
@@ -286,6 +365,12 @@ class ContactType11:
         is the /DT/NODA nodal-stiffness accumulation, M6)."""
         if len(self.es) == 0 or len(self.em) == 0:
             return 0.0, np.inf
+        if dt <= 0.0:
+            return 0.0, self.dt_bound if hasattr(self, "dt_bound") else np.inf
+
+        if t is not None:
+            if t < self.tstart or t > self.tstop:
+                return 0.0, self.dt_bound if hasattr(self, "dt_bound") else np.inf
 
         if self.deletable:
             self.es_alive = tracking.alive_segment_mask(
@@ -334,12 +419,20 @@ class ContactType11:
 
         K = combine_stiffness(self.itf.istf, self.itf.stfac,
                               self.Km[pm], self.Ks[ps])
+        if self.stmin > 0.0:
+            K = np.maximum(K, self.stmin)
+        if self.stmax > 0.0:
+            K = np.minimum(K, self.stmax)
         # per-node spring-stiffness sums (bincount = the fast add.at, M7)
         n_nod = len(fcont)
-        Knode = np.bincount(ea.reshape(-1), weights=np.repeat(K, 2),
-                            minlength=n_nod)
-        Knode += np.bincount(eb.reshape(-1), weights=np.repeat(K, 2),
-                             minlength=n_nod)
+        ea_flat = ea.reshape(-1)
+        w_a = np.repeat(K, 2)
+        v_a = (ea_flat >= 0) & (ea_flat < n_nod)
+        Knode = np.bincount(ea_flat[v_a], weights=w_a[v_a], minlength=n_nod)
+        eb_flat = eb.reshape(-1)
+        w_b = np.repeat(K, 2)
+        v_b = (eb_flat >= 0) & (eb_flat < n_nod)
+        Knode += np.bincount(eb_flat[v_b], weights=w_b[v_b], minlength=n_nod)
         loaded = Knode > 0.0
         dt_int = min(self.dt_bound, float(
             np.sqrt(2.0 * mass[loaded] / Knode[loaded]).min()))
@@ -356,8 +449,22 @@ class ContactType11:
         s, t = s[active], t[active]
         gap = gap[active]
         pen = pen[active]
-        d = np.maximum(d[active], EM20)
-        nvec = dvec[active] / d[:, None]      # pushes the secondary edge out
+        norm_d = norm3(dvec[active])
+        deg = norm_d <= EM20
+        if np.any(deg):
+            e1 = x[ea[:, 1]] - x[ea[:, 0]]
+            e2 = x[eb[:, 1]] - x[eb[:, 0]]
+            n_cross = np.cross(e1, e2)
+            n_cross_norm = norm3(n_cross)
+            valid_cross = n_cross_norm > EM20
+            fallback = np.where(valid_cross[:, None],
+                                n_cross / np.maximum(n_cross_norm, EM20)[:, None],
+                                np.array([0.0, 0.0, 1.0]))
+            d_safe = np.maximum(norm_d, EM20)
+            nvec = np.where(deg[:, None], fallback, dvec[active] / d_safe[:, None])
+        else:
+            d_safe = np.maximum(d[active], EM20)
+            nvec = dvec[active] / d_safe[:, None]
 
         # relative velocity of the two closest points
         vA = (1 - s)[:, None] * v[ea[:, 0]] + s[:, None] * v[ea[:, 1]]
@@ -368,7 +475,7 @@ class ContactType11:
         # normal force: spring + damper (mass of the lighter secondary end
         # node sizes the damper, as the node mass does in TYPE7)
         m_ref = mass[ea].min(axis=1)
-        C = 2.0 * _VISC * np.sqrt(K * m_ref)
+        C = self.visc * np.sqrt(2.0 * K * m_ref)
         Fn = K * pen - C * np.minimum(vn, 0.0)
         Fvec = Fn[:, None] * nvec
 
@@ -379,6 +486,7 @@ class ContactType11:
         # mu = const, no-filter path is the M4 code verbatim
         # (x + (-a) == x - a exactly in IEEE — bit-identical).
         if self.fric > 0.0 or self.mfrot > 0:
+            Fn_pos = np.maximum(Fn, 0.0)
             gap_ref = float(np.mean(gap))
             vt = vrel - vn[:, None] * nvec
             vt_mag = norm3(vt)
@@ -387,13 +495,13 @@ class ContactType11:
                 # documented port DEFINITION of an edge pair's contact
                 # pressure (contact/friction.py)
                 lm = norm3(x[eb[:, 1]] - x[eb[:, 0]])
-                pres = Fn / np.maximum(lm * gap, EM20)
+                pres = Fn_pos / np.maximum(lm * gap, EM20)
                 mu = friction.mu_kinetic(self.mfrot, self.fric,
                                          self.fric_c, pres, vt_mag)
             else:
                 mu = self.fric
-            Ft = mu * Fn * vt_mag / (
-                vt_mag + 1e-3 * gap_ref / max(dt, EM20))
+            v_ref = np.maximum(1e-3 * gap_ref / max(dt, EM20), EM20)
+            Ft = mu * Fn_pos * vt_mag / (vt_mag + v_ref)
             ftvec = -(Ft / np.maximum(vt_mag, EM20))[:, None] * vt
             if self.ifq > 0:
                 alpha = friction.filter_alpha(self.ifq, self.xfiltr, dt)
@@ -409,11 +517,17 @@ class ContactType11:
         va = np.empty((len(s), 2, 3))
         va[:, 0, :] = (1 - s)[:, None] * Fvec
         va[:, 1, :] = s[:, None] * Fvec
-        scatter_add3(fcont, ea.reshape(-1), va.reshape(-1, 3))
+        ea_act = ea.reshape(-1)
+        va_act = va.reshape(-1, 3)
+        v_act_a = (ea_act >= 0) & (ea_act < n_nod)
+        scatter_add3(fcont, ea_act[v_act_a], va_act[v_act_a])
         vb = np.empty((len(t), 2, 3))
         vb[:, 0, :] = -(1 - t)[:, None] * Fvec
         vb[:, 1, :] = -t[:, None] * Fvec
-        scatter_add3(fcont, eb.reshape(-1), vb.reshape(-1, 3))
+        eb_act = eb.reshape(-1)
+        vb_act = vb.reshape(-1, 3)
+        v_act_b = (eb_act >= 0) & (eb_act < n_nod)
+        scatter_add3(fcont, eb_act[v_act_b], vb_act[v_act_b])
 
         wrk = float(np.einsum("nb,nb->", Fvec, vrel)) * dt
         return -wrk, dt_int

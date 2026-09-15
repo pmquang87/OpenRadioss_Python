@@ -1,0 +1,14 @@
+#RADIOSS ENGINE
+/RUN/EVOLUTIONARY_MULTI_INPUT/1
+1.0
+/IMPL
+/IMPL/FATIG/MULT/MINPUT/EVOL/NSTAT
+0.0  400.0  1500  10  8
+5.0  10000.0  0.03  0.0  0.0  400.0  29000
+30
+60.0  180.0  80.0  80.0  6
+2  0  0.1  0.0  0.0  0.0  0.9  0.0
+1  10
+2  11
+/PRINT/-500
+# /STOP 15.0 (port energy-error abort) omitted: the real Engine reader cannot read the block (M35, forrtl severe 24); the port uses its default 15% guard

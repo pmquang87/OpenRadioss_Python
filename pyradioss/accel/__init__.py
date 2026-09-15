@@ -160,6 +160,7 @@ def _load_numba_module():
     Factored out so the auto path and the tests share ONE seam — tests
     monkeypatch this to simulate numba being absent without touching the
     real import machinery."""
+    import numba  # noqa: F401 — probe availability before loading kernels
     from . import jit_kernels  # import compiles/loads the mirrors
     return jit_kernels
 

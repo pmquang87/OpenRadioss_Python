@@ -59,8 +59,18 @@ intent of the surrounding code) is the cutoff-frequency first-order
 filter, so the port uses ``ALPHA = MIN(ONE, XFILTR*dt)`` and records the
 difference here rather than reproducing what looks like an upstream MAX/
 MIN slip. IFQ >= 10 selects the INCREMENTAL (stiffness) tangential
-formulation (MODFR = 2) — a different force path, deferred loudly (its
-return-mapping mechanics is what the IMPLICIT port already implements).
+formulation (MODFR = 2, Iform = 2) — ``apply_incremental_stiffness``
+below (M477).  The Fortran reference is i7for3.F lines 2310-2356:
+
+    FX = CAND_FX + ALPHA * STIF0 * VX * DT12
+    FTN = FX*N1 + FY*N2 + FZ*N3       (normal projection)
+    FX = FX - FTN*N1                   (tangential plane)
+    BETA = min(1, XMU * sqrt(FN/FT))  (Coulomb return mapping)
+    FXT = FX * BETA; CAND_FX = FXT     (store return-mapped force)
+
+Note: the Fortran uses DT12 (= (DT1+DT2)/2, the leapfrog midstep) while
+the port uses dt (= DT1, the cycle timestep).  For constant dt these are
+identical; for variable dt the difference is second-order.
 
 TYPE11 (a DOCUMENTED PORT EXTENSION — checked against the source): the
 original engine never evaluates friction models for edge-to-edge
@@ -88,6 +98,8 @@ The implicit solver evaluates the SAME laws at their STATIC LIMIT — see
 from __future__ import annotations
 
 import numpy as np
+
+from ..common.constants import EM20
 
 #: the mu floor of i7for3.F (XMU = MAX(XMU, EM30))
 _MU_FLOOR = 1e-30
@@ -127,7 +139,8 @@ def mu_kinetic(mfrot, mu0, c, p, v):
         xi = (v[mid] - vc1) / (vc2 - vc1)
         mu[mid] = c[2] + (c[3] - c[2]) * (3.0 - 2.0 * xi) * xi * xi
         dmu = c[1] - c[3]
-        mu[hi] = c[1] - dmu / (1.0 + dmu * (v[hi] - vc2) ** 2)
+        denom = 1.0 + dmu * (v[hi] - vc2) ** 2
+        mu[hi] = c[1] - dmu / np.maximum(denom, EM20)
     elif mfrot == 4:
         # exponential decay (static -> dynamic) — i7for3 MFROT==4
         mu = c[0] + (mu0 - c[0]) * np.exp(-c[1] * v)
@@ -187,9 +200,9 @@ def has_velocity_terms(mfrot, c) -> bool:
 
 def filter_alpha(ifq, xfiltr, dt):
     """The per-cycle IFQ filter coefficient ALPHA (module docstring).
-    IFQ 1/2: the constant XFILTR; IFQ 3: min(1, XFILTR*dt) — the
+    IFQ 1/2/11/12: the constant XFILTR; IFQ 3/13: min(1, XFILTR*dt) — the
     cutoff-frequency form (the documented MAX->MIN deviation)."""
-    if ifq == 3:
+    if ifq in (3, 13):
         return min(1.0, xfiltr * dt)
     return xfiltr
 
@@ -214,5 +227,50 @@ def apply_filter(keys, ft_target, alpha, filt_keys, filt_vals):
         hit = filt_keys[pos] == keys
         prev[hit] = filt_vals[pos[hit]]
     ft = alpha * ft_target + (1.0 - alpha) * prev
+    order = np.argsort(keys)
+    return ft, keys[order], ft[order]
+
+
+def apply_incremental_stiffness(keys, k, v_rel, dt, normal, mu, fn, alpha, filt_keys, filt_vals):
+    """One incremental stiffness tangential force step (MODFR=2 / IFQ>=10)
+    over the active pairs — the CAND_FX/FY/FZ explicit path in i7for3.F
+    lines 2310-2356 (M477).
+
+    Returns (ft, new_keys, new_vals), where ``ft`` is the tangential force
+    vector.  The incremental formula (Fortran lines 2320-2340):
+
+        F_trial = CAND_F + alpha * k * v_rel * dt
+        F_trial_tan = F_trial - (F_trial . normal) * normal
+        beta = min(1, mu * |Fn| / |F_trial_tan|)
+        ft = F_trial_tan * beta
+        CAND_F = ft  (stored for next cycle — the return-mapped value)
+
+    This implicitly handles stick/slip transitions: beta=1 in stick
+    (elastic accumulation), beta<1 in slip (Coulomb saturation at mu*Fn).
+    """
+    prev = np.zeros_like(v_rel)
+    if len(filt_keys):
+        pos = np.searchsorted(filt_keys, keys)
+        pos = np.minimum(pos, len(filt_keys) - 1)
+        hit = filt_keys[pos] == keys
+        prev[hit] = filt_vals[pos[hit]]
+
+    # F_trial = CAND_F + alpha * k * v_rel * dt
+    f_trial = prev + (alpha * k * dt)[:, None] * v_rel
+    
+    # Project to tangential plane (F_trial_tan)
+    ftn = np.einsum('ij,ij->i', f_trial, normal)
+    f_trial_tan = f_trial - ftn[:, None] * normal
+    
+    # Frictional limit
+    ft_mag = np.linalg.norm(f_trial_tan, axis=1)
+    
+    # beta = min(1.0, mu * fn / ft_mag)
+    # Handle division by zero where ft_mag is extremely small
+    safe_mag = np.maximum(ft_mag, 1e-30)
+    beta = np.clip((mu * np.maximum(fn, 0.0)) / safe_mag, 0.0, 1.0)
+    
+    ft = f_trial_tan * beta[:, None]
+    
     order = np.argsort(keys)
     return ft, keys[order], ft[order]

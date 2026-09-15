@@ -466,7 +466,7 @@ EXPECTED = {
     "JWL": (2, 1.63),            # /MAT/JWL/2/123: id 2, unit 123
     "KELVINMAX": (3, 2e-9),
     "LAW151": (2, 0.0),
-    "LAW37": (2, 1e-3),          # liquid-phase density estimate
+    "LAW37": (2, 1.22e-6),       # live biphasic mixture density (alpha1=0 -> pure gas rho_g0)
     "LAW46": (2, 960.0),
     "LAW51": (1, 0.0),           # non-reflecting boundary: all-zero phases
     "LAW59": (100026, 7.9e-9),
@@ -511,7 +511,28 @@ def _parse_deck(text, tmp_path, name="SNIP"):
 #: build LIVE materials instead of InactiveMaterial (their constructors
 #: need the cfg-named params, so without the cfg tree they are skipped)
 ACTIVE_FAMILIES = {"VOID", "GAS", "KELVINMAX", "LAW70",       # pack 1
-                   "CONC", "FABRI", "LAW62", "LAW81"}         # pack 2
+                   "CONC", "FABRI", "LAW62", "LAW81",         # pack 2
+                   "LAW83", "HYD_VISC", "LAW66",
+                   "LAW88", "LAW92", "LAW94", "LAW46", "LAW69",
+                   "LAW124", "LAW126", "LAW125", "LAW127", "LAW130",
+                   "LAW128", "LAW129", "LAW123", "LAW132", "LAW134",
+                   "LAW104", "LAW105", "LAW106", "LAW107", "LAW110", "LAW115",
+                   "LAW109", "LAW111", "LAW112", "LAW116", "LAW122", "LAW158",
+                   "BOUND", "LAW151", "MULTIFLUID",
+                   "LAW59", "CONNECT", "LAW52", "GURSON", "LAW16", "GRAY",
+                   "LAW14", "COMPSO", "LAW64", "MARTENSITE",
+                   "LAW68", "COSSER", "COSSERAT", "LAW72", "HILL_MMC",
+                   "LAW65", "ELASTOMER", "LAW58", "FABR_A", "LAW20", "BIMAT",
+                   "LAW38", "VISC_TAB", "LAW29", "FEM", "LAW34", "BOLTZMAN",
+                   "LAW37", "BIPHAS", "BIPHASIC",
+                   "LAW23", "PLAS_DAMA", "LAW78",
+                   "LAW100", "SPOTWELD", "LAW97", "EXPLOSIVE_JWLS", "JWLS",
+                   "LAW71", "SUPER_ELAS", "NITINOL", "LAW73", "THERM_HILL", "HILL_THERM",
+                   "LAW84", "SWIFT_VOCE", "PLAS_SWIFT_VOCE", "LAW93", "ORTH_HILL",
+                   "LAW133", "GRANULAR", "LAW101", "PLAS_POLY", "LAW43", "HILL_TAB",
+                   "LAW41", "LEE_T", "LEE_TARVER", "LAW79", "LAW190",
+                   "LAW53", "TSAI_TAB", "LAW54", "PREDIT", "LAW74", "LAW82", "OGDEN",
+                   "HYD_JCOOK", "LAW4", "LAW5", "JWL"}
 
 
 @pytest.mark.parametrize("family", sorted(MAT_SNIPPETS))
@@ -673,13 +694,13 @@ def test_law82_cell_arrays(tmp_path):
 
 
 def test_mat_id_with_unit_id(tmp_path):
-    """/MAT/LAW83/5/2 (id 5, unit 2) and /MAT/JWL/2/123: the FIRST
+    """/MAT/LAW92/1/1 (id 1, unit 1) and /MAT/JWL/2/123: the FIRST
     trailing integer is the material id — the unit id must not steal
     it."""
-    model, log = _parse_deck(MAT_SNIPPETS["LAW83"], tmp_path)
+    model, log = _parse_deck(MAT_SNIPPETS["LAW92"], tmp_path)
     assert not log.errors
-    assert 5 in model.materials
-    assert model.materials[5].record.unit_id == 2
+    assert 1 in model.materials
+    assert model.materials[1].record.unit_id == 1
     model, log = _parse_deck(MAT_SNIPPETS["JWL"], tmp_path)
     assert 2 in model.materials
     assert model.materials[2].record.unit_id == 123
@@ -729,7 +750,7 @@ def test_ale_euler_heat_mat_notes(tmp_path):
 
 
 def test_other_ale_options_still_skipped(tmp_path):
-    model, log = _parse_deck("/ALE/GRID/DONEA\n0.1 0.2\n/END\n", tmp_path)
+    model, log = _parse_deck("/ALE/UNPORTED/DONEA\n0.1 0.2\n/END\n", tmp_path)
     assert not log.errors
     assert not model.raw_mat_notes
     assert any("not ported" in w for w in log.warnings)
@@ -931,8 +952,39 @@ def test_registry_pending_laws_have_schemas():
     cat = mat_reader.catalogue()
     for key in ("LAW19", "FABRI", "LAW24", "CONC", "LAW35", "FOAM_VISC",
                 "LAW44", "COWPER", "LAW70", "FOAM_TAB", "LAW81",
-                "VOID", "LAW0", "GAS"):
+                "VOID", "LAW0", "GAS", "LAW10", "SOIL", "DPRAG1"):
         assert cat.schema(key) is not None, f"no cfg schema for {key}"
+
+
+@needs_cfg
+def test_law10_soil_cfg_parse(tmp_path):
+    """M536: Verify /MAT/SOIL, /MAT/DPRAG1, /MAT/LAW10 parse through CFG into active Material."""
+    deck_text = """\
+# RAD
+/BEGIN
+TEST
+                2019                   0
+/MAT/SOIL/1
+Soil Layer
+                1800                1800
+               2.5e7                 0.3
+               1.0e6                 0.5                0.01               1.0e7
+                50.0               2.0e7               100.0                25.0
+             -1.0e5              101325
+               2.2e7                 0.2
+/END
+"""
+    model, log = _parse_deck(deck_text, tmp_path, "SOIL_TEST")
+    assert len(log.errors) == 0, log.errors
+    assert 1 in model.materials
+    mat = model.materials[1]
+    assert mat.law == 10
+    assert mat.rho0 == 1800.0
+    assert mat.params["E"] == 2.5e7
+    assert mat.params["nu"] == 0.3
+    assert mat.params["A0"] == 1.0e6
+    assert mat.params["c1"] == 2.0e7
+    assert mat.params["bunl"] == 2.2e7
 
 
 @needs_cfg

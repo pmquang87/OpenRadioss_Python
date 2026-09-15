@@ -117,9 +117,9 @@ def test_law36_real_format_warns_on_unported_fields(tmp_path):
     assert not log.errors, log.errors
     assert 8 in model.materials
     w = "\n".join(log.warnings)
-    assert "F_smooth" in w
     assert "fct_IDp" in w
     assert "Fscale_i" not in w                       # ported in M40
+    assert "F_smooth" not in w                       # ported
     assert model.materials[8].params["yfac"] == [3.0]
 
 
@@ -274,17 +274,17 @@ def test_inter7_real_format_parses_without_range_error(tmp_path):
     assert i.fric == 0.0 and i.ifq == 0 and i.xfiltr == 0.0
     assert i.sens_id == 0
     assert i.stfac == 1.0            # Stfac = 0 -> default scale 1.0
-    # the non-default real fields (Idel=2, Stmin=1000, Inacti=5, Iform=2)
+    # the non-default real fields (Idel=2, Stmin=1000, Iform=2)
     # are reported once, not silently swallowed
     w = "\n".join(log.warnings)
-    assert "Idel=2" in w and "Inacti=5" in w and "Stmin=1000" in w, \
+    assert "Idel=2" in w and "Stmin=1000" in w, \
         log.warnings
 
 
-def test_inter7_real_format_iform2_with_friction_is_refused(tmp_path):
+def test_inter7_real_format_iform2_with_friction_is_accepted(tmp_path):
     """Iform = 2 IS the incremental tangential formulation (upstream:
-    IFQ += 10) — not ported; with actual friction it must error loudly,
-    exactly like the compact dialect's IFQ >= 10 refusal."""
+    IFQ += 10).  Now ported (M15/Iform=2); with actual friction the
+    real-format Iform=2 maps to IFQ + 10 and is accepted."""
     deck = INTER7_W13.replace(
         "                   0                   0                   0"
         "                   0                   0\n"
@@ -294,7 +294,10 @@ def test_inter7_real_format_iform2_with_friction_is_refused(tmp_path):
         "#      IBC", 1)
     assert "0.2" in deck              # Fric really patched in
     model, log = _parse(deck, tmp_path)
-    assert any("Iform=2" in e for e in log.errors), log.errors
+    assert not log.errors, log.errors
+    (i,) = model.interfaces
+    assert i.ifq >= 10               # Iform=2 mapped to IFQ += 10
+    assert i.fric == pytest.approx(0.2)
 
 
 def test_inter7_compact_xfreq_zero_turns_filter_off(tmp_path):
@@ -778,7 +781,7 @@ def test_part_numeric_title(tmp_path):
 
 def test_fail_biquad_real_card2_and_fail_id(tmp_path):
     """Header /FAIL/BIQUAD/mat_ID/fail_ID; card 2 is P_thickfail M_Flag
-    S_Flag ... (int('.2') crashed); P_thickfail warned, Ifail_sh
+    S_Flag ... (int('.2') crashed); P_thickfail is parsed, Ifail_sh
     defaults to 1."""
     body = (
         "/FAIL/BIQUAD/1/1\n"
@@ -795,19 +798,24 @@ def test_fail_biquad_real_card2_and_fail_id(tmp_path):
     assert fm.ifail_sh == 1
     assert fm.params["c1"] == pytest.approx(0.2419)
     assert fm.params["c5"] == pytest.approx(0.1394)
-    assert any("P_thickfail" in w for w in log.warnings), log.warnings
+    assert fm.params.get("p_thickfail") == pytest.approx(0.2)
 
 
-def test_fail_biquad_m_flag_preset_is_refused(tmp_path):
-    """M_Flag selects built-in presets the port does not carry — a clean
-    model error, not a crash."""
+def test_fail_biquad_m_flag_preset(tmp_path):
+    """M_Flag selects built-in presets (e.g. 2 for DP600)."""
     body = (
         "/FAIL/BIQUAD/2\n"
         "                                                        0.75\n"
         "                             2         2\n"
     )
     model, log = _parse_fixed(body, tmp_path)
-    assert any("M_Flag=2" in e for e in log.errors), log.errors
+    assert not log.errors, log.errors
+    (mat_id, fm, _), = model.raw_fails
+    assert mat_id == 2
+    # DP600: c3=0.75 -> c1 = 4.3*0.75, c5 = 1.6*0.75
+    assert fm.params["c1"] == pytest.approx(4.3 * 0.75)
+    assert fm.params["c5"] == pytest.approx(1.6 * 0.75)
+    assert fm.params["m_flag"] == 2
 
 
 # ---- /RBODY: real Mass/grnd/ICoG columns, blank title (Front_Impact) -------

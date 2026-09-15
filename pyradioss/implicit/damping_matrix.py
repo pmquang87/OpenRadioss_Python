@@ -116,7 +116,9 @@ def assemble_discrete_damping(model, dof: DofMap, x_geom, log=None):
             continue
         ce, edofs = kernel.damping_matrix(group, x_geom)
         n, d, _ = ce.shape
-        eq = dof.eq[edofs]
+        valid_dof = edofs >= 0
+        eq = np.full_like(edofs, -1)
+        eq[valid_dof] = dof.eq[edofs[valid_dof]]
         row_eq = np.repeat(eq[:, :, None], d, axis=2)
         col_eq = np.repeat(eq[:, None, :], d, axis=1)
         keep = (row_eq >= 0) & (col_eq >= 0)          # drop condensed DOFs

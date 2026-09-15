@@ -622,9 +622,17 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
             # supply beyond the loads, r = M a - (f_ext + f_int)
             g_new_r = model.mass[:, None] * a_new - (fext_new + fint)
             g_old_r = model.mass[:, None] * a - g_prev_f
+            iner = getattr(model, "inertia", None)
+            iner_val = iner[:, None] if iner is not None else np.zeros_like(ar_new)
+            g_new_rot = iner_val * ar_new - mint
+            g_old_rot = iner_val * ar - (g_prev_m if g_prev_m is not None else np.zeros_like(mint))
             for idx, d, fct, scale in imposed:
-                wext += 0.5 * float(((g_new_r + g_old_r)[idx, d]
-                                     * u[idx, d]).sum())
+                if d < 3:
+                    wext += 0.5 * float(((g_new_r + g_old_r)[idx, d]
+                                         * u[idx, d]).sum())
+                else:
+                    wext += 0.5 * float(((g_new_rot + g_old_rot)[idx, d - 3]
+                                         * ur_s[idx, d - 3]).sum())
 
         # ---- Rayleigh dissipation booking (DYNA_WEX's DY_EDAMP): the
         # trapezoid of the damping force over the step displacement
@@ -820,7 +828,11 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
     # ...and the /IMPDISP-driven DOFs (part of that mask) are then seeded
     # EXACTLY: the drive steps from d(t_n) to d(t_{n+1})
     for idx, d, fct, scale in imposed:
-        u[idx, d] = scale * (fct.eval(t_new) - fct.eval(t_old))
+        val = scale * (fct.eval(t_new) - fct.eval(t_old))
+        if d < 3:
+            u[idx, d] = val
+        else:
+            ur_s[idx, d - 3] = val
 
     inc = IncrementResult(load_factor=t_new, converged=False, iterations=0)
     fint = mint = None
@@ -868,6 +880,10 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
         rnorm = float(np.linalg.norm(R))
         inc.residuals.append(rnorm)
         inc.iterations = it + 1
+        if not np.isfinite(rnorm):
+            break
+        if it > 0 and rnorm > 1e4 * ref:
+            break
         if it == 0:
             # reference: the largest of the applied load, the inertial
             # force of the predicted motion (THE force scale of a free
@@ -875,7 +891,10 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
             ma = _reduce(dof.gather_residual(massz[:, None] * a_new,
                                              model.inertia[:, None]
                                              * ar_new))
-            ref = max(ref, float(np.linalg.norm(ma)), rnorm)
+            ma_norm = float(np.linalg.norm(ma))
+            if np.isfinite(ma_norm):
+                ref = max(ref, ma_norm)
+            ref = max(ref, rnorm)
 
         if rnorm <= ip.impl_tol * ref:
             inc.converged = True
@@ -899,11 +918,15 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
         K_eff = ap1 * K + M_diag
         if C_eff is not None:
             K_eff = K_eff + C_eff
-        if constr is not None:
-            du_eq = constr.expand(
-                solver.solve(constr.reduce_matrix(K_eff), R))
-        else:
-            du_eq = solver.solve(K_eff, R)
+        try:
+            if constr is not None:
+                du_eq = constr.expand(
+                    solver.solve(constr.reduce_matrix(K_eff), R))
+            else:
+                du_eq = solver.solve(K_eff, R)
+        except (RuntimeError, ValueError):
+            inc.converged = False
+            break
         du, dur = dof.scatter_solution(du_eq)
         u = u + du
         ur_s = ur_s + dur
@@ -912,7 +935,7 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
         # accept when the correction is negligible against the accumulated
         # increment, re-evaluating the residual at the corrected state
         unorm = np.linalg.norm(dof.gather_residual(u, ur_s))
-        if np.linalg.norm(du_eq) <= ip.impl_tol * max(unorm, 1e-30) \
+        if np.isfinite(unorm) and np.linalg.norm(du_eq) <= ip.impl_tol * max(unorm, 1e-30) \
                 and it > 0:
             a_new = c0 * u - v / (beta * dt) - (0.5 / beta - 1.0) * a
             ar_new = c0 * ur_s - vr / (beta * dt) - (0.5 / beta - 1.0) * ar

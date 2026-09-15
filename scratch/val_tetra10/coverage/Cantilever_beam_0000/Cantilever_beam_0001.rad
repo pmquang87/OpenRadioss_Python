@@ -1,0 +1,22 @@
+#RADIOSS ENGINE
+/TITLE
+Cantilever_beam                                                                 
+#
+/RUN/Cantilever_beam/1/
+1.0e-5
+#
+/PRINT/-500/0         
+#
+/DT/NODA/CST/0
+0.900000000000000    0.000000000000000   
+#
+/TFILE/0         
+1.00000000000000E-04
+#
+/H3D/DT
+0.000000000000000    0.010000000000000   
+/H3D/ELEM/EPSP
+/H3D/ELEM/VONM
+/H3D/COMPRESS
+0.001
+#

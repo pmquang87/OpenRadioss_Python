@@ -1,8 +1,21 @@
 """
 /DAMP — Rayleigh mass damping (M6).
 
-Fortran origin: ``engine/source/assembly/damping*.F`` (the /DAMP engine
-option): a mass-proportional damping force  f_i = -alpha * m_i * v_i  on
+Fortran origin: ``engine/source/assembly/damping.F``, subroutine
+``damping51`` (lines 100–170 for the mass-proportional branch in global
+coordinates, lines 175–228 for the rotational-DOF branch).  The Fortran
+uses an implicit-trapezoidal acceleration correction::
+
+    OMEGA = 1/(1 + 0.5*DAMP_A*DT1)
+    DA = (A - DAMP_A*V - BETASDT*(A - A_old)) * OMEGA - A
+    A = A + DA
+
+with energy booked as  DW += m * DA * (V + 0.5*A*DT1) * DT12.  The port
+replaces this with the exact integrating factor (see below), which gives
+identical physics (both are first-order-accurate mass damping) but is
+unconditionally stable and books energy exactly from the KE identity.
+
+A mass-proportional damping force  f_i = -alpha * m_i * v_i  acts on
 the nodes of a group, optionally windowed in time (Tstart/Tstop). The
 stiffness-proportional (beta) branch of full Rayleigh damping needs K*v
 products the explicit port does not assemble — not ported (documented).
@@ -59,6 +72,18 @@ class Dampers:
         self.items = []          # (idx, alpha, tstart, tstop)
         self.all_idx = np.zeros(0, dtype=np.int64)   # union, for the
         # attribution correction the Engine books (see engine step 4b)
+        # Build rigid-body slave set once — Fortran damping.F:150 excludes
+        # nodes with TAGSLV_RBY != 0 because rigid_body.advance() will
+        # overwrite their velocities, making any damping booking phantom.
+        rb_slaves = set()
+        for rb in getattr(model, 'rbodies', []):
+            slaves = getattr(rb, 'slaves', None)
+            if slaves is not None:
+                rb_slaves.update(int(s) for s in slaves)
+        if rb_slaves:
+            rb_arr = np.array(sorted(rb_slaves), dtype=np.int64)
+        else:
+            rb_arr = np.zeros(0, dtype=np.int64)
         for dp in model.damps:
             g = model.node_groups.get(dp.grnod_id)
             if g is None or g.node_idx is None or g.node_idx.size == 0:
@@ -66,6 +91,11 @@ class Dampers:
                           f"missing or empty", "DAMP CHECK")
                 continue
             idx = g.node_idx[model.mass[g.node_idx] < 1e29]
+            # Exclude rigid-body slave nodes (damping.F:150 TAGSLV_RBY check)
+            if len(rb_arr):
+                idx = idx[~np.isin(idx, rb_arr)]
+            if len(idx) == 0:
+                continue
             self.items.append((idx, dp.alpha, dp.tstart, dp.tstop))
             self.all_idx = np.unique(np.concatenate([self.all_idx, idx]))
             log.info(f"     /DAMP/{dp.id}: ALPHA = {dp.alpha:12.5E} ON "
@@ -80,7 +110,17 @@ class Dampers:
     def apply(self, t: float, dt: float, v: np.ndarray, vr: np.ndarray,
               mass: np.ndarray, inertia: np.ndarray) -> float:
         """Damp the group velocities (exact integrating factor) and
-        return the kinetic energy removed this cycle."""
+        return the kinetic energy removed this cycle.
+
+        Fortran: ``damping.F`` lines 129–171 (translational, ISK<=1, global
+        coords) and lines 175–228 (rotational DOFs, IRODDL branch).
+
+        The Fortran applies  DA = (A - alpha*V) * omega - A  per axis and
+        books  DW += m * DA * (V + 0.5*A*DT1) * DT12.  The port replaces
+        this with the exact ODE solution  v *= exp(-alpha*dt)  and books
+        the KE drop  de += 0.5 * m * (|v_old|^2 - |v_new|^2)  — identical
+        to roundoff for the damping ODE and unconditionally stable.
+        """
         de = 0.0
         for idx, alpha, tstart, tstop in self.items:
             if dt <= 0.0 or t < tstart or t > tstop:

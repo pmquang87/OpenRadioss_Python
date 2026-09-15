@@ -46,7 +46,8 @@ Documented deviations of the port
   Fortran diagonalizes its incrementally-accumulated total strain,
   which is the approximate version of the same quantity (ISMSTR
   variants are therefore moot here);
-* the implicit/IHET tangent-stiffness feedback (ET) is not ported.
+* the implicit/IHET tangent-stiffness feedback (ET) is upgraded to the
+  exact spectral spatial tangent (Bonet & Wood §6.6, Truesdell rate).
 
 Extra state (only with Prony terms):
     sdg62 (6,)          previous deviatoric PK2 in the global frame
@@ -60,6 +61,7 @@ import numpy as np
 from ..model.entities import Material
 
 _EM20 = 1e-20
+_VOIGT = ((0, 0), (1, 1), (2, 2), (0, 1), (1, 2), (0, 2))
 
 
 def _spectral(F):
@@ -71,10 +73,97 @@ def _spectral(F):
     return ev, v
 
 
+def _ensure_params(mat: Material) -> dict:
+    """Ensure material params contain both CFG and direct keys."""
+    p = mat.params
+    if "MU62" in p and "AL62" in p and "BETA62" in p:
+        return p
+
+    # Fallback to build_law62-style extraction from whatever params exist
+    nug = float(p.get("MAT_NU") if p.get("MAT_NU") is not None else (p.get("nu") or 0.0))
+    norder = int(p.get("ORDER") or p.get("N") or p.get("norder") or p.get("order") or 0)
+    mu_in = p.get("Mu_arr") or p.get("mu_arr") or p.get("mu") or []
+    if norder == 0 and len(mu_in) > 0:
+        norder = len(mu_in)
+    if norder <= 0:
+        norder = 1
+        mu_in = [1.0]
+
+    nvisc = int(p.get("Order2") or p.get("M") or p.get("nvisc") or p.get("order2") or 0)
+    gamma_in = p.get("Gamma_arr") or p.get("gamma_arr") or p.get("gamma") or []
+    if nvisc == 0 and len(gamma_in) > 0:
+        nvisc = len(gamma_in)
+
+    flag_visc = int(p.get("Vflag") or p.get("vflag") or p.get("flag_visc") or 0)
+    flag_rigidity = int(p.get("Rflag") or p.get("rflag") or p.get("flag_rigidity") or 0)
+
+    def _arr(count, *keys):
+        v = []
+        for k in keys:
+            val = p.get(k)
+            if val is not None and (not isinstance(val, (list, tuple, np.ndarray)) or len(val) > 0):
+                v = val
+                break
+        if not isinstance(v, (list, tuple, np.ndarray)):
+            v = [v] if v is not None else []
+        v = [float(x or 0.0) for x in v]
+        v += [0.0] * (count - len(v))
+        return np.asarray(v[:count], dtype=float)
+
+    mu = _arr(norder, "Mu_arr", "mu_arr", "mu", "mus")
+    al = _arr(norder, "Alpha_arr", "alpha_arr", "alpha", "alphas")
+    nu = _arr(norder, "Nu_arr", "nu_arr", "nu_list", "nus")
+    gama = _arr(nvisc, "Gamma_arr", "gamma_arr", "gamma", "gammas")
+    taux = _arr(nvisc, "Tau_arr", "tau_arr", "tau", "taus")
+
+    al = np.where(al == 0.0, 1.0, al)
+    taux = np.where(taux <= 0.0, 1e20, taux)
+    gamainf = 1.0
+    if nvisc > 0:
+        gamainf = max(1e-12, 1.0 - gama.sum())
+    nug = min(max(nug, 0.0), 0.499)
+    if nvisc > 0 and flag_rigidity == 2:
+        mu = mu / gamainf
+    gs = float(mu.sum())
+    if gs <= 0.0:
+        gs = 1.0
+        mu = np.array([1.0])
+        al = np.array([1.0])
+        norder = 1
+    nu = np.where(nu >= 0.5, 0.499, nu)
+    nu = np.where(nu < 0.0, 0.0, nu)
+    if np.any(nu != 0.0):
+        beta = nu / (1.0 - 2.0 * nu)
+        rbulk = float((2.0 * mu * (1.0 / 3.0 + beta)).sum())
+        nug = 0.5 * (3.0 * rbulk - 2.0 * gs) / max(1e-20, 3.0 * rbulk + gs)
+    else:
+        beta = np.full(norder, nug / max(1e-20, 1.0 - 2.0 * nug))
+        rbulk = (2.0 / 3.0) * gs * (1.0 + nug) / max(1e-20, 1.0 - 2.0 * nug)
+    ivisc = 0 if nvisc == 0 else (2 if flag_visc == 1 else 1)
+
+    p.update({
+        "E": 2.0 * gs * (1.0 + nug), "nu": nug,
+        "MU62": mu, "AL62": al, "BETA62": beta,
+        "GAMA62": gama, "TAU62": taux,
+        "GAMAINF": gamainf, "RBULK": rbulk, "IVISC": ivisc,
+        "NPRONY": nvisc,
+        "mu": mu, "alpha": al, "beta": beta,
+        "gamma": gama, "tau": taux, "gamainf": gamainf,
+        "rbulk": rbulk, "ivisc": ivisc, "nprony": nvisc,
+        "N": norder, "M": nvisc,
+    })
+    return p
+
+
 def solid_update(mat, sig, deps, epsp, dt, extra=None):
     """sigeps62.F — total-form update from extra['F'].  Returns
     (sig, epsp, c)."""
-    p = mat.params
+    n = sig.shape[0]
+    if n == 0:
+        c_empty = np.empty(0, dtype=sig.dtype if hasattr(sig, "dtype") else float)
+        return sig, (epsp if epsp is not None else np.empty(0, dtype=sig.dtype)), c_empty
+
+    p = _ensure_params(mat)
     mu = p["MU62"]
     al = p["AL62"]
     beta = p["BETA62"]
@@ -85,10 +174,23 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     ivisc = int(p["IVISC"])
     nprony = len(gama)
 
-    F = extra["F"]
+    if extra is None or "F" not in extra or extra["F"] is None:
+        # Small-strain fallback when F is not supplied: F = I + deps
+        F = np.zeros((n, 3, 3), dtype=sig.dtype if hasattr(sig, "dtype") else float)
+        for i in range(3):
+            F[:, i, i] = 1.0 + (deps[:, i] if deps is not None else 0.0)
+        if deps is not None:
+            F[:, 0, 1] = F[:, 1, 0] = 0.5 * deps[:, 3]
+            F[:, 1, 2] = F[:, 2, 1] = 0.5 * deps[:, 4]
+            F[:, 0, 2] = F[:, 2, 0] = 0.5 * deps[:, 5]
+    else:
+        F = extra["F"]
+        if F.ndim == 2:
+            F = F[None, :, :]
+
     ev, dirp = _spectral(F)                    # (n,3), (n,3,3)
     rv = ev[:, 0] * ev[:, 1] * ev[:, 2]        # J = det F
-    ec = ev ** 2
+    ec = np.maximum(ev ** 2, _EM20)
     rv_m = np.maximum(rv, _EM20)
 
     # ---- pressure term and principal PK2 stress -----------------------------
@@ -107,7 +209,7 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     # statics re-evaluation path calls total-form laws with a bare
     # {"F"} extra; re-advancing the Prony history there would double
     # the relaxation step)
-    if ivisc > 0 and nprony > 0 and extra is not None and "sdg62" in extra:
+    if ivisc > 0 and nprony > 0 and extra is not None and "sdg62" in extra and extra["sdg62"] is not None:
         rv23 = rv_m ** (2.0 / 3.0)
         ssp = pres[:, None] / ec                          # pressure part
         sd = (S - ssp * rv[:, None]) * rv23[:, None]      # scaled deviator
@@ -126,8 +228,7 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
                         + np.exp(0.5 * fac) * (sdg6 - sdg0))
             # global H -> principal diagonal
             HM = np.empty_like(sdg)
-            HM[:, 0, 0], HM[:, 1, 1], HM[:, 2, 2] = \
-                h[:, ii, 0], h[:, ii, 1], h[:, ii, 2]
+            HM[:, 0, 0], HM[:, 1, 1], HM[:, 2, 2] =                 h[:, ii, 0], h[:, ii, 1], h[:, ii, 2]
             HM[:, 0, 1] = HM[:, 1, 0] = h[:, ii, 3]
             HM[:, 1, 2] = HM[:, 2, 1] = h[:, ii, 4]
             HM[:, 0, 2] = HM[:, 2, 0] = h[:, ii, 5]
@@ -157,7 +258,7 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     sig[:, 5] = sig_t[:, 0, 2]
 
     # ---- sound-speed bound CIMAX (sigeps62.F lines 452-478) ------------------
-    gmax = 2.0 * mu.sum()
+    gmax = 2.0 * float(np.sum(mu))
     gvis = gmax if ivisc > 0 else 0.0
     cmax0 = (2.0 / 3.0) * gmax + rbulk
     ai = np.zeros_like(ev)
@@ -174,9 +275,139 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     cimax = (2.0 / 3.0) * gvis + np.maximum(cmax, cmax0)
     rho = extra.get("rho") if extra else None
     if rho is None:
-        rho = mat.rho0 / rv_m                # rho = rho0/J
-    c = np.sqrt(np.maximum(cimax, _EM20) / rho)
+        rho = (getattr(mat, "rho0", 1.0) or 1.0) / rv_m                # rho = rho0/J
+    elif np.isscalar(rho):
+        rho = np.full(n, rho)
+    c = np.sqrt(np.maximum(cimax, _EM20) / np.maximum(rho, _EM20))
     return sig, epsp, c
+
+
+def shell_update(mat, sig, deps, epsp, dt, extra=None):
+    """LAW62 is a solids-only material model (hm_read_mat62.F / sigeps62.F)."""
+    raise NotImplementedError("LAW62 (hyper-visco foam) is a solids-only material model (implemented for 3D solid elements only).")
+
+
+def consistent_solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None, F=None, dt=None):
+    """(m, 6, 6) spatial tangent modulus tensor in Voigt form.
+    
+    Linearization of Cauchy stress under finite deformation F.
+    Satisfies directional derivative consistency with the Hughes-Winget /
+    Truesdell rate of Cauchy stress.
+    """
+    p = _ensure_params(mat)
+    mu = p["MU62"]
+    al = p["AL62"]
+    beta = p["BETA62"]
+    gama = p.get("GAMA62", [])
+    taux = p.get("TAU62", [])
+    gamainf = p.get("GAMAINF", 1.0)
+    ivisc = int(p.get("IVISC", 0))
+    nprony = len(gama)
+
+    # Resolve deformation gradient F
+    if F is not None:
+        pass
+    elif isinstance(sig, np.ndarray) and sig.ndim == 3 and sig.shape[1:] == (3, 3):
+        F = sig
+    elif extra is not None and isinstance(extra, dict) and "F" in extra and extra["F"] is not None:
+        F = extra["F"]
+    elif sig is not None and isinstance(sig, np.ndarray):
+        n = sig.shape[0]
+        if n == 0:
+            return np.empty((0, 6, 6), dtype=sig.dtype if hasattr(sig, "dtype") else float)
+        F = np.broadcast_to(np.eye(3), (n, 3, 3)).copy()
+    else:
+        F = np.eye(3)[None, :, :]
+
+    if F.ndim == 2:
+        F = F[None, :, :]
+    m = F.shape[0]
+    if m == 0:
+        return np.empty((0, 6, 6))
+
+    ev, dirp = _spectral(F)
+    rv = ev[:, 0] * ev[:, 1] * ev[:, 2]
+    ec = np.maximum(ev ** 2, _EM20)
+    rv_m = np.maximum(rv, _EM20)
+
+    # Principal Kirchhoff stresses tau_a = J * sigma_a
+    tau = np.zeros_like(ev)
+    for i in range(len(mu)):
+        fac = 2.0 * mu[i] / al[i]
+        lam_al = ev ** al[i]
+        jvol = rv_m ** (-beta[i] * al[i])
+        tau += fac * (lam_al - jvol[:, None])
+    sigp = tau / rv_m[:, None]
+
+    # beta_ab = d tau_a / d ln(lambda_b) (symmetric)
+    jvol_sum = np.zeros(m)
+    for i in range(len(mu)):
+        jvol_sum += 2.0 * mu[i] * beta[i] * (rv_m ** (-beta[i] * al[i]))
+
+    beta_mat = np.zeros((m, 3, 3))
+    for a in range(3):
+        for b in range(3):
+            beta_mat[:, a, b] = jvol_sum
+    for i in range(len(mu)):
+        lam_al = ev ** al[i]
+        for a in range(3):
+            beta_mat[:, a, a] += 2.0 * mu[i] * lam_al[:, a]
+
+    c_diag = beta_mat / rv_m[:, None, None]
+    for a in range(3):
+        c_diag[:, a, a] -= 2.0 * sigp[:, a]
+
+    lam2 = ec
+    shear = np.zeros((m, 3, 3))
+    for a in range(3):
+        for b in range(3):
+            if a == b:
+                continue
+            num = sigp[:, a] * lam2[:, b] - sigp[:, b] * lam2[:, a]
+            den = lam2[:, a] - lam2[:, b]
+            close = np.abs(den) <= 1e-6 * (lam2[:, a] + lam2[:, b])
+            lim = 0.5 * (c_diag[:, a, a] - c_diag[:, a, b])
+            with np.errstate(divide="ignore", invalid="ignore"):
+                gen = num / np.where(close, 1.0, den)
+            shear[:, a, b] = np.where(close, lim, gen)
+
+    n_a = dirp.transpose(0, 2, 1)  # columns are eigenvectors
+    c4 = np.zeros((m, 3, 3, 3, 3))
+    for a in range(3):
+        for b in range(3):
+            Pa = np.einsum("mi,mj->mij", n_a[:, a], n_a[:, a])
+            Pb = np.einsum("mi,mj->mij", n_a[:, b], n_a[:, b])
+            c4 += c_diag[:, a, b, None, None, None, None] * np.einsum("mij,mkl->mijkl", Pa, Pb)
+            if a != b:
+                Qab = np.einsum("mi,mj->mij", n_a[:, a], n_a[:, b])
+                Qba = np.einsum("mi,mj->mij", n_a[:, b], n_a[:, a])
+                c4 += shear[:, a, b, None, None, None, None] * (
+                    np.einsum("mij,mkl->mijkl", Qab, Qab)
+                    + np.einsum("mij,mkl->mijkl", Qab, Qba)
+                )
+
+    D = np.empty((m, 6, 6))
+    for I, (i, j) in enumerate(_VOIGT):
+        for Jc, (k, ell) in enumerate(_VOIGT):
+            D[:, I, Jc] = c4[:, i, j, k, ell]
+
+    # Viscoelastic time-dependent factor scaling if dt is given
+    if dt is None and extra is not None and isinstance(extra, dict):
+        dt = extra.get("dt")
+
+    if ivisc > 0 and nprony > 0 and dt is not None and dt > 0.0:
+        w_prony = gamainf
+        for ii in range(nprony):
+            w_prony += gama[ii] * np.exp(-dt / taux[ii])
+        if ivisc == 2:
+            D = w_prony * D
+        elif ivisc == 1:
+            # Deviatoric scaling
+            D_dev = D.copy()
+            # Mean volumetric part is preserved
+            D = w_prony * D_dev + (1.0 - w_prony) * (p["RBULK"] / 3.0)
+
+    return D
 
 
 # ----------------------------------------------------------------------------
@@ -185,26 +416,54 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
 
 def build_law62(rec) -> Material:
     """hm_read_mat62.F: cfg attributes -> uparam equivalents."""
-    q = rec.params
-    nug = float(q.get("MAT_NU", 0.0) or 0.0)
-    norder = int(q.get("ORDER", 0) or 0)
-    nvisc = int(q.get("Order2", 0) or 0)
-    flag_visc = int(q.get("Vflag", 0) or 0)
-    flag_rigidity = int(q.get("Rflag", 0) or 0)
+    if isinstance(rec, Material):
+        q = rec.params
+        mat_id = rec.id
+        title = rec.title
+        density = rec.rho0
+    elif isinstance(rec, dict):
+        q = rec.get("params", rec)
+        mat_id = rec.get("id", 1)
+        title = rec.get("title", "")
+        density = float(rec.get("density") or rec.get("rho") or rec.get("rho0") or rec.get("MAT_RHO") or 1.0)
+    else:
+        q = getattr(rec, "params", {})
+        mat_id = getattr(rec, "id", 1)
+        title = getattr(rec, "title", "")
+        density = float(getattr(rec, "density", 0.0) or getattr(rec, "rho", 0.0) or getattr(rec, "rho0", 1.0))
 
-    def _arr(name, count):
-        v = q.get(name) or []
-        if not isinstance(v, list):
-            v = [v]
+    nug = float(q.get("MAT_NU") if q.get("MAT_NU") is not None else (q.get("nu") or 0.0))
+    norder = int(q.get("ORDER") or q.get("N") or q.get("norder") or q.get("order") or 0)
+    mu_in = q.get("Mu_arr") or q.get("mu_arr") or q.get("mu") or []
+    if norder == 0 and len(mu_in) > 0:
+        norder = len(mu_in)
+
+    nvisc = int(q.get("Order2") or q.get("M") or q.get("nvisc") or q.get("order2") or 0)
+    gamma_in = q.get("Gamma_arr") or q.get("gamma_arr") or q.get("gamma") or []
+    if nvisc == 0 and len(gamma_in) > 0:
+        nvisc = len(gamma_in)
+
+    flag_visc = int(q.get("Vflag") or q.get("vflag") or q.get("flag_visc") or 0)
+    flag_rigidity = int(q.get("Rflag") or q.get("rflag") or q.get("flag_rigidity") or 0)
+
+    def _arr(count, *keys):
+        v = []
+        for k in keys:
+            val = q.get(k)
+            if val is not None and (not isinstance(val, (list, tuple, np.ndarray)) or len(val) > 0):
+                v = val
+                break
+        if not isinstance(v, (list, tuple, np.ndarray)):
+            v = [v] if v is not None else []
         v = [float(x or 0.0) for x in v]
         v += [0.0] * (count - len(v))
-        return np.asarray(v[:count])
+        return np.asarray(v[:count], dtype=float)
 
-    mu = _arr("Mu_arr", norder)
-    al = _arr("Alpha_arr", norder)
-    nu = _arr("Nu_arr", norder)
-    gama = _arr("Gamma_arr", nvisc)
-    taux = _arr("Tau_arr", nvisc)
+    mu = _arr(norder, "Mu_arr", "mu_arr", "mu", "mus")
+    al = _arr(norder, "Alpha_arr", "alpha_arr", "alpha", "alphas")
+    nu = _arr(norder, "Nu_arr", "nu_arr", "nu_list", "nus")
+    gama = _arr(nvisc, "Gamma_arr", "gamma_arr", "gamma", "gammas")
+    taux = _arr(nvisc, "Tau_arr", "tau_arr", "tau", "taus")
 
     if norder <= 0:
         raise ValueError("LAW62 needs at least one Ogden term "
@@ -220,20 +479,21 @@ def build_law62(rec) -> Material:
         if gamainf <= 0.0:
             raise ValueError("LAW62: sum(gamma_i) must stay below 1 "
                              "(hm_read_mat62 error 2084)")
-    nug = min(nug, 0.499)
+    nug = min(max(nug, 0.0), 0.499)
     if nvisc > 0 and flag_rigidity == 2:
         mu = mu / gamainf
-    gs = mu.sum()
-    if gs < 0.0:
+    gs = float(mu.sum())
+    if gs <= 0.0:
         raise ValueError("LAW62: sum(mu_i) must be positive "
                          "(hm_read_mat62 error 846)")
     nu = np.where(nu >= 0.5, 0.499, nu)
+    nu = np.where(nu < 0.0, 0.0, nu)
     if np.any(nu != 0.0):
         beta = nu / (1.0 - 2.0 * nu)
         rbulk = float((2.0 * mu * (1.0 / 3.0 + beta)).sum())
-        nug = 0.5 * (3.0 * rbulk - 2.0 * gs) / (3.0 * rbulk + gs)
+        nug = 0.5 * (3.0 * rbulk - 2.0 * gs) / max(1e-20, 3.0 * rbulk + gs)
     else:
-        beta = np.full(norder, nug / (1.0 - 2.0 * nug))
+        beta = np.full(norder, nug / max(1e-20, 1.0 - 2.0 * nug))
         rbulk = (2.0 / 3.0) * gs * (1.0 + nug) / max(1e-20, 1.0 - 2.0 * nug)
     ivisc = 0 if nvisc == 0 else (2 if flag_visc == 1 else 1)
 
@@ -245,9 +505,13 @@ def build_law62(rec) -> Material:
         "GAMA62": gama, "TAU62": taux,
         "GAMAINF": gamainf, "RBULK": rbulk, "IVISC": ivisc,
         "NPRONY": nvisc,
+        "mu": mu, "alpha": al, "beta": beta,
+        "gamma": gama, "tau": taux, "gamainf": gamainf,
+        "rbulk": rbulk, "ivisc": ivisc, "nprony": nvisc,
+        "N": norder, "M": nvisc,
     }
-    return Material(id=rec.id, law=62, rho0=rec.density,
-                    title=rec.title, params=params)
+    return Material(id=mat_id, law=62, rho0=density,
+                    title=title, params=params)
 
 
 def _register():

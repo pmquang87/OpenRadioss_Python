@@ -99,10 +99,10 @@ def _yield_stress(mat, epsp: np.ndarray, rate_fac):
     thermal-softening factors — both are evaluated once per increment
     and held constant through the Newton return (see _combined_factor).
     """
-    A = mat.params["A"]
-    B = mat.params["B"]
-    n = mat.params["n"]
-    sig_max = mat.params["sig_max"]
+    A = mat.params.get("A", 0.0)
+    B = mat.params.get("B", 0.0)
+    n = mat.params.get("n", 1.0)
+    sig_max = mat.params.get("sig_max", 1e30)
     # eps^n with eps=0 guarded (n<1 would give infinite slope at 0 — the
     # Fortran guards the same way with EM20).
     e = np.maximum(epsp, 1e-20)
@@ -122,15 +122,20 @@ def _thermal_factor(mat, extra):
     if extra is None or "temp" not in extra or "mT" not in mat.params:
         return 1.0, None
     temp = extra["temp"]                 # rise above T_i, in place
-    tstar = np.clip(temp / (mat.params["T_melt"] - mat.params["T_i"]),
-                    0.0, 1.0)
-    return 1.0 - tstar ** mat.params["mT"], temp
+    T_melt = mat.params.get("T_melt", 1.0)
+    T_i = mat.params.get("T_i", 0.0)
+    denom = max(T_melt - T_i, 1e-20)
+    tstar = np.clip(temp / denom, 0.0, 1.0)
+    mT = mat.params.get("mT", 1.0)
+    return 1.0 - tstar ** mT, temp
 
 
 def _adiabatic_heating(mat, temp, sy_new, dl, idx):
     """T += sigma_y * d(eps_p) / rho_Cp on the plastic subset (M6)."""
     if temp is not None:
-        temp[idx] += sy_new * dl / mat.params["rho_cp"]
+        rho_cp = mat.params.get("rho_cp", 1.0)
+        if rho_cp > 0.0:
+            temp[idx] += sy_new * dl / rho_cp
 
 
 def _rate_factor(mat, deps_eq_dot: np.ndarray) -> np.ndarray:
@@ -161,28 +166,42 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
     extra: law state views (M6: extra['temp'] = adiabatic temperature
            rise, present when the thermal card is given)
     """
+    if sig.shape[0] == 0:
+        return sig, epsp
+
     G = mat.G
 
-    # 1. elastic trial
-    law01_elastic.solid_update(mat, sig, deps)
-
-    # 2. pressure/deviator split and von Mises stress
-    p = (sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0
+    # 1. deviatoric elastic trial (strip the old pressure, sigeps02.F
+    #    lines 304-319: P0 removes the old mean stress, G2*dev(DEPS) is
+    #    the incremental deviatoric predictor)
+    p_old = (sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0
+    tr3 = (deps[:, 0] + deps[:, 1] + deps[:, 2]) / 3.0
     s = sig.copy()
-    s[:, 0] -= p
-    s[:, 1] -= p
-    s[:, 2] -= p
+    s[:, 0] += 2.0 * G * (deps[:, 0] - tr3) - p_old
+    s[:, 1] += 2.0 * G * (deps[:, 1] - tr3) - p_old
+    s[:, 2] += 2.0 * G * (deps[:, 2] - tr3) - p_old
+    s[:, 3:] += G * deps[:, 3:]        # engineering shear: tau = G*gamma
+
+    # 2. new pressure: total K*mu when the kernel gives the density,
+    #    hypoelastic trace increment otherwise
+    if extra is not None and "rho" in extra:
+        p_new = -mat.K * (extra["rho"] / mat.rho0 - 1.0)   # tension > 0
+    else:
+        p_new = p_old + mat.K * 3.0 * tr3
+
     j2 = 0.5 * (s[:, 0] ** 2 + s[:, 1] ** 2 + s[:, 2] ** 2) \
         + s[:, 3] ** 2 + s[:, 4] ** 2 + s[:, 5] ** 2
     sig_eq = np.sqrt(3.0 * j2) + 1e-30
 
     # equivalent (deviatoric) strain rate of the increment, for the JC
     # rate term: eps_eq_dot = sqrt(2/3 e:e) / dt
-    tr3 = (deps[:, 0] + deps[:, 1] + deps[:, 2]) / 3.0
-    exx, eyy, ezz = deps[:, 0] - tr3, deps[:, 1] - tr3, deps[:, 2] - tr3
-    ee = exx ** 2 + eyy ** 2 + ezz ** 2 \
-        + 0.5 * (deps[:, 3] ** 2 + deps[:, 4] ** 2 + deps[:, 5] ** 2)
-    rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, 1e-30)
+    if dt > 0.0:
+        exx, eyy, ezz = deps[:, 0] - tr3, deps[:, 1] - tr3, deps[:, 2] - tr3
+        ee = exx ** 2 + eyy ** 2 + ezz ** 2 \
+            + 0.5 * (deps[:, 3] ** 2 + deps[:, 4] ** 2 + deps[:, 5] ** 2)
+        rate = np.sqrt((2.0 / 3.0) * ee) / dt
+    else:
+        rate = np.zeros(len(deps))
     rate_fac = _rate_factor(mat, rate)
     # thermal softening (M6): evaluated at the START-of-increment
     # temperature and frozen through the return (see module docstring)
@@ -192,34 +211,34 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
     # 3. yield check
     sy, _ = _yield_stress(mat, epsp, rate_fac)
     plastic = sig_eq > sy
-    if not np.any(plastic):
-        return sig, epsp
+    
+    if np.any(plastic):
+        # 4. Newton solve of  sig_eq - 3G dl = sigma_y(epsp + dl)  on the
+        #    plastic subset only (Fortran does the same with a masked loop).
+        idx = np.where(plastic)[0]
+        dl = np.zeros(len(idx))
+        seq = sig_eq[idx]
+        ep0 = epsp[idx]
+        rf = rate_fac[idx] if np.ndim(rate_fac) else rate_fac
+        for _ in range(_NEWTON_ITERS):
+            sy_i, H_i = _yield_stress(mat, ep0 + dl, rf)
+            res = seq - 3.0 * G * dl - sy_i
+            dl += res / (3.0 * G + np.maximum(H_i, 0.0))
+            dl = np.maximum(dl, 0.0)
+        sy_new, _ = _yield_stress(mat, ep0 + dl, rf)
 
-    # 4. Newton solve of  sig_eq - 3G dl = sigma_y(epsp + dl)  on the
-    #    plastic subset only (Fortran does the same with a masked loop).
-    idx = np.where(plastic)[0]
-    dl = np.zeros(len(idx))
-    seq = sig_eq[idx]
-    ep0 = epsp[idx]
-    rf = rate_fac[idx] if np.ndim(rate_fac) else rate_fac
-    for _ in range(_NEWTON_ITERS):
-        sy_i, H_i = _yield_stress(mat, ep0 + dl, rf)
-        res = seq - 3.0 * G * dl - sy_i
-        dl += res / (3.0 * G + np.maximum(H_i, 0.0))
-        dl = np.maximum(dl, 0.0)
-    sy_new, _ = _yield_stress(mat, ep0 + dl, rf)
+        # radial scaling of the deviator; pressure untouched
+        scale = sy_new / seq
+        for k in range(6):
+            s[idx, k] *= scale
+        epsp[idx] = ep0 + dl
+        # adiabatic heating from the plastic work (M6)
+        _adiabatic_heating(mat, temp, sy_new, dl, idx)
 
-    # radial scaling of the deviator; pressure untouched
-    scale = sy_new / seq
-    for k in range(6):
-        s[idx, k] *= scale
-    sig[idx, :] = s[idx, :]
-    sig[idx, 0] += p[idx]
-    sig[idx, 1] += p[idx]
-    sig[idx, 2] += p[idx]
-    epsp[idx] = ep0 + dl
-    # adiabatic heating from the plastic work (M6)
-    _adiabatic_heating(mat, temp, sy_new, dl, idx)
+    sig[:, :] = s
+    sig[:, 0] += p_new
+    sig[:, 1] += p_new
+    sig[:, 2] += p_new
     return sig, epsp
 
 
@@ -234,6 +253,9 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
     sig, deps: (n, 3) = [xx, yy, xy];  epsp: (n,). In-place updates.
     extra['temp'] (M6): per-layer adiabatic temperature rise.
     """
+    if sig.shape[0] == 0:
+        return sig, epsp
+
     G = mat.G
 
     # elastic trial
@@ -250,7 +272,10 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
     tr3 = (dxx + dyy + dzz) / 3.0
     ee = (dxx - tr3) ** 2 + (dyy - tr3) ** 2 + (dzz - tr3) ** 2 \
         + 0.5 * dxy ** 2
-    rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, 1e-30)
+    if dt > 0.0:
+        rate = np.sqrt((2.0 / 3.0) * ee) / dt
+    else:
+        rate = np.zeros(len(deps))
     rate_fac = _rate_factor(mat, rate)
     tfac, temp = _thermal_factor(mat, extra)     # M6 thermal softening
     rate_fac = rate_fac * tfac
@@ -328,6 +353,8 @@ def consistent_solid_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
     """
     from . import law01_elastic
     n = sig.shape[0]
+    if n == 0:
+        return np.empty((0, 6, 6))
     G = mat.G
     Kb = mat.K
     C = law01_elastic.solid_tangent(mat)             # (6, 6) elastic
@@ -422,6 +449,8 @@ def consistent_shell_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
     """
     from . import law01_elastic
     n = sig.shape[0]
+    if n == 0:
+        return np.empty((0, 3, 3))
     G = mat.G
     C = law01_elastic.shell_membrane_tangent(mat)     # (3, 3) plane stress
     D = np.broadcast_to(C, (n, 3, 3)).copy()

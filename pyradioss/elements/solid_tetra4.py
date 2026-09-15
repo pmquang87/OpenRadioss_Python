@@ -99,18 +99,46 @@ def _geometry(xe: np.ndarray):
     xe : (n, 4, 3) nodal coordinates.
     Returns (dndx (n,4,3), vol (n,)). Fortran: s4coor3.F/s4deri3.F.
     """
+    n = len(xe)
+    if n == 0:
+        return np.zeros((0, 4, 3)), np.zeros(0)
     # J[a,b] = d x_b / d xi_a  (edge vectors from node 1); explicit 3x3
     # cofactor det/inverse — the M7 cheap win, see fastmath.det_inv33
     J = np.einsum("ia,nib->nab", _DN_DXI, xe)
-    detJ, Jinv = det_inv33(J)
+    a, b, c = J[:, 0, 0], J[:, 0, 1], J[:, 0, 2]
+    d, e, f = J[:, 1, 0], J[:, 1, 1], J[:, 1, 2]
+    g, h, i = J[:, 2, 0], J[:, 2, 1], J[:, 2, 2]
+    A = e * i - f * h
+    B = f * g - d * i
+    C = d * h - e * g
+    detJ = a * A + b * B + c * C
     vol = detJ / 6.0                      # tet volume = det(edges)/6
+
+    safe_det = np.where(np.abs(detJ) < 1e-12, np.where(detJ >= 0, 1e-12, -1e-12), detJ)
+    idet = 1.0 / safe_det
+    Jinv = np.empty_like(J)
+    Jinv[:, 0, 0] = A * idet
+    Jinv[:, 0, 1] = (c * h - b * i) * idet
+    Jinv[:, 0, 2] = (b * f - c * e) * idet
+    Jinv[:, 1, 0] = B * idet
+    Jinv[:, 1, 1] = (a * i - c * g) * idet
+    Jinv[:, 1, 2] = (c * d - a * f) * idet
+    Jinv[:, 2, 0] = C * idet
+    Jinv[:, 2, 1] = (b * g - a * h) * idet
+    Jinv[:, 2, 2] = (a * e - b * d) * idet
+
     # dN_i/dx_b = dN_i/dxi_a * dxi_a/dx_b ; dxi_a/dx_b = inv(J)[b,a]
     dndx = np.einsum("ia,nba->nib", _DN_DXI, Jinv)
+    deg = np.abs(detJ) < 1e-12
+    if np.any(deg):
+        dndx[deg] = 0.0
     return dndx, vol
 
 
 def _char_length(xe: np.ndarray, vol: np.ndarray) -> np.ndarray:
     """Characteristic length = minimum altitude = 3 V / max face area."""
+    if len(vol) == 0:
+        return np.zeros(0)
     # all 4 faces at once (fastmath cross/norm — the M7 cheap win, same
     # rewrite as solid_hexa8._char_length)
     e1 = xe[:, _FACES[:, 1]] - xe[:, _FACES[:, 0]]      # (n, 4, 3)
@@ -124,6 +152,8 @@ def _exact_dt_factor(dndx: np.ndarray, vol: np.ndarray, lc: np.ndarray,
     """Per-element ratio dt_exact / (lc/c) — see the module docstring and
     solid_hexa8._exact_dt_factor (same construction, nodal mass rho*V/4)."""
     n = len(vol)
+    if n == 0:
+        return np.ones(0)
     b = dndx                                        # (n, 4, 3)
     S = np.einsum("nia,nib->nab", b, b)             # gradient moment (n,3,3)
     BBt = np.zeros((n, 6, 6))
@@ -146,25 +176,31 @@ def _exact_dt_factor(dndx: np.ndarray, vol: np.ndarray, lc: np.ndarray,
 
     fac = np.ones(n)
     for sl, mat, prop in slices:
-        lam = mat.K - 2.0 * mat.G / 3.0
-        G = mat.G
+        rho0_val = getattr(mat, "rho0", 0.0)
+        E_val = getattr(mat, "E", 0.0)
+        if not (rho0_val > 0.0 and E_val > 0.0) or np.any(vol[sl] <= 1e-12):
+            fac[sl] = 1.0
+            continue
+        nu_val = getattr(mat, "nu", 0.3)
+        K_val = getattr(mat, "K", E_val / (3.0 * (1.0 - 2.0 * nu_val)) if abs(1.0 - 2.0 * nu_val) > 1e-6 else E_val)
+        G_val = getattr(mat, "G", E_val / (2.0 * (1.0 + nu_val)) if abs(1.0 + nu_val) > 1e-6 else E_val / 2.6)
+        lam = K_val - 2.0 * G_val / 3.0
         C = np.array([
-            [lam + 2 * G, lam, lam, 0, 0, 0],
-            [lam, lam + 2 * G, lam, 0, 0, 0],
-            [lam, lam, lam + 2 * G, 0, 0, 0],
-            [0, 0, 0, G, 0, 0],
-            [0, 0, 0, 0, G, 0],
-            [0, 0, 0, 0, 0, G],
+            [lam + 2 * G_val, lam, lam, 0, 0, 0],
+            [lam, lam + 2 * G_val, lam, 0, 0, 0],
+            [lam, lam, lam + 2 * G_val, 0, 0, 0],
+            [0, 0, 0, G_val, 0, 0],
+            [0, 0, 0, 0, G_val, 0],
+            [0, 0, 0, 0, 0, G_val],
         ])
-        c = mat.sound_speed_solid() \
-            if (mat.rho0 > 0.0 and mat.E > 0.0) else 0.0
+        c = mat.sound_speed_solid() if (hasattr(mat, "sound_speed_solid") and rho0_val > 0.0 and E_val > 0.0) else (
+            np.sqrt((K_val + 4.0 * G_val / 3.0) / rho0_val) if rho0_val > 0.0 else 0.0
+        )
         if c <= 0.0:
-            # stiffness-free material (a /MAT/VOID with E = 0) claims no
-            # time step — see the brick kernel's identical guard
             fac[sl] = 1.0
             continue
         eig = np.linalg.eigvals(C[None, :, :] @ BBt[sl])
-        w2max = (4.0 / mat.rho0) * eig.real.max(axis=1)   # m = rho*V/4
+        w2max = (4.0 / rho0_val) * eig.real.max(axis=1)   # m = rho*V/4
         dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
         fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
     return fac
@@ -185,6 +221,21 @@ def init_group(group, model, log):
     are written) is fixed IN PLACE by the same 2<->4 local-node swap, so the
     stored connectivity always yields a positive volume for the tested
     forces()/tangent() math.  See the _DN_DXI convention note above."""
+    n = group.n
+    if n == 0 or len(group.conn) == 0:
+        group.state.update(
+            sig=np.zeros((0, 6)),
+            epsp=np.zeros(0),
+            vol0=np.zeros(0),
+            mass=np.zeros(0),
+            eint=np.zeros(0),
+            ehour=np.zeros(0),
+            off=np.ones(0),
+            qvw_pend=np.zeros(0),
+            dtfac=np.ones(0),
+        )
+        return np.empty(0, dtype=np.int64), np.empty(0, dtype=float), None
+
     xe = model.x0[group.conn]                      # (n, 4, 3)
     dndx0, vol = _geometry(xe)
     # --- canonicalise winding: swap local nodes 2 and 4 where V_std<0 -------
@@ -210,10 +261,11 @@ def init_group(group, model, log):
         # element so the flagged run cannot trip the dt eigensolver below.
         vol = np.where(bad, EM20, vol)
         dndx0[bad] = 0.0
-    n = group.n
+
+    slices = group.state.get("slices", [])
     rho0 = np.zeros(n)
-    for sl, mat, prop in group.state["slices"]:
-        rho0[sl] = mat.rho0
+    for sl, mat, prop in slices:
+        rho0[sl] = getattr(mat, "rho0", 0.0)
     mass = rho0 * vol
 
     lc0 = _char_length(xe, vol)
@@ -227,27 +279,98 @@ def init_group(group, model, log):
         off=np.ones(n),              # 1 alive / 0 deleted (GBUF%OFF)
         qvw_pend=np.zeros(n),        # deferred half of the viscous work
         # (midstep booking, see solid_hexa8)
-        dtfac=_exact_dt_factor(dndx0, vol, lc0, group.state["slices"]),
+        dtfac=_exact_dt_factor(dndx0, vol, lc0, slices),
     )
     # dndx0 / damage / failure-flag plumbing shared with the brick kernel
     from .solid_hexa8 import _init_material_state
     _init_material_state(group, dndx0)
+    group._model = model
+    
+    # ---- M36: Smoothing FEM (Itetra4 = 3) initialization -------------------
+    # Determine which slices have itetra4 == 3
+    isrot3 = np.zeros(n, dtype=bool)
+    for sl, mat, prop in slices:
+        if hasattr(prop, "params") and prop.params.get("itetra4", 0) == 3:
+            isrot3[sl] = True
+            
+    if isrot3.any():
+        if not hasattr(model, "nodal_vol_0"):
+            model.nodal_vol_0 = np.zeros(len(model.x0))
+            model.nodal_vol_t = np.zeros(len(model.x0))
+        
+        # S4VOLNOD_SM: scatter initial element volumes to nodes
+        v_sfem = vol * isrot3
+        nodes_sfem = group.conn[isrot3]      # (m, 4)
+        v_sfem_m = v_sfem[isrot3]            # (m,)
+        
+        np.add.at(model.nodal_vol_0, nodes_sfem.reshape(-1), np.repeat(v_sfem_m, 4))
+        
+        # Store for the cycle loop
+        group.state["sfem_isrot3"] = isrot3
+        group.state["sfem_amu0"] = np.zeros(n)  # for volumetric strain rate
+        group.state["sfem_v0_nodes"] = model.nodal_vol_0
+        group.state["sfem_v_nodes"] = model.nodal_vol_t
+
     node_idx = group.conn.reshape(-1)
     mass_c = np.repeat(mass / 4.0, 4)
     return node_idx, mass_c, None
 
 
-# ----------------------------------------------------------------------------
-# Engine-side force computation (one cycle)
-# ----------------------------------------------------------------------------
+def pre_forces(group, model, x, dt):
+    """Pre-forces pass for global nodal volume scattering (Itetra=3)."""
+    if group.n == 0 or len(group.conn) == 0:
+        return
+    if not group.state.get("sfem_isrot3", np.array(False)).any():
+        return
+    st = group.state
+    conn = group.conn
+    isrot3 = st["sfem_isrot3"]
+    xe = x[conn[isrot3]]
+    _, vol = _geometry(xe)
+    nodes_sfem = conn[isrot3]
+    if hasattr(model, "nodal_vol_t"):
+        np.add.at(model.nodal_vol_t, nodes_sfem.reshape(-1), np.repeat(vol, 4))
+
 
 def forces(group, x, v, vr, dt, fint, mint):
     """One explicit cycle for the whole tetra group (s4forc3.F chain).
     Returns the per-element critical time step."""
-    st = group.state
+    n = group.n
     conn = group.conn
+    if n == 0 or len(conn) == 0:
+        return np.empty(0, dtype=float)
+    if dt is not None and dt < 0.0:
+        return np.full(n, EP30)
+    st = group.state
     xe = x[conn]                                   # (n, 4, 3) gather
-    ve = v[conn]
+    if dt is None or dt == 0.0 or v is None:
+        dndx, vol = _geometry(xe)
+        vol = np.maximum(vol, EM20)
+        lc = _char_length(xe, vol)
+        rho = st["mass"] / vol
+        c = np.zeros(n)
+        is_void = np.zeros(n, dtype=bool)
+        for sl, mat, prop in st.get("slices", []):
+            if getattr(mat, "law", 1) == 0:
+                is_void[sl] = True
+            elif hasattr(mat, "sound_speed_solid"):
+                c[sl] = mat.sound_speed_solid()
+            else:
+                c_val = None
+                try:
+                    c_val = materials.sound_speed(mat, rho=rho[sl])
+                except Exception:
+                    pass
+                if c_val is not None:
+                    c[sl] = c_val
+                else:
+                    K = getattr(mat, "K", 0.0)
+                    G = getattr(mat, "G", 0.0)
+                    c[sl] = np.sqrt(np.maximum(K + 4.0 * G / 3.0, 0.0) / np.maximum(rho[sl], EM20))
+        alive = st.get("off", np.ones(n)) > 0.0
+        dt_e = np.where(alive & (c > 0.0), st.get("dtfac", np.ones(n)) * lc / np.maximum(c, EM20), EP30)
+        return np.where(is_void, EP30, dt_e)
+    ve = np.zeros_like(xe) if v is None else v[conn]
 
     # ---- geometry (s4coor3) ----------------------------------------------
     dndx, vol = _geometry(xe)
@@ -277,6 +400,43 @@ def forces(group, x, v, vr, dt, fint, mint):
         deps[~alive] = 0.0
         trD = np.where(alive, trD, 0.0)
 
+    # ---- M36: Smoothing FEM (Itetra4 = 3) ---------------------------------
+    if st.get("sfem_isrot3") is not None and st["sfem_isrot3"].any():
+        isrot3 = st["sfem_isrot3"]
+        v0_nodes = st["sfem_v0_nodes"]
+        v_nodes = st["sfem_v_nodes"]
+        
+        # J_a = V_a(t) / V_{0,a}
+        # (v_nodes was already scattered across ALL groups in pre_forces!)
+        nodes_sfem = conn[isrot3]
+        Ja = v_nodes / np.maximum(v0_nodes, EM20)
+        
+        # \bar{J}_e = 1/4 * sum(J_a)
+        Je_bar = 0.25 * Ja[nodes_sfem].sum(axis=1)
+        
+        # S4VOLN_M volumetric strain rate correction
+        amu = 1.0 / np.maximum(Je_bar, EM20) - 1.0
+        amu0 = st["sfem_amu0"][isrot3]
+        divde = amu0 - amu
+        
+        tr_deps = deps[isrot3, 0] + deps[isrot3, 1] + deps[isrot3, 2]
+        corr = (divde - tr_deps) / 3.0
+        deps[isrot3, 0] += corr
+        deps[isrot3, 1] += corr
+        deps[isrot3, 2] += corr
+        st["sfem_amu0"][isrot3] = amu
+        
+        # Update trace for bulk viscosity
+        trD = np.where(isrot3, divde / np.maximum(dt, 1e-30), trD)
+        
+        # Modified element volume V_{e,eff} = \bar{J}_e * V_{0,e}
+        vol_eff = vol.copy()
+        vol_eff[isrot3] = Je_bar * st["vol0"][isrot3]
+        
+        # Override physical volume with the effective volume for material/eos pressure
+        # Note: 'rho' computed above remains physical density, as required by OpenRadioss
+        vol = vol_eff
+
     # ---- Jaumann rotation of the old stress (srota3) -----------------------
     sig = st["sig"]
     sig_old = sig.copy()
@@ -297,17 +457,24 @@ def forces(group, x, v, vr, dt, fint, mint):
     # its c MUST feed the time step; same for an /EOS since M6; see the
     # brick kernel for the full commentary — the two blocks below are its
     # line-by-line siblings)
-    epsp_old = st["epsp"].copy() if st["chk_fail"] else None
+    epsp_old = st["epsp"].copy() if st.get("chk_fail") else None
     c = np.zeros(group.n)
     c_from_law = np.zeros(group.n, dtype=bool)
     F = None
     if "dndx0" in st:
         F = np.einsum("nia,nib->nab", xe, st["dndx0"])
-    for sl, mat, prop in st["slices"]:
+    for sl, mat, prop in st.get("slices", []):
+        law = getattr(mat, "law", 1)
+        if law == 0 or getattr(mat, "rho0", 0.0) <= 0.0:
+            sig[sl] = 0.0
+            c[sl] = 0.0
+            c_from_law[sl] = True
+            continue
         extra = {}
         if F is not None:
             extra["F"] = F[sl]
-        for name, arr in st["mat_extra"].items():
+        extra["off"] = st["off"][sl]
+        for name, arr in st.get("mat_extra", {}).items():
             extra[name] = arr[sl]
         if materials.needs_env(mat) and not st.get("_impl_static_hg"):
             # M37 pack 2: LAW24/LAW81 gate their dilatancy on the current
@@ -318,11 +485,32 @@ def forces(group, x, v, vr, dt, fint, mint):
             # tangent carries K — see solid_hexa8.forces for the full note.
             extra["rho"] = rho[sl]
             extra["eint"] = st["eint"][sl]
+            extra["vol"] = vol[sl]
+            extra["vol0"] = st["vol0"][sl]
+            extra["deltax"] = lc[sl]
+            extra["le"] = lc[sl]
+            extra["aldt"] = lc[sl]
+            if hasattr(group, "_model") and hasattr(group._model, "t"):
+                extra["time"] = group._model.t
         _, _, c_new = materials.solid_update(
             mat, sig[sl], deps[sl], st["epsp"][sl], dt, extra or None)
         if c_new is not None:
             c[sl] = c_new
             c_from_law[sl] = True
+        for name in st.get("mat_extra", {}):
+            if name in extra and name != "eint":
+                st["mat_extra"][name][sl] = extra[name]
+        if "uvar88" in extra:
+            if "uvar88" not in st:
+                st["uvar88"] = np.zeros((group.n, 30))
+            st["uvar88"][sl] = extra["uvar88"]
+        law_id = getattr(mat, "law", None)
+        law_str = str(law_id).lower().replace("law", "") if law_id is not None else ""
+        off_key = f"off{law_str}"
+        if off_key in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra[off_key])
+        elif "off" in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra["off"])
 
         # ---- /EOS pressure (M6, eosmain) — see solid_hexa8 -----------------
         if mat.eos is not None:
@@ -359,16 +547,19 @@ def forces(group, x, v, vr, dt, fint, mint):
             c_from_law[sl] = True
 
     # ---- failure models + eps_p_max deletion (pyradioss/failure/) ----------
-    if st["chk_fail"]:
+    if st.get("chk_fail"):
         off = st["off"]
-        for sl, mat, prop in st["slices"]:
-            eps_max = mat.params.get("eps_p_max", EP30)
+        for sl, mat, prop in st.get("slices", []):
+            if getattr(mat, "law", 1) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "LAW50_VISC_HONEY", "LAW50_HYP_FOAM", 79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", 163, "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "LAW50_VISC_HONEY", "LAW50_HYP_FOAM", "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM"):
+                eps_max = mat.params.get("eps_p_max", EP30)
+            else:
+                eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
             if mat.fail is None and eps_max >= 1e30:
                 continue
             broken = np.zeros(sl.stop - sl.start, dtype=bool)
             if mat.fail is not None:
                 tstar = None                 # /FAIL/JOHNSON D5 (M6)
-                if "temp" in st["mat_extra"] and "mT" in mat.params:
+                if "temp" in st.get("mat_extra", {}) and "mT" in mat.params:
                     tstar = np.clip(
                         st["mat_extra"]["temp"][sl]
                         / (mat.params["T_melt"] - mat.params["T_i"]),
@@ -379,17 +570,25 @@ def forces(group, x, v, vr, dt, fint, mint):
             if eps_max < 1e30:
                 broken |= st["epsp"][sl] > eps_max
             off[sl][broken] = 0.0
-        alive = off > 0.0
-        sig[~alive] = 0.0            # a deleted element carries no stress
+    alive = st["off"] > 0.0
+    sig[~alive] = 0.0            # a deleted element carries no stress
 
     # ---- sound speed & bulk viscosity (sbulk3) ------------------------------
     qa = np.zeros(group.n)
     qb = np.zeros(group.n)
-    for sl, mat, prop in st["slices"]:
-        if not c_from_law[sl.start]:
-            c[sl] = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
-        qa[sl] = prop.params["qa"]
-        qb[sl] = prop.params["qb"]
+    for sl, mat, prop in st.get("slices", []):
+        if sl.stop > sl.start and not c_from_law[sl.start]:
+            rho0_sl = getattr(mat, "rho0", 0.0)
+            if getattr(mat, "law", 1) == 0 or rho0_sl <= 0.0:
+                c[sl] = 0.0
+            elif hasattr(mat, "sound_speed_solid"):
+                c[sl] = mat.sound_speed_solid()
+            else:
+                K_sl = getattr(mat, "K", 0.0)
+                G_sl = getattr(mat, "G", 0.0)
+                c[sl] = np.sqrt((K_sl + 4.0 * G_sl / 3.0) / rho0_sl)
+        qa[sl] = getattr(prop, "params", {}).get("qa", 1.1) if hasattr(prop, "params") else getattr(prop, "qa", 1.1)
+        qb[sl] = getattr(prop, "params", {}).get("qb", 0.05) if hasattr(prop, "params") else getattr(prop, "qb", 0.05)
     compressing = (trD < 0.0) & alive
     qvisc = np.where(
         compressing,
@@ -430,11 +629,13 @@ def forces(group, x, v, vr, dt, fint, mint):
     st["qvw_pend"] = 0.5 * vol * qvisc * dt          # booked next cycle
 
     # ---- scatter to global arrays (asspar) ----------------------------------
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
+    if fint is not None:
+        scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
     # ---- critical time step --------------------------------------------------
     Q = np.where(compressing, qb * c + qa * lc * np.abs(trD), 0.0)
-    dt_crit = st["dtfac"] * lc / (Q + np.sqrt(Q * Q + c * c))
+    denom = Q + np.sqrt(Q * Q + c * c)
+    dt_crit = np.where((denom > 0.0) & (c > 0.0), st["dtfac"] * lc / np.maximum(denom, EM20), EP30)
     # deleted elements no longer constrain the global step
     return np.where(alive, dt_crit, EP30)
 
@@ -466,6 +667,8 @@ def forces(group, x, v, vr, dt, fint, mint):
 def _edofs(conn):
     """(n, 12) global scalar DOF slot ids, node-major [ux, uy, uz] * 4."""
     n = len(conn)
+    if n == 0:
+        return np.zeros((0, 12), dtype=np.int64)
     ix = np.arange(4)
     edofs = np.empty((n, 12), dtype=np.int64)
     edofs[:, 3 * ix + 0] = conn * 6 + 0
@@ -484,6 +687,8 @@ def tangent(group, x, epsp_incr=None):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 12, 12), dtype=float), np.zeros((0, 12), dtype=np.int64)
     dndx, vol = _geometry(x[conn])
     vol = np.maximum(vol, EM20)
 
@@ -509,7 +714,9 @@ def tangent(group, x, epsp_incr=None):
     # linearization geometry (see solid_hexa8.tangent)
     F = (np.einsum("nia,nib->nab", x[conn], st["dndx0"])
          if "dndx0" in st else None)
-    for sl, mat, prop in st["slices"]:
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            continue
         extra = ({"F": F[sl]} if F is not None
                  and _materials.needs_defgrad(mat) else None)
         D = _materials.solid_tangent(mat, st["sig"][sl], st["epsp"][sl],
@@ -528,6 +735,8 @@ def kgeo(group, x):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 12, 12), dtype=float), np.zeros((0, 12), dtype=np.int64)
     dndx, vol = _geometry(x[conn])
     vol = np.maximum(vol, EM20)
     s = st["sig"]
@@ -586,6 +795,8 @@ def consistent_mass(group, x=None):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 12, 12), dtype=float), np.zeros((0, 12), dtype=np.int64)
     m = st["mass"]                                    # ρ V0, per element
     me = np.zeros((n, 12, 12))
     for a in range(4):
@@ -602,6 +813,8 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     M9/M11 implicit residual (s4fint3 standalone): f_i = -V sigma gradN_i.
     No hourglass term exists for the tet (full integration). ``u``/``ur``/
     ``mint`` unused (no rotational DOFs)."""
+    if group.n == 0 or len(group.conn) == 0 or fint is None:
+        return
     st = group.state
     conn = group.conn
     dndx, vol = _geometry(x[conn])
@@ -612,7 +825,7 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     if "dndx0" in st:
         from .. import materials as _materials
         F = np.einsum("nia,nib->nab", x[conn], st["dndx0"])
-        for sl, mat, prop in st["slices"]:
+        for sl, mat, prop in st.get("slices", []):
             if _materials.needs_defgrad(mat):
                 _materials.solid_update(
                     mat, s[sl], np.zeros((sl.stop - sl.start, 6)),
@@ -623,4 +836,23 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     S[:, 1, 2] = S[:, 2, 1] = s[:, 4]
     S[:, 0, 2] = S[:, 2, 0] = s[:, 5]
     fe = -vol[:, None, None] * np.einsum("nid,ncd->nic", dndx, S)
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
+    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+
+
+def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom):
+    """Implicit residual internal forces dispatch for tetra4.
+
+    Linear geometry (nlgeom=False): evaluates forces at x_ref with displacement u.
+    Nonlinear geometry (nlgeom=True): advances state at midpoint configuration
+    x_ref + 0.5*u, then assembles internal forces on end configuration x_ref + u."""
+    if group.n == 0 or len(group.conn) == 0:
+        return
+    if not nlgeom:
+        forces(group, x_ref, u, ur, 1.0, fint, mint)
+    else:
+        x_mid = x_ref + 0.5 * u
+        x_end = x_ref + u
+        junk_f = np.zeros_like(fint) if fint is not None else None
+        forces(group, x_mid, u, ur, 1.0, junk_f, mint)
+        static_internal_forces(group, x_end, u, ur, fint, mint)
+

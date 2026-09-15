@@ -62,25 +62,60 @@ from __future__ import annotations
 
 import numpy as np
 
+from .law02_johnson_cook import _yield_stress, _rate_factor, _NEWTON_ITERS
+
+
+def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
+                 epsp: np.ndarray, dt: float, extra: dict = None):
+    """LAW27 is defined strictly for shell elements (/MAT/LAW27 /MAT/PLAS_BRIT).
+    OpenRadioss starter rejects it on 3D solids (engine/source/materials/mat/mat027/sigeps27c.F).
+    """
+    raise NotImplementedError("LAW27 (brittle tensile cracking) is implemented for shell elements only.")
+
 
 def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
-                 epsp: np.ndarray, dt: float, extra: dict):
+                 epsp: np.ndarray, dt: float, extra: dict = None):
     """One layer update (vectorized over the part slice). ``extra`` holds
     the per-layer views eps/crk/ang/dmg/layfail described above. Writes
     sig in place (total-strain law: the incoming rotated stress is
     discarded and recomputed from the accumulated strain)."""
+    if sig.shape[0] == 0:
+        return sig, epsp
+
     E, nu, G = mat.E, mat.nu, mat.G
     p = mat.params
-    eps_t1, eps_m1 = p["eps_t1"], p["eps_m1"]
-    eps_t2, eps_m2 = p["eps_t2"], p["eps_m2"]
-    dmax1, dmax2 = p["dmax1"], p["dmax2"]
-    eps_f1, eps_f2 = p["eps_f1"], p["eps_f2"]
+    eps_t1 = p.get("eps_t1", 0.0)
+    eps_m1 = p.get("eps_m1", 0.0)
+    eps_t2 = p.get("eps_t2", eps_t1)
+    eps_m2 = p.get("eps_m2", eps_m1)
+    dmax1 = p.get("dmax1", 0.999)
+    dmax2 = p.get("dmax2", dmax1)
+    eps_f1 = p.get("eps_f1", 1e30)
+    eps_f2 = p.get("eps_f2", eps_f1)
 
-    eps = extra["eps27"]          # (m, 3) accumulated local strain
-    crk = extra["crk27"]          # (m,)   cracked flag
-    ang = extra["ang27"]          # (m,)   crack angle
-    dmg = extra["dmg27"]          # (m, 2) directional damage
-    layfail = extra["layfail"]    # (m,)   1 alive / 0 broken
+    if extra is None:
+        extra = {}
+    m = sig.shape[0]
+    eps = extra.get("eps27")
+    if eps is None:
+        eps = np.zeros((m, 3))
+        extra["eps27"] = eps
+    crk = extra.get("crk27")
+    if crk is None:
+        crk = np.zeros(m)
+        extra["crk27"] = crk
+    ang = extra.get("ang27")
+    if ang is None:
+        ang = np.zeros(m)
+        extra["ang27"] = ang
+    dmg = extra.get("dmg27")
+    if dmg is None:
+        dmg = np.zeros((m, 2))
+        extra["dmg27"] = dmg
+    layfail = extra.get("layfail")
+    if layfail is None:
+        layfail = np.ones(m)
+        extra["layfail"] = layfail
 
     # ---- accumulate the total local strain --------------------------------
     eps += deps
@@ -148,6 +183,94 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
         syy[cracked] = syy_c
         sxy[cracked] = sxy_c
 
+    # ---- Johnson-Cook Plasticity (Iplas=1 iterative plane-stress return) ---
+    # Plasticity is evaluated on the damaged trial stress (matching M27PLAS)
+    p_A = p.get("A", 0.0)
+    if p_A > 0.0:
+        sig_eq = np.sqrt(sxx ** 2 - sxx * syy + syy ** 2 + 3.0 * sxy ** 2) + 1e-30
+        
+        # in-plane equivalent strain rate
+        if dt > 0.0:
+            dxx, dyy, dxy = deps[:, 0], deps[:, 1], deps[:, 2]
+            dzz = -(dxx + dyy) * 0.5
+            tr3 = (dxx + dyy + dzz) / 3.0
+            ee = (dxx - tr3) ** 2 + (dyy - tr3) ** 2 + (dzz - tr3) ** 2 + 0.5 * dxy ** 2
+            rate = np.sqrt((2.0 / 3.0) * ee) / dt
+            rate_fac = _rate_factor(mat, rate)
+        else:
+            rate_fac = 1.0 if not hasattr(mat, "c") or mat.c == 0.0 else np.ones(len(deps))
+
+        sy, _ = _yield_stress(mat, epsp, rate_fac)
+        plastic = (sig_eq > sy) & (layfail > 0.0)
+        if np.any(plastic):
+            idx = np.where(plastic)[0]
+            
+            S1_t = sxx[idx] + syy[idx]
+            S2_t = sxx[idx] - syy[idx]
+            S3_t = sxy[idx]
+            
+            A_i = 0.25 * S1_t * S1_t
+            B_i = 0.75 * S2_t * S2_t + 3.0 * S3_t * S3_t
+            
+            svm_i = sig_eq[idx]
+            ep0 = epsp[idx]
+            y_i = sy[idx]
+            rf = rate_fac[idx] if np.ndim(rate_fac) else rate_fac
+            
+            p_B = p.get("B", 0.0)
+            p_n = p.get("n", 0.0)
+            p_sigmax = p.get("sig_max", 0.0)
+            
+            # H_i at the beginning of the step (M27PLAS uses SMALL=1e-7)
+            H_i = p_n * p_B * ((ep0 + 1e-7) ** (p_n - 1.0)) * rf
+            if p_sigmax > 0.0:
+                H_i = np.where(y_i >= p_sigmax, 0.0, H_i)
+                
+            dpla_j = (svm_i - y_i) / (3.0 * G + H_i)
+            
+            nu1 = 1.0 / (1.0 - nu)
+            nu2 = 1.0 / (1.0 + nu)
+            
+            for _ in range(3):
+                dpla_i = dpla_j
+                
+                e_new = np.maximum(ep0 + dpla_i, 1e-20)
+                yld_i = (p_A + p_B * (e_new ** p_n)) * rf
+                if p_sigmax > 0.0:
+                    yld_i = np.where(yld_i > p_sigmax, p_sigmax, yld_i)
+                    
+                dr = 0.5 * E * dpla_i / yld_i
+                
+                P_ = 1.0 / (1.0 + dr * nu1)
+                Q_ = 1.0 / (1.0 + 3.0 * dr * nu2)
+                
+                P2 = P_ * P_
+                Q2 = Q_ * Q_
+                
+                f = A_i * P2 + B_i * Q2 - yld_i * yld_i
+                df = -(A_i * nu1 * P2 * P_ + 3.0 * B_i * nu2 * Q2 * Q_) * (E - 2.0 * dr * H_i) / yld_i - 2.0 * H_i * yld_i
+                df_safe = np.where(np.abs(df) > 1e-20, df, -1e-20)
+                dpla_j = np.where(dpla_i > 0.0, np.maximum(0.0, dpla_i - f / df_safe), 0.0)
+                
+            epsp[idx] = ep0 + dpla_j
+            
+            # Final stress components update
+            e_new = np.maximum(ep0 + dpla_j, 1e-20)
+            yld_i = (p_A + p_B * (e_new ** p_n)) * rf
+            if p_sigmax > 0.0:
+                yld_i = np.where(yld_i > p_sigmax, p_sigmax, yld_i)
+                
+            dr = 0.5 * E * dpla_j / yld_i
+            P_ = 1.0 / (1.0 + dr * nu1)
+            Q_ = 1.0 / (1.0 + 3.0 * dr * nu2)
+            
+            S1_new = S1_t * P_
+            S2_new = S2_t * Q_
+            
+            sxx[idx] = 0.5 * (S1_new + S2_new)
+            syy[idx] = 0.5 * (S1_new - S2_new)
+            sxy[idx] = S3_t * Q_
+
     # broken layers carry no stress at all
     dead = layfail == 0.0
     sig[:, 0] = np.where(dead, 0.0, sxx)
@@ -209,17 +332,27 @@ def consistent_shell_tangent(mat, extra):
     """(m, 3, 3) consistent tangent of one LAW27 layer at its TRIAL state
     (the ``extra`` views hold the trial eps27/crk27/ang27/dmg27/layfail
     the force pass just updated — see the branch derivation above)."""
+    if extra is None:
+        return np.empty((0, 3, 3))
+    crk = extra.get("crk27")
+    if crk is None or len(crk) == 0:
+        return np.empty((0, 3, 3))
+
     E, nu, G = mat.E, mat.nu, mat.G
     p = mat.params
-    eps_t1, eps_m1 = p["eps_t1"], p["eps_m1"]
-    eps_t2, eps_m2 = p["eps_t2"], p["eps_m2"]
-    dmax1, dmax2 = p["dmax1"], p["dmax2"]
+    eps_t1 = p.get("eps_t1", 0.0)
+    eps_m1 = p.get("eps_m1", 0.0)
+    eps_t2 = p.get("eps_t2", eps_t1)
+    eps_m2 = p.get("eps_m2", eps_m1)
+    dmax1 = p.get("dmax1", 0.999)
+    dmax2 = p.get("dmax2", dmax1)
 
     eps = extra["eps27"]
-    crk = extra["crk27"]
     ang = extra["ang27"]
     dmg = extra["dmg27"]
-    layfail = extra["layfail"]
+    layfail = extra.get("layfail")
+    if layfail is None:
+        layfail = np.ones(len(crk))
 
     m = len(crk)
     cps = E / (1.0 - nu * nu)

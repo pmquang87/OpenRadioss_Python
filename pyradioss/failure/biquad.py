@@ -28,9 +28,22 @@ The two meet at the uniaxial point c3, so eps_f is continuous. Outside
 positive floor guards against a parabola dipping through zero far outside
 its fitted range.
 
-Port simplifications: the built-in material presets (M-flag = 1..99,
-which derive c1..c5 from c3 alone) and the S-flag / Inst_start necking
-options are not ported — give the five coefficients explicitly.
+Presets and Options
+-------------------
+- M_flag (biquad_coefficients.F lines 70–122): Built-in material presets
+  deriving c1, c2, c4, c5 from c3:
+    1: Mild Steel (default if M_flag > 0 or c1=c2=c4=c5=0)
+    2: DP600
+    3: Boron
+    4: Aluminium AA5182
+    5: Aluminium AA6082-T6
+    6: Plastic PA6GF30
+    7: Plastic PP T40
+    99: User scaling factors e1..e4
+- S_flag (fail_biquad_s.F lines 176–205):
+    1: Raw parabola through (1/3, c3), (2/3, c4), (1, c5)
+    2: Split high parabolas meeting at plane strain triaxiality
+       sigma* = 1/sqrt(3) with zero slope (default in Radioss)
 """
 
 from __future__ import annotations
@@ -54,39 +67,117 @@ def _parabola(x0, y0, x1, y1, x2, y2):
 
 
 def fit(params: dict) -> None:
-    """Pre-compute the parabola coefficients from c1..c5 (Starter side)."""
-    c1, c2, c3, c4, c5 = (params[k] for k in ("c1", "c2", "c3", "c4", "c5"))
+    """Pre-compute the parabola coefficients from c1..c5 and M_Flag/S_Flag."""
+    c3 = params.get("c3", 0.0)
+    
+    # M_flag presets (biquad_coefficients.F)
+    m_flag = params.get("m_flag", 0)
+    if m_flag > 0 or (params.get("c1", 0.0) == 0.0 and params.get("c2", 0.0) == 0.0 
+                      and params.get("c4", 0.0) == 0.0 and params.get("c5", 0.0) == 0.0):
+        if m_flag == 2:    # DP600
+            c1, c2, c4, c5 = 4.3 * c3, 1.4 * c3, 0.6 * c3, 1.6 * c3
+        elif m_flag == 3:  # Boron
+            c1, c2, c4, c5 = 5.2 * c3, 3.1 * c3, 0.8 * c3, 3.5 * c3
+        elif m_flag == 4:  # AA5182
+            c1, c2, c4, c5 = 5.0 * c3, 1.0 * c3, 0.4 * c3, 0.8 * c3
+        elif m_flag == 5:  # AA6082-T6
+            c1, c2, c4, c5 = 7.8 * c3, 3.5 * c3, 0.6 * c3, 2.8 * c3
+        elif m_flag == 6:  # PA6GF30
+            c1, c2, c4, c5 = 3.6 * c3, 0.6 * c3, 0.5 * c3, 0.6 * c3
+        elif m_flag == 7:  # PP T40
+            c1, c2, c4, c5 = 10.0 * c3, 2.7 * c3, 0.6 * c3, 0.7 * c3
+        elif m_flag == 99: # user scaling factors
+            e1, e2 = params.get("e1", 0.0), params.get("e2", 0.0)
+            e3, e4 = params.get("e3", 0.0), params.get("e4", 0.0)
+            c1, c2, c4, c5 = e1 * c3, e2 * c3, e3 * c3, e4 * c3
+        else:              # m_flag == 1 or anything else -> Mild Steel
+            c1, c2, c4, c5 = 3.5 * c3, 1.6 * c3, 0.6 * c3, 1.5 * c3
+        # write back the resolved params so they can be inspected
+        params.update({"c1": c1, "c2": c2, "c4": c4, "c5": c5})
+    else:
+        c1, c2, c4, c5 = (params.get(k, 0.0) for k in ("c1", "c2", "c4", "c5"))
+
     params["plow"] = _parabola(-1.0 / 3.0, c1, 0.0, c2, 1.0 / 3.0, c3)
-    params["phigh"] = _parabola(1.0 / 3.0, c3, 2.0 / 3.0, c4, 1.0, c5)
+    
+    # S_flag = 2 creates two high parabolas meeting at plane strain with zero slope
+    # plane strain triax = 1/sqrt(3) ~= 0.57735
+    s_flag = params.get("s_flag", 2)
+    if s_flag == 3:
+        inst = params.get("inst_start", 0.0)
+        if inst <= 0.0 or inst >= c4:
+            s_flag = 2
+
+    if s_flag == 2:
+        # P1 = (1/3, c3), S1 = (1/sqrt(3), c4), P2 = (2/3, c5)
+        # matching biquad_coefficients.F and fail_biquad_s.F:180-202
+        sqr3 = np.sqrt(3.0)
+        s1x = 1.0 / sqr3
+        raw_ah, raw_bh, raw_ch = _parabola(1.0 / 3.0, c3, s1x, c4, 2.0 / 3.0, c5)
+        s1y = raw_ah * s1x**2 + raw_bh * s1x + raw_ch
+        
+        # Parabola 2a through P1=(1/3, c3) with zero slope at S1=(s1x, s1y)
+        p1x, p1y = 1.0 / 3.0, c3
+        a1 = (p1y - s1y) / (p1x - s1x)**2
+        b1 = -2.0 * a1 * s1x
+        c1_c = a1 * s1x**2 + s1y
+        params["phigh_1"] = (a1, b1, c1_c)
+        
+        # Parabola 2b through P2=(2/3, c5) with zero slope at S1=(s1x, s1y)
+        p2x, p2y = 2.0 / 3.0, c5
+        a2 = (p2y - s1y) / (p2x - s1x)**2
+        b2 = -2.0 * a2 * s1x
+        c2_c = a2 * s1x**2 + s1y
+        params["phigh_2"] = (a2, b2, c2_c)
+    else:
+        sqr3 = np.sqrt(3.0)
+        params["phigh"] = _parabola(1.0 / 3.0, c3, 1.0 / sqr3, c4, 2.0 / 3.0, c5)
 
 
 def eps_f(fail, triax: np.ndarray) -> np.ndarray:
     """Failure strain at the given triaxiality (vectorized)."""
-    al, bl, cl = fail.params["plow"]
-    ah, bh, ch = fail.params["phigh"]
+    params = getattr(fail, "params", fail)
+    if "plow" not in params:
+        fit(params)
+    al, bl, cl = params["plow"]
     low = triax <= 1.0 / 3.0
-    e = np.where(low,
-                 al * triax ** 2 + bl * triax + cl,
-                 ah * triax ** 2 + bh * triax + ch)
+    
+    if "phigh" in params:
+        ah, bh, ch = params["phigh"]
+        e = np.where(low,
+                     al * triax ** 2 + bl * triax + cl,
+                     ah * triax ** 2 + bh * triax + ch)
+    else:
+        ah1, bh1, ch1 = params["phigh_1"]
+        ah2, bh2, ch2 = params["phigh_2"]
+        s1x = 1.0 / np.sqrt(3.0)
+        high1 = (triax > 1.0 / 3.0) & (triax <= s1x)
+        high2 = (triax > s1x)
+        e = np.where(low, al * triax ** 2 + bl * triax + cl, 0.0)
+        e = np.where(high1, ah1 * triax ** 2 + bh1 * triax + ch1, e)
+        e = np.where(high2, ah2 * triax ** 2 + bh2 * triax + ch2, e)
+        
     return np.maximum(e, _FLOOR)
 
 
-def solid_step(fail, sig, d_epsp, deps, dt, dama):
+def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     """3-D damage step (deps/dt unused: no rate term in BIQUAD)."""
     sm = (sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0
     s0, s1, s2 = sig[:, 0] - sm, sig[:, 1] - sm, sig[:, 2] - sm
     vm = np.sqrt(1.5 * (s0 ** 2 + s1 ** 2 + s2 ** 2)
                  + 3.0 * (sig[:, 3] ** 2 + sig[:, 4] ** 2 + sig[:, 5] ** 2))
     triax = sm / np.maximum(vm, _TINY)
+    triax = np.clip(triax, -2.0 / 3.0, 2.0 / 3.0)
     dama += np.maximum(d_epsp, 0.0) / eps_f(fail, triax)
+    np.minimum(dama, 1.0, out=dama)
     return dama >= 1.0
 
 
-def shell_step(fail, sig, d_epsp, deps, dt, dama):
+def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     """Plane-stress damage step for one layer."""
     sm = (sig[:, 0] + sig[:, 1]) / 3.0
     vm = np.sqrt(sig[:, 0] ** 2 - sig[:, 0] * sig[:, 1] + sig[:, 1] ** 2
                  + 3.0 * sig[:, 2] ** 2)
     triax = sm / np.maximum(vm, _TINY)
     dama += np.maximum(d_epsp, 0.0) / eps_f(fail, triax)
+    np.minimum(dama, 1.0, out=dama)
     return dama >= 1.0

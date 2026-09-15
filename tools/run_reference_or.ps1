@@ -37,7 +37,7 @@ $deckItem = Get-Item $Deck
 Set-Location $deckItem.DirectoryName
 $name = $deckItem.Name
 
-$isEngine = $name -match "_[0-9]{3}[1-9]\.rad$"   # _0001.rad and later restarts
+$isEngine = ($name -match "_([0-9]{4})\.rad$") -and ($Matches[1] -ne "0000")   # _0001.rad and later restarts
 if ($isEngine -and $Both) { throw "-Both expects the starter deck (_0000.rad)" }
 
 # NB: solver stdout is piped to Out-Host inside the functions — a PS function

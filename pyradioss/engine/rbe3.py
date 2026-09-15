@@ -4,8 +4,11 @@
 Fortran origin: ``engine/source/constraints/general/rbe3/`` —
 
     rbe3f.F    distribution of the dependent node's forces to the masters
+               (subroutines RBE3T1 lines 45–100, RBE3CL lines 557–560, MFAC_RBE3 lines 568–575)
     rbe3v.F    kinematic update of the dependent node from the masters
-    starter/source/constraints/general/rbe3/hm_read_rbe3.F (input)
+               (subroutines RBE3V, RBE3V_PEN)
+    starter/source/constraints/general/rbe3/hm_read_rbe3.F (input lines 50–120)
+    common_source/modules/constraints/rbe3_mod.F90 (module RBE3_MOD)
 
 Theory — the weighted least-squares rigid fit and its dual
 ----------------------------------------------------------

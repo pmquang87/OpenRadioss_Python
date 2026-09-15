@@ -59,10 +59,12 @@ from __future__ import annotations
 import glob
 import importlib.util
 import os
+import queue
 import re
 import subprocess
 import sys
 import threading
+import time
 from typing import Callable, Dict, List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
@@ -335,8 +337,16 @@ def convert_anim_to_vtk(run_dir: str, exec_dir: Optional[str] = None,
     for cmd, out_path in cmds:
         try:
             with open(out_path, "wb") as fh:
-                proc = subprocess.run(cmd, stdout=fh, stderr=subprocess.PIPE,
-                                      cwd=run_dir, timeout=timeout)
+                proc = subprocess.Popen(cmd, stdout=fh, stderr=subprocess.PIPE,
+                                        cwd=run_dir)
+                with _active_procs_lock:
+                    _active_procs.append(proc)
+                try:
+                    _, err_data = proc.communicate(timeout=timeout)
+                finally:
+                    with _active_procs_lock:
+                        if proc in _active_procs:
+                            _active_procs.remove(proc)
         except (OSError, subprocess.SubprocessError) as exc:
             _line(emit, f"   ** {os.path.basename(cmd[-1])}: {exc}")
             continue
@@ -347,7 +357,7 @@ def convert_anim_to_vtk(run_dir: str, exec_dir: Optional[str] = None,
                         f"{os.path.basename(out_path)} "
                         f"({os.path.getsize(out_path)} bytes)")
         else:
-            err = (proc.stderr or b"").decode("utf-8", "replace").strip()
+            err = (err_data or b"").decode("utf-8", "replace").strip()
             _line(emit, f"   ** {os.path.basename(cmd[-1])} failed "
                         f"(rc={proc.returncode}) {err[:200]}")
     ok = len(outputs) == len(cmds)
@@ -387,6 +397,10 @@ def convert_th_to_csv(run_dir: str, exec_dir: Optional[str] = None,
 # Runner (worker thread + queue) for the Post-processing tab
 # ---------------------------------------------------------------------------
 
+_active_procs: List[subprocess.Popen] = []
+_active_procs_lock = threading.Lock()
+
+
 class PostProcRunner:
     """Runs a selection of converters on a worker thread, streaming events to
     ``self.queue`` (a :class:`queue.Queue`) so the Tk UI drains them exactly
@@ -407,6 +421,7 @@ class PostProcRunner:
         self.queue = event_queue or _queue.Queue()
         self.results: Dict[str, Dict[str, object]] = {}
         self._thread: Optional[threading.Thread] = None
+        self._stop = threading.Event()
 
     def start(self) -> None:
         if self._thread is not None and self._thread.is_alive():
@@ -418,15 +433,34 @@ class PostProcRunner:
     def is_running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
+    def stop(self) -> None:
+        """Terminate child subprocesses and signal worker to stop."""
+        self._stop.set()
+        with _active_procs_lock:
+            procs = list(_active_procs)
+        for proc in procs:
+            if proc.poll() is None:
+                try:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5.0)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                except OSError:
+                    pass
+
     def join(self, timeout: Optional[float] = None) -> None:
         if self._thread is not None:
             self._thread.join(timeout)
 
     def _run(self) -> None:
         emit = self.queue.put
-        run_post_actions(self.run_dir, self.actions, exec_dir=self.exec_dir,
-                         emit=emit, python_exe=self.python_exe,
-                         results=self.results)
+        for action in self.actions:
+            if self._stop.is_set():
+                break
+            run_post_actions(self.run_dir, [action], exec_dir=self.exec_dir,
+                             emit=emit, python_exe=self.python_exe,
+                             results=self.results)
         emit(("post_all_done", dict(self.results)))
 
     def run_to_completion(self, timeout: float = 1800.0
@@ -500,22 +534,81 @@ def _stream_subprocess(cmd: List[str], cwd: str, emit: EmitFn,
     except OSError as exc:
         _line(emit, f"   ** failed to launch: {exc}")
         return -1
-    try:
-        assert proc.stdout is not None
-        for raw in proc.stdout:
-            line = raw.rstrip("\n")
-            if line.strip():
-                _line(emit, "   " + line)
-    finally:
+
+    with _active_procs_lock:
+        _active_procs.append(proc)
+
+    q: queue.Queue[Optional[str]] = queue.Queue()
+
+    def _reader():
         try:
             if proc.stdout is not None:
-                proc.stdout.close()
-        except OSError:
-            pass
+                for raw in proc.stdout:
+                    q.put(raw)
+        finally:
+            q.put(None)
+
+    t = threading.Thread(target=_reader, daemon=True)
+    t.start()
+
+    deadline = time.time() + timeout
+    timed_out = False
+
+    while True:
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            timed_out = True
+            break
         try:
-            rc = proc.wait(timeout=timeout)
+            item = q.get(timeout=min(remaining, 0.1))
+            if item is None:
+                break
+            line = item.rstrip("\n")
+            if line.strip():
+                _line(emit, "   " + line)
+        except queue.Empty:
+            if proc.poll() is not None:
+                # Process terminated, drain queue
+                while True:
+                    try:
+                        item = q.get_nowait()
+                        if item is None:
+                            break
+                        line = item.rstrip("\n")
+                        if line.strip():
+                            _line(emit, "   " + line)
+                    except queue.Empty:
+                        break
+                break
+
+    if timed_out:
+        proc.kill()
+        _line(emit, "   ** timed out")
+        try:
+            proc.wait(timeout=2.0)
+        except Exception:
+            pass
+        rc = -9
+    else:
+        try:
+            rc = proc.wait(timeout=max(0.1, deadline - time.time()))
         except subprocess.TimeoutExpired:
             proc.kill()
             _line(emit, "   ** timed out")
             rc = -9
+
+    try:
+        t.join(timeout=2.0)
+    except Exception:
+        pass
+    try:
+        if proc.stdout is not None:
+            proc.stdout.close()
+    except OSError:
+        pass
+
+    with _active_procs_lock:
+        if proc in _active_procs:
+            _active_procs.remove(proc)
+
     return rc

@@ -1,0 +1,28 @@
+# 
+/TITLE 
+Parison
+/VERS/140 
+/DT/INTER/DEL
+6.700000e-001 1.000000e-007
+
+#/DT/NODA/CST
+#6.700000e-001 1.000000e-006
+
+/ANIM/DT 
+0.000000e+000 1.000000e-001
+/TFILE
+1.000000e-003
+/ABF
+1.000000e-003 1e30
+/RFILE
+10000 0 0
+/PRINT/-1000
+/RUN/EXAMPLE4_66/1
+8.010000e-001
+/ANIM/ELEM/EPSP
+/ANIM/ELEM/VONM
+/ANIM/VECT/VEL
+/ANIM/SHELL/THIC
+/ANIM/GZIP
+/MON/ON                                                                         
+                                                                         

@@ -112,21 +112,61 @@ _FACES = np.array([
 # Geometry helpers
 # ----------------------------------------------------------------------------
 
+def _edofs(conn: np.ndarray) -> np.ndarray:
+    """Global translation DOF indices for 8-node hexas: 3 per node in node-major order."""
+    n = len(conn)
+    if n == 0:
+        return np.empty((0, 24), dtype=np.int64)
+    ix = np.arange(8)
+    edofs = np.empty((n, 24), dtype=np.int64)
+    edofs[:, 3 * ix + 0] = conn * 6 + 0
+    edofs[:, 3 * ix + 1] = conn * 6 + 1
+    edofs[:, 3 * ix + 2] = conn * 6 + 2
+    return edofs
+
+
 def _geometry(xe: np.ndarray):
     """Centroid Jacobian, volume and cartesian shape gradients.
 
     xe : (n, 8, 3) nodal coordinates.
     Returns (dndx (n,8,3), vol (n,)). Fortran: srcoor3.F + sderi3.F.
     """
+    n = len(xe)
+    if n == 0:
+        return np.empty((0, 8, 3)), np.empty(0)
     # J[a,b] = d x_b / d xi_a  summed over nodes: (3,8) @ (n,8,3) matmul
     J = _DN_DXI_T @ xe
-    # explicit 3x3 cofactor det/inverse (fastmath — LAPACK is ~5x slower
-    # at group sizes and not reproducible by the numba mirror)
-    detJ, Jinv = det_inv33(J)
-    vol = 8.0 * detJ
+    a, b, c = J[:, 0, 0], J[:, 0, 1], J[:, 0, 2]
+    d, e, f = J[:, 1, 0], J[:, 1, 1], J[:, 1, 2]
+    g, h, i = J[:, 2, 0], J[:, 2, 1], J[:, 2, 2]
+    A = e * i - f * h
+    B = f * g - d * i
+    C = d * h - e * g
+    detJ = a * A + b * B + c * C
+    bad = detJ <= EM20
+    if np.any(bad):
+        # Safe fallback for degenerate / zero-volume / collapsed elements
+        J_safe = np.where(bad[:, None, None], np.eye(3)[None, :, :], J)
+        _, Jinv = det_inv33(J_safe)
+        Jinv[bad] = 0.0
+        vol = np.where(detJ <= EM20, EM20, 8.0 * detJ)
+        dndx = _DN_DXI @ Jinv.transpose(0, 2, 1)
+        dndx[bad] = 0.0
+        return dndx, vol
+    _, Jinv = det_inv33(J)
+    vol = np.where(detJ <= EM20, EM20, 8.0 * detJ)
     # dN_i/dx_b = dN_i/dxi_a * dxi_a/dx_b ; dxi_a/dx_b = inv(J)[b,a]
     dndx = _DN_DXI @ Jinv.transpose(0, 2, 1)
     return dndx, vol
+
+
+def _detJ(xe: np.ndarray) -> np.ndarray:
+    if len(xe) == 0:
+        return np.empty(0)
+    J = _DN_DXI_T @ xe
+    return (J[:, 0, 0] * (J[:, 1, 1] * J[:, 2, 2] - J[:, 1, 2] * J[:, 2, 1])
+          + J[:, 0, 1] * (J[:, 1, 2] * J[:, 2, 0] - J[:, 1, 0] * J[:, 2, 2])
+          + J[:, 0, 2] * (J[:, 1, 0] * J[:, 2, 1] - J[:, 1, 1] * J[:, 2, 0]))
 
 
 def _char_length(xe: np.ndarray, vol: np.ndarray) -> np.ndarray:
@@ -186,8 +226,12 @@ def _exact_dt_factor(dndx: np.ndarray, vol: np.ndarray, lc: np.ndarray,
             [0, 0, 0, 0, G, 0],
             [0, 0, 0, 0, 0, G],
         ])
-        c = mat.sound_speed_solid() \
-            if (mat.rho0 > 0.0 and mat.E > 0.0) else 0.0
+        if hasattr(mat, "sound_speed_solid"):
+            c = mat.sound_speed_solid() if (getattr(mat, "rho0", 0.0) > 0.0 and getattr(mat, "E", 0.0) > 0.0) else 0.0
+        else:
+            rho0 = getattr(mat, "rho0", 0.0)
+            E = getattr(mat, "E", 0.0)
+            c = np.sqrt(max(mat.K + 4.0 * mat.G / 3.0, 0.0) / max(rho0, EM20)) if (rho0 > 0.0 and E > 0.0) else 0.0
         if c <= 0.0:
             # stiffness-free material (a /MAT/VOID with E = 0, a bare
             # /MAT/GAS): the element claims no time step at all
@@ -215,6 +259,28 @@ def init_group(group, model, log):
     element volume from the initial geometry, element mass = rho0 * V,
     spread equally to the 8 nodes (consistent with the original's lumping).
     """
+    n = group.n
+    if n == 0 or len(group.conn) == 0:
+        group.state.update(
+            sig=np.empty((0, 6)),
+            epsp=np.empty(0),
+            vol0=np.empty(0),
+            mass=np.empty(0),
+            eint=np.empty(0),
+            ehour=np.empty(0),
+            off=np.empty(0),
+            qvw_pend=np.empty(0),
+            hgq=np.empty((0, 4, 3)),
+            hgqex=np.empty((0, 4, 3)),
+            dtfac=np.empty(0),
+            lc_scale=np.empty(0),
+            law70_mask=np.empty(0, dtype=bool),
+            has_law70=False,
+            chk_fail=False,
+            mat_extra={},
+        )
+        return np.empty(0, dtype=np.int64), np.empty(0), None
+
     xe = model.x0[group.conn]                      # (n, 8, 3)
     dndx0, vol = _geometry(xe)
     bad = vol <= 0.0
@@ -222,13 +288,27 @@ def init_group(group, model, log):
         for eid in group.ids[bad]:
             log.error(f"/BRICK {eid}: zero or negative volume "
                       f"(check node ordering)", "SOLID INIT")
-    n = group.n
     rho0 = np.zeros(n)
     for sl, mat, prop in group.state["slices"]:
-        rho0[sl] = mat.rho0
+        rho0[sl] = getattr(mat, "rho0", 0.0)
     mass = rho0 * vol
 
-    lc0 = _char_length(xe, vol)
+    # Degenerate element (wedge/pyramid/tetra) length scale
+    # IDEGE count: duplicate nodes in the connectivity (sdlen_dege.F)
+    eq = group.conn[:, :, None] == group.conn[:, None, :]
+    eq[:, np.arange(8), np.arange(8)] = False
+    idege = eq.any(axis=2).sum(axis=1) // 2
+
+    # Scale characteristic length for degenerate elements
+    # Hex (idege=0, 1): scale = 1.0
+    # Wedge/Pyramid (idege=2): scale = 2.0
+    # Tetra (idege>2): scale = 3.0
+    lc_scale = np.ones(n)
+    lc_scale[idege > 2] = 3.0
+    lc_scale[(idege > 1) & (idege <= 2)] = 2.0
+    group.state["lc_scale"] = lc_scale
+
+    lc0 = _char_length(xe, vol) * lc_scale
     group.state.update(
         sig=np.zeros((n, 6)),        # Cauchy stress, Voigt (GBUF%SIG)
         epsp=np.zeros(n),            # equivalent plastic strain (GBUF%PLA)
@@ -256,6 +336,10 @@ def init_group(group, model, log):
         # exact stability correction to the lc/c estimate (module docstring)
         dtfac=_exact_dt_factor(dndx0, vol, lc0, group.state["slices"]),
     )
+    # Bypass the one-point exact eigenvalue bound for degenerate elements,
+    # as the 24x24 matrix includes kinematically forbidden modes that artificially
+    # shrink the Courant limit. Fortran OpenRadioss safely uses the scaled lc/c.
+    group.state["dtfac"] = np.where(idege > 0, 1.0, group.state["dtfac"])
     # LAW70 tabulated foam needs the physical (stiffness) hourglass its
     # /PROP/SOLID Isolid=24 asks for — the viscous default cannot hold the
     # zero-energy modes through its densification lock-up (see
@@ -267,6 +351,7 @@ def init_group(group, model, log):
     group.state["law70_mask"] = law70_mask
     group.state["has_law70"] = bool(law70_mask.any())
     _init_material_state(group, dndx0)
+    group._model = model
     # nodal mass: 1/8 of the element mass to each node
     node_idx = group.conn.reshape(-1)
     mass_c = np.repeat(mass / 8.0, 8)
@@ -298,17 +383,50 @@ def _init_material_state(group, dndx0):
     n = group.n
     if any(materials.needs_defgrad(mat) for _, mat, _ in st["slices"]):
         st["dndx0"] = dndx0.copy()
-    if any(mat.fail is not None for _, mat, _ in st["slices"]):
+    if any(getattr(mat, "fail", None) is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros(n)
     st["chk_fail"] = any(
-        mat.fail is not None or mat.params.get("eps_p_max", EP30) < 1e30
+        getattr(mat, "fail", None) is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 48, 52, 60, 66, 74, "74", "LAW74", "HILL_3D", "ORTH_PLAS", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS")
+        or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "74", "LAW74", "HILL_3D", "ORTH_PLAS", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS")
+        or mat.params.get("eps_p_max", EP30) < 1e30
+        or (getattr(mat, "law", 1) not in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", 74, "74", "LAW74", "HILL_3D", "ORTH_PLAS", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", 79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", 163, "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM")
+            and getattr(mat, "law_name", None) not in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "74", "LAW74", "HILL_3D", "ORTH_PLAS", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM")
+            and mat.params.get("eps_max", EP30) < 1e30)
         for _, mat, _ in st["slices"])
     st["mat_extra"] = {}
     for sl, mat, prop in st["slices"]:
         for name, shape in materials.extra_shapes(mat).items():
             if name not in st["mat_extra"]:
-                st["mat_extra"][name] = np.zeros((n,) + shape)
-    if any(mat.eos is not None for _, mat, _ in st["slices"]):
+                if name.startswith("off") or name.startswith("alpe") or name.startswith("uvar82"):
+                    st["mat_extra"][name] = np.ones((n,) + shape)
+                elif name.startswith("uvar66") or name.startswith("uvar74"):
+                    st["mat_extra"][name] = np.zeros((n,) + shape)
+                elif name in ("uvar", "uv69", "uvar69") and getattr(mat, "law", 1) in (69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "HYP_EXT_COMP", "HYPER_EXT_COMP"):
+                    arr = np.zeros((n,) + shape)
+                    arr[..., 2] = 1.0
+                    st["mat_extra"][name] = arr
+                else:
+                    st["mat_extra"][name] = np.zeros((n,) + shape)
+        if getattr(mat, "law", 1) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+            t0 = float(mat.params.get("t0", mat.params.get("T0", 300.0)))
+            if "theta" in st["mat_extra"]:
+                st["mat_extra"]["theta"][sl] = t0
+        if getattr(mat, "law", 1) in (74, "74", "LAW74", "HILL_3D", "ORTH_PLAS") or getattr(mat, "law_name", None) in ("74", "LAW74", "HILL_3D", "ORTH_PLAS", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS"):
+            t0 = float(mat.params.get("t0", mat.params.get("T0", 293.0)))
+            if "temp" in st["mat_extra"]:
+                st["mat_extra"]["temp"][sl] = t0
+        if getattr(mat, "law", 1) in (5, "5", "LAW5", "JWL"):
+            e0 = float(mat.params.get("e0", mat.params.get("MAT_E0", 0.0)))
+            st["eint"][sl] = e0 * st["vol0"][sl]
+            if "eint" in st["mat_extra"]:
+                st["mat_extra"]["eint"][sl] = st["eint"][sl]
+        if (getattr(mat, "law", 1) in (88, "88", "LAW88", "HYP_TAB", "TAB_HYP", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TABULATED_HYP")
+                or getattr(mat, "law_name", None) in ("88", "LAW88", "HYP_TAB", "TAB_HYP", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TABULATED_HYP", "MAT_LAW88", "MAT_HYP_TAB", "MAT_TAB_HYP", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC")):
+            if "uvar88" not in st:
+                st["uvar88"] = np.zeros((n, 30))
+            if "uvar88" not in st["mat_extra"]:
+                st["mat_extra"]["uvar88"] = np.zeros((n, 30))
+    if any(getattr(mat, "eos", None) is not None for _, mat, _ in st["slices"]):
         from ..materials import eos as eos_mod
         st["eos_mask"] = np.zeros(n, dtype=bool)
         st["e_eos"] = np.zeros(n)
@@ -330,7 +448,7 @@ def _init_material_state(group, dndx0):
 # Engine-side force computation (one cycle)
 # ----------------------------------------------------------------------------
 
-def _pre(xe, ve, sig, dt, off):
+def _pre(xe, ve, sig, dt, off, lc_scale):
     """Geometry + kinematics + Jaumann rotation: the srcoor3 / sdefo3 /
     srota3 / sdlen3-geometry part of the cycle, everything BEFORE the
     material law. Rotates ``sig`` in place; returns
@@ -341,7 +459,7 @@ def _pre(xe, ve, sig, dt, off):
     # ---- geometry at t_{n+1/2} (srcoor3) --------------------------------
     dndx, vol = _geometry(xe)
     vol = np.maximum(vol, EM20)
-    lc = _char_length(xe, vol)
+    lc = _char_length(xe, vol) * lc_scale
 
     # ---- velocity gradient, D and W (sdefo3) -----------------------------
     # L = sum_i v_i (x) gradN_i as a stacked matmul: (n,3,8) @ (n,8,3)
@@ -475,7 +593,9 @@ def _post(xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
     # the bulk-viscosity pressure stiffens the response, eroding the
     # Courant limit — but only where it acts, i.e. in compression:
     Q = np.where(compressing, qb * c + qa * lc * np.abs(trD), 0.0)
-    dt_crit = dtfac * lc / (Q + np.sqrt(Q * Q + c * c))
+    denom = Q + np.sqrt(Q * Q + c * c)
+    safe_denom = np.where(denom > 0.0, denom, 1.0)
+    dt_crit = np.where(denom > 0.0, dtfac * lc / safe_denom, EP30)
     # deleted elements no longer constrain the global step
     dt_crit = np.where(alive, dt_crit, EP30)
     return fe, dt_crit, w_visc, qvw_new, deint0, dehour
@@ -566,7 +686,36 @@ def forces(group, x, v, vr, dt, fint, mint):
     time step."""
     st = group.state
     conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty(0)
+
     xe = x[conn]                                   # (n, 8, 3) gather
+    detJ = _detJ(xe)
+
+    # Cycle 0 Courant step probe or evaluation without velocity
+    if dt is None or dt <= 0.0 or v is None:
+        dndx, vol = _geometry(xe)
+        lc = _char_length(xe, vol) * st.get("lc_scale", np.ones(n))
+        rho = st["mass"] / np.maximum(vol, EM20)
+        c = np.zeros(n)
+        is_void = np.zeros(n, dtype=bool)
+        for sl, mat, prop in st.get("slices", []):
+            if getattr(mat, "law", 1) == 0:
+                is_void[sl] = True
+            elif getattr(mat, "law", 1) in (5, "5", "LAW5", "JWL", 21, "21", "LAW21", "DPRAG", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_LAW48", "LAW48_ZHAO", 49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "LAW50_VISC_HONEY", "LAW50_HYP_FOAM", 52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", 66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB", 74, "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "LAW74_HILL_3D", 79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", 93, "93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL", 95, "95", "LAW95", "BERGSTROM_BOYCE", "MAT_LAW95", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE", 163, "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB", "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "LAW74_HILL_3D", "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", "93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL", "95", "LAW95", "BERGSTROM_BOYCE", "MAT_LAW95", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE", "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "LAW50_VISC_HONEY", "LAW50_HYP_FOAM", "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM"):
+                c[sl] = materials.sound_speed(mat, rho[sl])
+            elif hasattr(mat, "sound_speed_solid"):
+                c[sl] = mat.sound_speed_solid()
+            else:
+                K = getattr(mat, "K", 0.0)
+                G = getattr(mat, "G", 0.0)
+                c[sl] = np.sqrt(np.maximum(K + 4.0 * G / 3.0, 0.0) / np.maximum(rho[sl], EM20))
+        alive = st["off"] > 0.0
+        dt_e = np.where(alive, st.get("dtfac", np.ones(n)) * lc / np.maximum(c, EM20), EP30)
+        dt_e = np.where(detJ <= EM20, EP30, dt_e)
+        return np.where(is_void, EP30, dt_e)
+
     ve = v[conn]
 
     sig = st["sig"]
@@ -577,9 +726,9 @@ def forces(group, x, v, vr, dt, fint, mint):
     # (dispatched to the numba mirror when that backend is active)
     jit = accel_get("hexa_pre")
     if jit is not None:
-        dndx, vol, lc, deps, trD = jit(xe, ve, sig, dt, st["off"])
+        dndx, vol, lc, deps, trD = jit(xe, ve, sig, dt, st["off"], st["lc_scale"])
     else:
-        dndx, vol, lc, deps, trD = _pre(xe, ve, sig, dt, st["off"])
+        dndx, vol, lc, deps, trD = _pre(xe, ve, sig, dt, st["off"], st["lc_scale"])
     rho = st["mass"] / vol                          # current density
 
     # ---- material law per part slice (mmain -> sigeps) -------------------
@@ -594,9 +743,12 @@ def forces(group, x, v, vr, dt, fint, mint):
         # exact deformation gradient at the point: F = sum_i x_i (x) gradN0_i
         F = np.einsum("nia,nib->nab", xe, st["dndx0"])
     for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            continue
         extra = {}
         if F is not None:
             extra["F"] = F[sl]
+        extra["off"] = st["off"][sl]
         for name, arr in st["mat_extra"].items():
             extra[name] = arr[sl]
         if materials.needs_env(mat) and not st.get("_impl_static_hg"):
@@ -614,11 +766,32 @@ def forces(group, x, v, vr, dt, fint, mint):
             # refused by materials.solid_tangent at assembly time.)
             extra["rho"] = rho[sl]
             extra["eint"] = st["eint"][sl]
+            extra["vol"] = vol[sl]
+            extra["vol0"] = st["vol0"][sl]
+            extra["deltax"] = lc[sl]
+            extra["le"] = lc[sl]
+            extra["aldt"] = lc[sl]
+            if hasattr(group, "_model") and hasattr(group._model, "t"):
+                extra["time"] = group._model.t
         _, _, c_new = materials.solid_update(
             mat, sig[sl], deps[sl], st["epsp"][sl], dt, extra or None)
         if c_new is not None:
             c[sl] = c_new
             c_from_law[sl] = True
+        for name in st["mat_extra"]:
+            if name in extra and name != "eint":
+                st["mat_extra"][name][sl] = extra[name]
+        if "uvar88" in extra:
+            if "uvar88" not in st:
+                st["uvar88"] = np.zeros((group.n, 30))
+            st["uvar88"][sl] = extra["uvar88"]
+        law_id = getattr(mat, "law", None)
+        law_str = str(law_id).lower().replace("law", "") if law_id is not None else ""
+        off_key = f"off{law_str}"
+        if off_key in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra[off_key])
+        elif "off" in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra["off"])
 
         # ---- /EOS pressure (M6, eosmain): replace the law's pressure by
         # the implicit E-p update — deviator from the law, pressure from
@@ -664,7 +837,12 @@ def forces(group, x, v, vr, dt, fint, mint):
     if st["chk_fail"]:
         off = st["off"]
         for sl, mat, prop in st["slices"]:
-            eps_max = mat.params.get("eps_p_max", EP30)
+            if getattr(mat, "law", 1) == 0:
+                continue
+            if getattr(mat, "law", 1) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "LAW50_VISC_HONEY", "LAW50_HYP_FOAM", 74, "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "LAW74_HILL_3D", 79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", 163, "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "LAW74_HILL_3D", "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "LAW50_VISC_HONEY", "LAW50_HYP_FOAM", "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM"):
+                eps_max = mat.params.get("eps_p_max", EP30)
+            else:
+                eps_max = mat.params.get("eps_p_max", mat.params.get("eps_max", EP30))
             if mat.fail is None and eps_max >= 1e30:
                 continue
             broken = np.zeros(sl.stop - sl.start, dtype=bool)
@@ -682,21 +860,27 @@ def forces(group, x, v, vr, dt, fint, mint):
             if eps_max < 1e30:
                 broken |= st["epsp"][sl] > eps_max
             off[sl][broken] = 0.0
-        alive = off > 0.0
-        sig[~alive] = 0.0            # a deleted element carries no stress
+    alive = st["off"] > 0.0
+    sig[~alive] = 0.0            # a deleted element carries no stress
+    if "mat_extra" in st:
+        for name in st["mat_extra"]:
+            if name.startswith("off"):
+                st["mat_extra"][name][~alive] = 0.0
 
     # ---- sound speed & bulk-viscosity coefficients per slice --------------
     qa = np.zeros(group.n)
     qb = np.zeros(group.n)
     hcoef = np.zeros(group.n)
     for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            continue
         # current sound speed uses current density (stiffness constant);
         # laws that returned their own (nonlinear) c keep it
-        if not c_from_law[sl.start]:
-            c[sl] = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
-        qa[sl] = prop.params["qa"]
-        qb[sl] = prop.params["qb"]
-        hcoef[sl] = prop.params["h"]
+        if sl.stop > sl.start and not c_from_law[sl.start]:
+            c[sl] = np.sqrt((getattr(mat, "K", 0.0) + 4.0 * getattr(mat, "G", 0.0) / 3.0) / rho[sl])
+        qa[sl] = getattr(prop, "params", {}).get("qa", 1.1)
+        qb[sl] = getattr(prop, "params", {}).get("qb", 0.05)
+        hcoef[sl] = getattr(prop, "params", {}).get("h", 0.1)
 
     # ---- post block: viscosity, forces, hourglass, energies, dt -----------
     # (dispatched to the numba mirror when that backend is active)
@@ -746,8 +930,19 @@ def forces(group, x, v, vr, dt, fint, mint):
         st["ehour"] += dehour_hg
         dt_crit = np.minimum(dt_crit, dt_hg)
 
+    is_void = np.zeros(group.n, dtype=bool)
+    for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    if np.any(is_void):
+        fe[is_void] = 0.0
+        dt_crit[is_void] = EP30
+
+    dt_crit = np.where(detJ <= EM20, EP30, dt_crit)
+
     # ---- scatter to global arrays (asspar) ---------------------------------
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
+    if fint is not None:
+        scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
     return dt_crit
 
@@ -816,6 +1011,9 @@ def _hg_operators(group, x):
     above)."""
     st = group.state
     conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return conn, np.empty((0, 4, 8)), np.empty((0, 8, 8)), np.empty(0), np.empty(0)
     xe = x[conn]
     dndx, vol = _geometry(xe)
     vol = np.maximum(vol, EM20)
@@ -828,9 +1026,11 @@ def _hg_operators(group, x):
     k_hg = np.zeros(n)
     k_stiff = np.zeros(n)
     for sl, mat, prop in st["slices"]:
-        c = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
-        ah = prop.params["h"] * rho[sl] * c * vol[sl] ** (2.0 / 3.0) / 4.0
-        ks = HG_STIFF * mat.G * vol[sl] * traceS[sl]
+        if getattr(mat, "law", 1) == 0:
+            continue
+        c = np.sqrt((getattr(mat, "K", 0.0) + 4.0 * getattr(mat, "G", 0.0) / 3.0) / rho[sl])
+        ah = getattr(prop, "params", {}).get("h", 0.1) * rho[sl] * c * vol[sl] ** (2.0 / 3.0) / 4.0
+        ks = HG_STIFF * getattr(mat, "G", 0.0) * vol[sl] * traceS[sl]
         k_stiff[sl] = ks
         k_hg[sl] = ah + ks
     return conn, gamma, GG, k_hg, k_stiff
@@ -867,6 +1067,10 @@ def static_stabilization(group, x, u, ur, fint, mint):
     ``ehour`` (a statics device; documented, like the incremental form
     before it)."""
     st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return
     conn, gamma, GG, k_hg, k_stiff = _hg_operators(group, x)
     ue = u[conn]                                               # (n, 8, 3)
     modal = np.einsum("nai,nid->nad", gamma, ue)              # (n, 4, 3)
@@ -878,7 +1082,16 @@ def static_stabilization(group, x, u, ur, fint, mint):
     #                                       identity kept — the snapshot/
     #                                       restore contract); committed
     #                                       on convergence
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        fe[dead] = 0.0
+
+    if fint is not None:
+        scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
 
 def tangent(group, x, epsp_incr=None):
@@ -896,6 +1109,8 @@ def tangent(group, x, epsp_incr=None):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24)), np.empty((0, 24), dtype=np.int64)
     xe = x[conn]                                   # (n, 8, 3)
 
     # geometry: uniform-gradient shape derivatives + volume (srcoor3/sderi3)
@@ -927,6 +1142,8 @@ def tangent(group, x, epsp_incr=None):
     F = (np.einsum("nia,nib->nab", xe, st["dndx0"])
          if "dndx0" in st else None)
     for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            continue
         extra = ({"F": F[sl]} if F is not None
                  and materials.needs_defgrad(mat) else None)
         D = materials.solid_tangent(mat, st["sig"][sl], st["epsp"][sl],
@@ -947,12 +1164,15 @@ def tangent(group, x, epsp_incr=None):
         cols = (3 * ix + b)[None, :]
         ke[:, rows, cols] += kh
 
-    # ---- global DOF addressing (node*6 + component) -----------------------
-    edofs = np.empty((n, 24), dtype=np.int64)
-    edofs[:, 3 * ix + 0] = conn * 6 + 0
-    edofs[:, 3 * ix + 1] = conn * 6 + 1
-    edofs[:, 3 * ix + 2] = conn * 6 + 2
-    return ke, edofs
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
 
 
 # ----------------------------------------------------------------------------
@@ -1006,6 +1226,8 @@ def consistent_mass(group, x=None):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24)), np.empty((0, 24), dtype=np.int64)
     # density ρ = m / V0 from the stored element mass and reference volume:
     # the mass is conserved, so it is integrated on the UNDEFORMED element.
     rho = st["mass"] / np.maximum(st["vol0"], EM20)     # (n,)
@@ -1038,11 +1260,15 @@ def consistent_mass(group, x=None):
         rows = (3 * ix + c)[:, None]
         cols = (3 * ix + c)[None, :]
         me[:, rows, cols] = MS
-    edofs = np.empty((n, 24), dtype=np.int64)
-    edofs[:, 3 * ix + 0] = conn * 6 + 0
-    edofs[:, 3 * ix + 1] = conn * 6 + 1
-    edofs[:, 3 * ix + 2] = conn * 6 + 2
-    return me, edofs
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)
 
 
 # ----------------------------------------------------------------------------
@@ -1081,6 +1307,8 @@ def kgeo(group, x):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24)), np.empty((0, 24), dtype=np.int64)
     dndx, vol = _geometry(x[conn])
     vol = np.maximum(vol, EM20)
 
@@ -1102,11 +1330,15 @@ def kgeo(group, x):
         cols = (3 * ix + b)[None, :]
         ke[:, rows, cols] += g
 
-    edofs = np.empty((n, 24), dtype=np.int64)
-    edofs[:, 3 * ix + 0] = conn * 6 + 0
-    edofs[:, 3 * ix + 1] = conn * 6 + 1
-    edofs[:, 3 * ix + 2] = conn * 6 + 2
-    return ke, edofs
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
 
 
 def static_internal_forces(group, x, u, ur, fint, mint):
@@ -1128,6 +1360,9 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     ``mint`` are unused (solids carry no rotational DOFs)."""
     st = group.state
     conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return
     dndx, vol = _geometry(x[conn])
     vol = np.maximum(vol, EM20)
     s = st["sig"]
@@ -1142,6 +1377,8 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     if "dndx0" in st:
         F = np.einsum("nia,nib->nab", x[conn], st["dndx0"])
         for sl, mat, prop in st["slices"]:
+            if getattr(mat, "law", 1) == 0:
+                continue
             if materials.needs_defgrad(mat):
                 materials.solid_update(mat, s[sl], np.zeros((sl.stop - sl.start, 6)),
                                        st["epsp"][sl], 1.0, {"F": F[sl]})
@@ -1156,4 +1393,14 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     _, gamma, _, k_hg, _ = _hg_operators(group, x)
     modal = np.einsum("nai,nid->nad", gamma, u[conn])          # (n, 4, 3)
     fe -= k_hg[:, None, None] * np.einsum("nad,nai->nid", modal, gamma)
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
+
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        fe[dead] = 0.0
+
+    if fint is not None:
+        scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))

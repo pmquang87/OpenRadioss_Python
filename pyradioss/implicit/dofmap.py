@@ -88,11 +88,11 @@ class DofMap:
         over (warned at the constraint scan)."""
         self.model = model
         n = model.numnod
-        extra = (constraints.extra if constraints is not None
+        extra = (constraints.extra if constraints
                  else np.zeros((n, DOFS_PER_NODE), dtype=bool))
-        unfreeze = (constraints.unfreeze if constraints is not None
+        unfreeze = (constraints.unfreeze if constraints
                     else np.zeros(n, dtype=bool))
-        bcs_ignore = (constraints.bcs_ignore if constraints is not None
+        bcs_ignore = (constraints.bcs_ignore if constraints
                       else np.zeros(n, dtype=bool))
 
         # ---- which nodes carry rotational stiffness ----------------------
@@ -102,8 +102,8 @@ class DofMap:
         # zero rows in K. Beam connectivity is (N1, N2, N3) with N3 the
         # force-free ORIENTATION node — only N1/N2 carry stiffness.
         has_rot = np.zeros(n, dtype=bool)
-        for name in ("shells", "sh3n"):
-            g = getattr(model, name)
+        for name in ("shells", "sh3n", "shells_qbat", "shells_qeph", "sh3n_dkt18"):
+            g = getattr(model, name, None)
             if g is not None and g.n:
                 has_rot[g.conn.reshape(-1)] = True
         g = getattr(model, "beams", None)
@@ -145,22 +145,72 @@ class DofMap:
         self.fix_tra = fix_tra
         self.fix_rot = fix_rot
 
+        # Collect element connectivity across groups
+        elem_groups = list(model.element_groups()) if hasattr(model, "element_groups") else []
+        if not elem_groups:
+            for elname in ("bricks", "bricks_heph", "bric20s", "quads", "tetras", "tetra10s", "shel16s",
+                           "shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18", "trusses", "springs", "beams"):
+                g = getattr(model, elname, None)
+                if g is not None and getattr(g, "n", 0) > 0:
+                    elem_groups.append((elname, g))
+
+        # Identify nodes in other element connectivity or beam geometry
+        has_other_connectivity = np.zeros(n, dtype=bool)
+        for elname, g in elem_groups:
+            if elname == "beams":
+                if g.conn.shape[1] >= 2:
+                    idx = g.conn[:, :2].reshape(-1)
+                    valid = idx[(idx >= 0) & (idx < n)]
+                    has_other_connectivity[valid] = True
+            else:
+                idx = g.conn.reshape(-1)
+                valid = idx[(idx >= 0) & (idx < n)]
+                has_other_connectivity[valid] = True
+
+        # Standalone beam orientation node N3: in beams.conn[:, 2] but nowhere else
+        is_standalone_n3 = np.zeros(n, dtype=bool)
+        for elname, g in elem_groups:
+            if elname == "beams" and g.conn.shape[1] >= 3:
+                n3s = g.conn[:, 2]
+                for nid in n3s:
+                    if 0 <= nid < n and not has_other_connectivity[nid]:
+                        is_standalone_n3[nid] = True
+        self.is_standalone_n3 = is_standalone_n3
+
+        # Identify nodes belonging exclusively to 2D solid_quad (quads group)
+        in_quads = np.zeros(n, dtype=bool)
+        in_non_quads = np.zeros(n, dtype=bool)
+        for elname, g in elem_groups:
+            idx = g.conn.reshape(-1)
+            valid = idx[(idx >= 0) & (idx < n)]
+            if elname == "quads":
+                in_quads[valid] = True
+            else:
+                in_non_quads[valid] = True
+        quad_exclusive = in_quads & (~in_non_quads)
+        self.quad_exclusive = quad_exclusive
+
         # ---- assign equation indices -------------------------------------
         # a node with no mass and no rotational stiffness contributes nothing
         # (its translations would be zero rows) — but a massed, unfixed node
         # is assumed element-attached (well-posed static model), so every
-        # such translational slot is active. Exactly-zero-mass nodes (a
-        # standalone beam orientation node N3 — the module docstring) carry
-        # no element and are excluded (M11).
-        massed = (model.mass > 0.0) & (model.mass < 1e29)
+        # such translational slot is active. Standalone beam orientation nodes
+        # N3 (which receive neither mass nor stiffness) are excluded from active DOFs.
+        # Nodes belonging exclusively to 2D solid_quad have zero stiffness in UX (c=0),
+        # so UX is not assigned an active equation.
+        massed = (model.mass > 0.0) & (model.mass < 1e29) & (~is_standalone_n3)
         eq = np.full(n * DOFS_PER_NODE, -1, dtype=np.int64)
         counter = 0
         for i in range(n):
+            if is_standalone_n3[i] and not extra[i].any():
+                continue
             base = i * DOFS_PER_NODE
             # translations (M12: constraint masters/dependents force-
             # numbered through ``extra`` — see the constructor docstring)
             if massed[i] or extra[i, :3].any():
                 for c in range(3):
+                    if c == 0 and quad_exclusive[i] and not extra[i, 0]:
+                        continue
                     if not fix_tra[i, c] and (massed[i] or extra[i, c]):
                         eq[base + c] = counter
                         counter += 1

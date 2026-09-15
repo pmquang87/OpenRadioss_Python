@@ -279,7 +279,8 @@ def test_type2_projection_reconstruction(make_deck):
     # enforce() on the unmoved mesh must reproduce x0 exactly
     x = model.x0.copy()
     v = np.zeros_like(x)
-    ct.enforce(x, v, 1.0)
+    vr = np.zeros_like(v)
+    ct.enforce(x, v, vr, 1.0)
     assert np.abs(x[ct.snode] - model.x0[ct.snode]).max() < 1e-12
     assert np.abs(v[ct.snode]).max() < 1e-12
 
@@ -303,7 +304,8 @@ def test_type2_tied_nodes_follow_rigid_motion(make_deck):
 
     x = model.x0 @ R.T + c
     v = np.zeros_like(x)
-    ct.enforce(x, v, 1.0)
+    vr = np.zeros_like(v)
+    ct.enforce(x, v, vr, 1.0)
     assert np.abs(x[ct.snode]
                   - (model.x0[ct.snode] @ R.T + c)).max() < 1e-9
 
@@ -324,9 +326,10 @@ def test_type2_transfer_conserves_force_and_mass(make_deck):
     fint = rng.normal(size=model.x.shape)
     fext = rng.normal(size=model.x.shape)
     fcont = rng.normal(size=model.x.shape)
+    mint = np.zeros_like(fint)
     tot = fint.sum(axis=0) + fext.sum(axis=0) + fcont.sum(axis=0)
     inv = 1.0 / mass_eff
-    ct.transfer_forces(fint, fext, fcont, mass_eff, inv, cycle=1)
+    ct.transfer_forces(fint, fext, fcont, mint, model.x, mass_eff, inv, cycle=1)
     assert (fint.sum(axis=0) + fext.sum(axis=0)
             + fcont.sum(axis=0)) == pytest.approx(tot)
     assert np.abs(fint[ct.snode]).max() == 0.0
@@ -427,8 +430,10 @@ def test_deletion_drops_segments_and_nodes(make_deck):
 def test_type7_forces_vanish_on_deleted_segments(make_deck):
     """End-to-end mask usage: a contact pair pushing at cycle 0 must stop
     pushing the moment its segment's parent element is deleted, even
-    between broad-phase refreshes."""
+    between broad-phase refreshes.  Idel must be >= 1 for deletion
+    processing to activate (Fortran chkstfn3.F:1352)."""
     model = _starter_only(make_deck, "DELF", DELETABLE_BAR)
+    model.interfaces[0].idel = 1   # enable deletion (BUG-05: default 0 = no deletion)
     ct = ContactType7(model.interfaces[0], model, MessageLog())
     # move the tip nodes close over the top face: contact active
     tip = model.node_indices([9, 10, 11, 12])
@@ -444,6 +449,58 @@ def test_type7_forces_vanish_on_deleted_segments(make_deck):
     fcont[:] = 0.0
     ct.forces(model.x, model.v, model.mass, 1e-4, fcont, 1)  # no refresh
     assert np.abs(fcont).max() == 0.0
+
+
+def test_type7_forces_persist_when_idel_zero(make_deck):
+    """BUG-05: When Idel=0 (default), contact forces persist even if an element fails,
+    matching Fortran chkstfn3.F:1352 which gates deletion on IDEL >= 1."""
+    model = _starter_only(make_deck, "DEL0", DELETABLE_BAR)
+    assert model.interfaces[0].idel == 0
+    ct = ContactType7(model.interfaces[0], model, MessageLog())
+    assert not ct.deletable  # deletion tracking disabled because idel == 0
+
+    tip = model.node_indices([9, 10, 11, 12])
+    model.x[tip, 2] = -0.02
+    fcont = np.zeros_like(model.x)
+    ct.forces(model.x, model.v, model.mass, 1e-4, fcont, 0)
+    assert np.abs(fcont).max() > 0.0
+
+    model.bricks.state["off"][0] = 0.0        # crack opens
+    fcont[:] = 0.0
+    ct.forces(model.x, model.v, model.mass, 1e-4, fcont, 1)  # no refresh
+    assert np.abs(fcont).max() > 0.0          # forces persist because Idel=0
+
+
+def test_type7_forces_vanish_when_secondary_only_fails(make_deck):
+    """BUG-06: When only secondary elements can fail (main surface has no failure),
+    any_deletable must detect secondary failure capability and orphan nodes must cease
+    transmitting force after a broad-phase refresh."""
+    model = _starter_only(make_deck, "DELSEC", DELETABLE_BAR)
+    model.interfaces[0].idel = 1
+    # Clear main surface segment provenance so main surface has NO deletable elements
+    model.surfaces[1].seg_gtype[:] = ""
+
+    ct = ContactType7(model.interfaces[0], model, MessageLog())
+    # Secondary failure must enable deletable flag via sec_nodes!
+    assert ct.deletable
+
+    # Tip nodes (9, 10, 11, 12) belong ONLY to element 2 (element index 1)
+    tip = model.node_indices([9, 10, 11, 12])
+    model.x[tip, 2] = -0.02
+    fcont = np.zeros_like(model.x)
+    ct.forces(model.x, model.v, model.mass, 1e-4, fcont, 0)
+    assert np.abs(fcont[tip]).max() > 0.0
+
+    # Fail element 2 (the ONLY element owning the tip nodes)
+    model.bricks.state["off"][1] = 0.0
+
+    # Advance beyond broad-phase refresh
+    cycle = ct.refresh + 1
+    fcont[:] = 0.0
+    ct.forces(model.x, model.v, model.mass, 1e-4, fcont, cycle)
+
+    # Orphaned tip nodes must cease transmitting force!
+    assert np.abs(fcont[tip]).max() == 0.0
 
 
 # ============================================================================

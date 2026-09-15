@@ -1,0 +1,27 @@
+/PRINT/-1000
+/RUN/fsi_drop_container/1/
+              0.0093
+/TFILE/0
+#            dT_HIS
+0.000150
+/TITLE
+ALEDrop  
+/H3D/DT
+0 0.00093
+/H3D/NODA/VEL
+/H3D/NODA/ACC
+/H3D/ELEM/VFRAC
+/H3D/ELEM/DENS
+/H3D/ELEM/VONM
+/H3D/ELEM/EPSP
+#/ANIM/VECT/DISP
+#/ANIM/VECT/ACC
+#/ANIM/VECT/VEL
+#/ANIM/ELEM/VFRAC
+#/ANIM/ELEM/DENSITY
+#/ANIM/ELEM/VONM_STRESS
+#/ANIM/ELEM/EPSP                                                                                         
+#/ANIM/GZIP
+#/ANIM/DT
+##   TSTART     TFREQ
+#0.000000 0.000930

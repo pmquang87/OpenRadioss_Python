@@ -67,12 +67,13 @@ def _rate_factor(fail, deps, dt, dev_from_6):
             + (deps[:, 2] - tr3) ** 2 \
             + 0.5 * (deps[:, 3] ** 2 + deps[:, 4] ** 2 + deps[:, 5] ** 2)
     else:  # plane stress: thickness strain from incompressibility
-        dzz = -(deps[:, 0] + deps[:, 1]) * 0.5
+        dzz = -(deps[:, 0] + deps[:, 1])
         tr3 = (deps[:, 0] + deps[:, 1] + dzz) / 3.0
         ee = (deps[:, 0] - tr3) ** 2 + (deps[:, 1] - tr3) ** 2 \
             + (dzz - tr3) ** 2 + 0.5 * deps[:, 2] ** 2
     rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, _TINY)
-    r = np.maximum(rate / fail.params["eps_dot_0"], 1.0)
+    eps0 = max(fail.params.get("eps_dot_0", 1.0), _TINY)
+    r = np.maximum(rate / eps0, 1.0)
     return 1.0 + D4 * np.log(r)
 
 
@@ -112,21 +113,21 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     vm = np.sqrt(1.5 * (s0 ** 2 + s1 ** 2 + s2 ** 2)
                  + 3.0 * (sig[:, 3] ** 2 + sig[:, 4] ** 2 + sig[:, 5] ** 2))
     triax = sm / np.maximum(vm, _TINY)
-    eps_f = (p["D1"] + p["D2"] * np.exp(p["D3"] * triax)) \
+    eps_f = (p["D1"] + p["D2"] * np.exp(np.clip(p["D3"] * triax, -100.0, 100.0))) \
         * _rate_factor(fail, deps, dt, True) \
         * _thermal_factor(fail, tstar)
     _accumulate(fail, dama, d_epsp, eps_f)
     return dama >= 1.0
 
 
-def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
+def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     """Plane-stress damage step for one layer. sig (m, 3) = [xx, yy, xy]."""
     p = fail.params
     sm = (sig[:, 0] + sig[:, 1]) / 3.0            # sigma_zz = 0
     vm = np.sqrt(sig[:, 0] ** 2 - sig[:, 0] * sig[:, 1] + sig[:, 1] ** 2
                  + 3.0 * sig[:, 2] ** 2)
     triax = sm / np.maximum(vm, _TINY)
-    eps_f = (p["D1"] + p["D2"] * np.exp(p["D3"] * triax)) \
+    eps_f = (p["D1"] + p["D2"] * np.exp(np.clip(p["D3"] * triax, -100.0, 100.0))) \
         * _rate_factor(fail, deps, dt, False) \
         * _thermal_factor(fail, tstar)
     _accumulate(fail, dama, d_epsp, eps_f)

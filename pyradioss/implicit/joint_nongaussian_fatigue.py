@@ -229,6 +229,8 @@ from __future__ import annotations
 import math
 
 import numpy as np
+from scipy import stats
+from scipy.optimize import brentq
 
 from ..common.npcompat import trapezoid
 
@@ -410,7 +412,8 @@ def _hermite_e_coeffs(a, h3, h4, kappa):
 
 
 def induced_projection_moments(M0, proj, gamma3, gamma4, model="winterstein",
-                               return_components=False, underlying_R=None):
+                               return_components=False, underlying_R=None,
+                               copula="gaussian", copula_params=None):
     """The CLOSED-FORM induced (variance, skewness, kurtosis) of the resolved-plane
     scalar s = p^T sigma under the joint component-wise Hermite transform (theory eq.
     (3)) — the resolved plane INHERITING the joint tensor non-Gaussianity.
@@ -641,8 +644,61 @@ def _higham_nearest_correlation(A, max_iter=200, tol=1e-12, eig_floor=1e-10):
     return Y
 
 
+
+def _solve_pair_rho_t_copula(target, h3_1, h4_1, kappa_1, h3_2, h4_2, kappa_2, nu, n_samples=100000, seed=42):
+    rng = np.random.default_rng(seed)
+    Z1_norm = rng.standard_normal(n_samples)
+    Z2_indep = rng.standard_normal(n_samples)
+    W = rng.chisquare(nu, size=n_samples)
+    sqrt_nu_W = np.sqrt(nu / W)
+    
+    def obj(rho_U):
+        Z2_norm = rho_U * Z1_norm + np.sqrt(1.0 - rho_U**2) * Z2_indep
+        X1 = Z1_norm * sqrt_nu_W
+        X2 = Z2_norm * sqrt_nu_W
+        Z1 = stats.norm.ppf(stats.t.cdf(X1, df=nu))
+        Z2 = stats.norm.ppf(stats.t.cdf(X2, df=nu))
+        q1 = kappa_1 * (Z1 + h3_1*(Z1**2 - 1.0) + h4_1*(Z1**3 - 3.0*Z1))
+        q2 = kappa_2 * (Z2 + h3_2*(Z2**2 - 1.0) + h4_2*(Z2**3 - 3.0*Z2))
+        return np.corrcoef(q1, q2)[0, 1] - target
+        
+    try:
+        return brentq(obj, -0.999, 0.999)
+    except ValueError:
+        return np.sign(target) * 0.999
+
+def _induced_projection_moments_t_copula(R, proj_a, h3f, h4f, kappaf, nu, n_samples=100000, seed=42):
+    rng = np.random.default_rng(seed)
+    n = len(proj_a)
+    L = np.linalg.cholesky(R)
+    Z_norm = rng.standard_normal((n_samples, n))
+    Y = Z_norm @ L.T
+    
+    W = rng.chisquare(nu, size=(n_samples, 1))
+    X = Y * np.sqrt(nu / W)
+    
+    U = stats.t.cdf(X, df=nu)
+    Z = stats.norm.ppf(U)
+    
+    Z2 = Z**2
+    Z3 = Z**3
+    q = proj_a * kappaf * (Z + h3f * (Z2 - 1.0) + h4f * (Z3 - 3.0 * Z))
+    
+    s = np.sum(q, axis=1)
+    
+    var = np.var(s)
+    std = np.sqrt(var)
+    if var > 0:
+        skew = np.mean((s - np.mean(s))**3) / (std**3)
+        kurt = np.mean((s - np.mean(s))**4) / (std**4)
+    else:
+        skew = 0.0
+        kurt = 3.0
+    return float(var), float(skew), float(kurt)
+
 def solve_underlying_correlation(M0, gamma3, gamma4, model="winterstein",
-                                 repair=True, var_floor=1e-9):
+                                 repair=True, var_floor=1e-9,
+                                 copula="gaussian", copula_params=None):
     """Solve the UNDERLYING-Gaussian correlation rho^U (M34) so the component-wise
     Winterstein-Hermite (translation) transform of a Gaussian tensor of correlation
     rho^U reproduces the TARGET 6x6 covariance ``M0`` EXACTLY — the Grigoriu / Nataf /
@@ -711,10 +767,16 @@ def solve_underlying_correlation(M0, gamma3, gamma4, model="winterstein",
             if not (nz[c] and nz[cp]):
                 rho[c, cp] = rho[cp, c] = 0.0
                 continue
-            A1 = kappa[c] * kappa[cp]
-            A2 = A1 * 2.0 * h3[c] * h3[cp]
-            A3 = A1 * 6.0 * h4[c] * h4[cp]
-            r, _res, feasible = _solve_pair_rho(A1, A2, A3, float(R[c, cp]))
+            if copula == "t":
+                nu = copula_params if copula_params is not None else 4.0
+                r = _solve_pair_rho_t_copula(float(R[c, cp]), h3[c], h4[c], kappa[c], h3[cp], h4[cp], kappa[cp], nu)
+                # t-copula MC solve doesn't return feasible status, assume feasible unless r is exactly bounded
+                feasible = abs(r) < 0.99
+            else:
+                A1 = kappa[c] * kappa[cp]
+                A2 = A1 * 2.0 * h3[c] * h3[cp]
+                A3 = A1 * 6.0 * h4[c] * h4[cp]
+                r, _res, feasible = _solve_pair_rho(A1, A2, A3, float(R[c, cp]))
             rho[c, cp] = rho[cp, c] = r
             if not feasible:
                 n_infeasible += 1
@@ -757,7 +819,8 @@ def solve_underlying_correlation(M0, gamma3, gamma4, model="winterstein",
 
 
 def joint_lambda_ng(M0, proj, gamma3, gamma4, m, alpha2=1.0,
-                    bandwidth_correction=True, model="winterstein"):
+                    bandwidth_correction=True, model="winterstein",
+                    copula="gaussian", copula_params=None):
     """The JOINT non-Gaussian amplification lambda_ng of a resolved plane: compute the
     INDUCED (gamma_3^s, gamma_4^s) of the projection ``proj`` under the joint transform
     (``induced_projection_moments``) and feed those to the M24 closed-form
@@ -766,7 +829,8 @@ def joint_lambda_ng(M0, proj, gamma3, gamma4, m, alpha2=1.0,
     correction applies). Returns (lambda_ng, gamma3_induced, gamma4_induced). In the
     Gaussian tensor limit the induced kurtosis is 3 and lambda_ng == 1 EXACTLY."""
     from . import nongaussian_fatigue as ngf
-    _, g3s, g4s = induced_projection_moments(M0, proj, gamma3, gamma4, model=model)
+    _, g3s, g4s = induced_projection_moments(M0, proj, gamma3, gamma4, model=model,
+                                             copula=copula, copula_params=copula_params)
     lam = ngf.nongaussian_correction_factor(
         g3s, g4s, m, alpha2=alpha2, bandwidth_correction=bandwidth_correction,
         model=model)
@@ -1220,7 +1284,7 @@ def _sample_cov_rel_error(X, M0_target):
     return float(np.max(dev)) if dev.size else 0.0
 
 
-def _rescale_block_to_underlying(Sw, freqs, gamma3, gamma4, model):
+def _rescale_block_to_underlying(Sw, freqs, gamma3, gamma4, model, copula="gaussian", copula_params=None):
     """Return a copy of the block cross-PSD ``Sw`` (nf, 6, 6) with its OFF-DIAGONAL
     cross-spectra scaled by the NORTA ratio rho^U_cc' / R_cc' (M34), so a Gaussian
     synthesised from it carries the underlying-Gaussian correlation rho^U. The block's
@@ -1236,7 +1300,7 @@ def _rescale_block_to_underlying(Sw, freqs, gamma3, gamma4, model):
     # factor cancels in the ratio). Real part = the zero-lag covariance contribution.
     M0 = trapezoid(Sw.real, freqs, axis=0)
     M0 = 0.5 * (M0 + M0.T)
-    sol = solve_underlying_correlation(M0, gamma3, gamma4, model=model)
+    sol = solve_underlying_correlation(M0, gamma3, gamma4, model=model, copula=copula, copula_params=copula_params)
     R = sol["target_R"]
     rho_u = sol["rho_u"]
     supp = sol["support"]
@@ -1256,7 +1320,8 @@ def _rescale_block_to_underlying(Sw, freqs, gamma3, gamma4, model):
 def synthesize_joint_nongaussian_history(omega, Scross, durations, fc, bw, seed,
                                          kurt, skew=0.0, scales=None, refine=8,
                                          smooth=0.0, kurt_grid=None, skew_grid=None,
-                                         fs=None, model="winterstein", exact=False):
+                                         fs=None, model="winterstein", exact=False,
+                                         copula="gaussian", copula_params=None):
     """Synthesise the MULTIVARIATE NON-GAUSSIAN NON-STATIONARY stress-tensor record
     (theory "THE MULTIVARIATE NON-GAUSSIAN NON-STATIONARY MONTE-CARLO"): the M27/M31
     multivariate non-separable synthesiser on the fine instant grid (per-instant
@@ -1327,8 +1392,17 @@ def synthesize_joint_nongaussian_history(omega, Scross, durations, fc, bw, seed,
         # leading-order / Gaussian case the ratio is 1 (a no-op, byte-identical).
         if exact and not _is_gaussian_component_schedule(gamma4[j:j + 1],
                                                          gamma3[j:j + 1]):
-            Sw = _rescale_block_to_underlying(Sw, freqs, gamma3[j], gamma4[j], model)
+            Sw = _rescale_block_to_underlying(Sw, freqs, gamma3[j], gamma4[j], model=model, copula=copula, copula_params=copula_params)
         _t, Xi = synthesize_multiaxial_history(freqs, Sw, dur_j, int(seed) + j, fs=fs)
+        
+        if copula == "t":
+            rng_t = np.random.default_rng(int(seed) + j)
+            nu = copula_params if copula_params is not None else 4.0
+            W = rng_t.chisquare(nu)
+            Xi = Xi * np.sqrt(nu / W)
+            U = stats.t.cdf(Xi, df=nu)
+            Xi = stats.norm.ppf(U)
+            
         # per-component memoryless Hermite transform (VECTOR transform; identity at a
         # Gaussian component) — standardise each component, transform, rescale
         for c in range(6):
@@ -1358,7 +1432,7 @@ def joint_nongaussian_monte_carlo_damage(omega, Scross, durations, fc, bw, m, C,
                                          fs=None, mean_stress=0.0, ultimate=0.0,
                                          naz=24, npol=13, model="winterstein",
                                          reduction="shear_plane", summary=None,
-                                         exact=False):
+                                         exact=False, copula="gaussian", copula_params=None):
     """The JOINT non-Gaussian tensor damage rate by MULTIVARIATE non-stationary
     Monte-Carlo (theory): synthesise the multivariate non-Gaussian record
     (``synthesize_joint_nongaussian_history`` — per-instant correlated 6-component
@@ -1407,7 +1481,7 @@ def joint_nongaussian_monte_carlo_damage(omega, Scross, durations, fc, bw, m, C,
     t, X, info = synthesize_joint_nongaussian_history(
         omega, Scross, durations, fc, bw, seed, kurt, skew=skew, scales=scales,
         refine=refine, smooth=smooth, kurt_grid=kurt_grid, skew_grid=skew_grid,
-        fs=fs, model=model, exact=exact)
+        fs=fs, model=model, exact=exact, copula=copula, copula_params=copula_params)
     edges = info["edges"]
     nwin = len(edges) - 1
     # the per-instant critical planes (re-searched from each instant's tensor) — reuse

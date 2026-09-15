@@ -263,20 +263,29 @@ class NodalTimeStep:
         for (name, conn, share, iner), dt_e in zip(self._shares, dt_claims):
             k = 2.0 * share / np.maximum(dt_e, EM20)[:, None] ** 2
             # a deleted element's claim is 1e30 -> its k underflows to 0
-            np.add.at(self.stifn, conn.reshape(-1), k.reshape(-1))
+            c_flat = conn.reshape(-1)
+            k_flat = k.reshape(-1)
+            valid = (c_flat >= 0) & (c_flat < len(self.stifn))
+            np.add.at(self.stifn, c_flat[valid], k_flat[valid])
             if iner is not None:
                 kr = 2.0 * iner / np.maximum(dt_e, EM20)[:, None] ** 2
-                np.add.at(self.stifr, conn.reshape(-1), kr.reshape(-1))
+                kr_flat = kr.reshape(-1)
+                valid_r = (c_flat >= 0) & (c_flat < len(self.stifr))
+                np.add.at(self.stifr, c_flat[valid_r], kr_flat[valid_r])
 
     # ------------------------------------------------------------------
     def apply(self, mass_eff: np.ndarray, inv_mass: np.ndarray,
               v: np.ndarray, t: float,
               inertia: Optional[np.ndarray] = None,
-              inv_inertia: Optional[np.ndarray] = None) -> float:
+              inv_inertia: Optional[np.ndarray] = None,
+              ams_nodes: Optional[np.ndarray] = None) -> float:
         """Mass scaling + nodal dt for this cycle. Must run BEFORE the
         acceleration update (the added mass stabilizes the very cycle
         that needed it). Returns the nodal critical time step.
 
+        ``ams_nodes`` — boolean array of nodes active in AMS (which are 
+        excluded from driving the explicit dt).
+        
         ``inertia``/``inv_inertia`` — the physical nodal rotational
         inertia (``model.inertia``) and its inverse: enables the
         ROTATIONAL nodal dt ``sqrt(2 IN/STIFR)`` over every free node
@@ -288,12 +297,16 @@ class NodalTimeStep:
         The stiffness accumulators are consumed and reset here."""
         model = self.model
         loaded = (self.stifn > 0.0) & self.free
+        if ams_nodes is not None:
+            loaded &= ~ams_nodes
         # rotational claims: dtnoda.F's IRODDL/IN(N)>0 gating.  stifr > 0
         # implies the node took a shell/beam claim, which also fed stifn,
         # so rot is a subset of loaded (contact springs feed only stifn).
         rot = None
         if self._rot and inertia is not None:
             rot = (self.stifr > 0.0) & self.free & (inertia > 0.0)
+            if ams_nodes is not None:
+                rot &= ~ams_nodes
             if not np.any(rot):
                 rot = None
         if not np.any(loaded):
@@ -306,7 +319,7 @@ class NodalTimeStep:
                 self.stifr[:] = 0.0
             return dt_rb
 
-        if self.cst and self.dt_min > 0.0:
+        if self.cst and self.dt_min > 0.0 and self.dt_sca > 0.0:
             # mass needed so that dt_sca * sqrt(2 M / K) >= dt_min
             m_req = self.stifn[loaded] * (self.dt_min / self.dt_sca) ** 2 \
                 / 2.0

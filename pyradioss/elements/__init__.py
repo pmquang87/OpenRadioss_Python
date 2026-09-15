@@ -27,16 +27,23 @@ that  a = (fext + fint) / m  (this matches the Fortran A(3,*) accumulation
 where internal forces enter negated).
 """
 
-from . import (beam_type3, shell_bt4, shell_qbat, shell_qeph,  # noqa: F401
-               shell_tri3, solid_hexa8, solid_tetra4, spring, truss)
+from . import (beam_type3, shell_bt4, shell_dkt18, shell_qbat, shell_qeph,  # noqa: F401
+               shell_thick16, shell_tri3, solid_bric20, solid_heph, solid_hexa8, solid_quad,
+               solid_tetra10, solid_tetra4, spring, truss)
 
 KERNELS = {
     "bricks": solid_hexa8,
+    "bricks_heph": solid_heph,
+    "bric20s": solid_bric20,
+    "quads": solid_quad,
+    "tetra10s": solid_tetra10,
     "tetras": solid_tetra4,
     "shells": shell_bt4,
     "shells_qbat": shell_qbat,
     "shells_qeph": shell_qeph,
     "sh3n": shell_tri3,
+    "sh3n_dkt18": shell_dkt18,
+    "shel16s": shell_thick16,
     "trusses": truss,
     "springs": spring,
     "beams": beam_type3,
@@ -56,4 +63,16 @@ SHELL_ISHELL_GROUPS = {
     22: "shells_qeph",
     23: "shells_qeph",
     24: "shells_qeph",
+}
+
+#: /PROP/SHELL Ish3n -> dedicated element-technology group for 3-node shells.
+#: 2 = DKT18 (Discrete Kirchhoff Triangle — cdkforc3.F).
+SH3N_ISHELL_GROUPS = {
+    2: "sh3n_dkt18",
+}
+
+#: /PROP/SOLID Isolid -> dedicated element-technology group.
+#: 24 = HEPH (physically-stabilized 8-node hexahedral element).
+SOLID_ISOLID_GROUPS = {
+    24: "bricks_heph",
 }

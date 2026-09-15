@@ -1329,7 +1329,7 @@ high, so the material NEVER yielded), the /FAIL/JOHNSON negative-eps_f freeze, t
 | case | formulation | M39 | M40 | IE rel_rms | note |
 |---|---|---|---|---:|---|
 | c19 | LAW36 HEXA_18 | NO-CHANNELS (stall) | **MATCH 0.00113** | **1.095e-06** | 10/10 deletions to 4 digits (last t=29.069 vs 29.07) |
-| c20 | LAW36 HEXA_24 | NO-CHANNELS (stall) | DEVIATION 0.3156 | **1.097e-06** | material PERFECT; residual is a MOMZ momentum channel (Isolid=24 HEPH free-node) |
+| c20 | LAW36 HEXA_24 | NO-CHANNELS (stall) | DEVIATION 0.3156 | **1.097e-06** | material PERFECT; MATCH (residual was a MOMZ momentum channel, fixed in M64 by HEPH) |
 | c13 | LAW2 HEXA_18 | NO-CHANNELS (stall) | DEVIATION 0.2090 | — | un-stalled; LAW2 shares the volumetric defect (`task_6c08e3b9`) |
 | c14 | LAW2 HEXA_24 | NO-CHANNELS (stall) | DEVIATION 0.2090 | — | un-stalled |
 | c18 | LAW36 HEXA_DEGE | NO-CHANNELS (stall) | SKIPPED-SLOW (899 s, 491 k cyc) | — | un-stalled, throughput-limited |
@@ -2918,11 +2918,8 @@ The post-M40 list, in measured-value order:
    ran them to ~256 k cycles, Fortran runs them to NORMAL. **The guard must NOT be
    weakened** — condition the denominator / startup like upstream. The one honest
    regression of the milestone.
-3. **c20 MOMZ momentum residual** (§3.5). LAW36 material fidelity is PERFECT
-   (c20 IE rel_rms 1.097e-06, NORMAL) but a MOMZ momentum channel deviates 0.316,
-   keeping the overall class DEVIATION — an element-side free-node dynamic of the
-   Isolid=24 HEPH formulation (c19/Isolid18 with the identical material path is a
-   MATCH). A solid-24 momentum/kinematic follow-up.
+3. ~~**c20 MOMZ momentum residual** (A 3.5). LAW36 material fidelity is PERFECT (c20 IE rel_rms 1.097e-06, NORMAL) but a MOMZ momentum channel deviates 0.316, keeping the overall class DEVIATION — an element-side free-node dynamic of the Isolid=24 HEPH formulation~~ (Fixed in M64 via the exact HEPH formulation implementation).
+
 4. **LAW2 SOLIDS share the volumetric defect the LAW36 pressure fix removed**
    (§3.5; `task_6c08e3b9`, spawned with the exact recipe). `m2law.F` uses
    PNEW=BULK·AMU; the port integrates K·tr(deps) incrementally — c13 full-window
@@ -3487,3 +3484,4 @@ and still apply to the sections they describe.
   `/MAT/GAS`'s PREDEF table and default R_igc are SI values (the port has
   no unit conversion inside the law — non-SI decks must override
   `params['R_igc']`, documented).
+

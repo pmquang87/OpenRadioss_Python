@@ -118,6 +118,9 @@ def modal_frequencies(model, nev=6, log=None, constraints=None, contacts=None,
             from .contact import build_implicit_contacts
             contacts = build_implicit_contacts(model, silent)
 
+    if not constraints:
+        constraints = None
+
     dof = DofMap(model, log, constraints=constraints)
     # STIFFNESS: material (+hourglass) tangent, plus the geometric stiffness of
     # the committed stress state when a prestressed spectrum is requested

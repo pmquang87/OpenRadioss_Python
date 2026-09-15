@@ -165,6 +165,136 @@ class TestFieldLayouts:
         assert float(cards[5][0:20]) == 2.0          # alpha_1
         assert cards[6].strip() == ""                # alpha_6..10 blank
 
+    def test_law4_card_layout(self):
+        """MAT/matl4_hyd_jcook.cfg: RHO / E nu / A B n eps_max sig_max /
+        Pmin / C eps_dot_0 M Tmelt Tmax / RHOCP blank(40) T0."""
+        d = dw.StarterDeck("T")
+        d.mat_law4(1, "jcook", rho=7.85e-3, e=210000.0, nu=0.3,
+                   a=250.0, b=400.0, n=0.4, eps_max=0.5, sig_max=800.0,
+                   p_min=-500.0, c=0.05, eps_dot_0=1.0, m=1.0,
+                   tmelt=1800.0, tmax=2000.0, rhocp=3.5e6, t0=300.0)
+        cards = data_cards(block_lines(d.render(), "/MAT/LAW4/1"))
+        assert len(cards) == 7
+        assert cards[0] == "jcook"
+        assert float(cards[1][0:20]) == 7.85e-3
+        assert float(cards[2][0:20]) == 210000.0
+        assert float(cards[2][20:40]) == 0.3
+        assert float(cards[3][0:20]) == 250.0
+        assert float(cards[3][20:40]) == 400.0
+        assert float(cards[3][40:60]) == 0.4
+        assert float(cards[3][60:80]) == 0.5
+        assert float(cards[3][80:100]) == 800.0
+        assert float(cards[4][0:20]) == -500.0
+        assert float(cards[5][0:20]) == 0.05
+        assert float(cards[5][20:40]) == 1.0
+        assert float(cards[5][40:60]) == 1.0
+        assert float(cards[5][60:80]) == 1800.0
+        assert float(cards[5][80:100]) == 2000.0
+        assert float(cards[6][0:20]) == 3.5e6
+        assert cards[6][20:60] == " " * 40
+        assert float(cards[6][60:80]) == 300.0
+
+    def test_law10_card_layout(self):
+        """MAT/matl10_law10.cfg (radioss2020): TITLE / RHO_I RHO_O / E Nu /
+        A0 A1 A2 Amax / C0 C1 C2 C3 / Pmin Pext / B Mu_max."""
+        d = dw.StarterDeck("T")
+        d.mat_law10(
+            mat_id=1,
+            title="soil_sample",
+            rho0=2.0e-9,
+            rhor=2.0e-9,
+            e=50000.0,
+            nu=0.25,
+            a0=15.0,
+            a1=0.4,
+            a2=0.005,
+            amax=500.0,
+            c0=10.0,
+            c1=40000.0,
+            c2=100.0,
+            c3=50.0,
+            pmin=-1e6,
+            pext=101325.0,
+            b=45000.0,
+            mue_max=0.35,
+        )
+        cards = data_cards(block_lines(d.render(), "/MAT/LAW10/1"))
+        assert len(cards) == 7
+        assert cards[0] == "soil_sample"
+        # Card 2: RHO_I, RHO_O
+        assert float(cards[1][0:20]) == 2.0e-9
+        assert float(cards[1][20:40]) == 2.0e-9
+        # Card 3: E, Nu
+        assert float(cards[2][0:20]) == 50000.0
+        assert float(cards[2][20:40]) == 0.25
+        # Card 4: A0, A1, A2, Amax
+        assert float(cards[3][0:20]) == 15.0
+        assert float(cards[3][20:40]) == 0.4
+        assert float(cards[3][40:60]) == 0.005
+        assert float(cards[3][60:80]) == 500.0
+        # Card 5: C0, C1, C2, C3
+        assert float(cards[4][0:20]) == 10.0
+        assert float(cards[4][20:40]) == 40000.0
+        assert float(cards[4][40:60]) == 100.0
+        assert float(cards[4][60:80]) == 50.0
+        # Card 6: Pmin, Pext
+        assert float(cards[5][0:20]) == -1e6
+        assert float(cards[5][20:40]) == 101325.0
+        # Card 7: B, Mu_max
+        assert float(cards[6][0:20]) == 45000.0
+        assert float(cards[6][20:40]) == 0.35
+
+    def test_law10_card_layouts_constants_and_aliases(self):
+        from pyradioss.input.card_layouts import (
+            MAT_LAW10_1, MAT_LAW10_2, MAT_LAW10_3, MAT_LAW10_4,
+            MAT_LAW10_5, MAT_LAW10_6, MAT_LAW10_7,
+            MAT_LAW10_CFG_1, MAT_LAW10_CFG_2, MAT_LAW10_CFG_3, MAT_LAW10_CFG_4,
+            MAT_LAW10_CFG_5, MAT_LAW10_CFG_6, MAT_LAW10_CFG_7,
+            CARD_LAYOUTS,
+        )
+        assert MAT_LAW10_1 == (100,)
+        assert MAT_LAW10_2 == (20, 20)
+        assert MAT_LAW10_3 == (20, 20)
+        assert MAT_LAW10_4 == (20, 20, 20, 20)
+        assert MAT_LAW10_5 == (20, 20, 20, 20)
+        assert MAT_LAW10_6 == (20, 20)
+        assert MAT_LAW10_7 == (20, 20)
+
+        assert MAT_LAW10_CFG_1 == (100,)
+        assert MAT_LAW10_CFG_2 == (20, 20)
+        assert MAT_LAW10_CFG_3 == (20, 20)
+        assert MAT_LAW10_CFG_4 == (20, 20, 20, 20)
+        assert MAT_LAW10_CFG_5 == (20, 20, 20, 20)
+        assert MAT_LAW10_CFG_6 == (20, 20)
+        assert MAT_LAW10_CFG_7 == (20, 20)
+
+        assert CARD_LAYOUTS["MAT_LAW10_1"] == [100]
+        assert CARD_LAYOUTS["MAT_LAW10_2"] == [20, 20]
+        assert CARD_LAYOUTS["MAT_LAW10_3"] == [20, 20]
+        assert CARD_LAYOUTS["MAT_LAW10_4"] == [20, 20, 20, 20]
+        assert CARD_LAYOUTS["MAT_LAW10_5"] == [20, 20, 20, 20]
+        assert CARD_LAYOUTS["MAT_LAW10_6"] == [20, 20]
+        assert CARD_LAYOUTS["MAT_LAW10_7"] == [20, 20]
+
+        assert CARD_LAYOUTS["MAT_LAW10_CFG_1"] == [100]
+        assert CARD_LAYOUTS["MAT_SOIL_CFG_1"] == [100]
+        assert CARD_LAYOUTS["MAT_DPRAG1_1"] == [100]
+        assert CARD_LAYOUTS["MAT_DPRAG1_CFG_1"] == [100]
+        assert CARD_LAYOUTS["MAT_DPRAG_1"] == [20, 20]
+        assert CARD_LAYOUTS["MAT_DPRAG_CFG_1"] == [20, 20]
+
+    def test_law10_deck_writer_unit_id_and_aliases(self):
+        d = dw.StarterDeck("T")
+        d.mat_law10(mat_id=101, title="with_unit", rho0=1.5e-9, unit_id=3)
+        cards = data_cards(block_lines(d.render(), "/MAT/LAW10/101/3"))
+        assert len(cards) == 7
+        assert cards[0] == "with_unit"
+        assert float(cards[1][0:20]) == 1.5e-9
+
+        # Test aliases mat_soil and mat_dprag1 for LAW10 on StarterDeck
+        assert d.mat_soil == d.mat_law10
+        assert d.mat_dprag1 == d.mat_law10
+
     def test_fmt_float_roundtrip(self):
         for v in (0.3, 7.8e-6, -9.81e-3, 1e30, 12345.6789012345,
                   5000000000000.0):

@@ -258,9 +258,9 @@ def test_hexa_pre_post_parity(make_deck):
     off = g.state["off"]
 
     sig_np = sig0.copy()
-    dndx, vol, lc, deps, trD = hx._pre(xe, ve, sig_np, dt, off)
+    dndx, vol, lc, deps, trD = hx._pre(xe, ve, sig_np, dt, off, np.ones(g.n))
     sig_nb = sig0.copy()
-    dndx2, vol2, lc2, deps2, trD2 = jk.hexa_pre(xe, ve, sig_nb, dt, off)
+    dndx2, vol2, lc2, deps2, trD2 = jk.hexa_pre(xe, ve, sig_nb, dt, off, np.ones(g.n))
     for a, b in ((dndx, dndx2), (vol, vol2), (lc, lc2), (deps, deps2),
                  (trD, trD2), (sig_np, sig_nb)):
         assert np.allclose(a, b, rtol=1e-12, atol=1e-15)
@@ -493,8 +493,87 @@ def test_restart_chain_bitmatch_under_numba(make_deck):
         run_engine(ec1)
         mc = run_engine(ec2)
 
-    assert mc.engine_state.cycle == mu.engine_state.cycle == 700
-    assert np.allclose(mc.x, mu.x, rtol=0, atol=1e-10)
-    assert np.allclose(mc.v, mu.v, rtol=0, atol=1e-10)
-    # interior of the body must still be at exactly zero strain
-    assert np.abs(mc.bricks.state["sig"]).max() < 1e-12
+    try:
+        assert mc.engine_state.cycle == mu.engine_state.cycle == 700
+        assert np.allclose(mc.x, mu.x, rtol=0, atol=1e-10)
+        assert np.allclose(mc.v, mu.v, rtol=0, atol=1e-10)
+        # interior of the body must still be at exactly zero strain
+        assert np.abs(mc.bricks.state["sig"]).max() < 1e-12
+    finally:
+        accel.select_backend("numpy")
+
+
+@needs_numba
+def test_hexa_post_zero_sound_speed():
+    """hexa_post must not raise ZeroDivisionError when sound speed c is zero."""
+    from pyradioss.accel import jit_kernels as jk
+    from pyradioss.common.constants import EP30
+    n = 2
+    xe = np.zeros((n, 8, 3))
+    ve = np.zeros((n, 8, 3))
+    dndx = np.zeros((n, 8, 3))
+    vol = np.ones(n)
+    lc = np.ones(n)
+    rho = np.ones(n)
+    trD = np.zeros(n)
+    deps = np.zeros((n, 6))
+    sig = np.zeros((n, 6))
+    sig_old = np.zeros((n, 6))
+    qa = np.full(n, 1.1)
+    qb = np.full(n, 0.05)
+    c = np.zeros(n)
+    hcoef = np.zeros(n)
+    alive = np.ones(n, dtype=bool)
+    qvw_pend = np.zeros(n)
+    dt = 1e-4
+    dtfac = np.ones(n)
+
+    fe, dt_crit, w_visc, qvw_new, deint0, dehour = jk.hexa_post(
+        xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
+        qa, qb, c, hcoef, alive, qvw_pend, dt, dtfac
+    )
+    assert np.all(dt_crit == EP30)
+
+
+@needs_numba
+def test_tetra10_post_zero_sound_speed():
+    """tetra10_post must not raise ZeroDivisionError when sound speed c is zero."""
+    from pyradioss.accel import jit_kernels as jk
+    from pyradioss.common.constants import EP30
+    n = 2
+    xe = np.zeros((n, 10, 3))
+    dndx = np.zeros((n, 4, 10, 3))
+    vol = np.ones((n, 4))
+    vol_tot = np.ones(n)
+    lc = np.ones(n)
+    rho = np.ones(n)
+    trD = np.zeros((n, 4))
+    deps = np.zeros((n, 4, 6))
+    sig = np.zeros((n, 4, 6))
+    sig_old = np.zeros((n, 4, 6))
+    qa = np.full(n, 1.1)
+    qb = np.full(n, 0.05)
+    c = np.zeros(n)
+    alive = np.ones(n, dtype=bool)
+    qvw_pend = np.zeros(n)
+    dt = 1e-4
+    dtfac = np.ones(n)
+
+    fe, dt_crit, w_visc, qvw_new, deint0 = jk.tetra10_post(
+        xe, dndx, vol, vol_tot, lc, rho, trD, deps, sig, sig_old,
+        qa, qb, c, alive, qvw_pend, dt, dtfac
+    )
+    assert np.all(dt_crit == EP30)
+
+
+@needs_numba
+def test_law70_tab2d_duplicate_points():
+    """law70_tab2d must guard against zero divisions with duplicate points."""
+    from pyradioss.accel import jit_kernels as jk
+    xg = np.array([0.0, 0.5, 0.5, 1.0])
+    rates = np.array([10.0, 10.0])
+    Y = np.zeros((4, 2))
+    x = np.array([0.5, 0.2])
+    r = np.array([10.0, 5.0])
+    out = jk.law70_tab2d(xg, rates, Y, x, r)
+    assert np.all(np.isfinite(out))

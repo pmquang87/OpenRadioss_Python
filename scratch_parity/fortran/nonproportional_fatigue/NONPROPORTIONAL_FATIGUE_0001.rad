@@ -1,0 +1,9 @@
+#RADIOSS ENGINE
+/RUN/NONPROPORTIONAL_FATIGUE/1
+1.0
+/IMPL
+/IMPL/FATIG/MULT/NPROP
+0.0  500.0  800  10  8
+5.0  10000.0  0.03  0.0  0.0  60.0  22000  0.3  0.5
+/PRINT/-500
+# /STOP 15.0 (port energy-error abort) omitted: the real Engine reader cannot read the block (M35, forrtl severe 24); the port uses its default 15% guard

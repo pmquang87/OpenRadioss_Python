@@ -287,12 +287,14 @@ def _tab2d(xg, rates, Y, x, r):
     """Bilinear (strain, rate) lookup with END-SLOPE extrapolation in
     both dimensions — TABLE_MAT_VINTERP's default."""
     i = np.clip(np.searchsorted(xg, x, side="right"), 1, len(xg) - 1)
-    t = (x - xg[i - 1]) / (xg[i] - xg[i - 1])            # unclamped
+    dx = np.maximum(xg[i] - xg[i - 1], 1e-20)
+    t = (x - xg[i - 1]) / dx                             # unclamped
     if len(rates) == 1:
         return Y[i - 1, 0] + t * (Y[i, 0] - Y[i - 1, 0])
     j = np.clip(np.searchsorted(rates, r, side="right"), 1,
                 len(rates) - 1)
-    u = (r - rates[j - 1]) / (rates[j] - rates[j - 1])   # unclamped
+    dr = np.maximum(rates[j] - rates[j - 1], 1e-20)
+    u = (r - rates[j - 1]) / dr                          # unclamped
     y0 = Y[i - 1, j - 1] + t * (Y[i, j - 1] - Y[i - 1, j - 1])
     y1 = Y[i - 1, j] + t * (Y[i, j] - Y[i - 1, j])
     return y0 + u * (y1 - y0)
@@ -330,13 +332,39 @@ def _elastic_stress(aa1, aa2, g, e):
 # The stress update (sigeps70.F)
 # ----------------------------------------------------------------------------
 
-def solid_update(mat, sig, deps, dt, extra):
+def solid_update(mat, sig, deps, dt, extra=None):
     """One SIGEPS70 cycle, vectorized over the group. ``extra`` carries
     the persistent state (eps70/uv70/epsd70, allocated by the kernels
     via extra_shapes) and the kernel's current density ``rho``.
     Returns (sig, c) with c the per-element sound speed sqrt(AA1/rho0).
     """
+    n = sig.shape[0]
+    if n == 0:
+        return sig, np.empty(0)
+
     p = mat.params
+    e0, emax = p["E0"], p["EMAX"]
+
+    if extra is None:
+        extra = {}
+    eps = extra.get("eps70")
+    if eps is None:
+        eps = np.zeros((n, 6))
+        extra["eps70"] = eps
+    uv = extra.get("uv70")
+    if uv is None:
+        uv = np.zeros((n, 10))
+        uv[:, 2] = e0
+        extra["uv70"] = uv
+    elif np.all(uv[:, 2] == 0.0):
+        uv[:, 2] = e0
+    epsd = extra.get("epsd70")
+    if epsd is None:
+        epsd = np.zeros(n)
+        extra["epsd70"] = epsd
+    if "rho" not in extra:
+        extra["rho"] = np.full(n, mat.rho0)
+
     # M39: numba-accelerated numeric leaves when that backend is active. These
     # are the "LAW70 curve lookups" — the (strain, rate) table interpolation
     # and the Voigt norms / elastic map. Each is a single scalar expression per
@@ -347,12 +375,8 @@ def solid_update(mat, sig, deps, dt, extra):
     snorm = accel_get("law70_snorm") or _snorm
     enorm = accel_get("law70_enorm") or _enorm
     elastic_stress = accel_get("law70_elastic_stress") or _elastic_stress
-    eps = extra["eps70"]
     eps += deps                                   # total strain (global)
-    uv = extra["uv70"]
-    n = sig.shape[0]
 
-    e0, emax = p["E0"], p["EMAX"]
     epsmax, aa = p["EPSMAX"], p["AA"]
     nu = p["nu"]
     iflag = p["iflag"]
@@ -362,10 +386,10 @@ def solid_update(mat, sig, deps, dt, extra):
 
     # filtered tensor-norm strain rate (MSTRAIN_RATE IDEV=0 + mulaw's
     # asrate = min(1, 2*pi*Fcut*dt))
-    rate = enorm(deps) / max(dt, 1e-30)
-    alpha = min(1.0, 2.0 * math.pi * p["fcut"] * dt)
-    epsd = extra["epsd70"]
-    epsd[:] = alpha * rate + (1.0 - alpha) * epsd
+    if dt > 0.0:
+        rate = enorm(deps) / dt
+        alpha = min(1.0, 2.0 * math.pi * p["fcut"] * dt)
+        epsd[:] = alpha * rate + (1.0 - alpha) * epsd
 
     # ---- static / loading / unloading magnitudes ---------------------------
     xg, rl, yl = p["xg_load"], p["r_load"], p["y_load"]
@@ -507,6 +531,59 @@ def solid_update(mat, sig, deps, dt, extra):
 
     sig[:] = signew
     return sig, c
+
+
+def shell_update(mat, sig, deps, epsp, dt, extra=None):
+    """LAW70 is defined strictly for 3D continuum solid elements and SPH.
+    OpenRadioss starter rejects it on shells (starter/source/materials/mat/mat070/hm_read_mat70.F).
+    """
+    raise NotImplementedError("LAW70 (tabulated foam) is implemented for 3D solid elements only.")
+
+
+def consistent_solid_tangent(mat, extra=None):
+    """(n, 6, 6) consistent elastic/tangent stiffness tensor for LAW70 solids
+    based on the current evolving modulus E_cur (uv70[:, 2]).
+    Returns Voigt 6x6 tangent matrix with P-wave AA1/AA2 terms and shear G.
+    """
+    p = mat.params
+    e0 = p.get("E0", p.get("E", 1.0))
+    nu = p.get("nu", 0.3)
+
+    if extra is not None and "uv70" in extra:
+        uv = extra["uv70"]
+        n = uv.shape[0]
+        if n == 0:
+            return np.empty((0, 6, 6))
+        e_cur = uv[:, 2].copy()
+        zero_mask = e_cur <= 0.0
+        if np.any(zero_mask):
+            e_cur[zero_mask] = e0
+    elif extra is not None and "eps70" in extra:
+        n = extra["eps70"].shape[0]
+        if n == 0:
+            return np.empty((0, 6, 6))
+        e_cur = np.full(n, e0)
+    else:
+        return np.empty((0, 6, 6))
+
+    aa1 = e_cur * (1.0 - nu) / ((1.0 + nu) * (1.0 - 2.0 * nu))
+    aa2 = aa1 * nu / (1.0 - nu)
+    g = 0.5 * e_cur / (1.0 + nu)
+
+    D = np.zeros((n, 6, 6))
+    D[:, 0, 0] = aa1
+    D[:, 1, 1] = aa1
+    D[:, 2, 2] = aa1
+    D[:, 0, 1] = aa2
+    D[:, 0, 2] = aa2
+    D[:, 1, 0] = aa2
+    D[:, 1, 2] = aa2
+    D[:, 2, 0] = aa2
+    D[:, 2, 1] = aa2
+    D[:, 3, 3] = g
+    D[:, 4, 4] = g
+    D[:, 5, 5] = g
+    return D
 
 
 def _register():

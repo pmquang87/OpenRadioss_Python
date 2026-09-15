@@ -745,8 +745,9 @@ def _solve_semidefinite(M, rhs, solver):
     d = M.diagonal()
     zero = d <= 0.0
     if np.any(zero):
+        D = sp.diags((~zero).astype(float))
         fix = sp.diags(zero.astype(float))
-        M = (M + fix).tocsr()
+        M = (D @ M @ D + fix).tocsr()
         rhs = np.where(zero, 0.0, rhs)
     return solver.solve(M, rhs)
 

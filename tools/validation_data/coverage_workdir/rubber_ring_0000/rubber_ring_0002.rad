@@ -1,0 +1,71 @@
+# 
+/TITLE 
+ei310sssc 
+/VERS/140 
+/TFILE
+1.000000e-003
+/ABF
+1.000000e-003 1e30
+/PRINT/-1
+/RUN/ei310sssc_type7/2
+2.0001
+/RFILE
+40 0 0
+#
+/BCSR/TRA/X/
+5 6 8 9 15 16 17 18
+87 88 89 93 94 95 241 242
+243 244 245 246 5717 5699 5681 5663
+5662 5537 5517 5497 5477 5476 2269
+/BCSR/ROT/Z
+2269
+#
+/ANIM/DT 
+0.000000e+000 1.000000e-001
+#
+/ANIM/VECT/CONT
+/ANIM/VECT/PCONT
+/ANIM/BRICK/TENS/STRAIN
+/ANIM/BRICK/TENS/STRESS
+/ANIM/VECT/FINT
+/ANIM/SHELL/TENS/STRESS/UPPER
+/ANIM/SHELL/TENS/STRESS/LOWER
+#
+/MON/ON
+#
+####################
+# IMPLICIT OPTIONS #
+####################
+#/IMPL/CHECK
+
+# Printout frequency for nonlinear computation:
+/IMPL/PRINT/NONLIN/-1
+
+#Static nonlinear computation (quasi Newton method):
+/IMPL/NONLIN/2
+# L_a  Itol  Tol
+  5    1     0.001
+
+# Linear solver method (DIRECT Cholesky):
+/IMPL/SOLVER/5
+# IPREC L_LIM ITOL L_TOL
+ 5      0       3     0.0
+ 
+ # Initial timestep:
+/IMPL/DTINI
+0.001
+
+# Min-max values for timestep:
+/IMPL/DT/STOP
+# Dt_min  Dt_max
+  1e-6    0.001
+
+# Timestep control method 2 (arc-length + line-search): 
+/IMPL/DT/2
+# It_w  L_arc  L_dtn  Scal_dtn  Scal_dtp_max
+  6     0      15     0.8       1.1
+#  
+/IMPL/AUTOSPC/ALL
+/IMPL/LSEARCH/3
+/IMPL/RREF/INTER/5
+

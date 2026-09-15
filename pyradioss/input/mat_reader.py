@@ -131,6 +131,11 @@ class GenericMaterialRecord:
     cfg_file: str = ""                  # provenance (schema used)
     raw_cards: List[str] = field(default_factory=list)
 
+    @property
+    def rho0(self) -> float:
+        """Initial density alias for Material compatibility."""
+        return self.density
+
 
 #: law name -> constructor(record) -> material-kernel-compatible object.
 #: The physics builders (LAW19/24/35/44/70/81, VOID, GAS ...) register
@@ -449,7 +454,7 @@ def parse_cfg_file(path: str,
         text = _strip_comments(fh.read())
 
     attributes: Dict[str, _Attr] = {}
-    for body in _region(text, re.compile(r"ATTRIBUTES\s*\(\s*COMMON\s*\)")):
+    for body in _region(text, re.compile(r"ATTRIBUTES(?:\s*\(\s*COMMON\s*\))?")):
         for m in _ATTR_RE.finditer(body):
             name, kind, size_var, typ = m.groups()
             if kind == "SIZE":
@@ -462,7 +467,7 @@ def parse_cfg_file(path: str,
                 attributes[name] = _Attr(name, typ or "FLOAT")
 
     defaults: Dict[str, object] = {}
-    for body in _region(text, re.compile(r"DEFAULTS\s*\(\s*COMMON\s*\)")):
+    for body in _region(text, re.compile(r"DEFAULTS(?:\s*\(\s*COMMON\s*\))?")):
         for m in _DEFAULT_RE.finditer(body):
             defaults[m.group(1)] = _parse_default_value(m.group(2))
 
@@ -611,12 +616,59 @@ class CfgCatalogue:
 
     # -- public API -----------------------------------------------------------
 
+    _SYNONYMS: Dict[str, str] = {
+        "HILL": "LAW32",
+        "LAW32": "LAW32",
+        "SOIL": "LAW10",
+        "SOIL_CONC": "LAW10",
+        "JWL": "LAW5",
+        "HONEYCOMB": "LAW28",
+        "BOLTZMAN": "LAW34",
+        "VISC_MAXW": "LAW34",
+        "BOLTZMANN": "LAW34",
+        "LAW34": "LAW34",
+        "VISC_TAB": "LAW38",
+        "LAW38": "LAW38",
+        "COMP_PLAS": "LAW25",
+        "COMPSH": "LAW25",
+        "TSAI_WU": "LAW25",
+        "CRASURV": "LAW25",
+        "COMPOSITE_PLAS": "LAW25",
+        "LAW25": "LAW25",
+        "CHANG": "LAW15",
+        "PLAS_ANISO": "LAW15",
+        "COMP_CHANG": "LAW15",
+        "LAW15": "LAW15",
+        "LAW12": "LAW12",
+        "3D_COMP": "LAW12",
+        "COMP_3D": "LAW12",
+        "3PARBI": "LAW12",
+        "RAGAB": "LAW12",
+        "LAW14": "LAW14",
+        "COMPSO": "LAW14",
+        "COMP_SOL": "LAW14",
+        "LAW69": "LAW69",
+        "HYP_ELAS": "LAW69",
+        "HYPERELASTIC": "LAW69",
+        "LAW69_HYP_ELAS": "LAW69",
+        "MAT_LAW69": "LAW69",
+    }
+
+
+    def canonical_law_name(self, law_name: str) -> str:
+        """Map a law spelling to its canonical name if known in synonyms."""
+        key = law_name.upper()
+        return self._SYNONYMS.get(key, key)
+
     def schema(self, law_name: str) -> Optional[CfgLawSchema]:
         """The parsed schema for a law spelling ('FABRI', 'LAW19',
         'ALE/MAT' ...), or None when the catalogue has no cfg for it."""
         self._scan()
         key = law_name.upper()
         path = self._files.get(key)
+        if path is None and key in self._SYNONYMS:
+            key = self._SYNONYMS[key]
+            path = self._files.get(key)
         if path is None:
             return None
         if path not in self._schemas:
@@ -771,8 +823,10 @@ class _CfgInterpreter:
         py = re.sub(r"!(?!=)", " not ", py)
         py = re.sub(r"\bFALSE\b", "0", py)
         py = re.sub(r"\bTRUE\b", "1", py)
+        env = _Env(self.v)
+        env["_GET_NB_FREE_CARDS"] = lambda: max(0, len(self.cards) - self.i)
         try:
-            return eval(py, {"__builtins__": {}}, _Env(self.v))
+            return eval(py, {"__builtins__": {}}, env)
         except Exception:
             return 0
 
@@ -792,6 +846,42 @@ class _CfgInterpreter:
         segs = _split_fmt(fmt)
         pos = 0
         ai = 0
+        tokens = line.split()
+
+        # Detect free-format input: any fixed-width slice containing >1 whitespace-separated token
+        is_free_format = False
+        scan_pos = 0
+        for seg in segs:
+            if seg[0] == "lit":
+                scan_pos += len(seg[1])
+                continue
+            _tag, _typ, width = seg
+            if width:
+                if len(line[scan_pos:scan_pos + width].split()) > 1:
+                    is_free_format = True
+                    break
+                scan_pos += width
+
+        if is_free_format and tokens:
+            data_segs = [s for s in segs if s[0] != "lit"]
+            non_blank_pairs = [(s[1], a) for s, a in zip(data_segs, args) if a != "_BLANK_"]
+            if len(tokens) <= len(non_blank_pairs):
+                for tok_idx, (typ, arg) in enumerate(non_blank_pairs):
+                    raw = tokens[tok_idx] if tok_idx < len(tokens) else ""
+                    self._set(arg, self._convert(typ, raw))
+                return
+            tok_idx = 0
+            for seg in segs:
+                if seg[0] == "lit":
+                    continue
+                _tag, typ, _w = seg
+                if ai < len(args):
+                    raw = tokens[tok_idx] if tok_idx < len(tokens) else ""
+                    tok_idx += 1
+                    self._set(args[ai], self._convert(typ, raw))
+                    ai += 1
+            return
+
         for seg in segs:
             if seg[0] == "lit":
                 pos += len(seg[1])
@@ -805,7 +895,8 @@ class _CfgInterpreter:
                 raw = m.group(0) if m else ""
                 pos = m.end() if m else len(line)
             if ai < len(args):
-                self._set(args[ai], self._convert(typ, raw))
+                val = self._convert(typ, raw)
+                self._set(args[ai], val)
                 ai += 1
 
     # -- statement execution -----------------------------------------------------
@@ -1252,6 +1343,7 @@ def read_generic_mat(block: KeywordBlock, model, log: MessageLog) -> None:
             log.error(f"/MAT/{rec.law_name}/{rec.id}: registered physics "
                       f"constructor failed: {exc}", block.source)
             return
+        mat.record = rec
         model.materials[rec.id] = mat
         return
     model.materials[rec.id] = make_inactive_material(rec)
@@ -1288,7 +1380,9 @@ def read_mat_note(kind: str, block: KeywordBlock, model,
         try:
             interp.run()
         except Exception:
-            pass
+            log.warning(f"     /{kind}/{mat_id}: CFG interpreter failed, "
+                        f"partial params may be incomplete",
+                        block.source)
         params = {k: v for k, v in interp.v.items()
                   if k not in _NOISE_ATTRS}
     else:
@@ -1299,3 +1393,7 @@ def read_mat_note(kind: str, block: KeywordBlock, model,
     notes.append((kind, mat_id, params, block.source))
     log.info(f"     /{kind}/{mat_id}: parsed as a note — "
              f"formulation not implemented (M37)")
+
+
+# Alias for callers importing read_mat from mat_reader
+read_mat = read_generic_mat

@@ -112,6 +112,17 @@ def parse_engine_deck(blocks: List[KeywordBlock],
     ec = EngineControls()
     for block in blocks:
         key = block.key0
+        if key == "ENG" and len(block.parts) > 1:
+            # Unwrap /ENG/STATE/DT -> /STATE/DT, /ENG/DYNAIN/DT -> /DYNAIN/DT, etc.
+            block = KeywordBlock(
+                keyword="/" + "/".join(block.parts[1:]),
+                parts=block.parts[1:],
+                cards=block.cards,
+                source=block.source,
+                user_id=block.user_id,
+                fixed=block.fixed,
+            )
+            key = block.key0
         try:
             if key == "RUN":
                 # /RUN/RunName/run_number — the run name defines output file
@@ -119,28 +130,54 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 if len(block.parts) >= 2:
                     ec.run_name = block.parts[1]
                 if block.cards:
-                    ec.t_end = block.cards[0].floats()[0]
+                    v = block.cards[0].floats()
+                    if v:
+                        ec.t_end = v[0]
                 else:
                     log.error("/RUN: missing T_stop card", block.source)
             elif key == "VERS":
                 pass  # input version — irrelevant to the port
             elif key == "TFILE":
                 if block.cards:
-                    ec.th_dt = block.cards[0].floats()[0]
+                    v = block.cards[0].floats()
+                    if v:
+                        ec.th_dt = v[0]
             elif key == "ANIM":
                 sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                sub2 = block.parts[2].upper() if len(block.parts) > 2 else ""
                 if sub == "DT":
                     vals = block.cards[0].floats() if block.cards else [0.0]
                     # card: T_start dT  (a single value is taken as dT)
                     ec.anim_dt = vals[1] if len(vals) > 1 else vals[0]
-                elif sub == "VECT" and len(block.parts) > 2:
-                    v = block.parts[2].upper()
-                    if v not in ec.anim_vect:
-                        ec.anim_vect.append(v)
-                elif sub == "ELEM" and len(block.parts) > 2:
-                    v = block.parts[2].upper()
-                    if v not in ec.anim_elem:
-                        ec.anim_elem.append(v)
+                elif sub == "VECT" and sub2:
+                    if sub2 not in ec.anim_vect:
+                        ec.anim_vect.append(sub2)
+                elif sub == "ELEM" and sub2:
+                    if sub2 in ("TENS", "SIG", "EPS") or "TENS" in sub2:
+                        if f"ELEM/{sub2}" not in ec.anim_tens:
+                            ec.anim_tens.append(f"ELEM/{sub2}")
+                    elif sub2 not in ec.anim_elem:
+                        ec.anim_elem.append(sub2)
+                elif sub == "NODA" and sub2 in ("VEL", "DIS", "DISP", "ACC", "CONT"):
+                    if sub2 not in ec.anim_vect:
+                        ec.anim_vect.append(sub2)
+                    chan = f"{sub}/{sub2}"
+                    if chan not in ec.anim_elem:
+                        ec.anim_elem.append(chan)
+                elif sub in ("BRICK", "BRI", "SHELL", "SH3N", "SHE", "QUAD", "QUA", "TETRA10", "TETRA4", "SOLID"):
+                    chan = f"{sub}/{sub2}" if sub2 else sub
+                    if sub2 == "TENS" or "TENS" in chan:
+                        if chan not in ec.anim_tens:
+                            ec.anim_tens.append(chan)
+                    elif chan not in ec.anim_elem:
+                        ec.anim_elem.append(chan)
+                elif sub in ("NODA", "MASS", "GPS", "INTER", "BEAM", "SPRING", "TRUSS", "TENS"):
+                    chan = f"{sub}/{sub2}" if sub2 else sub
+                    if "TENS" in chan:
+                        if chan not in ec.anim_tens:
+                            ec.anim_tens.append(chan)
+                    elif chan not in ec.anim_elem:
+                        ec.anim_elem.append(chan)
                 else:
                     log.warning(f"/ANIM/{sub} not ported", block.source)
             elif key == "DT":
@@ -156,24 +193,61 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 # (mass scaling — the added mass and its momentum/energy
                 # effect are tracked and reported).
                 sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                sub2 = block.parts[2].upper() if len(block.parts) > 2 else ""
+                sub3 = block.parts[3].upper() if len(block.parts) > 3 else ""
                 if sub == "NODA":
                     ec.dt_noda = ("CST" if len(block.parts) > 2 and
                                   block.parts[2].upper() == "CST"
                                   else "NODA")
-                elif sub:
-                    log.warning(f"/DT/{sub} not ported — treated as /DT",
-                                block.source)
-                if block.cards:
-                    vals = block.cards[0].floats()
-                    if vals:
-                        # a zero/blank scale means the DEFAULT 0.9 (the
-                        # reference reads dTsca=0 as 'use default' — the
-                        # RD-V-0220 oracle deck writes '0.0 1e-7'), and a
-                        # zero scale would divide the /DT/NODA/CST mass
-                        # target by zero (M37)
-                        ec.dt_scale = vals[0] if vals[0] > 0.0 else 0.9
-                    if len(vals) > 1:
-                        ec.dt_min = vals[1]
+                elif sub == "AMS":
+                    ec.dt_ams = True
+                    if len(block.parts) > 2:
+                        try:
+                            ec.dt_ams_igrp = int(block.parts[2])
+                        except ValueError:
+                            pass
+                elif sub in ("BRICK", "BRI", "SHELL", "SH3N", "SHE", "QUAD", "QUA", "TETRA10", "TETRA4", "INTER", "SPRING", "BEAM", "TRUSS", "SPH"):
+                    action = sub2 if sub2 else "STOP"
+                    scale_elem, dt_min_elem = 0.9, 0.0
+                    if block.cards:
+                        vals_el = block.cards[0].floats()
+                        if vals_el:
+                            scale_elem = vals_el[0] if vals_el[0] > 0.0 else 0.9
+                        if len(vals_el) > 1:
+                            dt_min_elem = vals_el[1]
+                    ec.dt_controls[sub] = {
+                        "action": action,
+                        "flag": sub3,
+                        "scale": scale_elem,
+                        "dt_min": dt_min_elem,
+                    }
+                if sub in ("NODA", "", "CST"):
+                    if block.cards:
+                        vals = block.cards[0].floats()
+                        if vals:
+                            # a zero/blank scale means the DEFAULT 0.9 (the
+                            # reference reads dTsca=0 as 'use default' — the
+                            # RD-V-0220 oracle deck writes '0.0 1e-7'), and a
+                            # zero scale would divide the /DT/NODA/CST mass
+                            # target by zero (M37)
+                            ec.dt_scale = vals[0] if vals[0] > 0.0 else 0.9
+                        if len(vals) > 1:
+                            ec.dt_min = vals[1]
+                elif sub == "AMS":
+                    if block.cards:
+                        vals = block.cards[0].floats()
+                        if vals:
+                            ec.dt_scale = vals[0] if vals[0] > 0.0 else 0.9
+                        if len(vals) > 1:
+                            ec.dt_min = vals[1]
+                    if len(block.cards) > 1:
+                        v1 = block.cards[1].floats()
+                        if v1:
+                            ec.dt_ams_tol = v1[0]
+                    if len(block.cards) > 2:
+                        v2 = block.cards[2].floats()
+                        if v2:
+                            ec.dt_ams_itmax = int(v2[0])
                 if ec.dt_noda == "CST" and ec.dt_min <= 0.0:
                     log.warning("/DT/NODA/CST without a positive dT_min "
                                 "adds no mass", block.source)
@@ -351,9 +425,19 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         # IDTC 2/3 variants — accepted, unused here
                         if len(vals) > 3 and 0.0 < vals[3] < 1.0:
                             ec.impl_dt_scaledn = vals[3]
+                    elif sub2 == "FIXP":
+                        fixp_vals = []
+                        for card in block.cards:
+                            fixp_vals.extend(card.floats())
+                        if len(fixp_vals) > 100:
+                            log.warning(f"/IMPL/DT/FIXP/{block.user_id} maximum "
+                                        f"100 fix points permitted", block.source)
+                            fixp_vals = fixp_vals[:100]
+                        # Fortran reads into DTIMPF and then calls ORDER_DTF
+                        ec.impl_dt_fixp = sorted(fixp_vals)
                     else:
                         log.warning(f"/IMPL/DT/{sub2} not ported — ignored "
-                                    f"(supports STOP, 1; the IDTC 2/3 "
+                                    f"(supports STOP, 1, FIXP; the IDTC 2/3 "
                                     f"arc-length step controls are "
                                     f"deferred)", block.source)
                 elif sub == "BUCKL":
@@ -761,6 +845,9 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     # sub-flag. See implicit/joint_nongaussian_fatigue.py.
                     is_exact = bool(subs & {"EXACT", "NORTA", "NATAF",
                                             "GRIGORIU", "COVEXACT"})
+                    # M36: NON-GAUSSIAN COPULA / NON-TRANSLATION JOINT DISTRIBUTION
+                    # Replaces the Gaussian copula with a t-copula.
+                    is_copula = bool(subs & {"COPULA", "TCOPULA"})
                     if is_wville:
                         is_evol = True                # continuous spectrum needs the
                         #                               drifting-shape / evol schedule
@@ -948,6 +1035,17 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             ec.impl_fatig_wv_refine = int(vE[5])
                         if len(vE) > 6 and vE[6] >= 0:
                             ec.impl_fatig_wv_smooth = float(vE[6])
+                            
+                    # M36 COPULA: the copula type and params live on a DEDICATED
+                    # card line AFTER the M26 drifting-shape line (and before MINPUT)
+                    if is_copula:
+                        cline = 2 + (1 if is_ngauss else 0) + (1 if is_nstat else 0) + (1 if is_evol else 0)
+                        vC = (block.cards[cline].floats() if len(block.cards) > cline else [])
+                        ec.impl_fatig_copula = "t"
+                        if len(vC) > 0 and vC[0] > 0.0:
+                            ec.impl_fatig_copula_params = vC[0]
+                        else:
+                            ec.impl_fatig_copula_params = 4.0
                     # M28 MULTI-INPUT: the input-pattern TABLE lives on DEDICATED
                     # card lines AFTER any M24 kurtosis / M25 modulation / M26
                     # drifting-shape lines — so its base index is 2 + (1 if NGAUSS)
@@ -958,7 +1056,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     if is_minput:
                         miline = (2 + (1 if is_ngauss else 0)
                                   + (1 if is_nstat else 0)
-                                  + (1 if is_evol else 0))
+                                  + (1 if is_evol else 0)
+                                  + (1 if is_copula else 0))
                         _parse_multi_input_table(block, ec, miline, log,
                                                  "/IMPL/FATIG/MINPUT")
                     if is_nprop and ec.impl_fatig_mcdur <= 0.0:
@@ -1059,18 +1158,464 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 # /PRINT/-100 → one listing line every 100 cycles (the minus
                 # sign is the Radioss convention for 'every n cycles').
                 if len(block.parts) > 1:
-                    ec.print_cycles = abs(int(block.parts[1]))
+                    try:
+                        ec.print_cycles = abs(int(block.parts[1]))
+                    except ValueError:
+                        pass
+                elif block.cards:
+                    # Alternately, /PRINT \n N_print (M82)
+                    v = block.cards[0].floats()
+                    if v and v[0] != 0.0:
+                        ec.print_cycles = abs(int(v[0]))
             elif key == "STOP":
-                # /STOP card: Emax Mmax Nmax NTH NANIM. Emax = 0.0 (blank or
-                # explicit 0, as official decks write '0 0 0 1 1') means "no
-                # user limit" in the real engine — NOT a 0% tolerance. Keep
-                # the 15% default then; only a positive Emax overrides it
-                # (M37: this zero mis-read aborted 14 official decks at
-                # their first energy check).
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "NSTEP":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if v:
+                            ec.stop_nstep = int(v[0])
+                elif sub == "TSTOP":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if v:
+                            ec.stop_tstop = v[0]
+                elif sub == "TIMET":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if v:
+                            ec.stop_timet = v[0]
+                else:
+                    # /STOP card: Emax Mmax Nmax NTH NANIM.
+                    if block.cards:
+                        vals = block.cards[0].floats()
+                        if vals:
+                            emax = vals[0]
+                            if emax > 0.0:
+                                ec.energy_error_stop = emax
+                        if len(vals) > 2 and vals[2] > 0.0:
+                            ec.stop_nstep = int(vals[2])
+            elif key == "DEBUG":
+                # /DEBUG or /DEBUG/<suboption> (M120): fredebug.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                val = 1
+                if len(block.parts) > 2:
+                    try:
+                        val = int(block.parts[2])
+                    except ValueError:
+                        val = 1
+                elif sub.isdigit():
+                    val = int(sub)
+                    sub = "CORE"
+                if not sub:
+                    sub = "CORE"
+                ec.debug_flags[sub] = val
+                if sub == "ACC" and block.cards:
+                    v = block.cards[0].floats()
+                    if v:
+                        ec.debug_acc_start = v[0]
+                    if len(v) > 1:
+                        ec.debug_acc_freq = int(v[1])
+            elif key == "BCS":
+                # /BCS/ON or /BCS/OFF (M120): frebcs.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
+                active = (sub == "ON")
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    for tok in c.tokens():
+                        try:
+                            bc_id = int(float(tok))
+                            if bc_id > 0:
+                                ec.bcs_active[bc_id] = active
+                        except ValueError:
+                            pass
+            elif key == "RBODY":
+                # /RBODY/ON or /RBODY/OFF (M120): frerbo.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
+                active = (sub == "ON")
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    for tok in c.tokens():
+                        try:
+                            rb_id = int(float(tok))
+                            if rb_id > 0:
+                                ec.rbody_active[rb_id] = active
+                        except ValueError:
+                            pass
+            elif key == "ALE":
+                # /ALE/ON or /ALE/OFF (M120): fraleonoff.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
+                active = (sub == "ON")
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    for tok in c.tokens():
+                        try:
+                            part_id = int(float(tok))
+                            if part_id > 0:
+                                ec.ale_active[part_id] = active
+                        except ValueError:
+                            pass
+            elif key == "NOIS":
+                # /NOIS or /NOIS/DT (M120): frenois.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "DT":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if len(v) > 1:
+                            ec.noise_tstart = v[0]
+                            ec.noise_dt = v[1]
+                        elif v:
+                            ec.noise_dt = v[0]
+                elif sub:
+                    ec.noise_flags[sub] = True
+                else:
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if len(v) > 1:
+                            ec.noise_tstart = v[0]
+                            ec.noise_dt = v[1]
+                        elif v:
+                            ec.noise_dt = v[0]
+            elif key == "H3D":
+                # /H3D/DT, /H3D/NODA, /H3D/ELEM, /H3D/SHELL, /H3D/SOLID (M120): redkey1_h3d.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "DT":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if len(v) > 1:
+                            ec.h3d_dt = v[1]
+                        elif v:
+                            ec.h3d_dt = v[0]
+                elif sub:
+                    channel = "/".join(block.parts[1:]).upper()
+                    if channel not in ec.h3d_requests:
+                        ec.h3d_requests.append(channel)
+            elif key == "FLOW":
+                # /FLOW/DT or /FLOW (M120): freflw.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "DT" or not sub:
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if len(v) > 1:
+                            ec.flow_dt = v[1]
+                        elif v:
+                            ec.flow_dt = v[0]
+            elif key == "UPWIND":
+                # /UPWIND (M120): freupwind.F
+                ec.upwind_active = True
                 if block.cards:
-                    emax = block.cards[0].floats()[0]
-                    if emax > 0.0:
-                        ec.energy_error_stop = emax
+                    v = block.cards[0].floats()
+                    if len(v) > 0 and v[0] > 0.0:
+                        ec.upwind_mom = v[0]
+                    if len(v) > 1 and v[1] > 0.0:
+                        ec.upwind_mass_eng = v[1]
+                    if len(v) > 2 and v[2] > 0.0:
+                        ec.upwind_wet_surf = v[2]
+            elif key == "EIG":
+                # /EIG/OFF (M120): freeig.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "OFF":
+                    for c in block.cards:
+                        if c.is_blank:
+                            continue
+                        for tok in c.tokens():
+                            try:
+                                m_id = int(float(tok))
+                                if m_id > 0:
+                                    ec.eig_off.append(m_id)
+                            except ValueError:
+                                pass
+            elif key == "ALECFDSPH":
+                pass # /ALECFDSPH (M122) accepted in engine deck
+            elif key == "INTER":
+                # /INTER/ON, /INTER/OFF, /INTER/id, /INTER (M146): freint.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "ON" or sub == "OFF":
+                    active = (sub == "ON")
+                    for c in block.cards:
+                        if c.is_blank:
+                            continue
+                        for tok in c.tokens():
+                            try:
+                                i_id = int(float(tok))
+                                if i_id > 0:
+                                    ec.inter_active[i_id] = active
+                            except ValueError:
+                                pass
+                else:
+                    for c in block.cards:
+                        if c.is_blank:
+                            continue
+                        toks = c.tokens()
+                        if toks:
+                            try:
+                                in_id = int(float(toks[0]))
+                                ns_id = int(float(toks[1])) if len(toks) > 1 else 0
+                                ts = float(toks[2]) if len(toks) > 2 else 0.0
+                                tf = float(toks[3]) if len(toks) > 3 else 1.0e30
+                                ec.inter_windows[in_id] = (ns_id, ts, tf)
+                            except ValueError:
+                                pass
+            elif key == "DEL":
+                # /DEL/<type> (M146): fredli.F, rdele.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ELEM"
+                sub2 = block.parts[2].upper() if len(block.parts) > 2 else ""
+                full_kind = f"{sub}/{sub2}".strip("/") if sub2 else sub
+                del_list = ec.del_elements.setdefault(full_kind, [])
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    for tok in c.tokens():
+                        try:
+                            eid = int(float(tok))
+                            if eid > 0:
+                                del_list.append(eid)
+                        except ValueError:
+                            pass
+            elif key == "DLI7":
+                # /DLI7 (M146): fredli7.F
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    toks = c.tokens()
+                    for idx, tok in enumerate(toks):
+                        try:
+                            ec.dli7_controls[f"param_{idx}"] = float(tok)
+                        except ValueError:
+                            pass
+            elif key == "KEREL":
+                # /KEREL (M146): freform.F
+                ec.kerel_active = True
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    v = c.floats()
+                    if len(v) >= 2:
+                        ec.kerel_tstart = v[0]
+                        ec.kerel_tstop = v[1]
+                    elif len(v) == 1:
+                        if v[0].is_integer() and ec.kerel_istatg == 0:
+                            ec.kerel_istatg = int(v[0])
+                        else:
+                            ec.kerel_tstart = v[0]
+            elif key == "DYREL":
+                # /DYREL (M146): freform.F
+                ec.dyrel_active = True
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    v = c.floats()
+                    if len(v) >= 2:
+                        ec.dyrel_beta = v[0]
+                        ec.dyrel_period = v[1]
+                    elif len(v) == 1:
+                        if v[0].is_integer() and ec.dyrel_istatg == 0:
+                            ec.dyrel_istatg = int(v[0])
+                        else:
+                            ec.dyrel_beta = v[0]
+            elif key in ("THERMAL", "HEAT"):
+                # /THERMAL, /HEAT, /THERMAL/DT, /HEAT/DT (M146/M202): frethermal.F
+                ec.heat_active = True
+                ec.heat_flag = True
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "DT":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if len(v) > 1:
+                            ec.thermal_tstart = v[0]
+                            ec.thermal_dt = v[1]
+                        elif v:
+                            ec.thermal_dt = v[0]
+                else:
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if v:
+                            ec.thermal_acc_fact = v[0]
+            elif key == "ABF":
+                # /ABF, /ABF/DT (M146): freabf.F
+                if block.cards:
+                    v = block.cards[0].floats()
+                    if len(v) > 1:
+                        ec.abf_dt = v[0]
+                        ec.abf_dt_write = v[1]
+                    elif v:
+                        ec.abf_dt = v[0]
+                        ec.abf_dt_write = v[0]
+            elif key == "INIVEL":
+                # /INIVEL/<TRA|ROT>/<X|Y|Z> (M146): freiniv.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "TRA"
+                dirn = block.parts[2].upper() if len(block.parts) > 2 else "X"
+                target_dict = ec.inivel_engine.setdefault(f"{sub}_{dirn}", {})
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    toks = c.tokens()
+                    if len(toks) >= 2:
+                        try:
+                            nid = int(float(toks[0]))
+                            val = float(toks[1])
+                            target_dict[nid] = val
+                        except ValueError:
+                            pass
+            elif key == "DAMP":
+                # /DAMP, /DAMP/DT (M148): fredamp.F, lecdamp.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "DT":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if v:
+                            ec.damp_dt = v[0]
+                else:
+                    for c in block.cards:
+                        if c.is_blank:
+                            continue
+                        v = c.floats()
+                        if len(v) >= 2:
+                            if ec.damp_alpha == 0.0 and ec.damp_beta == 0.0:
+                                ec.damp_alpha = v[0]
+                                ec.damp_beta = v[1]
+                            elif ec.damp_tstart == 0.0 and ec.damp_tstop == 0.0:
+                                ec.damp_tstart = v[0]
+                                ec.damp_tstop = v[1]
+                        elif len(v) == 1 and ec.damp_grpart == 0:
+                            ec.damp_grpart = int(v[0])
+            elif key == "MASS":
+                # /MASS/RESET (M148): freform.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "RESET" or not sub:
+                    ec.mass_reset = True
+            elif key in ("SENSOR", "SENS"):
+                # /SENSOR/RESET, /SENS/RESET (M148): freform.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "RESET":
+                    if not block.cards:
+                        ec.sensor_reset.append(0)
+                    else:
+                        for c in block.cards:
+                            if c.is_blank:
+                                continue
+                            for tok in c.tokens():
+                                try:
+                                    sid = int(float(tok))
+                                    ec.sensor_reset.append(sid)
+                                except ValueError:
+                                    pass
+                        if not ec.sensor_reset:
+                            ec.sensor_reset.append(0)
+            elif key == "VIPER":
+                # /VIPER, /VIPER/ON (M148): freform.F
+                ec.viper_active = True
+            elif key == "MADYMO":
+                # /MADYMO/ON, /MADYMO/ON2, /MADYMO/MPP (M148): freform.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
+                ec.madymo_mode = sub
+            elif key in ("RAD2R", "RAD2RAD"):
+                # /RAD2R/ON, /RAD2RAD/ON (M148): freform.F
+                ec.rad2r_active = True
+            elif key == "FVMBAG":
+                # /FVMBAG/REMESH, /FVMBAG/MODIF (M148): frefvbag.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "REMESH"
+                if sub in ("REMESH", "REMES"):
+                    ec.fvbag_remesh = True
+                elif sub in ("MODIF", "MODIFY"):
+                    ec.fvbag_modif = True
+            elif key == "PERF":
+                # /PERF/SORT1, /PERF/SORT2, /PERF/SORT3 (M148): freform.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "SORT1"
+                if sub == "SORT1":
+                    ec.perf_sort = 1
+                elif sub == "SORT2":
+                    ec.perf_sort = 2
+                elif sub == "SORT3":
+                    ec.perf_sort = 0
+            elif key == "DT1TET10":
+                # /DT1TET10 (M148): freform.F
+                ec.dt1tet10 = 1
+                if block.cards:
+                    v = block.cards[0].floats()
+                    if v:
+                        ec.dt1tet10 = int(v[0])
+            elif key == "DTTSH":
+                # /DTTSH (M148): freform.F
+                ec.dttsh = True
+            elif key in ("REPORT", "REPOR"):
+                # /REPORT, /REPORT/DT (M148): freform.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "DT":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if v:
+                            ec.report_dt = v[0]
+                else:
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if v:
+                            ec.report_freq = int(v[0])
+            elif key in ("NEGVOL", "NEGVO"):
+                # /NEGVOL/STOP, /NEGVOL/DEL (M148): freform.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "STOP"
+                ec.negvol_action = sub
+            elif key in ("TH", "ITH") or key.startswith("TH_") or key.startswith("ITH_"):
+                # /TH or /ITH time-history requests in engine deck (M194, M200)
+                from ..model.entities import EngineTHRecord
+                if key in ("TH", "ITH"):
+                    sub = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
+                elif key.startswith("ITH_"):
+                    sub = key[4:]
+                else:
+                    sub = key[3:]
+                if sub == "TITLE":
+                    ec.th_title = True
+                else:
+                    th_id = block.user_id if block.user_id is not None else 0
+                    title = block.cards[0].raw.strip() if block.cards else ""
+                    ids = []
+                    vars_list = []
+                    for c in block.cards[1:]:
+                        if not c.is_blank and not c.raw.strip().startswith("#"):
+                            # Extract non-numeric tokens as vars, numeric as ids
+                            for tok in c.tokens():
+                                try:
+                                    ids.append(int(float(tok)))
+                                except ValueError:
+                                    vars_list.append(tok.upper())
+                    ec.th_records.append(EngineTHRecord(th_type=sub, id=th_id, title=title, vars=vars_list, ids=ids))
+            elif key in ("FUNCT_PYTHON", "PYTHON_FUNCT"):
+                # /FUNCT_PYTHON or /PYTHON_FUNCT in engine deck (M194)
+                fid = block.user_id if block.user_id is not None else 0
+                title = block.cards[0].raw.strip() if block.cards else ""
+                expr = "\n".join(c.raw for c in block.cards[1:]) if len(block.cards) > 1 else ""
+                ec.python_functions[fid] = (title, expr)
+            elif key == "CHECKSUM":
+                # /CHECKSUM/START, /CHECKSUM/END (M195)
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
+                ec.checksum_mode = sub
+            elif key == "DYNAIN":
+                # /DYNAIN/DT (M195)
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "DT" and block.cards:
+                    vals = block.cards[0].floats()
+                    ec.dynain_tstart = vals[0] if vals else 0.0
+                    ec.dynain_dt = vals[1] if len(vals) > 1 else (vals[0] if vals else 0.0)
+            elif key == "DTIX":
+                # /DTIX or /ENG/DTIX (M200)
+                if block.cards:
+                    vals = block.cards[0].floats()
+                    ec.dtix_tini = vals[0] if vals else 0.0
+                    ec.dtix_tmax = vals[1] if len(vals) > 1 else (vals[0] if vals else 0.0)
+            elif key == "PARITH":
+                # /PARITH/ON, /PARITH/OFF (M200)
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
+                ec.parith = sub
+            elif key == "TH":
+                # /TH/TITLE (M200)
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "TITLE":
+                    ec.th_title = True
+            elif key == "END":
+                pass
             else:
                 log.warning(f"engine keyword /{'/'.join(block.parts)} "
                             f"not ported — ignored", block.source)

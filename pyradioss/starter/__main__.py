@@ -35,9 +35,14 @@ def main(argv=None) -> int:
 
     from ..common.messages import StarterError
     from .starter import run_starter
+    if not os.path.isfile(args.input):
+        print(f"\n     STARTER TERMINATION : ERROR\n     Starter input file not found: {args.input}")
+        return 2
     try:
-        run_starter(args.input)
-    except StarterError as exc:
+        res = run_starter(args.input)
+        if isinstance(res, int) and res != 0:
+            return 2
+    except (StarterError, FileNotFoundError) as exc:
         print(f"\n     STARTER TERMINATION : ERROR\n     {exc}")
         return 2
     return 0

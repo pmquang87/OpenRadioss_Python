@@ -30,6 +30,8 @@ import numpy as np
 
 def solid_update(mat, sig: np.ndarray, deps: np.ndarray) -> np.ndarray:
     """3-D stress update. sig, deps: (n, 6) Voigt arrays. In-place on sig."""
+    if sig.shape[0] == 0:
+        return sig
     G = mat.G
     lam = mat.K - 2.0 * G / 3.0        # Lamé lambda = K - 2G/3
     tr = deps[:, 0] + deps[:, 1] + deps[:, 2]
@@ -49,6 +51,8 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray) -> np.ndarray:
         dsig_yy = E/(1-nu^2) * (deps_yy + nu * deps_xx)
         dsig_xy = G * dgamma_xy
     """
+    if sig.shape[0] == 0:
+        return sig
     E, nu, G = mat.E, mat.nu, mat.G
     c = E / (1.0 - nu * nu)
     dxx, dyy = deps[:, 0].copy(), deps[:, 1].copy()

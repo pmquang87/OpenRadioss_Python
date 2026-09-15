@@ -86,6 +86,10 @@ def _local_geometry(xe: np.ndarray):
 
     xe: (n, 3, 3). Returns (E (n,3,3) columns e1|e2|e3, xl (n,3,2),
     area (n,), B1 (n,3), B2 (n,3))."""
+    n = len(xe)
+    if n == 0:
+        return (np.zeros((0, 3, 3)), np.zeros((0, 3, 2)),
+                np.zeros(0), np.zeros((0, 3)), np.zeros((0, 3)))
     s12 = xe[:, 1] - xe[:, 0]
     s13 = xe[:, 2] - xe[:, 0]
     e3 = cross3(s12, s13)
@@ -93,6 +97,27 @@ def _local_geometry(xe: np.ndarray):
     e3 = e3 / np.maximum(a2, EM20)[:, None]
     e1 = s12 / np.maximum(norm3(s12), EM20)[:, None]
     e2 = cross3(e3, e1)
+
+    bad_norm = a2 < 1e-12
+    if np.any(bad_norm):
+        for idx in np.where(bad_norm)[0]:
+            e1_i = s12[idx]
+            n1 = np.linalg.norm(e1_i)
+            if n1 < 1e-12:
+                e1_i = np.array([1.0, 0.0, 0.0])
+            else:
+                e1_i = e1_i / n1
+            cand = np.array([0.0, 0.0, 1.0])
+            if abs(np.dot(e1_i, cand)) > 0.9:
+                cand = np.array([0.0, 1.0, 0.0])
+            e2_i = np.cross(cand, e1_i)
+            e2_i = e2_i / np.maximum(np.linalg.norm(e2_i), EM20)
+            e3_i = np.cross(e1_i, e2_i)
+            e3_i = e3_i / np.maximum(np.linalg.norm(e3_i), EM20)
+            e1[idx] = e1_i
+            e2[idx] = e2_i
+            e3[idx] = e3_i
+
     E = np.stack([e1, e2, e3], axis=2)
     center = xe.mean(axis=1)
     # local in-plane coords: xl[n,i,a] = (x_i - c) . e_a, a = 1,2
@@ -132,6 +157,8 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
       the node count differs), which governs thick or large elements."""
     from .shell_bt4 import _bend_shear_omega2
     n = len(area)
+    if n == 0:
+        return np.ones(0)
     Sxx = np.einsum("ni,ni->n", B1, B1)
     Syy = np.einsum("ni,ni->n", B2, B2)
     Sxy = np.einsum("ni,ni->n", B1, B2)
@@ -142,32 +169,116 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
     BBt[:, 1, 2] = BBt[:, 2, 1] = Sxy
     fac = np.ones(n)
     for sl, mat, prop in slices:
-        if not (mat.rho0 > 0.0 and mat.E > 0.0):
+        rho0_val = getattr(mat, "rho0", 0.0)
+        E_val = getattr(mat, "E", 0.0)
+        if not (rho0_val > 0.0 and E_val > 0.0) or np.any(area[sl] <= 1e-12):
             # stiffness-free / massless material (a /MAT/VOID skin sh3n —
             # legally RHO0 = 0 and E = 0, see starter/checks.
-            # _NULL_RHO0_OK_LAWS): the element claims no time step at all
-            # (upstream lc/SSP with SSP = 0) — the same guard the solid
-            # and BT4 kernels apply for the same material
-            # (M39 / M38-NEW-2).
+            # _NULL_RHO0_OK_LAWS) or degenerate/zero area: the element claims
+            # no time step at all.
             fac[sl] = 1.0
             continue
-        Ep = mat.E / (1.0 - mat.nu ** 2)
-        C = np.array([[Ep, mat.nu * Ep, 0.0],
-                      [mat.nu * Ep, Ep, 0.0],
-                      [0.0, 0.0, mat.G]])
+        nu_val = getattr(mat, "nu", 0.0)
+        t_val = prop.params.get("thick", getattr(prop, "thick", 1.0)) if hasattr(prop, "params") else getattr(prop, "thick", 1.0)
+        denom = 1.0 - nu_val ** 2
+        Ep = E_val / denom if abs(denom) > 1e-12 else E_val
+        G_val = getattr(mat, "G", E_val / 2.6)
+        C = np.array([[Ep, nu_val * Ep, 0.0],
+                      [nu_val * Ep, Ep, 0.0],
+                      [0.0, 0.0, G_val]])
         eig = np.linalg.eigvals(C[None, :, :] @ BBt[sl])
-        w2max = (3.0 / mat.rho0) * eig.real.max(axis=1)
+        w2max = (3.0 / rho0_val) * eig.real.max(axis=1)
         w2bend = _bend_shear_omega2(B1, B2, area, sl, mat,
-                                    prop.params["thick"], 3, mat.rho0)
+                                    t_val, 3, rho0_val)
         w2max = np.maximum(w2max, w2bend)
-        c = mat.sound_speed_shell()
-        dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
-        fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
+        is_law57 = getattr(mat, "law", None) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3")
+        is_law73 = getattr(mat, "law", None) in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL")
+        is_law87 = getattr(mat, "law", None) in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000") or getattr(mat, "law_name", None) in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000")
+        is_law88 = getattr(mat, "law", None) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP")
+        is_law92 = getattr(mat, "law", None) in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE") or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE")
+        is_law93 = getattr(mat, "law", None) in (93, "93", "LAW93", "ORTH_HILL") or getattr(mat, "law_name", None) in ("93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL")
+        is_law94 = getattr(mat, "law", None) in (94, "94", "LAW94", "YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH", "LAW94_YEOH")
+        is_law66 = getattr(mat, "law", None) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB")
+        if is_law57:
+            try:
+                from ..materials import law57_barlat
+                c = law57_barlat.sound_speed_shell_law57(mat, rho0_val)
+            except Exception:
+                c = 0.0
+        elif is_law73:
+            try:
+                from ..materials import law73_hill_therm
+                c = law73_hill_therm.sound_speed(mat, rho0_val)
+            except Exception:
+                c = 0.0
+        elif is_law87:
+            try:
+                from ..materials import law87_barlat2000
+                c = law87_barlat2000.sound_speed(mat, rho0_val)
+            except Exception:
+                c = 0.0
+        elif is_law88:
+            try:
+                from ..materials import law88_tab_hyp
+                c = law88_tab_hyp.sound_speed_shell(mat, rho0_val)
+            except Exception:
+                c = 0.0
+        elif is_law92:
+            try:
+                from ..materials import law92_arruda_boyce
+                c = law92_arruda_boyce.sound_speed_shell(mat, rho0_val)
+            except Exception:
+                c = 0.0
+        elif is_law93:
+            try:
+                from ..materials import law93_orth_hill
+                c = law93_orth_hill.sound_speed_shell(mat, rho0_val)
+            except Exception:
+                c = 0.0
+        elif is_law94:
+            try:
+                from ..materials import law94_yeoh
+                c = law94_yeoh.sound_speed_shell(mat, rho0_val)
+            except Exception:
+                c = 0.0
+        elif is_law66:
+            c = mat.sound_speed_shell()
+        elif hasattr(mat, "sound_speed_shell"):
+            c = mat.sound_speed_shell()
+        else:
+            try:
+                from ..materials import law52_gurson
+                c = law52_gurson.sound_speed_shell_law52(mat, rho0_val)
+            except Exception:
+                c = 0.0
+        if c > 0.0:
+            dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
+            fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
+        else:
+            fac[sl] = 1.0
     return fac
 
 
 def init_group(group, model, log):
     """Element buffer + lumped mass/inertia (starter c3init3/c3mass3)."""
+    n = group.n
+    if n == 0 or len(group.conn) == 0:
+        group.state.update(
+            sig=np.zeros((0, 1, 3)),
+            qshear=np.zeros((0, 2)),
+            epsp=np.zeros((0, 1)),
+            thick=np.zeros(0),
+            area0=np.zeros(0),
+            mass=np.zeros(0),
+            eint=np.zeros(0),
+            ehour=np.zeros(0),
+            zw=[],
+            dtfac=np.ones(0),
+            off=np.ones(0),
+            chk_fail=False,
+        )
+        return np.empty(0, dtype=np.int64), np.empty(0, dtype=float), np.empty(0, dtype=float)
+
     xe = model.x0[group.conn]
     E, xl, area, B1, B2 = _local_geometry(xe)
     bad = area <= 0.0
@@ -176,21 +287,23 @@ def init_group(group, model, log):
             log.error(f"/SH3N {eid}: zero area (coincident nodes?)",
                       "SH3N INIT")
 
-    n = group.n
     thick = np.zeros(n)
     rho0 = np.zeros(n)
     nip_max = 1
-    for sl, mat, prop in group.state["slices"]:
-        thick[sl] = prop.params["thick"]
-        rho0[sl] = mat.rho0
-        nip_max = max(nip_max, int(prop.params["nip"]))
+    slices = group.state.get("slices", [])
+    for sl, mat, prop in slices:
+        t_val = prop.params.get("thick", getattr(prop, "thick", 1.0)) if hasattr(prop, "params") else getattr(prop, "thick", 1.0)
+        nip_val = int(prop.params.get("nip", getattr(prop, "nip", 1))) if hasattr(prop, "params") else int(getattr(prop, "nip", 1))
+        thick[sl] = t_val
+        rho0[sl] = getattr(mat, "rho0", 0.0)
+        nip_max = max(nip_max, nip_val)
     mass = rho0 * thick * area
 
     # Through-thickness Gauss stations per part slice (same as shell_bt4)
     zw = []
-    for sl, mat, prop in group.state["slices"]:
-        nip = int(prop.params["nip"])
-        gp, gw = np.polynomial.legendre.leggauss(nip)
+    for sl, mat, prop in slices:
+        nip_val = int(prop.params.get("nip", getattr(prop, "nip", 1))) if hasattr(prop, "params") else int(getattr(prop, "nip", 1))
+        gp, gw = np.polynomial.legendre.leggauss(nip_val)
         zw.append((gp * 0.5, gw * 0.5))  # relative to thickness
     group.state.update(
         sig=np.zeros((n, nip_max, 3)),   # in-plane stress per layer
@@ -203,13 +316,13 @@ def init_group(group, model, log):
         ehour=np.zeros(n),               # always zero: CST has no hg modes
         zw=zw,
         dtfac=_exact_dt_factor(B1, B2, area, _char_length(xl, area),
-                               thick, group.state["slices"]),
+                               thick, slices),
     )
     _init_material_state(group, nip_max)
     # orthotropy fiber frame (/PROP/TYPE9 SH_ORTH, TYPE16) — see shell_bt4
     from . import shell_ortho
     group.state["ortho"] = shell_ortho.build_group_ortho(
-        group.state["slices"], E, n, log, group.ids)
+        slices, E, n, log, group.ids)
     node_idx = group.conn.reshape(-1)
     mass_c = np.repeat(mass / 3.0, 3)
     # generous lumped rotational inertia (Key's trick, see module docstring)
@@ -217,7 +330,7 @@ def init_group(group, model, log):
     # (M40, engine/mass_scaling.py) — kr = 2 I/dt_e^2 mirrors upstream's
     # STIR = STI*(t^2+A)/12 (cndt3.F, the DKT/sh3n family) with the factor
     # matching this lumping; see shell_bt4.init_group for the full story.
-    group.state["dt_iner"] = mass / 3.0 * (thick ** 2 + area) / 12.0
+    group.state["dt_iner"] = mass / 3.0 * (area / 4.5 + thick ** 2 / 12.0)
     inertia_c = np.repeat(group.state["dt_iner"], 3)
     return node_idx, mass_c, inertia_c
 
@@ -230,6 +343,103 @@ def forces(group, x, v, vr, dt, fint, mint):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty(0, dtype=float)
+    if dt is not None and dt < 0.0:
+        return np.full(n, EP30)
+    if dt is None or dt == 0.0 or v is None:
+        xe = x[conn]
+        E, xl, area, B1, B2 = _local_geometry(xe)
+        area = np.maximum(area, EM20)
+        lc = _char_length(xl, area)
+        c = np.zeros(n)
+        for sl, mat, prop in st.get("slices", []):
+            is_law52 = getattr(mat, "law", None) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS")
+            is_law58 = getattr(mat, "law", None) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A")
+            is_law57 = getattr(mat, "law", None) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3")
+            is_law73 = getattr(mat, "law", None) in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL")
+            is_law87 = getattr(mat, "law", None) in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000") or getattr(mat, "law_name", None) in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000")
+            is_law88 = getattr(mat, "law", None) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP")
+            is_law92 = getattr(mat, "law", None) in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE") or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE")
+            is_law93 = getattr(mat, "law", None) in (93, "93", "LAW93", "ORTH_HILL") or getattr(mat, "law_name", None) in ("93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL")
+            is_law94 = getattr(mat, "law", None) in (94, "94", "LAW94", "YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH", "LAW94_YEOH")
+            is_law66 = getattr(mat, "law", None) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB")
+            is_law100_110 = getattr(mat, "law", None) in (100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+                                                           "100", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110",
+                                                           "LAW100", "LAW101", "LAW102", "LAW103", "LAW104", "LAW105", "LAW106", "LAW107", "LAW108", "LAW109", "LAW110") or \
+                            getattr(mat, "law_name", None) in ("100", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110",
+                                                               "LAW100", "LAW101", "LAW102", "LAW103", "LAW104", "LAW105", "LAW106", "LAW107", "LAW108", "LAW109", "LAW110")
+            has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58 or is_law52 or is_law57 or is_law73 or is_law66 or is_law87 or is_law88 or is_law92 or is_law93 or is_law94 or is_law100_110
+            if getattr(mat, "law", 1) == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or not has_stiff:
+                c[sl] = 0.0
+            else:
+                if is_law100_110:
+                    try:
+                        c[sl] = materials.sound_speed(mat, is_shell=True)
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law52:
+                    try:
+                        from ..materials import law52_gurson
+                        c[sl] = law52_gurson.sound_speed_shell_law52(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law58:
+                    try:
+                        from ..materials import law58_fabr_a
+                        c[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law57:
+                    try:
+                        from ..materials import law57_barlat
+                        c[sl] = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law73:
+                    try:
+                        from ..materials import law73_hill_therm
+                        c[sl] = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law87:
+                    try:
+                        from ..materials import law87_barlat2000
+                        c[sl] = law87_barlat2000.sound_speed(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law88:
+                    try:
+                        from ..materials import law88_tab_hyp
+                        c[sl] = law88_tab_hyp.sound_speed_shell(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law92:
+                    try:
+                        from ..materials import law92_arruda_boyce
+                        c[sl] = law92_arruda_boyce.sound_speed_shell(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law93:
+                    try:
+                        from ..materials import law93_orth_hill
+                        c[sl] = law93_orth_hill.sound_speed_shell(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law94:
+                    try:
+                        from ..materials import law94_yeoh
+                        c[sl] = law94_yeoh.sound_speed_shell(mat, getattr(mat, "rho0", None))
+                    except Exception:
+                        c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif is_law66:
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                elif hasattr(mat, "sound_speed_shell"):
+                    c[sl] = mat.sound_speed_shell()
+                else:
+                    c[sl] = 0.0
+        alive = st.get("off", np.ones(n)) > 0.0
+        return np.where(alive & (c > 0.0), st.get("dtfac", np.ones(n)) * lc / np.maximum(c, EM20), EP30)
     xe = x[conn]
     E, xl, area, B1, B2 = _local_geometry(xe)
     area = np.maximum(area, EM20)
@@ -237,8 +447,10 @@ def forces(group, x, v, vr, dt, fint, mint):
     thick = st["thick"]
 
     # velocities in the corotational frame
-    vl = np.einsum("nib,nba->nia", v[conn], E)
-    wl = np.einsum("nib,nba->nia", vr[conn], E)
+    v_conn = np.zeros((n, 3, 3)) if v is None else v[conn]
+    vr_conn = np.zeros((n, 3, 3)) if vr is None else vr[conn]
+    vl = np.einsum("nib,nba->nia", v_conn, E)
+    wl = np.einsum("nib,nba->nia", vr_conn, E)
 
     # ---- rate of deformation (c3defo3 kinematics) --------------------------
     vx, vy, vz = vl[:, :, 0], vl[:, :, 1], vl[:, :, 2]
@@ -290,9 +502,11 @@ def forces(group, x, v, vr, dt, fint, mint):
             if cs is not None:
                 deps = shell_ortho.rot_strain_e2m(deps, cs)   # elem -> fiber
             s_old = sig[sl, k, :].copy()
-            s_new, _ = materials.shell_update(
+            s_new, ep_new = materials.shell_update(
                 mat, sig[sl, k, :], deps, st["epsp"][sl, k], dt,
-                _layer_extra(st, sl, k))
+                _layer_extra(st, sl, k, area=area))
+            if ep_new is not None:
+                st["epsp"][sl, k] = ep_new
             if st["chk_fail"]:
                 _layer_failure(st, sl, mat, k, s_new, epsp_old, deps, dt)
             sig[sl, k, :] = s_new
@@ -302,10 +516,104 @@ def forces(group, x, v, vr, dt, fint, mint):
                 if cs is not None else s_new        # fiber -> elem
             Nres[sl] += wk[:, None] * s_res
             Mres[sl] += (wk * zk)[:, None] * s_res
-        c[sl] = mat.sound_speed_shell()
+        is_law52 = getattr(mat, "law", None) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS")
+        is_law58 = getattr(mat, "law", None) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A")
+        is_law57 = getattr(mat, "law", None) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3")
+        is_law73 = getattr(mat, "law", None) in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL")
+        is_law87 = getattr(mat, "law", None) in (87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000") or getattr(mat, "law_name", None) in ("87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000")
+        is_law88 = getattr(mat, "law", None) in (88, "88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP") or getattr(mat, "law_name", None) in ("88", "LAW88", "HYPER_ELAS", "TABULATED_HYPERELASTIC", "TAB_HYP", "TABULATED_HYP", "MAT_LAW88", "MAT_HYPER_ELAS", "MAT_TABULATED_HYPERELASTIC", "MAT_TAB_HYP")
+        is_law92 = getattr(mat, "law", None) in (92, "92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE") or getattr(mat, "law_name", None) in ("92", "LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "MAT_LAW92", "MAT_ARRUDA_BOYCE")
+        is_law93 = getattr(mat, "law", None) in (93, "93", "LAW93", "ORTH_HILL") or getattr(mat, "law_name", None) in ("93", "LAW93", "ORTH_HILL", "MAT_LAW93", "MAT_ORTH_HILL", "LAW93_ORTH_HILL")
+        is_law94 = getattr(mat, "law", None) in (94, "94", "LAW94", "YEOH") or getattr(mat, "law_name", None) in ("94", "LAW94", "YEOH", "MAT_LAW94", "MAT_YEOH", "LAW94_YEOH")
+        is_law66 = getattr(mat, "law", None) in (66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB") or getattr(mat, "law_name", None) in ("66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB")
+        is_law100_110 = getattr(mat, "law", None) in (100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+                                                       "100", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110",
+                                                       "LAW100", "LAW101", "LAW102", "LAW103", "LAW104", "LAW105", "LAW106", "LAW107", "LAW108", "LAW109", "LAW110") or \
+                        getattr(mat, "law_name", None) in ("100", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110",
+                                                           "LAW100", "LAW101", "LAW102", "LAW103", "LAW104", "LAW105", "LAW106", "LAW107", "LAW108", "LAW109", "LAW110")
+        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58 or is_law52 or is_law57 or is_law73 or is_law66 or is_law87 or is_law88 or is_law92 or is_law93 or is_law94 or is_law100_110
+        if getattr(mat, "law", 1) == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or not has_stiff:
+            c[sl] = 0.0
+        else:
+            if is_law100_110:
+                try:
+                    c[sl] = materials.sound_speed(mat, is_shell=True)
+                except Exception:
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+            elif is_law52:
+                try:
+                    from ..materials import law52_gurson
+                    c[sl] = law52_gurson.sound_speed_shell_law52(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+            elif is_law58:
+                try:
+                    from ..materials import law58_fabr_a
+                    c[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+            elif is_law57:
+                try:
+                    from ..materials import law57_barlat
+                    c[sl] = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+            elif is_law73:
+                try:
+                    from ..materials import law73_hill_therm
+                    c[sl] = law73_hill_therm.sound_speed(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+            elif is_law87:
+                try:
+                    from ..materials import law87_barlat2000
+                    c[sl] = law87_barlat2000.sound_speed(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+            elif is_law88:
+                try:
+                    from ..materials import law88_tab_hyp
+                    c[sl] = law88_tab_hyp.sound_speed_shell(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+            elif is_law92:
+                try:
+                    from ..materials import law92_arruda_boyce
+                    c[sl] = law92_arruda_boyce.sound_speed_shell(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+            elif is_law93:
+                try:
+                    from ..materials import law93_orth_hill
+                    c[sl] = law93_orth_hill.sound_speed_shell(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+            elif is_law94:
+                try:
+                    from ..materials import law94_yeoh
+                    c[sl] = law94_yeoh.sound_speed_shell(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+            elif is_law66:
+                c[sl] = mat.sound_speed_shell() if hasattr(mat, "sound_speed_shell") else 0.0
+                if "uvar66" in st and "uvar66" in st.get("mat_extra", {}):
+                    st["uvar66"][sl] = st["mat_extra"]["uvar66"][sl, 0]
+            elif hasattr(mat, "sound_speed_shell"):
+                c[sl] = mat.sound_speed_shell()
+            else:
+                c[sl] = 0.0
+        if "uvar87" in st and "uvar87" in st.get("mat_extra", {}):
+            u87 = st["mat_extra"]["uvar87"]
+            st["uvar87"][sl] = u87[sl, 0] if u87.ndim == 3 else u87[sl]
+        if "uvar88" in st.get("mat_extra", {}):
+            u88 = st["mat_extra"]["uvar88"]
+            if "uvar88" not in st:
+                st["uvar88"] = np.zeros((n, 30))
+            st["uvar88"][sl] = u88[sl, 0] if u88.ndim == 3 else u88[sl]
         # elastic transverse shear resultant stress (with 5/6 factor)
         qold = st["qshear"][sl].copy()
-        st["qshear"][sl] += SHEAR_FACTOR * mat.G * gs[sl] * dt
+        g_val = getattr(mat, "G", 0.0) or getattr(mat, "g5", 0.0) or getattr(mat, "g0", 0.0)
+        st["qshear"][sl] += SHEAR_FACTOR * g_val * gs[sl] * dt
         de_layers[sl] += t_sl * np.einsum(
             "nk,nk->n", 0.5 * (qold + st["qshear"][sl]), gs[sl] * dt)
 
@@ -340,12 +648,14 @@ def forces(group, x, v, vr, dt, fint, mint):
     ml = -m
     fg = np.einsum("nia,nba->nib", fl, E)
     mg = np.einsum("nia,nba->nib", ml, E)
-    scatter_add3(fint, conn.reshape(-1), fg.reshape(-1, 3))
-    scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3))
+    if fint is not None:
+        scatter_add3(fint, conn.reshape(-1), fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    if mint is not None:
+        scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
     # ---- critical time step --------------------------------------------------
     # deleted elements no longer constrain the global step
-    return np.where(alive, st["dtfac"] * lc / c, EP30)
+    return np.where(alive & (c > 0.0), st["dtfac"] * lc / np.maximum(c, EM20), EP30)
 
 
 # ----------------------------------------------------------------------------
@@ -407,6 +717,8 @@ def tangent(group, x, epsp_incr=None):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=float), np.zeros((0, 18), dtype=np.int64)
     E, xl, area, B1, B2 = _local_geometry(x[conn])
     area = np.maximum(area, EM20)
     thick = st["thick"]
@@ -434,6 +746,9 @@ def tangent(group, x, epsp_incr=None):
     Kl = np.zeros((n, 15, 15))
     kdrill = np.zeros(n)
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        if getattr(mat, "law", 1) == 0:
+            kdrill[sl] = 0.0
+            continue
         t_sl = thick[sl]
         A_sl = area[sl]
         kGt = SHEAR_FACTOR * mat.G * t_sl
@@ -572,6 +887,8 @@ def consistent_mass(group, x=None):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=float), np.zeros((0, 18), dtype=np.int64)
     mass = st["mass"]                                  # ρ t A, per element
     thick = st["thick"]
     m_trans = mass
@@ -596,6 +913,8 @@ def kgeo(group, x):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=float), np.zeros((0, 18), dtype=np.int64)
     E, xl, area, B1, B2 = _local_geometry(x[conn])
     area = np.maximum(area, EM20)
     thick = st["thick"]
@@ -635,6 +954,10 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return
+    if fint is None and mint is None:
+        return
     thick = st["thick"]
     E, xl, area, B1, B2 = _local_geometry(x[conn])
     area = np.maximum(area, EM20)
@@ -665,5 +988,26 @@ def static_internal_forces(group, x, u, ur, fint, mint):
                        + qres[:, 0:1] / 3.0)
     fg = np.einsum("nia,nba->nib", -f, E)
     mg = np.einsum("nia,nba->nib", -m, E)
-    scatter_add3(fint, conn.reshape(-1), fg.reshape(-1, 3))
-    scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3))
+    if fint is not None:
+        scatter_add3(fint, conn.reshape(-1), fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    if mint is not None:
+        scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+
+
+def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom):
+    """Implicit residual internal forces and moments dispatch for sh3n.
+
+    Linear geometry (nlgeom=False): evaluates forces at x_ref with displacement u.
+    Nonlinear geometry (nlgeom=True): advances state at midpoint configuration
+    x_ref + 0.5*u, then assembles internal forces on end configuration x_ref + u."""
+    if group.n == 0 or len(group.conn) == 0:
+        return
+    if not nlgeom:
+        forces(group, x_ref, u, ur, 1.0, fint, mint)
+    else:
+        x_mid = x_ref + 0.5 * u
+        x_end = x_ref + u
+        junk_f = np.zeros_like(fint) if fint is not None else None
+        junk_m = np.zeros_like(mint) if mint is not None else None
+        forces(group, x_mid, u, ur, 1.0, junk_f, junk_m)
+        static_internal_forces(group, x_end, u, ur, fint, mint)

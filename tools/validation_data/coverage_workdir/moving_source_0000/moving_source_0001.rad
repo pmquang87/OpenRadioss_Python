@@ -1,0 +1,23 @@
+/ANIM/DT
+#   TSTART     TFREQ
+0.000000 3.000000
+/PRINT/-100
+# Proc  nMIMD   minMIMD
+/PROC/4/0
+/RUN/moving_source/1
+             30.0001
+/TFILE/4
+#            dT_HIS
+0.100000
+/TITLE/3
+                                                                                                    
+/VERS/140
+/ANIM/VECT/CONT
+/ANIM/NODA/TEMP
+/ANIM/SHEL/TEMP
+/ANIM/GZIP
+/MON/ON
+/PARITH/ON
+/DT/NODA/CST
+#0.1 1e-009
+0.67 5e-4

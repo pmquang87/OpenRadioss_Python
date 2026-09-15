@@ -145,19 +145,40 @@ from ..common.constants import EM20
 def _principal_kirchhoff_dev(mat, lb: np.ndarray):
     """S_i = sum_p mu_p lb_i^alpha_p per principal direction; lb (m, 3)."""
     S = np.zeros_like(lb)
-    for mu, al in zip(mat.params["mu"], mat.params["alpha"]):
+    mus = mat.params.get("mu", [])
+    alphas = mat.params.get("alpha", [])
+    for mu, al in zip(mus, alphas):
         if mu != 0.0:
-            S += mu * lb ** al
+            S += mu * (lb ** al)
     return S
 
 
 def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
-                 epsp: np.ndarray, dt: float, extra: dict):
+                 epsp: np.ndarray, dt: float, extra: dict | None = None):
     """Hyperelastic stress from the deformation gradient (module doc).
 
     Returns (sig, epsp, c) with c the per-element nonlinear sound speed
     used by the kernel for the time step."""
-    F = extra["F"]                                # (m, 3, 3)
+    m = sig.shape[0]
+    if m == 0:
+        return sig, epsp, np.empty(0)
+
+    if extra is not None and "F" in extra:
+        F = extra["F"]
+    else:
+        # Fallback: construct F from deps if available, else identity
+        F = np.tile(np.eye(3), (m, 1, 1))
+        if deps is not None and deps.shape[0] == m:
+            F[:, 0, 0] += deps[:, 0]
+            F[:, 1, 1] += deps[:, 1]
+            F[:, 2, 2] += deps[:, 2]
+            F[:, 0, 1] += 0.5 * deps[:, 3]
+            F[:, 1, 0] += 0.5 * deps[:, 3]
+            F[:, 1, 2] += 0.5 * deps[:, 4]
+            F[:, 2, 1] += 0.5 * deps[:, 4]
+            F[:, 0, 2] += 0.5 * deps[:, 5]
+            F[:, 2, 0] += 0.5 * deps[:, 5]
+
     K = mat.K
     rho0 = mat.rho0
 
@@ -185,14 +206,26 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
     # nonlinear sound speed (module docstring): tangent shear bound from
     # the stiffest principal direction, volumetric tangent K*J in tension
     Gt = np.zeros_like(lb)
-    for mu, al in zip(mat.params["mu"], mat.params["alpha"]):
+    mus = mat.params.get("mu", [])
+    alphas = mat.params.get("alpha", [])
+    for mu, al in zip(mus, alphas):
         if mu != 0.0:
-            Gt += 0.5 * (mu * al) * lb ** al
+            Gt += 0.5 * (mu * al) * (lb ** al)
     Gt = Gt.max(axis=1) / J
     Kt = K * np.maximum(J, 1.0)
     rho = rho0 / J                                # current density
-    c = np.sqrt((Kt + 4.0 * Gt / 3.0) / rho)
+    c = np.sqrt(np.maximum((Kt + 4.0 * Gt / 3.0) / rho, EM20))
     return sig, epsp, c
+
+
+def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
+                 epsp: np.ndarray, dt: float, extra: dict | None = None):
+    """LAW42 Ogden hyperelasticity is defined for 3D solid continuum elements
+    only (Fortran origin: engine/source/materials/mat/mat042/sigeps42.F)."""
+    raise NotImplementedError(
+        f"Material /MAT/LAW42 (Ogden hyperelasticity) is currently supported for "
+        f"3D solid elements only (Fortran origin: sigeps42.F)."
+    )
 
 
 # ----------------------------------------------------------------------------
@@ -211,6 +244,8 @@ def consistent_solid_tangent(mat, F):
     stress for the K_c = int B^T c B dV + K_geo pairing (module
     docstring). Symmetric; engineering-shear Voigt convention."""
     m = F.shape[0]
+    if m == 0:
+        return np.empty((0, 6, 6))
     K = mat.K
     J = np.maximum(np.linalg.det(F), EM20)
     B = np.einsum("nab,ncb->nac", F, F)
@@ -222,9 +257,11 @@ def consistent_solid_tangent(mat, F):
     # principal Cauchy stresses + the hardening functions A_a (docstring)
     S = _principal_kirchhoff_dev(mat, lb)
     A = np.zeros_like(lb)
-    for mu, al in zip(mat.params["mu"], mat.params["alpha"]):
+    mus = mat.params.get("mu", [])
+    alphas = mat.params.get("alpha", [])
+    for mu, al in zip(mus, alphas):
         if mu != 0.0:
-            A += (mu * al) * lb ** al
+            A += (mu * al) * (lb ** al)
     tau = S - S.mean(axis=1)[:, None] + (K * J * (J - 1.0))[:, None]
     sigp = tau / J[:, None]
 

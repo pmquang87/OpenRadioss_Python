@@ -31,6 +31,10 @@ class MessageLog:
         self.errors: List[str] = []
         self._listing: Optional[TextIO] = None
 
+    @property
+    def messages(self) -> List[str]:
+        return self.errors + self.warnings
+
     def attach_listing(self, fh: TextIO) -> None:
         """Duplicate every future message into an open ``*.out`` file."""
         self._listing = fh
@@ -39,6 +43,7 @@ class MessageLog:
         print(text)
         if self._listing is not None:
             self._listing.write(text + "\n")
+            self._listing.flush()
 
     def info(self, text: str) -> None:
         self._emit(text)
@@ -67,6 +72,16 @@ class MessageLog:
                 f"{len(self.errors)} error(s) found while processing the deck "
                 f"(see messages above); restart file not written."
             )
+
+    @property
+    def has_errors(self) -> bool:
+        """True if any error was logged."""
+        return bool(self.errors)
+
+    @property
+    def has_warnings(self) -> bool:
+        """True if any warning was logged."""
+        return bool(self.warnings)
 
     def summary(self) -> str:
         """The classic end-of-listing tally."""

@@ -55,7 +55,21 @@ def main(argv=None) -> int:
         os.environ["PYRADIOSS_LINSOLVE"] = args.linsolve
 
     from .engine import run_engine
-    run_engine(args.input)
+    if not os.path.isfile(args.input):
+        print(f"\n     ENGINE TERMINATION : ERROR\n     Engine input file not found: {args.input}")
+        return 2
+    try:
+        model = run_engine(args.input)
+    except Exception as exc:
+        print(f"\n     ENGINE TERMINATION : ERROR\n     {exc}")
+        return 2
+
+    if hasattr(model, "engine_state") and model.engine_state.stop_reason:
+        reason = model.engine_state.stop_reason
+        if not reason.startswith("/STOP/"):
+            return 2
+    if hasattr(model, "implicit_result") and not getattr(model.implicit_result, "converged", True):
+        return 2
     return 0
 
 

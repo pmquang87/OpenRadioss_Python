@@ -11,3 +11,5 @@ arrays. We split the job the same way:
     starter_keywords.py  /NODE, /BRICK, /MAT/..., ...  -> Model
     engine_keywords.py   /RUN, /DT, /TFILE, /ANIM, ... -> EngineControls
 """
+
+from .deck_reader import parse_fortran_float

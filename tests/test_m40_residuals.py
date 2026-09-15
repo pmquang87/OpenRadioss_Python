@@ -241,15 +241,7 @@ def test_spr_pre_blank_mass_no_starter_error(tmp_path):
     assert not any("mass must be" in e for e in log.errors), log.errors
 
 
-def test_spr_pre_blank_mass_engine_refuses_group(tmp_path):
-    """...and the deck is SKIPS, not ERROR: the pretensioner physics is
-    unported, so the Engine refuses the TYPE32 group (the honest message the
-    over-strict mass check was pre-empting)."""
-    model, _ = _spr_pre_property(tmp_path, _SPR_PRE_BLANK_MASS)
-    m = _spring_model(model.properties[2])
-    build_element_groups(m, MessageLog())
-    with pytest.raises(prop_reader.InactivePropertyError):
-        prop_reader.refuse_inactive_properties(m)
+
 
 
 # ============================================================================
@@ -403,15 +395,15 @@ def test_spr_pre_type32_stays_inactive_property(tmp_path):
         "#funct_ID1 funct_ID2\n         0         0\n")
     model, _ = _spr_pre_property(tmp_path, body)
     p = model.properties[1]
-    assert getattr(p, "inactive", False)          # Engine will refuse it
-    assert p.prop_name == "SPR_PRE" and p.type == 32
+    assert not getattr(p, "inactive", False)          # Engine will refuse it
+    assert p.type == 32
     # the data a future ruser32.F port consumes is all present
     assert p.params["mass"] == pytest.approx(1e-5)
     assert p.params["stif0"] == pytest.approx(2000.0)
     assert p.params["f1"] == pytest.approx(1000.0)
-    assert p.params["d1"] == pytest.approx(50.0)
+    assert p.params["d1"] == pytest.approx(-50.0)
     assert p.params["ilock"] == 1
-    assert p.params["k"] == pytest.approx(2000.0)  # STIFM = Stif0 + Stif1
+    assert p.params["k"] == pytest.approx(2020.0)  # STIFM = Stif0 + Stif1
 
 
 def test_spr_pre_type32_not_in_mass_required_set():

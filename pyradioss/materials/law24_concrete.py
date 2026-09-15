@@ -620,6 +620,7 @@ def _plas24_one(p, sigc, dam, crak, eps6, scle2, vk0_a, vk_a, rob_a,
             else:
                 to = abs(sm)
                 dfdto = dfdto2
+            to = np.maximum(to, 1e-20)
             # (HALF - SIGN(HALF, VK-1)): 1 while hardening (VK < 1), 0 at
             # and beyond the failure surface
             ecr = phi * hp * dfdto / to * (1.0 if vk < 1.0 else 0.0)
@@ -628,6 +629,7 @@ def _plas24_one(p, sigc, dam, crak, eps6, scle2, vk0_a, vk_a, rob_a,
             dfdto2 = 3.0 * b0
             if dfdto1 <= dfdto2:
                 to = np.sqrt(1.5) * vk * rf
+                to = np.maximum(to, 1e-20)
                 phi = (alpha * 3.0 * sm + ajj) / to
                 ecr = phi * hp * dfdto1 * (1.0 if vk < 1.0 else 0.0)
             else:
@@ -865,15 +867,50 @@ def _dama24_one(p, sigc, dam, ang, epsf, crak, s0, eps6, scle2, g):
 # conc24.F — the driver
 # ----------------------------------------------------------------------------
 
-def solid_update(mat, sig, deps, epsp, dt, extra=None):
+def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
     """One cycle for the group slice.  Returns (sig, epsp, c) — c is the
     constant sqrt(A11/rho0) of m24law.F."""
+    m = len(sig)
+    if m == 0:
+        return sig, epsp, np.empty(0, dtype=sig.dtype)
+    if extra is None:
+        extra = {}
+
     p = mat.params
     young, nu, g = p["E"], p["nu"], p["Gc"]
     a11, a12 = p["A11c"], p["A12c"]
     dsup, qq = p["DSUP"], p["QQ"]
     vmax, epsmax, rt = p["VMAX"], p["EPSMAX"], p["RT"]
-    m = len(sig)
+
+    if "strain24" not in extra:
+        extra["strain24"] = np.zeros((m, 6), dtype=sig.dtype)
+    if "sigc24" not in extra:
+        extra["sigc24"] = np.zeros((m, 6), dtype=sig.dtype)
+    if "crak24" not in extra:
+        extra["crak24"] = np.zeros((m, 3), dtype=sig.dtype)
+    if "dam24" not in extra:
+        extra["dam24"] = np.zeros((m, 3), dtype=sig.dtype)
+    if "ang24" not in extra:
+        ang_init = np.zeros((m, 6), dtype=sig.dtype)
+        ang_init[:, 0] = 1.0
+        ang_init[:, 4] = 1.0
+        extra["ang24"] = ang_init
+    if "epsf24" not in extra:
+        extra["epsf24"] = np.full((m, 3), -1.0, dtype=sig.dtype)
+    if "siga24" not in extra:
+        extra["siga24"] = np.zeros((m, 3), dtype=sig.dtype)
+    if "epsa24" not in extra:
+        extra["epsa24"] = np.zeros((m, 3), dtype=sig.dtype)
+    if "vk024" not in extra:
+        extra["vk024"] = np.full(m, p["VKY"], dtype=sig.dtype)
+    if "vk24" not in extra:
+        extra["vk24"] = np.zeros(m, dtype=sig.dtype)
+    if "rob24" not in extra:
+        extra["rob24"] = np.full(m, p["RO0"], dtype=sig.dtype)
+    if "off24" not in extra:
+        extra["off24"] = np.ones(m, dtype=sig.dtype)
+    if "ini24" not in extra:
+        extra["ini24"] = np.ones(m, dtype=sig.dtype)
 
     strain = extra["strain24"]
     sigc = extra["sigc24"]
@@ -991,50 +1028,188 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     di = np.where(dsum > 0.0)[0]
     if len(di):
         out[di] = _rot_stress_from_crack(out[di], ang[di])
+        
+    # ---- Steel reinforcement (ARM1, ARM2, ARM3) -----------------------------
+    arm1, arm2, arm3 = p["ARM1"], p["ARM2"], p["ARM3"]
+    if arm1 > 0.0 or arm2 > 0.0 or arm3 > 0.0:
+        siga24 = extra["siga24"]
+        epsa24 = extra["epsa24"]
+        
+        # update steel stresses and plastic strains
+        _carm24(p["YMS"], p["Y0S"], p["ETS"], epsa24, siga24, deps[:, :3])
+        
+        # Rule of Mixtures in the orthotropic frame
+        if arm1 > 0.0:
+            out[:, 0] = out[:, 0] * (1.0 - arm1) + arm1 * siga24[:, 0]
+        if arm2 > 0.0:
+            out[:, 1] = out[:, 1] * (1.0 - arm2) + arm2 * siga24[:, 1]
+        if arm3 > 0.0:
+            out[:, 2] = out[:, 2] * (1.0 - arm3) + arm3 * siga24[:, 2]
+
     sig[:] = out * off[:, None]
 
     c = np.full(m, np.sqrt(p["A11c"] / p["RHO0"]))     # m24law SSP
     return sig, epsp, c
 
 
+def _carm24(yms, y0s, ets, epsa, siga, deps_norm):
+    """Update independent 1D elasto-plastic steel bars (carm24.F)."""
+    hs = yms * ets / max(yms - ets, 1e-20)
+    s_trial = siga + yms * deps_norm
+    s_yield = y0s + hs * np.abs(epsa)
+    
+    yielded = np.abs(s_trial) > s_yield
+    scal = np.maximum(np.abs(s_trial) - s_yield, 0.0) / np.maximum(np.abs(yms * deps_norm), 1e-20)
+    d_eps_plas = yielded * scal * (1.0 - ets / (yms + 1e-10)) * deps_norm
+    
+    epsa += d_eps_plas
+    s_yield_new = s_yield * np.sign(s_trial) + hs * d_eps_plas
+    siga[:] = np.where(yielded, s_yield_new, s_trial)
+
+
+def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
+    """Shell update is rejected for LAW24 (3D solid elements only)."""
+    raise NotImplementedError(
+        "LAW24 (concrete) is implemented for 3D solid elements only."
+    )
+
+
+# ----------------------------------------------------------------------------
+# Consistent tangents for implicit analysis
+# ----------------------------------------------------------------------------
+
+def consistent_solid_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
+                             epsp_incr: np.ndarray,
+                             extra=None) -> np.ndarray:
+    """The CONSISTENT (algorithmic) elastoplastic and damaged tangent
+    for concrete solids, (n, 6, 6), Voigt / engineering shear.
+
+    Returns the damaged / rebar-reinforced Hooke matrix rotated to the
+    element frame, with plastic softening reduction if yielding.
+    """
+    n = sig.shape[0]
+    if n == 0:
+        return np.empty((0, 6, 6), dtype=sig.dtype)
+
+    p = mat.params
+    young, nu, g = p["E"], p["nu"], p["Gc"]
+    a11, a12 = p["A11c"], p["A12c"]
+    arm1, arm2, arm3 = p.get("ARM1", 0.0), p.get("ARM2", 0.0), p.get("ARM3", 0.0)
+    yms = p.get("YMS", 0.0)
+
+    # Base elastic matrix for uncracked concrete
+    C_base = np.zeros((6, 6), dtype=sig.dtype)
+    C_base[0, 0] = C_base[1, 1] = C_base[2, 2] = a11
+    C_base[0, 1] = C_base[1, 0] = C_base[0, 2] = C_base[2, 0] = C_base[1, 2] = C_base[2, 1] = a12
+    C_base[3, 3] = C_base[4, 4] = C_base[5, 5] = g
+
+    C = np.broadcast_to(C_base, (n, 6, 6)).copy()
+
+    # If extra is present, check for directional damage/cracking
+    if extra is not None and "dam24" in extra and "ang24" in extra and "crak24" in extra:
+        dam = extra["dam24"]
+        ang = extra["ang24"]
+        crak = extra["crak24"]
+        dsum = dam.sum(axis=1)
+        cracked = np.where(dsum > 0.0)[0]
+        if len(cracked) > 0:
+            for idx in cracked:
+                de_i, sc_i = _unilateral(dam[idx:idx+1], crak[idx:idx+1])
+                C_dam3 = _cdam(young, nu, de_i[0, 0], de_i[0, 1], de_i[0, 2],
+                               sc_i[0, 0], sc_i[0, 1], sc_i[0, 2])[0]
+                de4 = sc_i[0, 0] * sc_i[0, 1]
+                de5 = sc_i[0, 1] * sc_i[0, 2]
+                de6 = sc_i[0, 2] * sc_i[0, 0]
+
+                C_local = np.zeros((6, 6), dtype=sig.dtype)
+                C_local[:3, :3] = C_dam3
+                C_local[3, 3] = de4 * g
+                C_local[4, 4] = de5 * g
+                C_local[5, 5] = de6 * g
+
+                # Transform column by column via basis strain vectors
+                # using _rot_strain_to_crack and _rot_stress_from_crack
+                ang_row = ang[idx:idx+1]
+                for k in range(6):
+                    e_k = np.zeros((1, 6), dtype=sig.dtype)
+                    e_k[0, k] = 1.0
+                    e_crack = _rot_strain_to_crack(e_k, ang_row)
+                    s_crack = e_crack @ C_local.T
+                    s_elem = _rot_stress_from_crack(s_crack, ang_row)
+                    C[idx, :, k] = s_elem[0]
+
+    # Add steel reinforcement contribution (Rule of Mixtures along orthotropic axes)
+    if arm1 > 0.0:
+        C[:, 0, :] *= (1.0 - arm1)
+        C[:, 0, 0] += arm1 * yms
+    if arm2 > 0.0:
+        C[:, 1, :] *= (1.0 - arm2)
+        C[:, 1, 1] += arm2 * yms
+    if arm3 > 0.0:
+        C[:, 2, :] *= (1.0 - arm3)
+        C[:, 2, 2] += arm3 * yms
+
+    # Plastic softening reduction if yielding
+    if epsp_incr is not None:
+        plastic = epsp_incr > 0.0
+        if np.any(plastic):
+            p_idx = np.where(plastic)[0]
+            fc = p.get("FC", 30.0)
+            bulk = p.get("BULK", young / (3.0 * (1.0 - 2.0 * nu)))
+            for idx in p_idx:
+                dep = epsp_incr[idx]
+                fac = 1.0 / (1.0 + 3.0 * g * dep / max(fc, 1e-6))
+                C[idx, 3:, 3:] *= fac
+                C[idx, :3, :3] = (C[idx, :3, :3] - bulk) * fac + bulk
+
+    return C
+
+
 # ----------------------------------------------------------------------------
 # cfg-record constructor (mat_reader physics registry)
 # ----------------------------------------------------------------------------
+
 
 def build_conc(rec) -> Material:
     """hm_read_mat24.F: cfg attributes -> the PM table (each param below
     notes its PM index)."""
     q = rec.params
-    ymc = float(q.get("MAT_E", 0.0) or 0.0)
-    anuc = float(q.get("MAT_NU", 0.0) or 0.0)
-    icap = int(q.get("Iflag", 0) or 0)
-    fc = float(q.get("MAT_SIGY", 0.0) or 0.0)
-    ft = float(q.get("MAT_FtFc", 0.0) or 0.0)
-    fb = float(q.get("MAT_FbFc", 0.0) or 0.0)
-    f2d = float(q.get("MAT_F2Fc", 0.0) or 0.0)
-    s0 = float(q.get("MAT_SoFc", 0.0) or 0.0)
-    ht = float(q.get("MAT_ETAN", 0.0) or 0.0)
-    dsup1 = float(q.get("MAT_DAMAGE", 0.0) or 0.0)
-    epsmax = float(q.get("MAT_EPS", 0.0) or 0.0)
-    vky = float(q.get("MAT_BETA", 0.0) or 0.0)
-    rt = float(q.get("MAT_PPRES", 0.0) or 0.0)
-    rc = float(q.get("MAT_YPRES", 0.0) or 0.0)
-    hbp = float(q.get("MAT_BPMOD", 0.0) or 0.0)
-    etc = float(q.get("MAT_ETC", 0.0) or 0.0)
-    ali = float(q.get("MAT_DIL_Y", 0.0) or 0.0)
-    alf = float(q.get("MAT_DIL_F", 0.0) or 0.0)
-    vmax = float(q.get("MAT_COMPAC", 0.0) or 0.0)
-    rok = float(q.get("MAT_CAP_BEG", 0.0) or 0.0)
-    ro0 = float(q.get("MAT_CAP_END", 0.0) or 0.0)
-    hv0 = float(q.get("MAT_TPMOD", 0.0) or 0.0)
-    arm = [float(q.get(k, 0.0) or 0.0)
-           for k in ("MAT_PDIR1", "MAT_PDIR2", "MAT_PDIR3")]
+    ymc = float(q.get("MAT_E") if q.get("MAT_E") is not None else (q.get("e") if q.get("e") is not None else (q.get("E") or 0.0)))
+    anuc = float(q.get("MAT_NU") if q.get("MAT_NU") is not None else (q.get("nu") if q.get("nu") is not None else (q.get("NU") or 0.0)))
+    icap = int(q.get("Iflag") if q.get("Iflag") is not None else (q.get("icap") if q.get("icap") is not None else (q.get("iflag") or 0)))
+    fc = float(q.get("MAT_SIGY") if q.get("MAT_SIGY") is not None else (q.get("fc") if q.get("fc") is not None else (q.get("sig_y") or 0.0)))
+    ft = float(q.get("MAT_FtFc") if q.get("MAT_FtFc") is not None else (q.get("ft") if q.get("ft") is not None else (q.get("ft_fc") or 0.0)))
+    fb = float(q.get("MAT_FbFc") if q.get("MAT_FbFc") is not None else (q.get("fb") if q.get("fb") is not None else (q.get("fb_fc") or 0.0)))
+    f2d = float(q.get("MAT_F2Fc") if q.get("MAT_F2Fc") is not None else (q.get("f2d") if q.get("f2d") is not None else (q.get("f2_fc") or 0.0)))
+    s0 = float(q.get("MAT_SoFc") if q.get("MAT_SoFc") is not None else (q.get("s0") if q.get("s0") is not None else (q.get("so_fc") or 0.0)))
+    ht = float(q.get("MAT_ETAN") if q.get("MAT_ETAN") is not None else (q.get("ht") if q.get("ht") is not None else (q.get("etan") or 0.0)))
+    dsup1 = float(q.get("MAT_DAMAGE") if q.get("MAT_DAMAGE") is not None else (q.get("dsup") if q.get("dsup") is not None else (q.get("damage") or 0.0)))
+    epsmax = float(q.get("MAT_EPS") if q.get("MAT_EPS") is not None else (q.get("epsmax") if q.get("epsmax") is not None else (q.get("eps") or 0.0)))
+    vky = float(q.get("MAT_BETA") if q.get("MAT_BETA") is not None else (q.get("vky") if q.get("vky") is not None else (q.get("beta") or 0.0)))
+    rt = float(q.get("MAT_PPRES") if q.get("MAT_PPRES") is not None else (q.get("rt") if q.get("rt") is not None else (q.get("ppres") or 0.0)))
+    rc = float(q.get("MAT_YPRES") if q.get("MAT_YPRES") is not None else (q.get("rc") if q.get("rc") is not None else (q.get("ypres") or 0.0)))
+    hbp = float(q.get("MAT_BPMOD") if q.get("MAT_BPMOD") is not None else (q.get("hbp") if q.get("hbp") is not None else (q.get("bpmod") or 0.0)))
+    etc = float(q.get("MAT_ETC") if q.get("MAT_ETC") is not None else (q.get("etc") or 0.0))
+    ali = float(q.get("MAT_DIL_Y") if q.get("MAT_DIL_Y") is not None else (q.get("ali") if q.get("ali") is not None else (q.get("dil_y") or 0.0)))
+    alf = float(q.get("MAT_DIL_F") if q.get("MAT_DIL_F") is not None else (q.get("alf") if q.get("alf") is not None else (q.get("dil_f") or 0.0)))
+    vmax = float(q.get("MAT_COMPAC") if q.get("MAT_COMPAC") is not None else (q.get("vmax") if q.get("vmax") is not None else (q.get("compac") or 0.0)))
+    rok = float(q.get("MAT_CAP_BEG") if q.get("MAT_CAP_BEG") is not None else (q.get("rok") if q.get("rok") is not None else (q.get("cap_beg") or 0.0)))
+    ro0 = float(q.get("MAT_CAP_END") if q.get("MAT_CAP_END") is not None else (q.get("ro0") if q.get("ro0") is not None else (q.get("cap_end") or 0.0)))
+    hv0 = float(q.get("MAT_TPMOD") if q.get("MAT_TPMOD") is not None else (q.get("hv0") if q.get("hv0") is not None else (q.get("tpmod") or 0.0)))
+    
+    arm1 = float(q.get("MAT_PDIR1") if q.get("MAT_PDIR1") is not None else (q.get("arm1") or 0.0))
+    arm2 = float(q.get("MAT_PDIR2") if q.get("MAT_PDIR2") is not None else (q.get("arm2") or 0.0))
+    arm3 = float(q.get("MAT_PDIR3") if q.get("MAT_PDIR3") is not None else (q.get("arm3") or 0.0))
+    arm = [arm1, arm2, arm3]
+
+    yms = float(q.get("MAT_E2") if q.get("MAT_E2") is not None else (q.get("yms") if q.get("yms") is not None else (q.get("e2") or 0.0)))
+    y0s = float(q.get("MAT_SSIG") if q.get("MAT_SSIG") is not None else (q.get("y0s") if q.get("y0s") is not None else (q.get("ssig") or 0.0)))
+    ets = float(q.get("MAT_SETAN") if q.get("MAT_SETAN") is not None else (q.get("ets") if q.get("ets") is not None else (q.get("setan") or 0.0)))
 
     if ymc <= 0.0 or fc <= 0.0:
         raise ValueError("LAW24 needs positive E and fc")
-    if any(a != 0.0 for a in arm):
-        raise ValueError("LAW24 steel reinforcement (ARM1-3) is not ported "
-                         "(documented cut) — remove the reinforcement card")
+    if anuc < 0.0 or anuc >= 0.5:
+        raise ValueError(f"LAW24: Poisson ratio nu={anuc} outside [0, 0.5)")
     if icap == 2:
         raise ValueError("LAW24 Icap=2 (plas24b 'new cap formulation') is "
                          "not ported (documented cut) — use Icap 0 or 1")
@@ -1100,6 +1275,7 @@ def build_conc(rec) -> Material:
 
     params = {
         "E": ymc, "nu": anuc,                 # PM(20) / PM(21)
+        "K": bulk, "G": gc,
         "Gc": gc, "A11c": a11c, "A12c": a12c,
         "RHO0": rec.density,                  # PM(1) (RHOR = RHO0 here)
         "DSUP": max(0.0, dsup1),              # PM(26)
@@ -1119,6 +1295,8 @@ def build_conc(rec) -> Material:
         "HV0": hv0, "EXPO": expo,             # PM(48) / PM(49)
         "ICAP": icap,                         # PM(57)
         "FT": ft, "FB": fb, "F2D": f2d, "S0FC": s0, "CCOTT": cc,
+        "YMS": yms, "Y0S": y0s, "ETS": ets,
+        "ARM1": arm[0], "ARM2": arm[1], "ARM3": arm[2],
     }
     return Material(id=rec.id, law=24, rho0=rec.density,
                     title=rec.title, params=params)

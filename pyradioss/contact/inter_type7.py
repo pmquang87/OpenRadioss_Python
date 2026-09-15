@@ -99,7 +99,8 @@ from ..common.fastmath import cross3, norm3, scatter_add3
 from ..model.model import Model
 from . import friction, tracking
 from .stiffness import (combine_stiffness, node_stiffness_gap,
-                        segment_stiffness_gap, _segment_areas)
+                        segment_stiffness_gap, _segment_areas,
+                        segment_mesh_gap, node_mesh_gap)
 
 _VISC = 0.05  # normal damping ratio (Radioss VIS_S default 5%)
 
@@ -207,21 +208,82 @@ def _expand_matches(keys_a: np.ndarray, keys_b: np.ndarray):
 class ContactType7:
     """One /INTER/TYPE7 interface, engine-side."""
 
+    def _init_empty(self):
+        """Initialize empty/inactive state."""
+        self.segs = np.zeros((0, 4), dtype=np.int64)
+        self.seg_gtype = np.zeros(0, dtype="<U8")
+        self.seg_elem = np.zeros(0, dtype=np.int64)
+        self.nodes = np.zeros(0, dtype=np.int64)
+        self.Km = np.zeros(0, dtype=float)
+        self.Ks = np.zeros(0, dtype=float)
+        self.gap_m = np.zeros(0, dtype=float)
+        self.gap_s = np.zeros(0, dtype=float)
+        self.gap_m_l = np.zeros(0, dtype=float)
+        self.gap_s_l = np.zeros(0, dtype=float)
+        self.gap_const = 0.0
+        self.gap_bound = 0.0
+        self.gap_min = 0.0
+        self.gap_max = np.inf
+        self.stmin = float(getattr(getattr(self, "itf", None), "stmin", 0.0) or 0.0)
+        self.stmax = float(getattr(getattr(self, "itf", None), "stmax", 0.0) or 0.0)
+        self.fric = float(getattr(self.itf, "fric", 0.0))
+        self.mfrot = int(getattr(self.itf, "mfrot", 0))
+        self.iform = int(getattr(self.itf, "iform", 0))
+        self.ifq = int(getattr(self.itf, "ifq", 0))
+        self.xfiltr = float(getattr(self.itf, "xfiltr", 0.0))
+        self.fric_c = np.asarray(getattr(self.itf, "fric_c", (0.0,) * 6), dtype=float)
+        self._filt_keys = np.zeros(0, dtype=np.int64)
+        self._filt_vals = np.zeros((0, 3), dtype=float)
+        self.dt_bound = np.inf
+        self.idel = int(getattr(self.itf, "idel", 0))
+        self.deletable = False
+        self.seg_alive = np.zeros(0, dtype=bool)
+        self.nodes_tracked = np.zeros(0, dtype=np.int64)
+        self.pairs_node = np.zeros(0, dtype=np.int64)
+        self.pairs_seg = np.zeros(0, dtype=np.int64)
+        self._last_refresh = -10**9
+        self.refresh = 20
+        self.visc = float(getattr(self.itf, "viss", getattr(self.itf, "stiff_dc", 0.05)))
+        if self.visc <= 0.0:
+            self.visc = 0.05
+        self.tstart = float(getattr(self.itf, "tstart", 0.0))
+        self.tstop = float(getattr(self.itf, "tstop", 1.0e30))
+
     def __init__(self, itf, model: Model, log):
         self.itf = itf
         self.model = model
 
-        surf = model.surfaces[itf.surf_id]
-        self.segs = surf.segments
-        if self.segs is None or len(self.segs) == 0:
+        self.visc = float(getattr(itf, "viss", getattr(itf, "stiff_dc", 0.05)))
+        if self.visc <= 0.0:
+            self.visc = 0.05
+        self.tstart = float(getattr(itf, "tstart", 0.0))
+        self.tstop = float(getattr(itf, "tstop", 1.0e30))
+
+        surf = model.surfaces.get(itf.surf_id)
+        if surf is None:
+            log.warning(f"/INTER/TYPE7/{itf.id}: main surface {itf.surf_id} not found — "
+                        f"interface inactive", "CONTACT INIT")
+            self._init_empty()
+            return
+
+        segs = surf.segments
+        if segs is None or len(segs) == 0:
             log.warning(f"/INTER/TYPE7/{itf.id}: main surface is empty — "
                         f"interface inactive", "CONTACT INIT")
-            self.segs = np.zeros((0, 4), dtype=np.int64)
-            self.seg_gtype = np.zeros(0, dtype="<U8")
-            self.seg_elem = np.zeros(0, dtype=np.int64)
-        else:
-            self.seg_gtype = surf.seg_gtype
-            self.seg_elem = surf.seg_elem
+            self._init_empty()
+            return
+
+        segs = np.asarray(segs, dtype=np.int64)
+        if segs.ndim == 2 and segs.shape[1] == 3:
+            segs = np.column_stack([segs, segs[:, 2]])
+        elif segs.ndim == 2 and segs.shape[1] == 4:
+            segs = segs.copy()
+            neg = segs[:, 3] < 0
+            segs[neg, 3] = segs[neg, 2]
+
+        self.segs = segs
+        self.seg_gtype = surf.seg_gtype
+        self.seg_elem = surf.seg_elem
 
         # --- secondary nodes: group, or the surface's own nodes ----------
         # (grnod_ID = 0 -> self-impact, the Radioss single-surface input)
@@ -231,20 +293,39 @@ class ContactType7:
                      f"{len(self.nodes)} SECONDARY NODES FROM THE MAIN "
                      f"SURFACE")
         else:
-            # kept SORTED: the cycle maps global node index -> position in
-            # this array with searchsorted (np.unique output is sorted)
-            self.nodes = np.sort(model.node_groups[itf.grnod_id].node_idx)
+            g = model.node_groups.get(itf.grnod_id)
+            if g is None or g.node_idx is None or len(g.node_idx) == 0:
+                log.warning(f"/INTER/TYPE7/{itf.id}: secondary node group {itf.grnod_id} "
+                            f"empty or not found — interface inactive", "CONTACT INIT")
+                self._init_empty()
+                return
+            self.nodes = np.sort(np.asarray(g.node_idx, dtype=np.int64))
+
+        if len(self.nodes) == 0:
+            self._init_empty()
+            return
 
         # --- penalty stiffness (i7sti3) -----------------------------------
         # Element-based stiffness on both sides; Istf picks the combination
         # (for Istf=1, stfac IS the stiffness and the element values are
         # only kept for the gap computation -> scale 1).
         scale = itf.stfac if itf.istf != 1 else 1.0
+        fscale = getattr(itf, "fscale_gap", 1.0) if itf.igap in (2, 3) else 1.0
         Km, gm = segment_stiffness_gap(model, self.segs, self.seg_gtype,
-                                       self.seg_elem, scale)
-        Ks_all, gs_all = node_stiffness_gap(model, scale)
+                                       self.seg_elem, scale, fscale_gap=fscale)
+        Ks_all, gs_all = node_stiffness_gap(model, scale, fscale_gap=fscale)
         self.Km = Km
-        self.Ks = Ks_all[self.nodes] if len(self.nodes) else np.zeros(0)
+        if len(self.nodes) and len(Ks_all):
+            valid_k = self.nodes < len(Ks_all)
+            self.Ks = np.zeros(len(self.nodes), dtype=float)
+            self.Ks[valid_k] = Ks_all[self.nodes[valid_k]]
+        else:
+            self.Ks = np.zeros(len(self.nodes), dtype=float)
+
+        if itf.igap == 3:
+            pmesh = getattr(itf, "percent_mesh_size", 0.4)
+            self.gap_m_l = segment_mesh_gap(model, self.segs, pmesh)
+            self.gap_s_l = node_mesh_gap(model, self.segs, self.nodes, pmesh)
 
         # --- contact gap ---------------------------------------------------
         # lc = mean segment size, the reference length for the defaults
@@ -255,11 +336,15 @@ class ContactType7:
         # otherwise (a zero gap would make contact undetectable)
         gap_floor = itf.gap if itf.gap > 0 else (
             float(gm.mean()) if len(gm) and gm.max() > 0 else 0.02 * lc)
-        if itf.igap == 1:
+        if itf.igap in (1, 2, 3):
             # variable gap: g = g_s(node) + g_m(segment), clipped
             self.gap_m = gm
-            self.gap_s = gs_all[self.nodes] if len(self.nodes) else \
-                np.zeros(0)
+            if len(self.nodes) and len(gs_all):
+                valid_g = self.nodes < len(gs_all)
+                self.gap_s = np.zeros(len(self.nodes), dtype=float)
+                self.gap_s[valid_g] = gs_all[self.nodes[valid_g]]
+            else:
+                self.gap_s = np.zeros(len(self.nodes), dtype=float)
             self.gap_min = gap_floor
             self.gap_max = itf.gap_max if itf.gap_max > 0 else np.inf
             gap_hi = (self.gap_s.max() if len(self.gap_s) else 0.0) + \
@@ -270,6 +355,8 @@ class ContactType7:
             self.gap_const = gap_floor
             self.gap_bound = gap_floor
         self.fric = itf.fric
+        self.stmin = float(getattr(itf, "stmin", 0.0) or 0.0)
+        self.stmax = float(getattr(itf, "stmax", 0.0) or 0.0)
 
         # --- friction MODELS + IFQ filter state (M15) -----------------------
         # mfrot/ifq = 0 leaves every M4 path untouched (bit-identical).
@@ -277,6 +364,7 @@ class ContactType7:
         # node*nseg + segrow, sorted; rebuilt from the active pairs each
         # cycle (a separated pair restarts its history — the IFPEN scope).
         self.mfrot = int(getattr(itf, "mfrot", 0))
+        self.iform = int(getattr(itf, "iform", 0))
         self.ifq = int(getattr(itf, "ifq", 0))
         self.xfiltr = float(getattr(itf, "xfiltr", 0.0))
         self.fric_c = np.asarray(getattr(itf, "fric_c",
@@ -286,7 +374,7 @@ class ContactType7:
         if self.mfrot > 0:
             log.info(f"     /INTER/TYPE7/{itf.id}: FRICTION MODEL "
                      f"MFROT={self.mfrot} (i7for3.F mu(p, v)), "
-                     f"IFQ={self.ifq}")
+                     f"IFQ={self.ifq}, IFORM={self.iform}")
 
         # --- interface time step bound (see module docstring) --------------
         # Worst node-on-spring combination on each side, evaluated once
@@ -297,7 +385,12 @@ class ContactType7:
             getattr(model, "mass0", model.mass))
 
         # --- deletion bookkeeping (M3<->M4) --------------------------------
-        self.deletable = tracking.any_deletable(model, self.seg_gtype)
+        # Fortran chkstfn3.F:1352 gates deletion on IDEL >= 1; Idel=0 (default)
+        # means no deletion processing even if the material can fail.
+        self.idel = int(getattr(itf, 'idel', 0))
+        self.deletable = (self.idel >= 1 and
+                          tracking.any_deletable(model, self.seg_gtype,
+                                                 sec_nodes=self.nodes))
         if self.deletable:
             self.ref_total = tracking.node_reference_counts(
                 model, alive_only=False)
@@ -319,14 +412,26 @@ class ContactType7:
         if len(self.segs) == 0 or len(self.nodes) == 0:
             return np.inf
         itf = self.itf
-        Km_max = np.full(len(self.nodes), self.Km.max())
-        K_sec = combine_stiffness(itf.istf, itf.stfac, Km_max, self.Ks)
-        dt_sec = np.sqrt(2.0 * mass[self.nodes]
+        valid_nodes_mask = (self.nodes >= 0) & (self.nodes < len(mass))
+        valid_nodes = self.nodes[valid_nodes_mask]
+        if len(valid_nodes) == 0:
+            return np.inf
+        Km_val = self.Km.max() if len(self.Km) else 0.0
+        Km_max = np.full(len(valid_nodes), Km_val)
+        Ks_subset = self.Ks[valid_nodes_mask] if len(self.Ks) == len(self.nodes) else np.zeros(len(valid_nodes))
+        K_sec = combine_stiffness(itf.istf, itf.stfac, Km_max, Ks_subset)
+        dt_sec = np.sqrt(2.0 * mass[valid_nodes]
                          / np.maximum(K_sec, EM20)).min()
-        Ks_max = np.full(len(self.segs),
+
+        valid_segs_mask = np.all((self.segs >= 0) & (self.segs < len(mass)), axis=1)
+        if not np.any(valid_segs_mask):
+            return float(dt_sec)
+        valid_segs = self.segs[valid_segs_mask]
+        Km_subset = self.Km[valid_segs_mask] if len(self.Km) == len(self.segs) else np.zeros(len(valid_segs))
+        Ks_max = np.full(len(valid_segs),
                          self.Ks.max() if len(self.Ks) else 0.0)
-        K_main = combine_stiffness(itf.istf, itf.stfac, self.Km, Ks_max)
-        m_corner = mass[self.segs].min(axis=1)
+        K_main = combine_stiffness(itf.istf, itf.stfac, Km_subset, Ks_max)
+        m_corner = mass[valid_segs].min(axis=1)
         dt_main = np.sqrt(2.0 * m_corner / np.maximum(K_main, EM20)).min()
         return float(min(dt_sec, dt_main))
 
@@ -393,7 +498,7 @@ class ContactType7:
         self.pairs_seg = sj
 
     # ------------------------------------------------------------------
-    def forces(self, x, v, mass, dt, fcont, cycle, stifn=None):
+    def forces(self, x, v, mass, dt, fcont, cycle=0, stifn=None, t=None, **kwargs):
         """Penalty forces for one cycle, scattered into ``fcont``.
 
         Returns (contact_work_increment, dt_interface). The work increment
@@ -408,8 +513,13 @@ class ContactType7:
         array, so the nodal time step / mass scaling sees the contact
         springs exactly like the element stiffness.
         """
-        if len(self.segs) == 0 or len(self.nodes) == 0:
-            return 0.0, np.inf
+        if len(self.segs) == 0 or len(self.nodes) == 0 or dt <= 0.0:
+            return 0.0, self.dt_bound
+
+        # Time window gating
+        if t is not None:
+            if t < self.tstart or t > self.tstop:
+                return 0.0, self.dt_bound
 
         # ---- deletion bookkeeping (cheap gathers; see tracking.py) -------
         if self.deletable:
@@ -419,7 +529,10 @@ class ContactType7:
         if cycle - self._last_refresh >= self.refresh:
             if self.deletable:
                 mask = tracking.tracked_node_mask(self.model, self.ref_total)
-                self.nodes_tracked = self.nodes[mask[self.nodes]]
+                valid_m = (self.nodes >= 0) & (self.nodes < len(mask))
+                tracked = np.zeros(len(self.nodes), dtype=bool)
+                tracked[valid_m] = mask[self.nodes[valid_m]]
+                self.nodes_tracked = self.nodes[tracked]
             self._broad_phase(x, v, dt)
             self._last_refresh = cycle
         if len(self.pairs_node) == 0:
@@ -443,10 +556,14 @@ class ContactType7:
 
         # ---- per-pair gap (Igap) ------------------------------------------
         loc = np.searchsorted(self.nodes, ni)    # nodes is sorted (init)
-        if self.itf.igap == 1:
+        loc = np.clip(loc, 0, max(len(self.nodes) - 1, 0))
+        if self.itf.igap in (1, 2, 3):
             # gap_s is aligned with self.nodes; loc maps global -> local
-            gap = np.clip(self.gap_s[loc] + self.gap_m[srow],
-                          self.gap_min, self.gap_max)
+            gap = self.gap_s[loc] + self.gap_m[srow]
+            if self.itf.igap == 3:
+                mesh_gap = self.gap_s_l[loc] + self.gap_m_l[srow]
+                gap = np.minimum(gap, mesh_gap)
+            gap = np.clip(gap, self.gap_min, self.gap_max)
         else:
             gap = np.full(len(ni), self.gap_const)
 
@@ -478,15 +595,24 @@ class ContactType7:
 
         K = combine_stiffness(self.itf.istf, self.itf.stfac,
                               self.Km[srow], self.Ks[loc])
+        if self.stmin > 0.0:
+            K = np.maximum(K, self.stmin)
+        if self.stmax > 0.0:
+            K = np.minimum(K, self.stmax)
         # per-node spring-stiffness sums (bincount = the fast add.at, M7):
         # full K on the secondary node, full K on each corner (weight <= 1)
         n_nod = len(fcont)
-        Knode = np.bincount(ni, weights=K, minlength=n_nod)
-        Knode += np.bincount(seg.reshape(-1), weights=np.repeat(K, 4),
+        valid_ni = (ni >= 0) & (ni < n_nod)
+        Knode = np.bincount(ni[valid_ni], weights=K[valid_ni], minlength=n_nod)
+        seg_flat = seg.reshape(-1)
+        valid_sf = (seg_flat >= 0) & (seg_flat < n_nod)
+        K_rep = np.repeat(K, 4)
+        Knode += np.bincount(seg_flat[valid_sf], weights=K_rep[valid_sf],
                              minlength=n_nod)
         loaded = Knode > 0.0
+        m_loaded = np.maximum(mass[loaded], EM20)
         dt_int = min(self.dt_bound, float(
-            np.sqrt(2.0 * mass[loaded] / Knode[loaded]).min()))
+            np.sqrt(2.0 * m_loaded / Knode[loaded]).min()))
         if stifn is not None:                    # /DT/NODA accumulation
             stifn[loaded] += Knode[loaded]
 
@@ -500,8 +626,23 @@ class ContactType7:
         K = K[active]                            # per-pair stiffness (Istf)
         gap = gap[active]
         pen = pen[active]
-        d = np.maximum(best_d[active], EM20)
+
+        # oriented face normal
+        d13 = x[seg[:, 2]] - x[seg[:, 0]]
+        d24 = x[seg[:, 3]] - x[seg[:, 1]]
+        n_seg_raw = cross3(d13, d24)
+        n_seg_norm = norm3(n_seg_raw)
+        n_seg = np.where(
+            (n_seg_norm > EM20)[:, None],
+            n_seg_raw / np.maximum(n_seg_norm, EM20)[:, None],
+            np.array([0.0, 0.0, 1.0]),
+        )
+
+        dist = best_d[active]
+        d = np.maximum(dist, EM20)
         nvec = (x[ni] - best_pt[active]) / d[:, None]    # push-out direction
+        fallback = dist <= EM20
+        nvec = np.where(fallback[:, None], n_seg, nvec)
         wseg = best_w[active]
 
         # relative velocity node vs interpolated segment point
@@ -510,7 +651,7 @@ class ContactType7:
         vn = np.einsum("nb,nb->n", vrel, nvec)
 
         # normal force: spring + damper (only damp approaching motion)
-        C = 2.0 * _VISC * np.sqrt(K * mass[ni])
+        C = self.visc * np.sqrt(2.0 * K * mass[ni])
         Fn = K * pen - C * np.minimum(vn, 0.0)
         Fvec = Fn[:, None] * nvec
 
@@ -524,6 +665,7 @@ class ContactType7:
             gap_ref = float(np.mean(gap))
             vt = vrel - vn[:, None] * nvec
             vt_mag = norm3(vt)
+            Fn_pos = np.maximum(Fn, 0.0)
             if self.mfrot > 0:
                 # contact pressure p = Fn / (CURRENT main-segment area),
                 # the i7for3 AREA = 1/2 |(x3-x1) x (x4-x2)| — its FNI by
@@ -531,29 +673,184 @@ class ContactType7:
                 d13 = x[seg[:, 2]] - x[seg[:, 0]]
                 d24 = x[seg[:, 3]] - x[seg[:, 1]]
                 area = 0.5 * norm3(cross3(d13, d24))
-                pres = Fn / np.maximum(area, EM20)
+                pres = Fn_pos / np.maximum(area, EM20)
                 mu = friction.mu_kinetic(self.mfrot, self.fric,
                                          self.fric_c, pres, vt_mag)
             else:
                 mu = self.fric
-            Ft = mu * Fn * vt_mag / (
-                vt_mag + 1e-3 * gap_ref / max(dt, EM20))
-            ftvec = -(Ft / np.maximum(vt_mag, EM20))[:, None] * vt
-            if self.ifq > 0:
+
+            if self.iform == 2 or self.ifq >= 10:
                 alpha = friction.filter_alpha(self.ifq, self.xfiltr, dt)
                 keys = ni * max(len(self.segs), 1) + srow[active]
                 ftvec, self._filt_keys, self._filt_vals = friction.\
-                    apply_filter(keys, ftvec, alpha, self._filt_keys,
-                                 self._filt_vals)
+                    apply_incremental_stiffness(keys, K, vrel, dt, nvec, mu, Fn_pos,
+                                                alpha, self._filt_keys,
+                                                self._filt_vals)
+                ftvec = -ftvec  # oppose sliding (i7for3.F:1511: FNCONT(JG) -= FXI)
+            else:
+                v_ref = np.maximum(1e-3 * gap_ref / max(dt, EM20), EM20)
+                Ft = mu * Fn_pos * vt_mag / (vt_mag + v_ref)
+                ftvec = -(Ft / np.maximum(vt_mag, EM20))[:, None] * vt
+                if self.ifq > 0:
+                    alpha = friction.filter_alpha(self.ifq, self.xfiltr, dt)
+                    keys = ni * max(len(self.segs), 1) + srow[active]
+                    ftvec, self._filt_keys, self._filt_vals = friction.\
+                        apply_filter(keys, ftvec, alpha, self._filt_keys,
+                                     self._filt_vals)
             Fvec += ftvec
 
         # scatter: action on the node, exact opposite reaction on the
         # segment corners (momentum conservation)
-        scatter_add3(fcont, ni, Fvec)
-        scatter_add3(fcont, seg.reshape(-1),
-                     (-wseg[:, :, None] * Fvec[:, None, :]).reshape(-1, 3))
+        valid_ni_act = (ni >= 0) & (ni < n_nod)
+        if np.any(valid_ni_act):
+            scatter_add3(fcont, ni[valid_ni_act], Fvec[valid_ni_act])
+
+        w_F = (-wseg[:, :, None] * Fvec[:, None, :]).reshape(-1, 3)
+        seg_flat_act = seg.reshape(-1)
+        valid_sf_act = (seg_flat_act >= 0) & (seg_flat_act < n_nod)
+        if np.any(valid_sf_act):
+            scatter_add3(fcont, seg_flat_act[valid_sf_act], w_F[valid_sf_act])
 
         # contact work this cycle (stored elastic + dissipated), for the
         # energy balance
         wrk = float(np.einsum("nb,nb->", Fvec, vrel)) * dt
         return -wrk, dt_int
+
+
+class LagmulType7:
+    """One /INTER/LAGMUL/TYPE7 constraint, engine-side."""
+    def __init__(self, itf, model: Model, log):
+        self.itf = itf
+        self.model = model
+        
+        # We reuse the initialization logic of ContactType7 to parse groups, segments, etc.
+        # But we create a dummy ContactType7 to hold the state.
+        self.penalty_handler = ContactType7(itf, model, log)
+        
+    def generate_l_matrix(self):
+        """Yield (data, node_indices, dof_indices, eq_indices) arrays for the global L matrix.
+        Only penetrating nodes approaching the surface (VN < 0) generate constraints.
+        If a node hits multiple segments, only the most severe (minimum VN) is kept.
+        """
+        # Run broad/narrow phases using the penalty handler's logic
+        handler = self.penalty_handler
+        x = getattr(self.model, "x", self.model.x0) # current position
+        v = self.model.v
+        dt = self.model.dt
+        
+        if len(handler.segs) == 0 or len(handler.nodes) == 0:
+            return np.array([]), np.array([]), np.array([]), np.array([]), 0
+            
+        if handler.deletable:
+            handler.seg_alive = tracking.alive_segment_mask(
+                handler.model, handler.seg_gtype, handler.seg_elem)
+
+        cycle = self.model.cycle
+        if cycle - handler._last_refresh >= handler.refresh:
+            if handler.deletable:
+                mask = tracking.tracked_node_mask(handler.model, handler.ref_total)
+                valid_m = handler.nodes < len(mask)
+                tracked = np.zeros(len(handler.nodes), dtype=bool)
+                tracked[valid_m] = mask[handler.nodes[valid_m]]
+                handler.nodes_tracked = handler.nodes[tracked]
+            handler._broad_phase(x, v, dt)
+            handler._last_refresh = cycle
+            
+        if len(handler.pairs_node) == 0:
+            return np.array([]), np.array([]), np.array([]), np.array([]), 0
+            
+        live = handler.seg_alive[handler.pairs_seg]
+        ni = handler.pairs_node[live]
+        srow = handler.pairs_seg[live]
+        if len(ni) == 0:
+            return np.array([]), np.array([]), np.array([]), np.array([]), 0
+        seg = handler.segs[srow]
+
+        jit = accel_get("t7_narrow")
+        if jit is not None:
+            best_d, best_pt, best_w = jit(x, ni, seg)
+        else:
+            best_d, best_pt, best_w = _narrow(x, ni, seg)
+            
+        loc = np.searchsorted(handler.nodes, ni)
+        if handler.itf.igap in (1, 2, 3):
+            gap = handler.gap_s[loc] + handler.gap_m[srow]
+            if handler.itf.igap == 3:
+                mesh_gap = handler.gap_s_l[loc] + handler.gap_m_l[srow]
+                gap = np.minimum(gap, mesh_gap)
+            gap = np.clip(gap, handler.gap_min, handler.gap_max)
+        else:
+            gap = np.full(len(ni), handler.gap_const)
+            
+        pen = gap - best_d
+        active = pen > 0.0
+        if not np.any(active):
+            return np.array([]), np.array([]), np.array([]), np.array([]), 0
+            
+        ni = ni[active]
+        seg = seg[active]
+        pen = pen[active]
+        d = np.maximum(best_d[active], EM20)
+        nvec = (x[ni] - best_pt[active]) / d[:, None]
+        wseg = best_w[active]
+        
+        # relative velocity node vs interpolated segment point
+        vseg = np.einsum("nk,nkb->nb", wseg, v[seg])
+        vrel = v[ni] - vseg
+        vn = np.einsum("nb,nb->n", vrel, nvec)
+        
+        # Fortran I7LAGM filter: VN < XTAG (approaching). We only constraint if VN <= 0.
+        approaching = vn <= 0.0
+        if not np.any(approaching):
+            return np.array([]), np.array([]), np.array([]), np.array([]), 0
+            
+        ni = ni[approaching]
+        seg = seg[approaching]
+        nvec = nvec[approaching]
+        wseg = wseg[approaching]
+        vn = vn[approaching]
+        
+        # If a node hits multiple segments, only keep the one with the most severe (minimum) VN
+        # (This matches the XTAG(IG) logic in I7LAGM)
+        sort_idx = np.argsort(vn)  # sorts from most negative (most severe) to least negative
+        ni_sorted = ni[sort_idx]
+        
+        # Find the first occurrence of each node
+        _, unique_idx = np.unique(ni_sorted, return_index=True)
+        # Restore the selected rows from the sorted arrays
+        final_idx = sort_idx[unique_idx]
+        
+        ni_f = ni[final_idx]
+        seg_f = seg[final_idx]
+        nvec_f = nvec[final_idx]
+        wseg_f = wseg[final_idx]
+        
+        # Build the L matrix
+        n = len(ni_f)
+        data = []
+        nodes = []
+        dofs = []
+        eq_ids = []
+        
+        for i in range(n):
+            snode = ni_f[i]
+            s_nodes = seg_f[i]
+            nx, ny, nz = nvec_f[i]
+            # wseg_f[i] contains H1, H2, H3, H4
+            
+            for dof, n_dof in enumerate((nx, ny, nz)):
+                # Master nodes (+Hk * n)
+                for k in range(4):
+                    data.append(n_dof * wseg_f[i, k])
+                    nodes.append(s_nodes[k])
+                    dofs.append(dof)
+                    eq_ids.append(i)
+                        
+                # Secondary node (-n)
+                data.append(-n_dof)
+                nodes.append(snode)
+                dofs.append(dof)
+                eq_ids.append(i)
+                
+        return np.array(data), np.array(nodes), np.array(dofs), np.array(eq_ids), n
+

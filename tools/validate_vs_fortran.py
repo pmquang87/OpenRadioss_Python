@@ -234,7 +234,7 @@ def deck_is_real_format(path: str) -> bool:
         if ln.strip().upper().startswith("/BEGIN"):
             for j in range(i + 1, min(i + 4, len(lines))):
                 toks = lines[j].split()
-                if toks and toks[0].isdigit() and len(toks[0]) == 4:
+                if toks and toks[0].isdigit() and len(toks[0]) >= 3:
                     return True
             return False
     return False
@@ -276,6 +276,32 @@ def real_deck_fixups_text(text: str) -> str:
                 i += 1
             out.append("# (/TH/SECT port block stripped for the Fortran "
                        "run — real Radioss spells it /TH/SECTIO)")
+            continue
+        if s.startswith("/RBODY/"):
+            out.append(ln)
+            i += 1
+            if i < n and not is_comment(lines[i]):
+                out.append(lines[i]) # title
+                i += 1
+                if i < n and not lines[i].lstrip().startswith("/"):
+                    card = lines[i]
+                    if len(card) <= 50 and card[10:20].strip() and not card[50:].strip():
+                        # Port dialect format: master(10) grnod(10) mass(20) icog(10)
+                        master = card[:10]
+                        grnod = card[10:20]
+                        mass = card[20:40] if len(card) >= 40 else " " * 20
+                        icog = card[40:50] if len(card) == 50 else " " * 10
+                        out.append(master + " " * 30 + mass + grnod + " " * 10 + icog)
+                        i += 1
+                        if i < n and not lines[i].lstrip().startswith("/") and not is_comment(lines[i]):
+                            out.append(lines[i]) # jadd
+                            i += 1
+                    else:
+                        out.append(lines[i])
+                        i += 1
+                        if i < n and not lines[i].lstrip().startswith("/") and not is_comment(lines[i]):
+                            out.append(lines[i]) # jadd
+                            i += 1
             continue
         if s.startswith("/RWALL/"):
             out.append(ln)
@@ -526,6 +552,7 @@ def run_fortran(name: str, runname: str, deck0: str, deck1: str,
     rd = os.path.join(workdir, "fortran", name)
     shutil.rmtree(rd, ignore_errors=True)
     os.makedirs(rd)
+    shutil.copytree(os.path.dirname(deck0), rd, dirs_exist_ok=True)
     d0 = os.path.join(rd, os.path.basename(deck0))
     d1 = os.path.join(rd, os.path.basename(deck1))
     info: Dict = {"mode": shim, "dir": rd}
@@ -602,8 +629,7 @@ def run_pyradioss(name: str, runname: str, deck0: str, deck1: str,
     rd = os.path.join(workdir, "pyradioss", name)
     shutil.rmtree(rd, ignore_errors=True)
     os.makedirs(rd)
-    shutil.copy(deck0, rd)
-    shutil.copy(deck1, rd)
+    shutil.copytree(os.path.dirname(deck0), rd, dirs_exist_ok=True)
     env = dict(os.environ)
     env["PYTHONPATH"] = REPO
     info: Dict = {"dir": rd}
@@ -795,7 +821,7 @@ def coverage(args) -> int:
         rd = os.path.join(workdir, "coverage", name)
         shutil.rmtree(rd, ignore_errors=True)
         os.makedirs(rd)
-        shutil.copy(deck, rd)
+        shutil.copytree(os.path.dirname(deck), rd, dirs_exist_ok=True)
 
         # 1. keyword census straight from the lexer
         census: Dict[str, int] = {}

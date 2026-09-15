@@ -18,6 +18,8 @@ inventing.
   auto-found at `C:\OpenRadioss\hm_cfg_files` (env `PYRADIOSS_HM_CFG` overrides).
 - Corpus-deck tests use `tests\data\rd_decks` (vendored); env
   `PYRADIOSS_RD_DECKS` points at a fuller extract (see the README there).
+- External harvested reference corpus for benchmarking & validation:
+  `C:\Users\pmqua\PycharmProjects\rad_examples_db` (decks, manifest, benchmarks).
 - READ-ONLY locations — never write, delete, or extract in place:
   `C:\OpenRadioss` (reference Fortran install + source), `C:\OpenRadioss_old`,
   and everything under `E:\` (`E:\openradioss_run`, `E:\foxcore_data`).
