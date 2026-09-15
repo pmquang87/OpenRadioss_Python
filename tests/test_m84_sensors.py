@@ -165,3 +165,43 @@ def test_cascaded_logical_sensors():
     assert not sensors.active(4)
     assert sensors.active(5)
 
+
+def test_sensor_dist_eval():
+    model = Model()
+    model.node_ids = np.array([1, 2], dtype=int)
+    model._id2idx = {1: 0, 2: 1}
+    model.x0 = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    model.x = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    model.v = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+
+    model.sensors = [
+        # Sensor 10: triggers when distance outside [0.5, 1.5] after tdelay=0.01
+        Sensor(id=10, kind="DIST", tdelay=0.01, node_id1=1, node_id2=2, dmin=0.5, dmax=1.5),
+        # Sensor 20: triggers when distance outside [2.0, 5.0] immediately (dist=1.0 < 2.0)
+        Sensor(id=20, kind="DIST", tdelay=0.0, node_id1=1, node_id2=2, dmin=2.0, dmax=5.0),
+    ]
+
+    log = MessageLog()
+    sensors = Sensors(model, log)
+
+    # At t=0.0: dist = 1.0 (inside [0.5, 1.5] for sensor 10, outside for sensor 20)
+    sensors.update(0.0, log)
+    assert not sensors.active(10)
+    assert sensors.active(20)
+    assert sensors.fire_time[20] == 0.0
+
+    # At t=0.05: node 2 moves to x=2.5 -> dist = 2.5 (outside [0.5, 1.5] for sensor 10)
+    model.x[1, 0] = 2.5
+    sensors.update(0.05, log)
+    assert not sensors.active(10)  # tdelay=0.01 hasn't elapsed yet (need t >= 0.05 + 0.01 = 0.06)
+
+    # At t=0.055: still before tdelay
+    sensors.update(0.055, log)
+    assert not sensors.active(10)
+
+    # At t=0.06: tdelay elapsed -> sensor 10 activates
+    sensors.update(0.06, log)
+    assert sensors.active(10)
+    assert sensors.fire_time[10] == pytest.approx(0.06)
+
+

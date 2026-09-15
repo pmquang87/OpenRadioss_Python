@@ -166,6 +166,7 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     vm = np.sqrt(1.5 * (s0 ** 2 + s1 ** 2 + s2 ** 2)
                  + 3.0 * (sig[:, 3] ** 2 + sig[:, 4] ** 2 + sig[:, 5] ** 2))
     triax = sm / np.maximum(vm, _TINY)
+    triax = np.clip(triax, -2.0 / 3.0, 2.0 / 3.0)
     dama += np.maximum(d_epsp, 0.0) / eps_f(fail, triax)
     np.minimum(dama, 1.0, out=dama)
     return dama >= 1.0

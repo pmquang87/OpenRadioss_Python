@@ -28,14 +28,8 @@ def _accumulate(fail, dama, d_epsp, eps_f):
     UVAR(I,1) += DP * d_epsp / eps_f
     """
     p = fail.params
-    # Pre-calculated damage scale DP:
     dn = p.get("n", 1.0)
-    dd = p.get("d", 0.0)
-    # Fortran: DP(I) = DN*DD**(ONE-ONE/DN)
-    if dn != 0.0 and dd > 0.0:
-        dp = dn * (dd ** (1.0 - 1.0 / dn))
-    else:
-        dp = 1.0
+    dp = np.where((dn != 0.0) & (dama > 0.0), dn * (np.maximum(dama, _TINY) ** (1.0 - 1.0 / dn)), 1.0)
 
     grow = eps_f > 0.0
     # Fortran: IF (EPSF > ZERO) UVAR = UVAR + DP * DPLA / EPSF

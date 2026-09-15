@@ -67,7 +67,7 @@ def _rate_factor(fail, deps, dt, dev_from_6):
             + (deps[:, 2] - tr3) ** 2 \
             + 0.5 * (deps[:, 3] ** 2 + deps[:, 4] ** 2 + deps[:, 5] ** 2)
     else:  # plane stress: thickness strain from incompressibility
-        dzz = -(deps[:, 0] + deps[:, 1]) * 0.5
+        dzz = -(deps[:, 0] + deps[:, 1])
         tr3 = (deps[:, 0] + deps[:, 1] + dzz) / 3.0
         ee = (deps[:, 0] - tr3) ** 2 + (deps[:, 1] - tr3) ** 2 \
             + (dzz - tr3) ** 2 + 0.5 * deps[:, 2] ** 2

@@ -882,6 +882,8 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
         inc.iterations = it + 1
         if not np.isfinite(rnorm):
             break
+        if it > 0 and rnorm > 1e4 * ref:
+            break
         if it == 0:
             # reference: the largest of the applied load, the inertial
             # force of the predicted motion (THE force scale of a free
@@ -916,11 +918,15 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
         K_eff = ap1 * K + M_diag
         if C_eff is not None:
             K_eff = K_eff + C_eff
-        if constr is not None:
-            du_eq = constr.expand(
-                solver.solve(constr.reduce_matrix(K_eff), R))
-        else:
-            du_eq = solver.solve(K_eff, R)
+        try:
+            if constr is not None:
+                du_eq = constr.expand(
+                    solver.solve(constr.reduce_matrix(K_eff), R))
+            else:
+                du_eq = solver.solve(K_eff, R)
+        except (RuntimeError, ValueError):
+            inc.converged = False
+            break
         du, dur = dof.scatter_solution(du_eq)
         u = u + du
         ur_s = ur_s + dur
@@ -929,7 +935,7 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
         # accept when the correction is negligible against the accumulated
         # increment, re-evaluating the residual at the corrected state
         unorm = np.linalg.norm(dof.gather_residual(u, ur_s))
-        if np.linalg.norm(du_eq) <= ip.impl_tol * max(unorm, 1e-30) \
+        if np.isfinite(unorm) and np.linalg.norm(du_eq) <= ip.impl_tol * max(unorm, 1e-30) \
                 and it > 0:
             a_new = c0 * u - v / (beta * dt) - (0.5 / beta - 1.0) * a
             ar_new = c0 * ur_s - vr / (beta * dt) - (0.5 / beta - 1.0) * ar

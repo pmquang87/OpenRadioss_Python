@@ -248,6 +248,9 @@ def write_anim_state(path: str, model: Model, t: float,
         if "VEL" in vect:
             fh.write("VECTORS VELOCITY double\n")
             _write_block(fh, model.v, "%.9E")
+        if ("ACC" in vect or "ACCEL" in vect) and hasattr(model, "a") and model.a is not None:
+            fh.write("VECTORS ACCELERATION double\n")
+            _write_block(fh, model.a, "%.9E")
         # user node ids (ITAB), row-aligned with POINTS — appended after the
         # vectors so parsers reading the historical prefix keep working
         fh.write("SCALARS NODE_ID int 1\nLOOKUP_TABLE default\n")

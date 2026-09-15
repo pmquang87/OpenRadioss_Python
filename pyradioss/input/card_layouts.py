@@ -30,6 +30,7 @@ line up exactly like the reference reader's.
 
 from __future__ import annotations
 
+import re
 from typing import Dict, List
 
 
@@ -51,17 +52,21 @@ def fmt_float(v, width: int = 20) -> str:
     Falls back to ``%.<n>G`` only if repr would not fit the field.
     """
     if isinstance(v, str):
-        v = float(v.replace("D", "E").replace("d", "e"))
+        v = float(re.sub(r'(?<=[0-9.])([+-])(?=[0-9])', r'E\1', v.replace("D", "E").replace("d", "e").strip()))
     v = float(v)
     s = repr(v)
     if len(s) > width:
-        for prec in (16, 14, 12, 10, 8, 6, 4):
+        for prec in range(16, 0, -1):
             s = f"{v:.{prec}G}"
             if len(s) <= width:
                 break
         if len(s) > width:
-            exp_prec = max(1, width - 7)
-            s = f"{v:.{exp_prec}E}"
+            for exp_prec in range(max(0, width - 6), -1, -1):
+                s = f"{v:.{exp_prec}E}"
+                if len(s) <= width:
+                    break
+        if len(s) > width:
+            s = s[:width]
     return f"{s:>{width}}"
 
 

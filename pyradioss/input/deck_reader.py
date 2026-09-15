@@ -128,13 +128,17 @@ class Card:
         return [_to_float(t) for t in self.tokens()]
 
 
+def parse_fortran_float(s: str) -> float:
+    """Centralized Fortran scientific notation normalizer: handles D/d exponents
+    and omitted-E sign notation (e.g., '1.5-3' -> '1.5E-3')."""
+    cleaned = s.strip().rstrip(",")
+    return float(re.sub(r'(?<=[0-9.])([+-])(?=[0-9])', r'E\1', cleaned.replace('D', 'E').replace('d', 'e').strip()))
+
+
 def _to_float(tok: str) -> float:
-    """Parse a Fortran-flavoured real: allows D exponents ('1.5D-3')."""
-    s = tok.strip().rstrip(",")
-    try:
-        return float(s)
-    except ValueError:
-        return float(s.replace("D", "E").replace("d", "e"))
+    """Parse a Fortran-flavoured real: allows D exponents ('1.5D-3') and omitted-E notation."""
+    return parse_fortran_float(tok)
+
 
 def _to_int(tok: str) -> int:
     """Parse an integer: allows float strings by truncating them (e.g., '500.0' -> 500)."""
@@ -142,7 +146,7 @@ def _to_int(tok: str) -> int:
     try:
         return int(s)
     except ValueError:
-        return int(float(s.replace("D", "E").replace("d", "e")))
+        return int(parse_fortran_float(s))
 
 
 @dataclass
@@ -185,7 +189,7 @@ class KeywordBlock:
         what the real fixed reader sees (a blank card = every field at
         its default), so per-layout card indices line up exactly."""
         if not self.blank_slots:
-            return self.cards
+            return list(self.cards)
         out: List[Card] = []
         slots, si = self.blank_slots, 0          # ascending by construction
         for i, c in enumerate(self.cards):

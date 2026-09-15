@@ -298,8 +298,8 @@ def hexa_post(xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
         else:
             Q = 0.0
         if live:
-            dt_crit[e] = dtfac[e] * lc[e] / (Q + np.sqrt(Q * Q
-                                                         + c[e] * c[e]))
+            denom = Q + np.sqrt(Q * Q + c[e] * c[e])
+            dt_crit[e] = (dtfac[e] * lc[e] / denom) if denom > EM20 else EP30
         else:
             dt_crit[e] = EP30
     return fe, dt_crit, w_visc, qvw_new, deint0, dehour
@@ -830,7 +830,7 @@ def law70_tab2d(xg, rates, Y, x, r):
             i = 1
         elif i > m - 1:
             i = m - 1
-        t = (xk - xg[i - 1]) / (xg[i] - xg[i - 1])       # unclamped
+        t = (xk - xg[i - 1]) / max(xg[i] - xg[i - 1], 1e-20)       # unclamped
         if nr == 1:
             out[k] = Y[i - 1, 0] + t * (Y[i, 0] - Y[i - 1, 0])
         else:
@@ -840,7 +840,7 @@ def law70_tab2d(xg, rates, Y, x, r):
                 j = 1
             elif j > nr - 1:
                 j = nr - 1
-            u = (rk - rates[j - 1]) / (rates[j] - rates[j - 1])   # unclamped
+            u = (rk - rates[j - 1]) / max(rates[j] - rates[j - 1], 1e-20)   # unclamped
             y0 = Y[i - 1, j - 1] + t * (Y[i, j - 1] - Y[i - 1, j - 1])
             y1 = Y[i - 1, j] + t * (Y[i, j] - Y[i - 1, j])
             out[k] = y0 + u * (y1 - y0)
@@ -1185,7 +1185,8 @@ def tetra10_post(xe, dndx, vol, vol_tot, lc, rho, trD, deps, sig, sig_old,
         else:
             Q = 0.0
         if live:
-            dt_crit[e] = dtfac[e] * lc[e] / (Q + np.sqrt(Q * Q + c[e] * c[e]))
+            denom = Q + np.sqrt(Q * Q + c[e] * c[e])
+            dt_crit[e] = (dtfac[e] * lc[e] / denom) if denom > EM20 else EP30
         else:
             dt_crit[e] = EP30
 

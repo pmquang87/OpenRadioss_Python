@@ -10544,6 +10544,12 @@ class StarterDeck:
         self.lines.append("".join(fmt_float(x) for x in m1[:3]))
         self.lines.append(fmt_float(radius))
 
+    def rwall_paral(self, wid: int, title: str, cards) -> None:
+        """``/RWALL/PARAL``."""
+        self._header("RWALL", "PARAL", wid)
+        self._title(title)
+        self.lines.extend((c.raw if hasattr(c, "raw") else str(c)).rstrip("\r\n") for c in cards)
+
     # ---- contact -------------------------------------------------------------------
 
     def inter_type2(self, iid: int, title: str, grnod: int, surf: int,
@@ -11610,7 +11616,7 @@ def _conv_prop(d: StarterDeck, b: KeywordBlock) -> None:
                             else 0.01)
         else:
             if cards:
-                f = cards[0].ints() + [0, 0, 0]
+                f = cards[0].ints() + [0, 0, 0, 0]
                 ishell = f[0] if f[0] > 0 else 1
                 ismstr, ish3n, idrill = f[1], f[2], f[3]
             if len(cards) >= 2:
@@ -11804,18 +11810,19 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
     elif key0 == "EOS":
         kind = b.parts[1].upper()
         key = "/EOS/" + kind
-        t = b.cards[0].floats() + [0.0] * 6
+        title, cards = _title_cards(b)
+        t = cards[0].floats() + [0.0] * 6 if cards else [0.0] * 6
         if kind in ("IDEAL-GAS", "IDEAL_GAS"):
             d.eos_ideal_gas(b.user_id, t[0], t[1])
         elif key == "/EOS/POLYNOMIAL":
-            e0 = b.cards[1].floats()[0] if len(b.cards) > 1 else 0.0
+            e0 = cards[1].floats()[0] if len(cards) > 1 else 0.0
             d.eos_polynomial(b.user_id, t[0], t[1], t[2], t[3], t[4], t[5], e0)
         elif key == "/EOS/LINEAR":
             d.eos_linear(b.user_id, t[0], t[1], t[2], t[3])
         elif key == "/EOS/STIFF-GAS":
-            d.eos_stiff_gas(b.user_id, title, b.cards)
+            d.eos_stiff_gas(b.user_id, title, cards)
         elif key == "/EOS/GRUNEISEN":
-            d.eos_gruneisen(b.user_id, title, b.cards)
+            d.eos_gruneisen(b.user_id, title, cards)
         else:
             d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                         note=f"unknown eos {kind}")

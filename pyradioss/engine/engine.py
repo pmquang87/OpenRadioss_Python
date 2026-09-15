@@ -170,10 +170,6 @@ def _energies(model: Model, state: EngineState) -> dict:
     if getattr(model, "inertia", None) is not None and getattr(model, "vr", None) is not None:
         real_rot = model.inertia < 1e29
         ke += float(0.5 * (model.inertia[real_rot, None] * model.vr[real_rot] ** 2).sum())
-    if hasattr(model, "rigid_bodies") and model.rigid_bodies:
-        for rb in model.rigid_bodies.values():
-            J = rb.R @ rb.J0 @ rb.R.T
-            ke += float(0.5 * rb.w @ J @ rb.w)
     total = ie + ke + he + state.econt + state.e_num + state.e_damp
     # the error reference is the ENERGY SCALE OF THE RUN: the largest of
     # the initial energy, external work, current energies and the running
@@ -430,10 +426,6 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         if getattr(model, "inertia", None) is not None and getattr(model, "vr", None) is not None:
             real_rot = model.inertia < 1e29
             ke0 += float(0.5 * (model.inertia[real_rot, None] * model.vr[real_rot] ** 2).sum())
-        if hasattr(model, "rigid_bodies") and model.rigid_bodies:
-            for rb in model.rigid_bodies.values():
-                J = rb.R @ rb.J0 @ rb.R.T
-                ke0 += float(0.5 * rb.w @ J @ rb.w)
         _energies.e0 = ke0 + _element_energy_sum(model)
 
         # ---- priming pass: dt=0 'cycle' just to collect the initial
@@ -647,6 +639,13 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                                  model.inertia, inv_inertia, ams_nodes)
             state.e_madd = noda.e_madd
 
+        dt_prev = state.dt_prev if state.dt_prev is not None else dt
+        dt = controls.dt_scale * dt_next
+        dt = min(dt, controls.t_end - state.t)
+        if controls.stop_tstop > 0 and state.t + dt >= controls.stop_tstop:
+            dt = max(controls.stop_tstop - state.t, 0.0)
+        dt12 = 0.5 * (dt_prev + dt)
+
         # ---- 3d. /MPC Lagrange forces (M6): the tiny coupled solve that
         # makes the ordinary update below satisfy G a = 0 (see mpc.py);
         # runs after mass scaling so it sees the final cycle masses
@@ -671,8 +670,6 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         model.fint = fint
         model.fext = fext
         model.a = acc
-        dt_prev = state.dt_prev if state.dt_prev is not None else dt
-        dt12 = 0.5 * (dt_prev + dt)
         model.v += acc * dt12
         model.vr += mint * inv_inertia[:, None] * dt12
         state.dt_prev = dt

@@ -9,13 +9,14 @@ per-type routines) and the starter reader
 * ``/SENSOR/DISP`` — fires when a node's displacement magnitude first
   exceeds Dmin;
 * ``/SENSOR/VEL``  — fires when a node's velocity magnitude first exceeds Vmax;
+* ``/SENSOR/DIST`` — fires when distance between two nodes is outside [dmin, dmax];
 * ``/SENSOR/NOT``  — active when sens_id1 is inactive;
 * ``/SENSOR/AND``  — active when both sens_id1 and sens_id2 are active;
 * ``/SENSOR/OR``   — active when either sens_id1 or sens_id2 is active.
 
 Semantics (matching the original):
 
-* physical sensors (TIME, DISP, VEL) LATCH: once fired, they stay active
+* physical sensors (TIME, DISP, VEL, DIST) LATCH: once fired, they stay active
   for the rest of the run (the fire time is part of the restart state);
 * logical sensors (NOT, AND, OR) update dynamically per cycle based on
   the state of their inputs and their Tdelay;
@@ -68,6 +69,20 @@ class Sensors:
                 self.defs[sn.id] = ("VEL", sn.vmax, ni, sn.tdelay, sn.fcut)
                 log.info(f"     /SENSOR/VEL/{sn.id}: FIRES WHEN NODE "
                          f"{sn.node_id} VELOCITY >= {sn.vmax:g}")
+            elif sn.kind == "DIST":
+                try:
+                    nid1 = getattr(sn, "node_id1", 0) or getattr(sn, "node1", 0)
+                    nid2 = getattr(sn, "node_id2", 0) or getattr(sn, "node2", 0)
+                    n1 = model.node_index(nid1)
+                    n2 = model.node_index(nid2)
+                except (KeyError, ValueError):
+                    log.error(f"/SENSOR/DIST/{sn.id}: unknown node(s) "
+                              f"{getattr(sn, 'node_id1', None)}, {getattr(sn, 'node_id2', None)}",
+                              "SENSOR CHECK")
+                    continue
+                self.defs[sn.id] = ("DIST", n1, n2, sn.dmin, sn.dmax, sn.tdelay)
+                log.info(f"     /SENSOR/DIST/{sn.id}: FIRES WHEN DISTANCE BETWEEN "
+                         f"NODES {nid1} AND {nid2} OUTSIDE [{sn.dmin:g}, {sn.dmax:g}]")
             elif sn.kind == "NOT":
                 self.defs[sn.id] = ("NOT", sn.sens_id1, sn.tdelay)
                 log.info(f"     /SENSOR/NOT/{sn.id}: ACTIVE WHEN SENSOR "
@@ -123,6 +138,18 @@ class Sensors:
                     self.status[sid] = True
                     log.info(f" -- /SENSOR/{sid} ACTIVATED AT TIME "
                              f"{self.fire_time[sid]:12.5E} (VELOCITY CRITERION)")
+            elif kind == "DIST":
+                n1, n2, dmin, dmax, tdelay = defn[1], defn[2], defn[3], defn[4], defn[5]
+                if sid not in self.crit_time:
+                    diff = self.model.x[n1] - self.model.x[n2]
+                    dist = float(np.linalg.norm(diff))
+                    if dist < dmin or (dmax > 0.0 and dist > dmax):
+                        self.crit_time[sid] = t
+                if sid in self.crit_time and (t + 1e-12) >= self.crit_time[sid] + tdelay:
+                    self.fire_time[sid] = self.crit_time[sid] + tdelay
+                    self.status[sid] = True
+                    log.info(f" -- /SENSOR/{sid} ACTIVATED AT TIME "
+                             f"{self.fire_time[sid]:12.5E} (DISTANCE CRITERION)")
 
         # 2. Update logical sensors (iterate to handle cascaded dependencies)
         changed = True

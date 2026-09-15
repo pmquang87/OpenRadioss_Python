@@ -97,12 +97,12 @@ class TestRateFactor:
     def test_3d_vs_plane_stress_consistency(self):
         """3D and plane-stress paths give the same rate for matching states.
 
-        For plane stress: e_zz = -(e_xx + e_yy)/2 (incompressibility).
+        For plane stress: e_zz = -(e_xx + e_yy) (incompressibility).
         The 3D path with that e_zz and zero shears should match.
         """
         fail = _Fail(D4=0.1, eps_dot_0=1.0)
         exx, eyy, exy = 0.05, -0.02, 0.01
-        ezz = -(exx + eyy) * 0.5
+        ezz = -(exx + eyy)
 
         deps_shell = np.array([[exx, eyy, exy]])
         deps_solid = np.array([[exx, eyy, ezz, exy, 0.0, 0.0]])

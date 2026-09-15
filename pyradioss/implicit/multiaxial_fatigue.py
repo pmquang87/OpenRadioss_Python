@@ -523,7 +523,7 @@ def monte_carlo_multiaxial_damage(freqs_hz, Scross, proj, m, C, duration, seed,
     T = t[-1] - t[0] if t.size > 1 else duration
     dr = D / T if T > 0 else 0.0
     tf, s_eq = sf.life_and_equivalent(
-        dr, ranges.size / T if T > 0 else 0.0, m, Ceff)
+        dr, float(counts.sum()) / T if T > 0 else 0.0, m, Ceff)
     return {"method": "monte_carlo_multiaxial", "damage_rate": dr, "life": tf,
             "s_eq": s_eq, "ncycles": float(counts.sum()), "ranges": ranges,
             "counts": counts, "duration": T, "rms": float(np.std(s))}

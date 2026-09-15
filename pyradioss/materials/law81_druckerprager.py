@@ -352,16 +352,15 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
             # plastic strain updates
             dvd += depspd_dlam * dlam
             epspd[ix] = epspd0[ix] + np.maximum(dvd, 0.0)
-            dvv += depspv_dlam * dlam
+            ddvv = depspv_dlam * dlam
+            dvv += ddvv
             if soft_flag == 1:
                 dvv = np.maximum(dvv, 0.0)
             epspv[ix] = epspv_base + dvv
 
-            # stress update (upstream: lame * TOTAL depspv accumulated)
+            # stress update
             dp6 = dlam[:, None] * dgds
-            sig[ix, 0] -= g2[ix] * dp6[:, 0] - lame[ix] * dvv
-            sig[ix, 1] -= g2[ix] * dp6[:, 1] - lame[ix] * dvv
-            sig[ix, 2] -= g2[ix] * dp6[:, 2] - lame[ix] * dvv
+            sig[ix, :3] -= g2[ix, None] * dp6[:, :3] - lame[ix, None] * ddvv[:, None]
             sig[ix, 3] -= g[ix] * dp6[:, 3]
             sig[ix, 4] -= g[ix] * dp6[:, 4]
             sig[ix, 5] -= g[ix] * dp6[:, 5]

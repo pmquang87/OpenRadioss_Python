@@ -249,8 +249,8 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
                 
                 f = A_i * P2 + B_i * Q2 - yld_i * yld_i
                 df = -(A_i * nu1 * P2 * P_ + 3.0 * B_i * nu2 * Q2 * Q_) * (E - 2.0 * dr * H_i) / yld_i - 2.0 * H_i * yld_i
-                
-                dpla_j = np.where(dpla_i > 0.0, np.maximum(0.0, dpla_i - f / df), 0.0)
+                df_safe = np.where(np.abs(df) > 1e-20, df, -1e-20)
+                dpla_j = np.where(dpla_i > 0.0, np.maximum(0.0, dpla_i - f / df_safe), 0.0)
                 
             epsp[idx] = ep0 + dpla_j
             

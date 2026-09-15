@@ -418,27 +418,46 @@ class RigidBodyEngine:
         REFERENCE point's velocity that gets prescribed.  Work is booked
         J . v_imp, the convention of the global-dof drives above.
         """
-        if not self.skew_drives or self.pivot:
+        if not self.skew_drives:
             return 0.0
         wext = 0.0
+        Jsp = self.R @ self.J0 @ self.R.T
         for row, dof, fct, scale, facx, t0, t1, x0 in self.skew_drives:
             if t < t0 or t > t1:
                 continue
-            e = self.skews.axes[row][dof]
-            if x0 is None:                                   # /IMPVEL
-                vimp = scale * fct.eval((t - 0.5 * dt) * facx)
-            else:                                            # /IMPDISP
-                if dt <= 0.0:
+            axis_idx = dof - 3 if dof >= 3 else dof
+            e = self.skews.axes[row][axis_idx]
+            if dof < 3:
+                if self.pivot:
                     continue
-                # land the MASTER on x0 + d(t) along the skew axis
-                target = float(x0 @ e) + scale * fct.eval(t * facx)
-                vimp = (target - float(x[self.master] @ e)) / dt
-            vref_new = vimp - float(
-                cross3(self.w, x[self.master] - self.x_ref) @ e)
-            dv = vref_new - float(self.v_ref @ e)
-            v_old_e = float(v_ref_old @ e) if v_ref_old is not None else float(self.v_ref @ e)
-            wext += self.M * dv * 0.5 * (v_old_e + vref_new)
-            self.v_ref += e * dv
+                if x0 is None:                                   # /IMPVEL
+                    vimp = scale * fct.eval((t - 0.5 * dt) * facx)
+                else:                                            # /IMPDISP
+                    if dt <= 0.0:
+                        continue
+                    # land the MASTER on x0 + d(t) along the skew axis
+                    target = float(x0 @ e) + scale * fct.eval(t * facx)
+                    vimp = (target - float(x[self.master] @ e)) / dt
+                vref_new = vimp - float(
+                    cross3(self.w, x[self.master] - self.x_ref) @ e)
+                dv = vref_new - float(self.v_ref @ e)
+                v_old_e = float(v_ref_old @ e) if v_ref_old is not None else float(self.v_ref @ e)
+                wext += self.M * dv * 0.5 * (v_old_e + vref_new)
+                self.v_ref += e * dv
+            else:
+                if x0 is None:                                   # /IMPVEL
+                    wimp = scale * fct.eval((t - 0.5 * dt) * facx)
+                else:                                            # /IMPDISP
+                    if dt <= 0.0:
+                        continue
+                    wimp = scale * (fct.eval(t * facx) - fct.eval((t - dt) * facx)) / dt
+                dw = wimp - float(self.w @ e)
+                w_new = self.w + e * dw
+                dL = Jsp @ (e * dw)
+                w_mid = 0.5 * (self.w + w_new)
+                wext += float(dL @ w_mid)
+                self.w = w_new
+                self.L = Jsp @ self.w
         return wext
 
     # ------------------------------------------------------------------
@@ -492,9 +511,10 @@ class RigidBodyEngine:
                 if t_next < t0 or t_next > t1:
                     continue
                 vimp = scale * fct.eval(t_mid * facx)
-                dv = vimp - self.v_ref[dof]
-                wext += self.M * dv * 0.5 * (v_ref_old[dof] + vimp)           # J . v_imp, as /IMPVEL
-                self.v_ref[dof] = vimp
+                vref_new = vimp - cross3(self.w, x[self.master] - self.x_ref)[dof]
+                dv = vref_new - self.v_ref[dof]
+                wext += self.M * dv * 0.5 * (v_ref_old[dof] + vref_new)           # J . v_imp, as /IMPVEL
+                self.v_ref[dof] = vref_new
             # master /IMPDISP (M37): the master dof lands on x0 + d(t)
             # exactly — velocity from the CURRENT master position, with
             # the spin transport w x (x_m - x_ref) removed so it is the
@@ -514,6 +534,8 @@ class RigidBodyEngine:
             # bcs10 runs after fixvel)
             wext += self._apply_skew_drives(x, t_next, dt, v_ref_old)
             self.v_ref[self.fix_tra] = 0.0
+        else:
+            wext += self._apply_skew_drives(x, t_next, dt, v_ref_old)
 
         # angular momentum update + spin from the co-rotated inertia
         self.L = self.L + T * dt
@@ -558,6 +580,12 @@ class RigidBodyEngine:
             wimp = scale * (fct.eval(t_next * facx)
                             - fct.eval((t_next - dt) * facx)) / dt
             wext += _spin_drive(rdof, wimp)
+        for row, dof, fct, scale, facx, t0, t1, _ in self.skew_drives:
+            if dof >= 3 and t_next >= t0 and t_next <= t1:
+                axis_idx = dof - 3
+                e = self.skews.axes[row][axis_idx]
+                w += e * (float(self.w @ e) - float(w @ e))
+                self.L = Jsp @ w
         # /BCS in a /SKEW on the master (M39): project the constrained skew
         # axes out of BOTH the reference velocity and the spin
         if self.bc_skew:

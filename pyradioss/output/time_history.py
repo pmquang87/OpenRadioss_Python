@@ -130,13 +130,36 @@ class TimeHistory:
             rb = rbs.get(oid) if rbs is not None else None
             if rb is not None:
                 if var_upper.startswith("D"):
-                    return float(rb.x_cg[comp] - rb.x_cg0[comp]) if hasattr(rb, "x_cg0") else 0.0
+                    if hasattr(rb, "x_cg0"):
+                        disp = rb.x_cg - rb.x_cg0
+                        if var_upper[-1] in ("X", "Y", "Z"):
+                            return float(disp[comp])
+                        return float(np.linalg.norm(disp))
+                    return 0.0
                 elif var_upper.startswith("V"):
-                    return float(rb.v_cg[comp]) if hasattr(rb, "v_cg") else 0.0
+                    if hasattr(rb, "v_cg"):
+                        if var_upper[-1] in ("X", "Y", "Z"):
+                            return float(rb.v_cg[comp])
+                        return float(np.linalg.norm(rb.v_cg))
+                    return 0.0
+                elif var_upper.startswith("W") or var_upper.startswith("ROT"):
+                    if hasattr(rb, "w"):
+                        if var_upper[-1] in ("X", "Y", "Z"):
+                            return float(rb.w[comp])
+                        return float(np.linalg.norm(rb.w))
+                    return 0.0
                 elif var_upper.startswith("F"):
-                    return float(rb.f_res[comp]) if hasattr(rb, "f_res") else 0.0
+                    if hasattr(rb, "f_res"):
+                        if var_upper[-1] in ("X", "Y", "Z"):
+                            return float(rb.f_res[comp])
+                        return float(np.linalg.norm(rb.f_res))
+                    return 0.0
                 elif var_upper.startswith("M"):
-                    return float(rb.m_res[comp]) if hasattr(rb, "m_res") else 0.0
+                    if hasattr(rb, "m_res"):
+                        if var_upper[-1] in ("X", "Y", "Z"):
+                            return float(rb.m_res[comp])
+                        return float(np.linalg.norm(rb.m_res))
+                    return 0.0
 
         elif kind in ("SPRING", "SPRI"):
             g = getattr(model, "springs", None)
@@ -161,7 +184,7 @@ class TimeHistory:
                             if L > 1e-20:
                                 return float(st["force"][r] * (dx[c] / L))
                         return 0.0
-                    elif var_upper in ("D", "DISP"):
+                    elif var_upper in ("D", "DISP", "DL"):
                         if "disp" in st:
                             return float(st["disp"][r])
                         if "L" in st and "L0" in st:
@@ -178,8 +201,8 @@ class TimeHistory:
                     elif var_upper in ("E", "IE", "ENERGY"):
                         return float(st["eint"][r]) if "eint" in st else 0.0
 
-        elif kind in ("SHEL", "SHELL", "BRIC", "BRICK", "SH3N", "TETR", "QUAD", "BEAM", "TRUS"):
-            for attr in ("shells", "shells_qbat", "shells_qeph", "bricks", "bricks_heph", "tetras", "sh3n", "sh3n_dkt18", "bric20s", "shel16s", "tetra10s", "quads"):
+        elif kind in ("SHEL", "SHELL", "BRIC", "BRICK", "SH3N", "TETR", "TETRA", "QUAD", "BEAM", "TRUS", "TRUSS", "SOLID"):
+            for attr in ("shells", "shells_qbat", "shells_qeph", "bricks", "bricks_heph", "tetras", "sh3n", "sh3n_dkt18", "bric20s", "shel16s", "tetra10s", "quads", "beams", "trusses"):
                 g = getattr(model, attr, None)
                 if g is not None and oid in g.ids:
                     row = np.where(g.ids == oid)[0]

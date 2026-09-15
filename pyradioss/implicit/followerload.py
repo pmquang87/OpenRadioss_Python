@@ -118,7 +118,10 @@ def pload_tangent(loads, model, t, x, dof):
         p = scale * fct.eval(t)
         if p == 0.0:
             continue
-        xs = x[segs]                                     # (nseg, 4, 3)
+        xs = x[segs].copy()                              # (nseg, 4, 3)
+        degen = (segs[:, 3] == segs[:, 2]) | (segs[:, 3] <= 0)
+        if np.any(degen):
+            xs[degen, 3] = xs[degen, 2]
         C13 = _skew(xs[:, 2] - xs[:, 0])                 # [d13]x
         C24 = _skew(xs[:, 3] - xs[:, 1])                 # [d24]x
         w = wgt
@@ -136,7 +139,11 @@ def pload_tangent(loads, model, t, x, dof):
         for k in range(4):
             for c in range(3):
                 edofs[:, 3 * k + c] = segs[:, k] * DOFS_PER_NODE + c
-        eq = dof.eq[edofs]
+        if np.any(degen & (segs[:, 3] <= 0)):
+            edofs[degen & (segs[:, 3] <= 0), 9:] = -1
+        eq = np.full(edofs.shape, -1, dtype=np.int64)
+        valid = (edofs >= 0) & (edofs < len(dof.eq))
+        eq[valid] = dof.eq[edofs[valid]]
         row_eq = np.repeat(eq[:, :, None], 12, axis=2)
         col_eq = np.repeat(eq[:, None, :], 12, axis=1)
         keep = (row_eq >= 0) & (col_eq >= 0)

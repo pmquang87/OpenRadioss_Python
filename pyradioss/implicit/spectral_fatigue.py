@@ -320,7 +320,7 @@ def dirlik_coefficients(moments):
         R = (gamma - x_m - D1 ** 2) / denomR
         R = min(max(R, 1e-6), 1.0 - 1e-9)  # keep R in (0,1) (Dirlik range)
         D2 = (1.0 - gamma - D1 + D1 ** 2) / (1.0 - R)
-        D2 = max(D2, 0.0)
+        D2 = min(max(D2, 0.0), max(1.0 - D1, 0.0))
         D3 = 1.0 - D1 - D2
         D3 = max(D3, 0.0)
         Q = 1.25 * (gamma - D3 - D2 * R) / D1
@@ -541,7 +541,7 @@ def monte_carlo_damage(freqs_hz, psd, m, C, duration, seed, fs=None,
     D = float(np.sum(counts * ranges ** m) / Ceff) if ranges.size else 0.0
     T = t[-1] - t[0] if t.size > 1 else duration
     dr = D / T if T > 0 else 0.0
-    tf, s_eq = life_and_equivalent(dr, ranges.size / T if T > 0 else 0.0,
+    tf, s_eq = life_and_equivalent(dr, float(counts.sum()) / T if T > 0 else 0.0,
                                    m, Ceff)
     return {"method": "monte_carlo", "damage_rate": dr, "life": tf,
             "s_eq": s_eq, "ncycles": float(counts.sum()),

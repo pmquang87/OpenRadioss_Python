@@ -620,6 +620,7 @@ def _plas24_one(p, sigc, dam, crak, eps6, scle2, vk0_a, vk_a, rob_a,
             else:
                 to = abs(sm)
                 dfdto = dfdto2
+            to = np.maximum(to, 1e-20)
             # (HALF - SIGN(HALF, VK-1)): 1 while hardening (VK < 1), 0 at
             # and beyond the failure surface
             ecr = phi * hp * dfdto / to * (1.0 if vk < 1.0 else 0.0)
@@ -628,6 +629,7 @@ def _plas24_one(p, sigc, dam, crak, eps6, scle2, vk0_a, vk_a, rob_a,
             dfdto2 = 3.0 * b0
             if dfdto1 <= dfdto2:
                 to = np.sqrt(1.5) * vk * rf
+                to = np.maximum(to, 1e-20)
                 phi = (alpha * 3.0 * sm + ajj) / to
                 ecr = phi * hp * dfdto1 * (1.0 if vk < 1.0 else 0.0)
             else:
