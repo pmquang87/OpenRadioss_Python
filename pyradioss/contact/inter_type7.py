@@ -641,8 +641,7 @@ class ContactType7:
         dist = best_d[active]
         d = np.maximum(dist, EM20)
         nvec = (x[ni] - best_pt[active]) / d[:, None]    # push-out direction
-        dot_n = np.einsum("nb,nb->n", nvec, n_seg)
-        fallback = (dist <= EM20) | (dot_n < 0.0)
+        fallback = dist <= EM20
         nvec = np.where(fallback[:, None], n_seg, nvec)
         wseg = best_w[active]
 
