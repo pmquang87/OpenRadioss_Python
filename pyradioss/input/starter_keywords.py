@@ -45522,11 +45522,12 @@ def read_mat_law93(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     else:
         # Standard 8-card format (matl93_ORTH_HILL.cfg)
         # Card 2: G13, G23, Nu13, Nu23 (%20lg%20lg%20lg%20lg)
-        c2 = valid_cards[2].cut("MAT_LAW93_3_STD") if block.fixed else valid_cards[2].tokens()
-        g13 = _safe_float(c2[0]) if len(c2) > 0 else 0.0
-        g23 = _safe_float(c2[1]) if len(c2) > 1 else 0.0
-        nu13 = _safe_float(c2[2]) if len(c2) > 2 else 0.0
-        nu23 = _safe_float(c2[3]) if len(c2) > 3 else 0.0
+        if len(valid_cards) > 2:
+            c2 = valid_cards[2].cut("MAT_LAW93_3_STD") if block.fixed else valid_cards[2].tokens()
+            g13 = _safe_float(c2[0]) if len(c2) > 0 else 0.0
+            g23 = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+            nu13 = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+            nu23 = _safe_float(c2[3]) if len(c2) > 3 else 0.0
 
         # Card 3: NL, VP, FCUT (%10d%10d%20lg)
         cur_idx = 3
