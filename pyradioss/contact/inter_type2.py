@@ -291,7 +291,7 @@ class ContactType2:
         for k in range(4):
             np.add.at(mass_eff, seg[:, k], -w[:, k] * m_s)
         touched = np.unique(seg)
-        inv_mass_eff[touched] = 1.0 / mass_eff[touched]
+        inv_mass_eff[touched] = np.where(mass_eff[touched] > 0.0, 1.0 / np.maximum(mass_eff[touched], 1e-30), 0.0)
         self.active[dead] = False
 
     # ------------------------------------------------------------------
@@ -407,10 +407,6 @@ class ContactType2:
                     I_inv = np.linalg.pinv(I_tensor, rcond=1e-8)
                     omega_main = np.einsum("nij,nj->ni", I_inv, L)
                     vr[sn] = omega_main
-
-                    # Add offset rotation to translational velocity
-                    d_center = x_new - x0
-                    v[sn] += np.cross(omega_main, d_center)
                 except Exception:
                     pass
             elif sf == 2:
@@ -418,10 +414,6 @@ class ContactType2:
                 vrs = vr[self.seg[act]]
                 omega_main = np.einsum("nk,nkb->nb", self.w[act], vrs)
                 vr[sn] = omega_main
-
-                # Add offset rotation to translational velocity
-                d_interp = x_new - np.einsum("nk,nkb->nb", self.w[act], xs)
-                v[sn] += np.cross(omega_main, d_interp)
 
         x[sn] = x_new
         self.x_prev[act] = x_new
