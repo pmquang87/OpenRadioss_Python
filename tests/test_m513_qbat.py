@@ -473,7 +473,7 @@ def test_qbat_implicit_internal_forces_consistency():
         u_el[6 * a:6 * a + 3] = u[a]
         u_el[6 * a + 3:6 * a + 6] = ur[a]
 
-    f_tangent = K @ u_el
+    f_tangent = -(K @ u_el)
 
     fint = np.zeros((4, 3))
     mint = np.zeros((4, 3))

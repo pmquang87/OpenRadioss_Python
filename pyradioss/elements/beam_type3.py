@@ -135,13 +135,15 @@ def _frame(x1: np.ndarray, x2: np.ndarray, x3: np.ndarray):
     n = len(d)
     if n == 0:
         return np.zeros((0, 3, 3)), np.zeros(0)
-    L = np.maximum(norm3(d), EM20)
+    nd = norm3(d)
+    deg_d = nd <= EM20
+    L = np.maximum(nd, EM20)
     e1 = d / L[:, None]
     yref = x3 - x1                                # local y lies in (e1, yref)
     dot = np.einsum("nb,nb->n", yref, e1)
     e2 = yref - dot[:, None] * e1
     ne2 = norm3(e2)
-    deg = ne2 <= 1e-12
+    deg = (ne2 <= 1e-12) | deg_d
     if np.any(deg):
         # Fallback reference vector for collinear/degenerate orientation nodes:
         # choose global X if e1 is not aligned with X, else global Y
@@ -154,10 +156,15 @@ def _frame(x1: np.ndarray, x2: np.ndarray, x3: np.ndarray):
                 e2[i] = e2_cand / ne2_cand
                 ne2[i] = 1.0
             else:
-                e2[i] = np.array([0.0, 0.0, 1.0])
+                e2[i] = np.array([0.0, 1.0, 0.0]) if abs(e1_i[1]) < 0.9 else np.array([0.0, 0.0, 1.0])
                 ne2[i] = 1.0
     e2 /= np.maximum(ne2, EM20)[:, None]
     e3 = cross3(e1, e2)
+    if np.any(deg_d):
+        for i in np.where(deg_d)[0]:
+            e1[i] = np.array([1.0, 0.0, 0.0])
+            e2[i] = np.array([0.0, 1.0, 0.0])
+            e3[i] = np.array([0.0, 0.0, 1.0])
     return np.stack([e1, e2, e3], axis=2), L
 
 
@@ -279,6 +286,7 @@ def init_group(group, model, log):
         mres=np.zeros((n, 3)),        # Mx, My, Mz
         L0=L0,
         mass=mass,
+        off=np.ones(n, dtype=float),
         eint=np.zeros(n),
         ehour=np.zeros(n),            # always zero: no hourglass modes
         dt0=_exact_dt(L0, mass, inertia_c, slices),
@@ -382,7 +390,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     if group is None or getattr(group, "n", 0) == 0 or len(getattr(group, "conn", [])) == 0:
         return np.zeros(0)
     if dt is None or dt <= 0.0:
-        return group.state.get("dt0", np.zeros(group.n))
+        alive = group.state.get("off", np.ones(group.n, dtype=float)) > 0.0
+        return np.where(alive, group.state.get("dt0", np.zeros(group.n)), EP30)
     if v is None:
         v = np.zeros_like(x)
     if vr is None:
@@ -438,19 +447,20 @@ def _forces_core(group, x, v, vr, dt, fint, mint, plast_iters):
             _global_plastic_return(st, sl, mat, p, plast_iters)
 
     # ---- internal nodal forces & moments (pfint3, see docstring) -----------
+    alive = st.get("off", np.ones(group.n, dtype=float)) > 0.0
     N, Qy, Qz = fres[:, 0], fres[:, 1], fres[:, 2]
     Mx, My, Mz = mres[:, 0], mres[:, 1], mres[:, 2]
-    f2 = np.stack([N, Qy, Qz], axis=1)             # local internal force
+    f2 = np.stack([N, Qy, Qz], axis=1) * alive[:, None]             # local internal force
     hL = 0.5 * L
-    m1 = np.stack([-Mx, -My + Qz * hL, -Mz - Qy * hL], axis=1)
-    m2 = np.stack([Mx, My + Qz * hL, Mz - Qy * hL], axis=1)
+    m1 = np.stack([-Mx, -My + Qz * hL, -Mz - Qy * hL], axis=1) * alive[:, None]
+    m2 = np.stack([Mx, My + Qz * hL, Mz - Qy * hL], axis=1) * alive[:, None]
 
     # energy: midpoint resultants x rates x L (before scatter)
     fmid = 0.5 * (f_old + fres)
     mmid = 0.5 * (m_old + mres)
-    st["eint"] += L * dt * (
+    st["eint"] += np.where(alive, L * dt * (
         fmid[:, 0] * eps_dot + fmid[:, 1] * gy_dot + fmid[:, 2] * gz_dot
-        + mmid[:, 0] * kx_dot + mmid[:, 1] * ky_dot + mmid[:, 2] * kz_dot)
+        + mmid[:, 0] * kx_dot + mmid[:, 1] * ky_dot + mmid[:, 2] * kz_dot), 0.0)
 
     # back to global; fint/mint accumulate MINUS the internal terms
     # (elements package sign convention): -f1 = +f2 on node 1.
@@ -463,8 +473,9 @@ def _forces_core(group, x, v, vr, dt, fint, mint, plast_iters):
         np.add.at(mint, n2, -np.einsum("na,nba->nb", m2, E))
 
     # ---- critical time step (exact init value, length-rescaled) ------------
-    ratio = L / st["L0"]
-    return st["dt0"] * np.where(ratio < 1.0, ratio, ratio ** -0.5)
+    ratio = L / np.maximum(st["L0"], EM20)
+    dt_crit = st["dt0"] * np.where(ratio < 1.0, ratio, ratio ** -0.5)
+    return np.where(alive, dt_crit, EP30)
 
 
 # ----------------------------------------------------------------------------

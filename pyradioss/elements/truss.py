@@ -34,6 +34,7 @@ def init_group(group, model, log):
             group.state.update(
                 sig=np.zeros(0), epsp=np.zeros(0), area=np.zeros(0), L0=np.zeros(0),
                 mass=np.zeros(0), eint=np.zeros(0), ehour=np.zeros(0),
+                off=np.ones(0, dtype=float),
             )
         return np.zeros(0, dtype=np.int64), np.zeros(0, dtype=float), None
 
@@ -59,6 +60,7 @@ def init_group(group, model, log):
     group.state.update(
         sig=np.zeros(n), epsp=np.zeros(n), area=area, L0=L0,
         mass=mass, eint=np.zeros(n), ehour=np.zeros(n),
+        off=np.ones(n, dtype=float),
     )
     node_idx = group.conn.reshape(-1)
     return node_idx, np.repeat(mass / 2.0, 2), None
@@ -125,7 +127,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             sig[sl] = np.where(plastic, np.sign(sig[sl]) * (sy + H * dl),
                                sig[sl])
 
-    F = st["area"] * sig
+    alive = st.get("off", np.ones(len(conn), dtype=float)) > 0.0
+    F = st["area"] * sig * alive
     # tension (sig>0) pulls node 1 toward node 2: this force is already
     # the "-internal" contribution (see elements package docstring).
     fvec = F[:, None] * a
@@ -133,13 +136,14 @@ def forces(group, x, v, vr, dt, fint, mint):
         np.add.at(fint, conn[:, 0], fvec)
         np.add.at(fint, conn[:, 1], -fvec)
 
-    st["eint"] += st["area"] * L * 0.5 * (sig_old + sig) * deps
+    st["eint"] += np.where(alive, st["area"] * L * 0.5 * (sig_old + sig) * deps, 0.0)
     # dt = L/c.  A stiffness-free material (a /MAT/VOID truss, E = 0) has
     # c = 0 and claims NO time-step limit of its own — the same convention
     # the solid kernel documents for SSP = 0 (solid_hexa8._exact_dt_factor)
     # and the spring uses for k = 0.  Returned as EP30 rather than letting
     # the division produce a warned inf (M39 / M38-NEW-2).
-    return np.where(c > 0.0, L / np.maximum(c, EM20), EP30)
+    dt_crit = np.where(c > 0.0, L / np.maximum(c, EM20), EP30)
+    return np.where(alive, dt_crit, EP30)
 
 
 # ----------------------------------------------------------------------------

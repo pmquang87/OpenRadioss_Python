@@ -421,6 +421,7 @@ def _cbacoor(xe, ve, vre, off, dt, force_flat):
     jac[:, 1] = np.abs(j0 + j2 + j1)
     jac[:, 2] = np.abs(j0 - j2 + j1)
     jac[:, 3] = np.abs(j0 - j2 - j1)
+    jac = np.maximum(jac, EM20)
     hx = np.empty((n, 4))
     hy = np.empty((n, 4))
     j1h = (my23 - my34) * _PG
@@ -1743,8 +1744,8 @@ def static_internal_forces(group, x, u, ur, fint, mint):
         u_el[:, 6 * a + 3:6 * a + 6] = ur[conn[:, a]]
     f_el = np.einsum("nij,nj->ni", ke, u_el)
     for a in range(4):
-        scatter_add3(fint, conn[:, a], f_el[:, 6 * a:6 * a + 3])
-        scatter_add3(mint, conn[:, a], f_el[:, 6 * a + 3:6 * a + 6])
+        scatter_add3(fint, conn[:, a], -f_el[:, 6 * a:6 * a + 3])
+        scatter_add3(mint, conn[:, a], -f_el[:, 6 * a + 3:6 * a + 6])
 
 
 def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom=False):
@@ -1761,6 +1762,6 @@ def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom=False):
         u_el[:, 6 * a + 3:6 * a + 6] = ur[conn[:, a]]
     f_el = np.einsum("nij,nj->ni", ke, u_el)
     for a in range(4):
-        scatter_add3(fint, conn[:, a], f_el[:, 6 * a:6 * a + 3])
-        scatter_add3(mint, conn[:, a], f_el[:, 6 * a + 3:6 * a + 6])
+        scatter_add3(fint, conn[:, a], -f_el[:, 6 * a:6 * a + 3])
+        scatter_add3(mint, conn[:, a], -f_el[:, 6 * a + 3:6 * a + 6])
 

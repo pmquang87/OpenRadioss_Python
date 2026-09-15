@@ -235,7 +235,7 @@ def _local_geometry(xe: np.ndarray):
     x, y = xl[:, :, 0], xl[:, :, 1]
     area = 0.5 * ((x[:, 2] - x[:, 0]) * (y[:, 3] - y[:, 1])
                   + (x[:, 1] - x[:, 3]) * (y[:, 2] - y[:, 0]))
-    inv2A = 1.0 / np.maximum(2.0 * area, EM20)
+    inv2A = 1.0 / np.maximum(np.abs(2.0 * area), EM20)
     B1 = np.empty((len(xe), 4))
     B1[:, 0] = y[:, 1] - y[:, 3]
     B1[:, 1] = y[:, 2] - y[:, 0]
@@ -307,8 +307,8 @@ def _bend_shear_omega2(B1, B2, area, sl, mat, t, nnode, rho) -> np.ndarray:
         [[Ep, mat.nu * Ep, 0.0], [mat.nu * Ep, Ep, 0.0], [0.0, 0.0, mat.G]])
     Cb[3, 3] = Cb[4, 4] = SHEAR_FACTOR * mat.G * t
     K = A[:, None, None] * np.einsum("nai,ab,nbj->nij", B, Cb, B)
-    m = rho * t * A / nnode                     # nodal mass
-    inertia = m * (t ** 2 + A) / 12.0           # nodal inertia (init_group)
+    m = np.maximum(rho * t * A / nnode, EM20)   # nodal mass
+    inertia = np.maximum(m * (t ** 2 + A) / 12.0, EM20)  # nodal inertia (init_group)
     minv = np.empty((n, 3 * nnode))
     minv[:, :nnode] = 1.0 / np.sqrt(m)[:, None]
     minv[:, nnode:] = np.repeat(1.0 / np.sqrt(inertia), 2 * nnode

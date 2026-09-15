@@ -106,40 +106,51 @@ def cdkcoor3(xe, ve, re, dt1):
         
         det = np.sqrt(e3x*e3x + e3y*e3y + e3z*e3z)
         det_max = max(EM20, det)
-        cc = 1.0 / det_max
-        
-        e3x *= cc
-        e3y *= cc
-        e3z *= cc
-        
-        c1c1 = rx*rx + ry*ry + rz*rz
-        c2c2 = sx*sx + sy*sy + sz*sz
-        
-        if c1c1 != 0.0:
-            c2_1 = np.sqrt(c2c2 / max(EM20, c1c1))
-            c1_1 = 1.0
-        elif c2c2 != 0.0:
-            c2_1 = 1.0
-            c1_1 = np.sqrt(c1c1 / max(EM20, c2c2))
+        if det <= EM20:
+            e3x = 0.0
+            e3y = 0.0
+            e3z = 1.0
+            e1x = 1.0
+            e1y = 0.0
+            e1z = 0.0
+            e2x = 0.0
+            e2y = 1.0
+            e2z = 0.0
         else:
-            c2_1 = 1.0
-            c1_1 = 1.0
+            cc = 1.0 / det_max
             
-        e1x = rx * c2_1 + (sy * e3z - sz * e3y) * c1_1
-        e1y = ry * c2_1 + (sz * e3x - sx * e3z) * c1_1
-        e1z = rz * c2_1 + (sx * e3y - sy * e3x) * c1_1
-        
-        c1 = np.sqrt(e1x*e1x + e1y*e1y + e1z*e1z)
-        if c1 != 0.0:
-            c1 = 1.0 / max(EM20, c1)
+            e3x *= cc
+            e3y *= cc
+            e3z *= cc
             
-        e1x *= c1
-        e1y *= c1
-        e1z *= c1
-        
-        e2x = e3y * e1z - e3z * e1y
-        e2y = e3z * e1x - e3x * e1z
-        e2z = e3x * e1y - e3y * e1x
+            c1c1 = rx*rx + ry*ry + rz*rz
+            c2c2 = sx*sx + sy*sy + sz*sz
+            
+            if c1c1 != 0.0:
+                c2_1 = np.sqrt(c2c2 / max(EM20, c1c1))
+                c1_1 = 1.0
+            elif c2c2 != 0.0:
+                c2_1 = 1.0
+                c1_1 = np.sqrt(c1c1 / max(EM20, c2c2))
+            else:
+                c2_1 = 1.0
+                c1_1 = 1.0
+                
+            e1x = rx * c2_1 + (sy * e3z - sz * e3y) * c1_1
+            e1y = ry * c2_1 + (sz * e3x - sx * e3z) * c1_1
+            e1z = rz * c2_1 + (sx * e3y - sy * e3x) * c1_1
+            
+            c1 = np.sqrt(e1x*e1x + e1y*e1y + e1z*e1z)
+            if c1 != 0.0:
+                c1 = 1.0 / max(EM20, c1)
+                
+            e1x *= c1
+            e1y *= c1
+            e1z *= c1
+            
+            e2x = e3y * e1z - e3z * e1y
+            e2y = e3z * e1x - e3x * e1z
+            e2z = e3x * e1y - e3y * e1x
         
         e1x_out[e] = e1x
         e1y_out[e] = e1y
@@ -184,8 +195,12 @@ def cdkcoor3(xe, ve, re, dt1):
         exz = yl3_val * vlz1 - yl2_val * vlz2
         eyz = -xl3_val * vlz1 + xl2_val * vlz2
         
-        ddry = dt05 * exz / det_max
-        ddrx = dt05 * eyz / det_max
+        if det <= EM20:
+            ddry = 0.0
+            ddrx = 0.0
+        else:
+            ddry = dt05 * exz / det_max
+            ddrx = dt05 * eyz / det_max
         
         v21x = vlx1
         v31x = vlx2

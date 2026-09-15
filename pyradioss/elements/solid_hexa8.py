@@ -143,21 +143,30 @@ def _geometry(xe: np.ndarray):
     B = f * g - d * i
     C = d * h - e * g
     detJ = a * A + b * B + c * C
-    bad = np.abs(detJ) <= EM20
+    bad = detJ <= EM20
     if np.any(bad):
         # Safe fallback for degenerate / zero-volume / collapsed elements
         J_safe = np.where(bad[:, None, None], np.eye(3)[None, :, :], J)
         _, Jinv = det_inv33(J_safe)
         Jinv[bad] = 0.0
-        vol = 8.0 * np.where(bad, EM20, detJ)
+        vol = np.where(detJ <= EM20, EM20, 8.0 * detJ)
         dndx = _DN_DXI @ Jinv.transpose(0, 2, 1)
         dndx[bad] = 0.0
         return dndx, vol
     _, Jinv = det_inv33(J)
-    vol = 8.0 * detJ
+    vol = np.where(detJ <= EM20, EM20, 8.0 * detJ)
     # dN_i/dx_b = dN_i/dxi_a * dxi_a/dx_b ; dxi_a/dx_b = inv(J)[b,a]
     dndx = _DN_DXI @ Jinv.transpose(0, 2, 1)
     return dndx, vol
+
+
+def _detJ(xe: np.ndarray) -> np.ndarray:
+    if len(xe) == 0:
+        return np.empty(0)
+    J = _DN_DXI_T @ xe
+    return (J[:, 0, 0] * (J[:, 1, 1] * J[:, 2, 2] - J[:, 1, 2] * J[:, 2, 1])
+          + J[:, 0, 1] * (J[:, 1, 2] * J[:, 2, 0] - J[:, 1, 0] * J[:, 2, 2])
+          + J[:, 0, 2] * (J[:, 1, 0] * J[:, 2, 1] - J[:, 1, 1] * J[:, 2, 0]))
 
 
 def _char_length(xe: np.ndarray, vol: np.ndarray) -> np.ndarray:
@@ -682,6 +691,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         return np.empty(0)
 
     xe = x[conn]                                   # (n, 8, 3) gather
+    detJ = _detJ(xe)
 
     # Cycle 0 Courant step probe or evaluation without velocity
     if dt is None or dt <= 0.0 or v is None:
@@ -703,6 +713,7 @@ def forces(group, x, v, vr, dt, fint, mint):
                 c[sl] = np.sqrt(np.maximum(K + 4.0 * G / 3.0, 0.0) / np.maximum(rho[sl], EM20))
         alive = st["off"] > 0.0
         dt_e = np.where(alive, st.get("dtfac", np.ones(n)) * lc / np.maximum(c, EM20), EP30)
+        dt_e = np.where(detJ <= EM20, EP30, dt_e)
         return np.where(is_void, EP30, dt_e)
 
     ve = v[conn]
@@ -926,6 +937,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     if np.any(is_void):
         fe[is_void] = 0.0
         dt_crit[is_void] = EP30
+
+    dt_crit = np.where(detJ <= EM20, EP30, dt_crit)
 
     # ---- scatter to global arrays (asspar) ---------------------------------
     if fint is not None:
