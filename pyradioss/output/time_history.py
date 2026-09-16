@@ -45,7 +45,7 @@ class TimeHistory:
     def __init__(self, path: str, model: Model, log):
         self.path = path
         self.model = model
-        self._fh = open(path, "w")
+        self._fh = open(path, "w", encoding="utf-8")
         self._cols: List[str] = [
             "TIME", "IE", "KE", "HE", "CE", "EN", "DE", "EW", "ERR%",
             "MASS", "MOMX", "MOMY", "MOMZ"]
@@ -59,8 +59,11 @@ class TimeHistory:
             for oid in th.ids:
                 for var in th.variables:
                     if th.kind == "NODE":
-                        self._node_req.append(
-                            (f"N{oid}_{var}", model.node_index(oid), var))
+                        try:
+                            idx = model.node_index(oid)
+                        except (KeyError, ValueError):
+                            continue
+                        self._node_req.append((f"N{oid}_{var}", idx, var))
                     elif th.kind in ("SECT", "SECTIO", "SECTION"):
                         self._sect_req.append((f"S{oid}_{var}", oid, var))
                     elif th.kind == "PART":
@@ -225,6 +228,10 @@ class TimeHistory:
                                 s_elem = sig[r]
                                 if s_elem.ndim > 1:
                                     s_elem = s_elem.mean(axis=0)
+                                if np.ndim(s_elem) == 0:
+                                    if var_upper in ("P", "PRESSURE"):
+                                        return float(-s_elem / 3.0)
+                                    return float(s_elem) if c_idx == 0 else 0.0
                                 if len(s_elem) == 3:
                                     shell_map = {0: 0, 1: 1, 3: 2}
                                     if c_idx in shell_map:
@@ -271,6 +278,8 @@ class TimeHistory:
                     row.append((fext_val + fint_val) / m if m > 0 else 0.0)
             elif var_upper.startswith("F"):
                 row.append(model.fint[idx, comp] if hasattr(model, "fint") and model.fint is not None else 0.0)
+            elif var_upper in ("X", "Y", "Z", "COORDX", "COORDY", "COORDZ"):
+                row.append(float(model.x[idx, comp]))
             else:
                 row.append(0.0)
         for _, pid, var in self._part_req:
