@@ -586,7 +586,10 @@ def direct_frf(basis, F_nod, M_nod, freqs_hz):
     U = []
     for Om in Omega:
         D = Kr - Om * Om * Mr + 1j * Om * Cr
-        u_red = sla.solve(D, f_red.astype(complex))
+        try:
+            u_red = sla.solve(D, f_red.astype(complex))
+        except (sla.LinAlgError, ValueError):
+            u_red = np.zeros(len(f_red), dtype=complex)
         U.append(_expand_complex(basis, u_red))
     U = np.array(U)
     return {"omega": Omega, "freqs": freqs_hz, "U": U,

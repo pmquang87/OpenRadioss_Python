@@ -112,8 +112,8 @@ def cqc_correlation(omega, zeta):
     (5), the general unequal-damping form)."""
     omega = np.asarray(omega, dtype=float)
     z = np.broadcast_to(np.asarray(zeta, dtype=float), omega.shape)
-    wi = omega[:, None]
-    wk = omega[None, :]
+    wi = np.maximum(omega[:, None], 1e-12)
+    wk = np.maximum(omega[None, :], 1e-12)
     zi = z[:, None]
     zk = z[None, :]
     r = wk / wi                                       # omega_k / omega_i
@@ -155,7 +155,7 @@ def modal_peaks(basis, design_spectrum, direction, zeta):
     # spectral ordinate at each modal frequency (Hz); spectral displacement
     # Sd = Sa / omega^2
     Sa = np.asarray(design_spectrum.eval(basis.freqs), dtype=float)
-    Sd = Sa / (omega * omega)
+    Sd = np.where(omega > 1e-12, Sa / (omega * omega), 0.0)
     # modal peak field: column i = Gamma_i * Sd_i * phi_i (eq. (2))
     peaks = Phi * (gamma * Sd)[None, :]
     return peaks, gamma, Sa

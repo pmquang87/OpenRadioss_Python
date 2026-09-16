@@ -131,6 +131,9 @@ def pload_tangent(loads, model, t, x, dof):
         # d f_a/d x_b = p w_a 1/2 [ e13_b (-[d24]x) + e24_b [d13]x ]
         dAdx = 0.5 * (e24[None, :, None, None] * C13[:, None, :, :]
                       - e13[None, :, None, None] * C24[:, None, :, :])
+        if np.any(degen):
+            dAdx[degen, 2] += dAdx[degen, 3]
+            dAdx[degen, 3] = 0.0
         # (nseg, 4(b), 3, 3) -> the full (nseg, 4(a), 3, 4(b), 3) block,
         # NEGATED: the load stiffness is K += -d f_ext/d x
         ke = -p * np.einsum("na,nbij->naibj", w, dAdx).reshape(

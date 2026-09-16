@@ -468,9 +468,9 @@ def synthesize_multiaxial_history(freqs_hz, Scross, duration, seed, fs=None):
     rng = np.random.default_rng(int(seed))
     f = np.asarray(freqs_hz, dtype=float)
     S = np.asarray(Scross)
-    fmax = float(f.max())
+    fmax = float(f.max()) if len(f) > 0 else 0.0
     if fs is None:
-        fs = 8.0 * fmax
+        fs = max(8.0 * fmax, 1.0)
     nt = int(max(round(duration * fs), 4))
     if nt % 2:
         nt += 1

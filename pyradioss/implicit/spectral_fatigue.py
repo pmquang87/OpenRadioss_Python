@@ -451,9 +451,9 @@ def synthesize_gaussian_history(freqs_hz, psd, duration, seed, fs=None):
     rng = np.random.default_rng(int(seed))
     f = np.asarray(freqs_hz, dtype=float)
     S = np.clip(np.asarray(psd, dtype=float), 0.0, None)
-    fmax = float(f.max())
+    fmax = float(f.max()) if len(f) > 0 else 0.0
     if fs is None:
-        fs = 8.0 * fmax                    # comfortably above Nyquist (2 fmax)
+        fs = max(8.0 * fmax, 1.0)                    # comfortably above Nyquist (2 fmax)
     nt = int(max(round(duration * fs), 4))
     if nt % 2:                             # even length keeps rfft bookkeeping simple
         nt += 1

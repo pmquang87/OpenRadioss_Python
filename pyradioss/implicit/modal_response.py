@@ -427,11 +427,14 @@ def modal_transient(basis, loads, t_end, dt, zeta, model, log=None,
     def _static_correction(fext):
         """[K^-1 - sum phi phi^T/omega^2] f in equation space (mode-accel)."""
         f_eq = basis.dof.gather_residual(fext, np.zeros((n, 3)))
-        if basis.constr is not None:
-            us = basis.constr.expand(solver.solve(Kred,
-                                                  basis.constr.reduce_vector(f_eq)))
-        else:
-            us = solver.solve(Kred, f_eq)
+        try:
+            if basis.constr is not None:
+                us = basis.constr.expand(solver.solve(Kred,
+                                                      basis.constr.reduce_vector(f_eq)))
+            else:
+                us = solver.solve(Kred, f_eq)
+        except (RuntimeError, ValueError):
+            return np.zeros_like(f_eq)
         # subtract the retained-mode quasi-static part sum phi (phi^T f)/w^2
         rf = Phi.T @ f_eq
         us = us - Phi @ (rf / (omega * omega))

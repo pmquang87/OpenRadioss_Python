@@ -660,6 +660,9 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
                 f"(||R|| = {inc.residuals[-1]:.4E}) EVEN AT THE MINIMUM "
                 f"INCREMENT {ctrl.dt_min:.3E} "
                 f"({ctrl.total_cuts} automatic cuts — imp_dt.F control)")
+            for gname, group in model.element_groups():
+                if gname in committed:
+                    group.state = committed[gname]
             break
         log.info(f" {inc_no:9d} {lam_new:13.5E} {inc.iterations:6d} "
                  f"{inc.residuals[-1]:14.5E}   converged")
@@ -1219,7 +1222,13 @@ def _run_arclength(model, controls, log, dof, loads, solver, committed,
     # /IMPL/DTINI load increment on the (still linear) path. M14: reduced
     # system + the committed-configuration contact tangent.
     K0 = _arc_tangent(model, dof, x_ref, None, constr, contacts, model.x)
-    duT0 = solver.solve(K0, q_eq)
+    try:
+        duT0 = solver.solve(K0, q_eq)
+    except (RuntimeError, ValueError) as err:
+        log.error(f" ARC-LENGTH INITIAL TANGENT K0 IS SINGULAR: {err}")
+        result.converged = False
+        result.stop_reason = f"INITIAL TANGENT K0 IS SINGULAR: {err}"
+        return result
     wlam = float(duT0 @ duT0)
     dl = ip.impl_arc_dl if getattr(ip, "impl_arc_dl", 0.0) > 0.0 \
         else abs(dlam0) * np.sqrt(2.0 * wlam)
