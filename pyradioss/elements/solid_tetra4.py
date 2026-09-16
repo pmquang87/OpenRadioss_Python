@@ -202,7 +202,7 @@ def _exact_dt_factor(dndx: np.ndarray, vol: np.ndarray, lc: np.ndarray,
         eig = np.linalg.eigvals(C[None, :, :] @ BBt[sl])
         w2max = (4.0 / rho0_val) * eig.real.max(axis=1)   # m = rho*V/4
         dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
-        fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
+        fac[sl] = np.minimum(dt_exact / np.maximum(lc[sl] / c, EM20), 1.0)
     return fac
 
 

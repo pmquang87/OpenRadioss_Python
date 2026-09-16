@@ -285,8 +285,8 @@ def s16deri3(xx, dnidr, dnids, dnidt):
         dzdr * drdz
     )
     
-    if det <= 0.0:
-        det = 1.0e-20
+    if det <= 1.0e-20:
+        return [0.0] * 16, [0.0] * 16, [0.0] * 16, 1.0e-20
         
     d = 1.0 / det
     

@@ -348,8 +348,12 @@ def _global_plastic_return(st, sl, mat, p, iters=_NEWTON_ITERS, prop=None):
     Mx, My, Mz = mres[sl, 0], mres[sl, 1], mres[sl, 2]
 
     # equivalent extreme-fiber stress (normal + shear, von Mises flavour)
-    sn = np.abs(N) / A + np.abs(My) / st["wy"][sl] + np.abs(Mz) / st["wz"][sl]
-    tau = np.abs(Mx) / st["wx"][sl] + np.sqrt(Qy ** 2 + Qz ** 2) / A
+    A_safe = np.maximum(A, EM20)
+    wy = np.maximum(st["wy"][sl], EM20)
+    wz = np.maximum(st["wz"][sl], EM20)
+    wx = np.maximum(st["wx"][sl], EM20)
+    sn = np.abs(N) / A_safe + np.abs(My) / wy + np.abs(Mz) / wz
+    tau = np.abs(Mx) / wx + np.sqrt(Qy ** 2 + Qz ** 2) / A_safe
     seq = np.sqrt(sn ** 2 + 3.0 * tau ** 2) + 1e-30
 
     def sy_h(ep):
@@ -680,15 +684,18 @@ def tangent(group, x, epsp_incr=None):
             # identical at the trial state; same sign pattern)
             N, Qy, Qz = R[:, 0], R[:, 1], R[:, 2]
             Mx, My, Mz = R[:, 3], R[:, 4], R[:, 5]
-            wy, wz, wx = st["wy"][gidx], st["wz"][gidx], st["wx"][gidx]
-            sn = np.abs(N) / A + np.abs(My) / wy + np.abs(Mz) / wz
-            tau = np.abs(Mx) / wx + np.sqrt(Qy ** 2 + Qz ** 2) / A
+            A_safe = np.maximum(A, EM20)
+            wy = np.maximum(st["wy"][gidx], EM20)
+            wz = np.maximum(st["wz"][gidx], EM20)
+            wx = np.maximum(st["wx"][gidx], EM20)
+            sn = np.abs(N) / A_safe + np.abs(My) / wy + np.abs(Mz) / wz
+            tau = np.abs(Mx) / wx + np.sqrt(Qy ** 2 + Qz ** 2) / A_safe
             seq = np.sqrt(sn ** 2 + 3.0 * tau ** 2) + 1e-30
             Qn = np.maximum(np.sqrt(Qy ** 2 + Qz ** 2), 1e-30)
             q = np.empty((len(plas), 6))
-            q[:, 0] = (sn / seq) * np.sign(N) / A
-            q[:, 1] = (3.0 * tau / seq) * Qy / (A * Qn)
-            q[:, 2] = (3.0 * tau / seq) * Qz / (A * Qn)
+            q[:, 0] = (sn / seq) * np.sign(N) / A_safe
+            q[:, 1] = (3.0 * tau / seq) * Qy / (A_safe * Qn)
+            q[:, 2] = (3.0 * tau / seq) * Qz / (A_safe * Qn)
             q[:, 3] = (3.0 * tau / seq) * np.sign(Mx) / wx
             q[:, 4] = (sn / seq) * np.sign(My) / wy
             q[:, 5] = (sn / seq) * np.sign(Mz) / wz

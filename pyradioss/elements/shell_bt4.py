@@ -248,6 +248,10 @@ def _local_geometry(xe: np.ndarray):
     B2[:, 2] = x[:, 1] - x[:, 3]
     B2[:, 3] = x[:, 2] - x[:, 0]
     B2 *= inv2A[:, None]
+    bad = np.abs(2.0 * area) <= EM20
+    if np.any(bad):
+        B1[bad] = 0.0
+        B2[bad] = 0.0
     return E, xl, area, B1, B2
 
 
@@ -394,7 +398,7 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
                                     getattr(prop, "params", {}).get("thick", getattr(prop, "thick", 0.001)), 4, mat.rho0)
         w2max = np.maximum(w2max, w2bend)
         dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
-        fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
+        fac[sl] = np.minimum(dt_exact / np.maximum(lc[sl] / c, EM20), 1.0)
     return fac
 
 
@@ -576,7 +580,7 @@ def _init_material_state(group, nip_max=None, n=None):
             if name not in st["mat_extra"]:
                 if name.startswith("off") or name.startswith("damt") or name.startswith("alpe") or name.startswith("uvar82") or name.startswith("uvar_lam3"):
                     st["mat_extra"][name] = np.ones((n,) + shape)
-                elif name in ("thk", "thk0", "thk87"):
+                elif name.startswith("thk"):
                     thk_arr = st.get("thick")
                     if thk_arr is None:
                         thk_arr = np.full(n, getattr(prop, "thick", 1.0))

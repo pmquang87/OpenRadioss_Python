@@ -244,7 +244,7 @@ def _exact_dt_factor(dndx: np.ndarray, vol: np.ndarray, lc: np.ndarray,
         eig = np.linalg.eigvals(C[None, :, :] @ BBt[sl])
         w2max = (8.0 / mat.rho0) * eig.real.max(axis=1)
         dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
-        fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
+        fac[sl] = np.minimum(dt_exact / np.maximum(lc[sl] / c, EM20), 1.0)
     return fac
 
 
@@ -283,7 +283,7 @@ def init_group(group, model, log):
 
     xe = model.x0[group.conn]                      # (n, 8, 3)
     dndx0, vol = _geometry(xe)
-    bad = vol <= 0.0
+    bad = vol <= EM20
     if np.any(bad):
         for eid in group.ids[bad]:
             log.error(f"/BRICK {eid}: zero or negative volume "

@@ -223,12 +223,16 @@ def _forces_axial(group, x, v, dt, fint, idx):
 
     mass = np.maximum(st["mass"][idx], EM20)
     k = np.maximum(st["k"][idx], 0.0)
+    c_damp = st["cdamp"][idx]
     pos_k = (st["k"][idx] > 0.0) & (st["mass"][idx] > 0.0)
+    pure_c = (st["k"][idx] <= 0.0) & (c_damp > 0.0) & (st["mass"][idx] > 0.0)
 
     omega = 2.0 * np.sqrt(np.where(pos_k, k / mass, 1.0))
-    xi = np.where(pos_k, st["cdamp"][idx] / np.sqrt(np.maximum(k * mass, EM20)), 0.0)
+    xi = np.where(pos_k, c_damp / np.sqrt(np.maximum(k * mass, EM20)), 0.0)
     dt_crit = (2.0 / omega) * (np.sqrt(1.0 + xi ** 2) - xi)
-    return np.where(pos_k, dt_crit, EP30)
+    # OpenRadioss r1len3.F: when K=0 and C>0: dt = 0.5 * M / C
+    dt_c = np.where(pure_c, 0.5 * mass / np.maximum(c_damp, EM20), EP30)
+    return np.where(pos_k, dt_crit, dt_c)
 
 
 def _forces_axial_type32(group, x, v, dt, fint, idx):
@@ -284,10 +288,11 @@ def _forces_axial_type32(group, x, v, dt, fint, idx):
     else:
         tacti[:] = t
 
+    dt_val = dt if (dt is not None and dt > 0.0) else 0.0
     not_act = ~iact
     if np.any(not_act):
         uvar2[not_act] = 0.0
-        F[not_act] += stif0[not_act] * dt * Ldot[not_act]
+        F[not_act] += stif0[not_act] * dt_val * Ldot[not_act]
         st["k"][idx[not_act]] = stif0[not_act]
 
     act = iact
@@ -296,8 +301,8 @@ def _forces_axial_type32(group, x, v, dt, fint, idx):
         uvar1[mask_just_act] = 0.0
         uvar2[mask_just_act] = 1.0
 
-        uvar1[act] += dt * Ldot[act]
-        F[act] += stif0[act] * dt * Ldot[act]
+        uvar1[act] += dt_val * Ldot[act]
+        F[act] += stif0[act] * dt_val * Ldot[act]
         st["k"][idx[act]] = stif0[act]
 
         for it in (1, 2, 3, 4):

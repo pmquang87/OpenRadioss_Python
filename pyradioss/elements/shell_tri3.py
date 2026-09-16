@@ -129,6 +129,10 @@ def _local_geometry(xe: np.ndarray):
                    y[:, 0] - y[:, 1]], axis=1) * inv2A[:, None]
     B2 = np.stack([x[:, 2] - x[:, 1], x[:, 0] - x[:, 2],
                    x[:, 1] - x[:, 0]], axis=1) * inv2A[:, None]
+    bad = area <= EM20
+    if np.any(bad):
+        B1[bad] = 0.0
+        B2[bad] = 0.0
     return E, xl, area, B1, B2
 
 
@@ -253,7 +257,7 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
                 c = 0.0
         if c > 0.0:
             dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
-            fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
+            fac[sl] = np.minimum(dt_exact / np.maximum(lc[sl] / c, EM20), 1.0)
         else:
             fac[sl] = 1.0
     return fac
