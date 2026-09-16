@@ -580,7 +580,7 @@ def _init_material_state(group, nip_max=None, n=None):
             if name not in st["mat_extra"]:
                 if name.startswith("off") or name.startswith("damt") or name.startswith("alpe") or name.startswith("uvar82") or name.startswith("uvar_lam3"):
                     st["mat_extra"][name] = np.ones((n,) + shape)
-                elif name.startswith("thk"):
+                elif name.startswith("thk") and name != "thk43":
                     thk_arr = st.get("thick")
                     if thk_arr is None:
                         thk_arr = np.full(n, getattr(prop, "thick", 1.0))
