@@ -405,7 +405,7 @@ class LagmulType17:
                     n_vec = np.sign(ti if ti != 0 else 1.0) * np.cross(dX_dr[i], dX_ds[i])
 
                 norm = np.linalg.norm(n_vec)
-                normal[i] = n_vec / max(norm, 1e-20)
+                normal[i] = n_vec / norm if norm > 1e-20 else np.array([0.0, 0.0, 1.0])
 
             self.active_normals = normal
         else:

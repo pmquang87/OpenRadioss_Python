@@ -420,8 +420,9 @@ class ContactType7:
         Km_max = np.full(len(valid_nodes), Km_val)
         Ks_subset = self.Ks[valid_nodes_mask] if len(self.Ks) == len(self.nodes) else np.zeros(len(valid_nodes))
         K_sec = combine_stiffness(itf.istf, itf.stfac, Km_max, Ks_subset)
-        dt_sec = np.sqrt(2.0 * mass[valid_nodes]
-                         / np.maximum(K_sec, EM20)).min()
+        m_sec = mass[valid_nodes]
+        m_sec_pos = m_sec > 0.0
+        dt_sec = np.sqrt(2.0 * m_sec[m_sec_pos] / np.maximum(K_sec[m_sec_pos], EM20)).min() if np.any(m_sec_pos) else np.inf
 
         valid_segs_mask = np.all((self.segs >= 0) & (self.segs < len(mass)), axis=1)
         if not np.any(valid_segs_mask):
@@ -432,7 +433,8 @@ class ContactType7:
                          self.Ks.max() if len(self.Ks) else 0.0)
         K_main = combine_stiffness(itf.istf, itf.stfac, Km_subset, Ks_max)
         m_corner = mass[valid_segs].min(axis=1)
-        dt_main = np.sqrt(2.0 * m_corner / np.maximum(K_main, EM20)).min()
+        mc_pos = m_corner > 0.0
+        dt_main = np.sqrt(2.0 * m_corner[mc_pos] / np.maximum(K_main[mc_pos], EM20)).min() if np.any(mc_pos) else np.inf
         return float(min(dt_sec, dt_main))
 
     # ------------------------------------------------------------------
@@ -676,7 +678,7 @@ class ContactType7:
                 d13 = x[seg[:, 2]] - x[seg[:, 0]]
                 d24 = x[seg[:, 3]] - x[seg[:, 1]]
                 area = 0.5 * norm3(cross3(d13, d24))
-                pres = Fn_pos / np.maximum(area, EM20)
+                pres = np.where(area > EM20, Fn_pos / np.maximum(area, EM20), 0.0)
                 mu = friction.mu_kinetic(self.mfrot, self.fric,
                                          self.fric_c, pres, vt_mag)
             else:
@@ -752,7 +754,7 @@ class LagmulType7:
         if cycle - handler._last_refresh >= handler.refresh:
             if handler.deletable:
                 mask = tracking.tracked_node_mask(handler.model, handler.ref_total)
-                valid_m = handler.nodes < len(mask)
+                valid_m = (handler.nodes >= 0) & (handler.nodes < len(mask))
                 tracked = np.zeros(len(handler.nodes), dtype=bool)
                 tracked[valid_m] = mask[handler.nodes[valid_m]]
                 handler.nodes_tracked = handler.nodes[tracked]
@@ -793,8 +795,18 @@ class LagmulType7:
         ni = ni[active]
         seg = seg[active]
         pen = pen[active]
-        d = np.maximum(best_d[active], EM20)
+        dist_act = best_d[active]
+        d = np.maximum(dist_act, EM20)
         nvec = (x[ni] - best_pt[active]) / d[:, None]
+        fallback = dist_act <= EM20
+        if np.any(fallback):
+            d13 = x[seg[:, 2]] - x[seg[:, 0]]
+            d24 = x[seg[:, 3]] - x[seg[:, 1]]
+            n_seg = cross3(d13, d24)
+            n_seg_norm = norm3(n_seg)
+            n_seg_safe = np.where(n_seg_norm > EM20, n_seg_norm, 1.0)
+            n_seg = np.where((n_seg_norm > EM20)[:, None], n_seg / n_seg_safe[:, None], np.array([0.0, 0.0, 1.0]))
+            nvec = np.where(fallback[:, None], n_seg, nvec)
         wseg = best_w[active]
         
         # relative velocity node vs interpolated segment point

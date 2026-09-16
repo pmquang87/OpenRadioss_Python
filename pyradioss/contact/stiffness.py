@@ -155,7 +155,8 @@ def node_stiffness_gap(model: Model, stfac: float, fscale_gap: float = 1.0):
             g_e = 0.5 * group.state["thick"] * fscale_gap
         elif gname in _SOLID_GROUPS:
             B = _per_element(group, _bulk_modulus)
-            k_e = stfac * B * np.maximum(group.state["vol0"], 0.0) ** (1.0 / 3.0)
+            vol0_clean = np.nan_to_num(group.state.get("vol0", 0.0), nan=0.0)
+            k_e = stfac * B * np.maximum(vol0_clean, 0.0) ** (1.0 / 3.0)
             g_e = np.zeros(group.n)
         else:
             # trusses/springs/beams: no face to contact through — their

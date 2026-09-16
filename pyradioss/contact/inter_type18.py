@@ -315,6 +315,15 @@ class ContactType18:
 
         self.cand_p = np.zeros(len(self.sec_nodes), dtype=float)
 
+        if self.gap <= 0.0 and len(self.main_faces) > 0:
+            f = self.main_faces
+            v0 = model.x0[f[:, 0]]
+            v1 = model.x0[f[:, 1]]
+            d01 = norm3(v1 - v0)
+            d01_pos = d01[d01 > EM20]
+            lc = float(d01_pos.mean()) if len(d01_pos) > 0 else 1.0
+            self.gap = 0.02 * lc
+
         log.info(f"Initialized /INTER/TYPE18/{self.id} '{self.title}' "
                  f"({len(self.sec_nodes)} secondary nodes vs {len(self.main_faces)} main segments)")
 
@@ -439,7 +448,7 @@ class ContactType18:
         if stifn is not None:
             stifn += K_node
 
-        loaded = K_node > 0.0
+        loaded = (K_node > 0.0) & (mass > 0.0)
         if np.any(loaded):
             dt_int = float(np.min(np.sqrt(2.0 * mass[loaded] / K_node[loaded])))
         else:

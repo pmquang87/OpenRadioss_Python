@@ -140,7 +140,7 @@ def mu_kinetic(mfrot, mu0, c, p, v):
         mu[mid] = c[2] + (c[3] - c[2]) * (3.0 - 2.0 * xi) * xi * xi
         dmu = c[1] - c[3]
         denom = 1.0 + dmu * (v[hi] - vc2) ** 2
-        mu[hi] = c[1] - dmu / np.maximum(denom, EM20)
+        mu[hi] = c[1] - dmu / np.where(denom > 0.05, denom, 0.05)
     elif mfrot == 4:
         # exponential decay (static -> dynamic) — i7for3 MFROT==4
         mu = c[0] + (mu0 - c[0]) * np.exp(-c[1] * v)

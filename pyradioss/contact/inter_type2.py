@@ -101,6 +101,16 @@ def _segment_frames(xs: np.ndarray):
     t1 = np.where((norm_r > EM20)[:, None], r / norm_r_clamped[:, None], np.array([1.0, 0.0, 0.0]))
 
     t2 = np.cross(n, t1)
+    norm_t2 = np.linalg.norm(t2, axis=1)
+    deg_t2 = norm_t2 <= EM20
+    if np.any(deg_t2):
+        alt = np.where(np.abs(n[:, 0:1]) < 0.9, np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0]))
+        t1_cand = np.cross(n, alt)
+        norm_t1_cand = np.maximum(np.linalg.norm(t1_cand, axis=1, keepdims=True), EM20)
+        t1 = np.where(deg_t2[:, None], t1_cand / norm_t1_cand, t1)
+        t2 = np.cross(n, t1)
+    norm_t2_clamped = np.maximum(np.linalg.norm(t2, axis=1, keepdims=True), EM20)
+    t2 = t2 / norm_t2_clamped
     return t1, t2, n
 
 
@@ -118,6 +128,13 @@ class ContactType2:
             return
 
         segs = surf.segments if surf.segments is not None else np.zeros((0, 4), dtype=np.int64)
+        segs = np.asarray(segs, dtype=np.int64)
+        if segs.ndim == 2 and segs.shape[1] == 3:
+            segs = np.column_stack([segs, segs[:, 2]])
+        elif segs.ndim == 2 and segs.shape[1] == 4:
+            segs = segs.copy()
+            neg = segs[:, 3] < 0
+            segs[neg, 3] = segs[neg, 2]
 
         grp = model.node_groups.get(itf.grnod_id)
         if grp is None or grp.node_idx is None:
@@ -126,6 +143,7 @@ class ContactType2:
             return
 
         cand = np.asarray(grp.node_idx, dtype=np.int64)
+        cand = cand[(cand >= 0) & (cand < len(model.mass))]
         if len(cand) == 0 or len(segs) == 0:
             self._init_empty()
             return
@@ -241,7 +259,7 @@ class ContactType2:
         self.active = np.ones(len(self.snode), dtype=bool)
 
         # deletion bookkeeping (release, not force filtering)
-        self.deletable = tracking.any_deletable(model, self.seg_gtype)
+        self.deletable = tracking.any_deletable(model, self.seg_gtype, sec_nodes=self.snode)
         if self.deletable:
             self.ref_total = tracking.node_reference_counts(
                 model, alive_only=False)

@@ -347,8 +347,12 @@ class LagmulType16:
             dX_dt = np.einsum("ni,nib->nb", dt, coords[b_act])
             normal = np.cross(dX_dt, dX_dr)
             n_norm = np.linalg.norm(normal, axis=1)
-            n_norm = np.maximum(n_norm, 1e-20)
-            self.active_normals = normal / n_norm[:, None]
+            pos_norm = n_norm > 1e-20
+            self.active_normals = np.where(
+                pos_norm[:, None],
+                normal / np.maximum(n_norm, 1e-20)[:, None],
+                np.array([0.0, 0.0, 1.0])
+            )
         else:
             self.active_normals = np.zeros((len(final_cand), 3), dtype=np.float64)
 

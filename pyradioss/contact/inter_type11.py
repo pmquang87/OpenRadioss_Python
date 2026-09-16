@@ -281,14 +281,16 @@ class ContactType11:
         K_s = combine_stiffness(itf.istf, itf.stfac,
                                 np.full(len(self.es), self.Km.max() if len(self.Km) > 0 else 0.0),
                                 self.Ks)
-        dt_s = np.sqrt(2.0 * mass[self.es].min(axis=1)
-                       / np.maximum(K_s, EM20)).min()
+        m_s = mass[self.es].min(axis=1)
+        m_s_pos = m_s > 0.0
+        dt_s = np.sqrt(2.0 * m_s[m_s_pos] / np.maximum(K_s[m_s_pos], EM20)).min() if np.any(m_s_pos) else np.inf
         K_m = combine_stiffness(itf.istf, itf.stfac, self.Km,
                                 np.full(len(self.em),
                                         self.Ks.max() if len(self.Ks)
                                         else 0.0))
-        dt_m = np.sqrt(2.0 * mass[self.em].min(axis=1)
-                       / np.maximum(K_m, EM20)).min()
+        m_m = mass[self.em].min(axis=1)
+        m_m_pos = m_m > 0.0
+        dt_m = np.sqrt(2.0 * m_m[m_m_pos] / np.maximum(K_m[m_m_pos], EM20)).min() if np.any(m_m_pos) else np.inf
         return float(min(dt_s, dt_m))
 
     # ------------------------------------------------------------------

@@ -105,10 +105,10 @@ class ContactType10:
         )
         self.Km = Km
         Ks_all, _ = node_stiffness_gap(model, scale)
-        if len(Ks_all) > 0 and len(self.nodes) > 0 and self.nodes.max() < len(Ks_all):
-            self.Ks = Ks_all[self.nodes]
-        else:
-            self.Ks = np.zeros(len(self.nodes))
+        self.Ks = np.zeros(len(self.nodes))
+        if len(Ks_all) > 0 and len(self.nodes) > 0:
+            valid_ks = (self.nodes >= 0) & (self.nodes < len(Ks_all))
+            self.Ks[valid_ks] = Ks_all[self.nodes[valid_ks]]
 
         # Deletion tracking — Fortran chkstfn3.F:1352 gates on IDEL >= 1
         self.idel = int(getattr(itf, "idel10", 0) or getattr(itf, "idel", 0) or 0)
@@ -197,7 +197,9 @@ class ContactType10:
             np.abs(v).max() if len(v) else 0.0
         )
 
-        valid_segs = np.maximum(segs, 0)
+        valid_segs = segs.copy()
+        tri_mask = valid_segs[:, 3] < 0
+        valid_segs[tri_mask, 3] = valid_segs[tri_mask, 2]
         xs = x[valid_segs]
         lo = xs.min(axis=1) - margin
         hi = xs.max(axis=1) + margin
@@ -317,8 +319,9 @@ class ContactType10:
         if cycle - self._last_refresh >= self.refresh:
             if self.deletable:
                 mask = tracking.tracked_node_mask(self.model, self.ref_total)
-                if len(mask) > 0 and len(self.nodes) > 0 and self.nodes.max() < len(mask):
-                    self.nodes_tracked = self.nodes[mask[self.nodes]]
+                if len(mask) > 0 and len(self.nodes) > 0:
+                    valid_n = (self.nodes >= 0) & (self.nodes < len(mask))
+                    self.nodes_tracked = self.nodes[valid_n & mask[self.nodes[valid_n]]]
                 else:
                     self.nodes_tracked = self.nodes
             self._broad_phase(x, v, dt)
@@ -408,7 +411,7 @@ class ContactType10:
         ft1_old = ft1_old[active]
         ft2_old = ft2_old[active]
 
-        loc = np.searchsorted(self.nodes, ni)
+        loc = np.clip(np.searchsorted(self.nodes, ni), 0, max(0, len(self.Ks) - 1))
         K = combine_stiffness(0, self.itf.stfac, self.Km[srow], self.Ks[loc])
 
         # Local orthonormal frame (T1, T2, N) per i10for3.F lines 274-302
@@ -491,7 +494,7 @@ class ContactType10:
 
         # Elastic energy increment (i10for3.F line 317-319)
         dE_elastic = float(
-            np.sum((fn_old * vn + ft1_old * vt1 + ft2_old * vt2) * (dt * 0.5))
+            np.sum(0.5 * ((fn_old + fn_new) * vn + (ft1_old + ft1_new) * vt1 + (ft2_old + ft2_new) * vt2) * dt)
         )
         dE_step = dE_elastic + dE_damp
         self.e_cont += dE_elastic
