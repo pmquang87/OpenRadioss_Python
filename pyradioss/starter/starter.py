@@ -277,6 +277,15 @@ def apply_transforms(model: Model, log: MessageLog) -> None:
             O2 = p[3]
             model.x0[idx] = O2 + (model.x0[idx] - O1) @ R.T
 
+        elif tr_type == "MATRIX":
+            grnod, mat_3x3, trans_vec, sub_id = args
+            idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
+            if idx is None or len(idx) == 0:
+                continue
+            mat = np.asarray(mat_3x3, dtype=float)
+            vec = np.asarray(trans_vec, dtype=float)
+            model.x0[idx] = model.x0[idx] @ mat.T + vec
+
 
 def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
     """Run the full Starter on ``input_file``; returns the initialized

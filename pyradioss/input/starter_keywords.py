@@ -562,7 +562,28 @@ def read_bric20(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/{block.key0} block without part id", block.source)
         return
 
-    if block.fixed and len(block.cards) % 2 == 0:
+    if block.fixed and len(block.cards) % 3 == 0:
+        for i in range(0, len(block.cards), 3):
+            c1 = block.cards[i]
+            c2 = block.cards[i+1]
+            c3 = block.cards[i+2]
+            f1 = c1.cut("ELEM_BRIC20_1")
+            f2 = c2.cut("ELEM_BRIC20_2")
+            f3 = c3.cut("ELEM_BRIC20_3")
+            if not f1[0].strip():
+                continue
+            try:
+                elem_id = _ival(f1[0])
+                nodes = ([_ival(x) for x in f1[1:] if x.strip()] +
+                         [_ival(x) for x in f2 if x.strip()] +
+                         [_ival(x) for x in f3 if x.strip()])
+                if len(nodes) == 20:
+                    model.raw_elems["BRIC20"].append((elem_id, part_id, nodes))
+                else:
+                    log.error(f"/{block.key0} {elem_id}: expected 20 nodes, got {len(nodes)}", c1.source)
+            except ValueError as e:
+                log.error(f"/{block.key0}: {e}", c1.source)
+    elif block.fixed and len(block.cards) % 2 == 0:
         for i in range(0, len(block.cards), 2):
             c1 = block.cards[i]
             c2 = block.cards[i+1]

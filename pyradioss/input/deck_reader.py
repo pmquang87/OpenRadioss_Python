@@ -89,6 +89,9 @@ class Card:
     #: cached whitespace tokens
     _tokens: Optional[List[str]] = field(default=None, repr=False)
 
+    def __str__(self) -> str:
+        return self.raw
+
     def tokens(self) -> List[str]:
         """Whitespace-separated tokens (free-format view)."""
         if self._tokens is None:

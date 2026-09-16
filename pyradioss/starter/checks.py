@@ -8531,7 +8531,7 @@ def check_model(model: Model, log: MessageLog) -> None:
             log.error(f"{who}: node group {gid} not defined", "CROSS REF")
 
     def need_funct(fid, who):
-        if fid not in model.functions:
+        if fid is not None and fid > 0 and fid not in model.functions:
             log.error(f"{who}: function {fid} not defined", "CROSS REF")
 
     for bc in model.bcs:

@@ -1543,14 +1543,19 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
                                 if 0 <= nid < model.numnod:
                                     model.mass[nid] += m_nod
                     continue
-        elif am.mass_type == 3:
-            # Part group distributed
-            grpart = model.egroups.get("PART", {}).get(am.grnod_id) if hasattr(model, "egroups") else None
-            pids = getattr(grpart, "part_ids_resolved", None) if grpart else None
-            if pids is None and grpart:
-                pids = getattr(grpart, "members", [])
-            if not pids and hasattr(model, "parts") and am.grnod_id in model.parts:
+        elif am.mass_type in (3, 4, 6, 7):
+            if am.mass_type in (6, 7):
                 pids = [am.grnod_id]
+            else:
+                # Part group
+                grpart = model.egroups.get("PART", {}).get(am.grnod_id) if hasattr(model, "egroups") else None
+                pids = getattr(grpart, "part_ids_resolved", None) if grpart else None
+                if pids is None and grpart:
+                    pids = getattr(grpart, "members", [])
+                if not pids and hasattr(model, "part_groups") and am.grnod_id in model.part_groups:
+                    pids = model.part_groups[am.grnod_id]
+                if not pids and hasattr(model, "parts") and am.grnod_id in model.parts:
+                    pids = [am.grnod_id]
             if pids:
                 part_nodes = set()
                 for _, grp in model.element_groups():
@@ -1567,6 +1572,9 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
                         if 0 <= n_idx < model.numnod:
                             model.mass[n_idx] += m_per_node
                     continue
+            else:
+                log.error(f"/ADMAS/{am.id}: unknown part or part group {am.grnod_id}", "ADMAS CHECK")
+                continue
 
         g = model.node_groups.get(am.grnod_id)
         if g is None or g.node_idx is None:
