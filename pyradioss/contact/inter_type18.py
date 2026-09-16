@@ -315,14 +315,21 @@ class ContactType18:
 
         self.cand_p = np.zeros(len(self.sec_nodes), dtype=float)
 
-        if self.gap <= 0.0 and len(self.main_faces) > 0:
-            f = self.main_faces
-            v0 = model.x0[f[:, 0]]
-            v1 = model.x0[f[:, 1]]
-            d01 = norm3(v1 - v0)
-            d01_pos = d01[d01 > EM20]
-            lc = float(d01_pos.mean()) if len(d01_pos) > 0 else 1.0
-            self.gap = 0.02 * lc
+        if self.gap <= 0.0:
+            if len(self.main_faces) > 0 and hasattr(model, "x0") and model.x0 is not None and len(model.x0) > 0:
+                f = self.main_faces
+                max_idx = max(int(f[:, 0].max()), int(f[:, 1].max())) if len(f) > 0 else 0
+                if max_idx < len(model.x0):
+                    v0 = model.x0[f[:, 0]]
+                    v1 = model.x0[f[:, 1]]
+                    d01 = norm3(v1 - v0)
+                    d01_pos = d01[d01 > EM20]
+                    lc = float(d01_pos.mean()) if len(d01_pos) > 0 else 1.0
+                    self.gap = 0.02 * lc
+                else:
+                    self.gap = 0.02
+            else:
+                self.gap = 0.02
 
         log.info(f"Initialized /INTER/TYPE18/{self.id} '{self.title}' "
                  f"({len(self.sec_nodes)} secondary nodes vs {len(self.main_faces)} main segments)")
