@@ -8,7 +8,7 @@ def initialize_monitored_volumes(model: Model) -> None:
     Matches the logic in fvmesh0.F / get_volume_area.F90.
     """
     for monvol in model.monitored_volumes.values():
-        if monvol.vol_type != "AIRBAG1":
+        if monvol.vol_type not in ("AIRBAG1", "TYPE7"):
             continue
             
         if monvol.surf_id not in model.surfaces:

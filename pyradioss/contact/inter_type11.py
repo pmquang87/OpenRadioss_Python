@@ -434,8 +434,11 @@ class ContactType11:
         v_b = (eb_flat >= 0) & (eb_flat < n_nod)
         Knode += np.bincount(eb_flat[v_b], weights=w_b[v_b], minlength=n_nod)
         loaded = Knode > 0.0
-        dt_int = min(self.dt_bound, float(
-            np.sqrt(2.0 * mass[loaded] / Knode[loaded]).min()))
+        if np.any(loaded):
+            dt_int = min(self.dt_bound, float(
+                np.sqrt(2.0 * mass[loaded] / Knode[loaded]).min()))
+        else:
+            dt_int = self.dt_bound
         if stifn is not None:                    # /DT/NODA accumulation
             stifn[loaded] += Knode[loaded]
 

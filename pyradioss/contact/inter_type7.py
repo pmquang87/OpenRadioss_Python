@@ -610,9 +610,12 @@ class ContactType7:
         Knode += np.bincount(seg_flat[valid_sf], weights=K_rep[valid_sf],
                              minlength=n_nod)
         loaded = Knode > 0.0
-        m_loaded = np.maximum(mass[loaded], EM20)
-        dt_int = min(self.dt_bound, float(
-            np.sqrt(2.0 * m_loaded / Knode[loaded]).min()))
+        if np.any(loaded):
+            m_loaded = np.maximum(mass[loaded], EM20)
+            dt_int = min(self.dt_bound, float(
+                np.sqrt(2.0 * m_loaded / Knode[loaded]).min()))
+        else:
+            dt_int = self.dt_bound
         if stifn is not None:                    # /DT/NODA accumulation
             stifn[loaded] += Knode[loaded]
 

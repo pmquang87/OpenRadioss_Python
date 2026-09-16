@@ -115,11 +115,13 @@ def segment_stiffness_gap(model: Model, segments: np.ndarray,
         if gname == "":
             K[sel] = stfac * _fallback_modulus(model) * np.sqrt(area[sel])
             continue
-        group = getattr(model, gname)
+        group = getattr(model, gname, None)
+        if group is None:
+            continue
         erow = seg_elem[sel]
         if gname in _SHELL_GROUPS:
             # K = 0.5 * Stfac * E * t ;  gap contribution = t / 2
-            E = _per_element(group, lambda m, p: m.E)[erow]
+            E = _per_element(group, lambda m, p: getattr(m, 'E', 0.0))[erow]
             t = group.state["thick"][erow]
             K[sel] = 0.5 * stfac * E * t
             gap[sel] = 0.5 * t * fscale_gap
@@ -148,7 +150,7 @@ def node_stiffness_gap(model: Model, stfac: float, fscale_gap: float = 1.0):
     gap = np.zeros(model.numnod)
     for gname, group in model.element_groups():
         if gname in _SHELL_GROUPS:
-            E = _per_element(group, lambda m, p: m.E)
+            E = _per_element(group, lambda m, p: getattr(m, 'E', 0.0))
             k_e = 0.5 * stfac * E * group.state["thick"]
             g_e = 0.5 * group.state["thick"] * fscale_gap
         elif gname in _SOLID_GROUPS:
@@ -219,10 +221,12 @@ def edge_stiffness_gap(model: Model, edges: np.ndarray,
                                - model.x0[edges[sel, 0]], axis=1)
             K[sel] = stfac * _fallback_modulus(model) * L
             continue
-        group = getattr(model, gname)
+        group = getattr(model, gname, None)
+        if group is None:
+            continue
         erow = seg_elem[sel]
         if gname in _SHELL_GROUPS:
-            E = _per_element(group, lambda m, p: m.E)[erow]
+            E = _per_element(group, lambda m, p: getattr(m, 'E', 0.0))[erow]
             t = group.state["thick"][erow]
             K[sel] = 0.5 * stfac * E * t
             gap[sel] = 0.5 * t

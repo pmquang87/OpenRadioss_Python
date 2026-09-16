@@ -1781,6 +1781,8 @@ def initialize_rigid_bodies(model: Model, log: MessageLog) -> None:
             xg = (m[:, None] * model.x0[rb.slaves]).sum(axis=0)
             xg = (xg + m_master * model.x0[rb.master]) / msum
         else:
+            if len(rb.slaves) == 0:
+                continue
             xg = model.x0[rb.slaves].mean(axis=0)   # massless: geometric
 
         # inertia tensor about xg (point masses + isotropic nodal inertias)
