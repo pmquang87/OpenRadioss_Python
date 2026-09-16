@@ -74,6 +74,14 @@ class ContactType10:
             return
 
         self.segs = np.asarray(surf.segments, dtype=np.int64)
+        if self.segs.ndim == 2:
+            if self.segs.shape[1] == 3:
+                self.segs = np.column_stack([self.segs, self.segs[:, 2]])
+            elif self.segs.shape[1] == 4:
+                tri_mask = self.segs[:, 3] < 0
+                if np.any(tri_mask):
+                    self.segs = self.segs.copy()
+                    self.segs[tri_mask, 3] = self.segs[tri_mask, 2]
         self.seg_gtype = (
             surf.seg_gtype
             if surf.seg_gtype is not None
@@ -468,12 +476,12 @@ class ContactType10:
         itied = int(getattr(self.itf, "itied", self.itied) or 0)
         if itied == 0:
             # Rebound permitted: if force changes sign from compression to tension and unpenetrated
-            # In i10for3.F line 327: CAND_F(1) * FNI < 0 and PENE == 0
-            rebound = (fn_old * fn_new < 0.0) & (pen <= 0.0)
-            fn_new[rebound] = 0.0
-            ft1_new[rebound] = 0.0
-            ft2_new[rebound] = 0.0
-            keep[rebound] = False
+            # In i10for3.F line 326-345: zero forces on tension, drop from tracking when separating
+            rebound_tens = (fn_new >= 0.0) | (fn_old * fn_new < 0.0)
+            fn_new[rebound_tens] = 0.0
+            ft1_new[rebound_tens] = 0.0
+            ft2_new[rebound_tens] = 0.0
+            keep[rebound_tens & (pen <= 0.0)] = False
 
         # Viscous Damping (i10for3.F lines 360-368)
         if self.stiff_dc > 0.0:
@@ -546,7 +554,8 @@ class ContactType10:
 
         loaded = K_node > 0.0
         if np.any(loaded):
-            dt_int = float(np.min(np.sqrt(2.0 * mass[loaded] / K_node[loaded])))
+            m_loaded = np.maximum(mass[loaded], EM20)
+            dt_int = float(np.min(np.sqrt(2.0 * m_loaded / K_node[loaded])))
         else:
             dt_int = np.inf
 

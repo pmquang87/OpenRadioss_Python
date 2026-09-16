@@ -143,7 +143,7 @@ class ContactType2:
             return
 
         cand = np.asarray(grp.node_idx, dtype=np.int64)
-        cand = cand[(cand >= 0) & (cand < len(model.mass))]
+        cand = np.unique(cand[(cand >= 0) & (cand < len(model.mass))])
         if len(cand) == 0 or len(segs) == 0:
             self._init_empty()
             return
@@ -355,22 +355,29 @@ class ContactType2:
                 if sf == 1:
                     # Spotflag 1 (Solid main): moment to force couple (I2FOMO3)
                     xs = x[seg]
-                    x0 = np.mean(xs, axis=1)
+                    is_tri = seg[:, 3] == seg[:, 2]
+                    w_corner = np.ones((len(sn), 4, 1))
+                    w_corner[is_tri, 3] = 0.0
+                    counts = np.where(is_tri, 3.0, 4.0)[:, None]
+                    x0 = np.sum(xs * w_corner, axis=1) / counts
                     r = xs - x0[:, None, :]
+                    r_eff = r * np.sqrt(w_corner)
 
-                    # Pseudo-inertia tensor I (unit mass at each node)
+                    # Pseudo-inertia tensor I (unit mass at each vertex)
                     I_tensor = np.zeros((len(sn), 3, 3))
-                    I_tensor[:, 0, 0] = np.sum(r[:, :, 1]**2 + r[:, :, 2]**2, axis=1)
-                    I_tensor[:, 1, 1] = np.sum(r[:, :, 0]**2 + r[:, :, 2]**2, axis=1)
-                    I_tensor[:, 2, 2] = np.sum(r[:, :, 0]**2 + r[:, :, 1]**2, axis=1)
-                    I_tensor[:, 0, 1] = I_tensor[:, 1, 0] = -np.sum(r[:, :, 0] * r[:, :, 1], axis=1)
-                    I_tensor[:, 0, 2] = I_tensor[:, 2, 0] = -np.sum(r[:, :, 0] * r[:, :, 2], axis=1)
-                    I_tensor[:, 1, 2] = I_tensor[:, 2, 1] = -np.sum(r[:, :, 1] * r[:, :, 2], axis=1)
+                    I_tensor[:, 0, 0] = np.sum(r_eff[:, :, 1]**2 + r_eff[:, :, 2]**2, axis=1)
+                    I_tensor[:, 1, 1] = np.sum(r_eff[:, :, 0]**2 + r_eff[:, :, 2]**2, axis=1)
+                    I_tensor[:, 2, 2] = np.sum(r_eff[:, :, 0]**2 + r_eff[:, :, 1]**2, axis=1)
+                    I_tensor[:, 0, 1] = I_tensor[:, 1, 0] = -np.sum(r_eff[:, :, 0] * r_eff[:, :, 1], axis=1)
+                    I_tensor[:, 0, 2] = I_tensor[:, 2, 0] = -np.sum(r_eff[:, :, 0] * r_eff[:, :, 2], axis=1)
+                    I_tensor[:, 1, 2] = I_tensor[:, 2, 1] = -np.sum(r_eff[:, :, 1] * r_eff[:, :, 2], axis=1)
 
                     try:
                         I_inv = np.linalg.pinv(I_tensor, rcond=1e-8)
                         A = np.einsum("nij,nj->ni", I_inv, M_tot)
                         F_couple = np.cross(A[:, None, :], r)
+                        if np.any(is_tri):
+                            F_couple[is_tri, 3] = 0.0
                     except Exception:
                         F_couple = np.zeros_like(r)
 
@@ -408,18 +415,23 @@ class ContactType2:
 
             if sf == 1:
                 # Spotflag 1 (Solid main): derive rotational velocity (I2VIROT3)
-                x0 = np.mean(xs, axis=1)
+                is_tri = self.seg[act, 3] == self.seg[act, 2]
+                w_corner = np.ones((len(sn), 4, 1))
+                w_corner[is_tri, 3] = 0.0
+                counts = np.where(is_tri, 3.0, 4.0)[:, None]
+                x0 = np.sum(xs * w_corner, axis=1) / counts
                 r = xs - x0[:, None, :]
+                r_eff = r * np.sqrt(w_corner)
                 vs = v[self.seg[act]]
-                L = np.sum(np.cross(r, vs), axis=1)
+                L = np.sum(np.cross(r, vs) * w_corner, axis=1)
 
                 I_tensor = np.zeros((len(sn), 3, 3))
-                I_tensor[:, 0, 0] = np.sum(r[:, :, 1]**2 + r[:, :, 2]**2, axis=1)
-                I_tensor[:, 1, 1] = np.sum(r[:, :, 0]**2 + r[:, :, 2]**2, axis=1)
-                I_tensor[:, 2, 2] = np.sum(r[:, :, 0]**2 + r[:, :, 1]**2, axis=1)
-                I_tensor[:, 0, 1] = I_tensor[:, 1, 0] = -np.sum(r[:, :, 0] * r[:, :, 1], axis=1)
-                I_tensor[:, 0, 2] = I_tensor[:, 2, 0] = -np.sum(r[:, :, 0] * r[:, :, 2], axis=1)
-                I_tensor[:, 1, 2] = I_tensor[:, 2, 1] = -np.sum(r[:, :, 1] * r[:, :, 2], axis=1)
+                I_tensor[:, 0, 0] = np.sum(r_eff[:, :, 1]**2 + r_eff[:, :, 2]**2, axis=1)
+                I_tensor[:, 1, 1] = np.sum(r_eff[:, :, 0]**2 + r_eff[:, :, 2]**2, axis=1)
+                I_tensor[:, 2, 2] = np.sum(r_eff[:, :, 0]**2 + r_eff[:, :, 1]**2, axis=1)
+                I_tensor[:, 0, 1] = I_tensor[:, 1, 0] = -np.sum(r_eff[:, :, 0] * r_eff[:, :, 1], axis=1)
+                I_tensor[:, 0, 2] = I_tensor[:, 2, 0] = -np.sum(r_eff[:, :, 0] * r_eff[:, :, 2], axis=1)
+                I_tensor[:, 1, 2] = I_tensor[:, 2, 1] = -np.sum(r_eff[:, :, 1] * r_eff[:, :, 2], axis=1)
 
                 try:
                     I_inv = np.linalg.pinv(I_tensor, rcond=1e-8)

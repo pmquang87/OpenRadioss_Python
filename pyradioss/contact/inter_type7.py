@@ -173,11 +173,17 @@ def _narrow(x, ni, seg):
     best_w = np.zeros((len(ni), 4))
     p = x[ni]
     for cols in ((0, 1, 2), (0, 2, 3)):
+        if cols == (0, 2, 3):
+            non_degen = seg[:, 2] != seg[:, 3]
+            if not np.any(non_degen):
+                continue
         a, b, c = (x[seg[:, cols[0]]], x[seg[:, cols[1]]],
                    x[seg[:, cols[2]]])
         pt, u, vv, w = _closest_point_on_triangle(p, a, b, c)
         d = norm3(p - pt)
         better = d < best_d
+        if cols == (0, 2, 3):
+            better = better & non_degen
         best_d = np.where(better, d, best_d)
         best_pt[better] = pt[better]
         wq = np.zeros((len(ni), 4))

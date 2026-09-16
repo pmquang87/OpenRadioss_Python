@@ -179,12 +179,20 @@ def node_stiffness_gap(model: Model, stfac: float, fscale_gap: float = 1.0):
 # ----------------------------------------------------------------------------
 
 def segment_mesh_gap(model: Model, segments: np.ndarray, percent_mesh_size: float = 0.4):
-    xs = model.x0[segments]
+    if len(segments) == 0:
+        return np.zeros(0, dtype=float)
+    tri_mask = (segments[:, 2] == segments[:, 3]) | (segments[:, 3] < 0)
+    valid_segs = segments.copy()
+    if np.any(tri_mask):
+        valid_segs[tri_mask, 3] = valid_segs[tri_mask, 2]
+    xs = model.x0[valid_segs]
     d1 = np.linalg.norm(xs[:, 1] - xs[:, 0], axis=1)
     d2 = np.linalg.norm(xs[:, 2] - xs[:, 1], axis=1)
     d3 = np.linalg.norm(xs[:, 3] - xs[:, 2], axis=1)
     d4 = np.linalg.norm(xs[:, 0] - xs[:, 3], axis=1)
-    d3[segments[:, 2] == segments[:, 3]] = np.inf
+    d3[tri_mask] = np.inf
+    if np.any(tri_mask):
+        d4[tri_mask] = np.linalg.norm(xs[tri_mask, 0] - xs[tri_mask, 2], axis=1)
     Lmin = np.min(np.column_stack((d1, d2, d3, d4)), axis=1)
     return percent_mesh_size * Lmin
 
@@ -193,7 +201,9 @@ def node_mesh_gap(model: Model, segments: np.ndarray, nodes: np.ndarray, percent
     g_m_l = segment_mesh_gap(model, segments, percent_mesh_size)
     node_gap = np.full(model.numnod, np.inf)
     for k in range(4):
-        np.minimum.at(node_gap, segments[:, k], g_m_l)
+        valid_k = (segments[:, k] >= 0) & (segments[:, k] < model.numnod)
+        if np.any(valid_k):
+            np.minimum.at(node_gap, segments[valid_k, k], g_m_l[valid_k])
     return node_gap[nodes]
 
 
