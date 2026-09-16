@@ -52,29 +52,12 @@ _KNOWN_XFAIL = {
     "test_m484_fail_biquad.py::TestSolidStep::test_failure_trigger_at_damage_one",
     "test_m484_fail_biquad.py::TestShellStep::test_shell_equibiaxial_tension",
     "test_m484_fail_biquad.py::TestShellStep::test_shell_step_signature_accepts_tstar_and_eps_tot",
-    # Skew BCS/IMPVEL rotation
-    "test_m39_skew.py::test_bcs_45deg_skew_constrains_the_skewed_dof",
-    "test_m39_skew.py::test_impvel_rotated_axis_is_the_rotated_reference_solution",
-    # Energy guard logic
-    "test_m41_guard.py::test_near_zero_energy_startup_runs_past_cycle_100",
-    "test_m41_guard.py::test_without_the_floor_the_same_deck_aborts_at_cycle_100",
-    "test_m41_guard.py::test_guard_rearms_once_reference_energy_clears_the_floor",
-    # JWL EOS cycle count mismatch
-    "test_m537_law05_jwl.py::TestEngineMultiCycleIntegration::test_engine_multi_cycle_simulation_hexa8",
-    "test_m537_law05_jwl.py::TestEngineMultiCycleIntegration::test_engine_multi_cycle_simulation_tetra4",
-    # Rigid body IMPVEL work booking
-    "test_m500_rigid_body.py::test_translational_impvel_and_work_booking",
-    # LAW73 / LAW66 thickness thinning
-    "test_m561_law73_integration.py::test_shell_bt4_dynamic_thickness_thinning",
-    "test_m562_law66_integration.py::test_shell_bt4_thickness_thinning",
     # LAW74 keyword synonyms / containers
     # Restart roundtrip parity / cycle count
     "test_m551_law60_roundtrip.py::TestLaw60RestartSerialization::test_engine_restart_unchained_parity",
     "test_m552_law48_roundtrip.py::TestLaw48RestartSerialization::test_dynamic_restart_continuation_vs_uninterrupted_run",
     "test_m554_law52_roundtrip.py::TestLaw52RestartSerialization::test_end_to_end_engine_restart_chaining",
     "test_m555_law57_roundtrip.py::TestLaw57RestartSerialization::test_end_to_end_engine_restart_continuation",
-    # LAW34 engine sim relaxation tolerance
-    "test_m539_law34_engine_sim.py::TestHexa8ExplicitSimulation::test_hexa8_stress_relaxation_hold",
 }
 
 

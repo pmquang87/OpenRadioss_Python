@@ -90,7 +90,7 @@ def _drill_shell_starter(fscale=_DRILL_FSCALE):
         "/PART/1\nsh\n1 1\n" + STEEL_LAW1 +
         "/PROP/SHELL/1\nsh\n0 0 0 0\n0.01 0.01 0.01\n5 0 1.0\n"
         "/GRNOD/NODE/1\nall4\n1 2 3 4\n"
-        f"/IMPVEL/1\ndrill spin\n5 ZZ 0 {fscale}\n"
+        f"/IMPVEL/1\ndrill spin\n5 ZZ 1 {fscale}\n"
         "/BCS/1\nfix drill\n000 001 0 1\n"
         # linear velocity ramp 0 -> 1 over t=500 (slow loading), then flat
         "/FUNCT/5\nslow ramp\n0.0 0.0\n500.0 1.0\n500000.0 1.0\n"

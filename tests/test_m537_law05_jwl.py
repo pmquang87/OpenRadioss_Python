@@ -965,12 +965,12 @@ class TestEngineMultiCycleIntegration:
         deck.write(s_path)
 
         engine_deck = f"""/RUN/{run_name}/1
-2.0e-2
+2.0e-1
 /DT
 0.9 0
 /PRINT/-1
 /STOP
-100
+100.0 0.0 100
 /END
 """
         with open(e_path, "w") as f:
@@ -1057,12 +1057,12 @@ class TestEngineMultiCycleIntegration:
         deck.write(s_path)
 
         engine_deck = f"""/RUN/{run_name}/1
-2.0e-2
+2.0e-1
 /DT
 0.9 0
 /PRINT/-1
 /STOP
-100
+100.0 0.0 100
 /END
 """
         with open(e_path, "w") as f:
