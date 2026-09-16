@@ -162,6 +162,7 @@ class Sensors:
                 kind = defn[0]
                 if kind not in ("NOT", "AND", "OR"):
                     continue
+                old_active = self.status.get(sid, False)
                 if kind == "NOT":
                     is1, tdelay = defn[1], defn[2]
                     cond = not self.active(is1)
