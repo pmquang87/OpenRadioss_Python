@@ -244,7 +244,7 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
     current: Optional[KeywordBlock] = None
     base_dir = os.path.dirname(os.path.abspath(path))
 
-    with open(path, "r", errors="replace") as fh:
+    with open(path, "r", encoding="utf-8", errors="replace") as fh:
         for lineno, line in enumerate(fh, start=1):
             line = line.rstrip("\n")
             stripped = line.strip()

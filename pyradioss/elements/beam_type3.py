@@ -176,14 +176,15 @@ def _b_operator(L: float) -> np.ndarray:
     """The 6x12 generalized-strain-rate operator of the module docstring,
     local dof order (v1x v1y v1z th1x th1y th1z v2x ... th2z)."""
     B = np.zeros((6, 12))
-    B[0, 0], B[0, 6] = -1 / L, 1 / L                       # eps
-    B[1, 1], B[1, 7] = -1 / L, 1 / L                       # gy
+    L_safe = max(float(L), EM20)
+    B[0, 0], B[0, 6] = -1 / L_safe, 1 / L_safe                       # eps
+    B[1, 1], B[1, 7] = -1 / L_safe, 1 / L_safe                       # gy
     B[1, 5], B[1, 11] = -0.5, -0.5
-    B[2, 2], B[2, 8] = -1 / L, 1 / L                       # gz
+    B[2, 2], B[2, 8] = -1 / L_safe, 1 / L_safe                       # gz
     B[2, 4], B[2, 10] = 0.5, 0.5
-    B[3, 3], B[3, 9] = -1 / L, 1 / L                       # kx (twist)
-    B[4, 4], B[4, 10] = -1 / L, 1 / L                      # ky
-    B[5, 5], B[5, 11] = -1 / L, 1 / L                      # kz
+    B[3, 3], B[3, 9] = -1 / L_safe, 1 / L_safe                       # kx (twist)
+    B[4, 4], B[4, 10] = -1 / L_safe, 1 / L_safe                      # ky
+    B[5, 5], B[5, 11] = -1 / L_safe, 1 / L_safe                      # kz
     return B
 
 

@@ -272,9 +272,12 @@ def _forces_axial_type32(group, x, v, dt, fint, idx):
     if sensors is not None:
         for i, s_id in enumerate(sens_id):
             if s_id > 0:
-                tf = sensors.fire_time.get(s_id, t)
-                tacti[i] = max(0.0, t - tf)
-                if tacti[i] == 0.0:
+                if sensors.active(s_id):
+                    tf = sensors.fire_time.get(s_id, 0.0)
+                    tacti[i] = max(0.0, t - tf)
+                    iact[i] = True
+                else:
+                    tacti[i] = 0.0
                     iact[i] = False
             else:
                 tacti[i] = t

@@ -95,9 +95,13 @@ def _curve(mat, name):
 def _finter(xy, x):
     """Vector FINTER/VINTER2: piecewise-linear value AND local slope,
     linear extrapolation with the end-segment slopes."""
-    xs, ys = xy
+    xs, ys = np.asarray(xy[0], dtype=float), np.asarray(xy[1], dtype=float)
+    if len(xs) <= 1:
+        y_val = ys[0] if len(ys) > 0 else 0.0
+        return np.full_like(x, y_val), np.zeros_like(x)
     y = np.interp(x, xs, ys)
-    slopes = np.diff(ys) / np.diff(xs)
+    dx = np.diff(xs)
+    slopes = np.diff(ys) / np.where(np.abs(dx) > _EM20, dx, _EM20)
     idx = np.clip(np.searchsorted(xs, x, side="right") - 1,
                   0, len(slopes) - 1)
     der = slopes[idx]

@@ -111,6 +111,10 @@ def _curve_eval(cx: np.ndarray, cy: np.ndarray, cs: np.ndarray,
     Returns (value, slope) — the slope is the hardening modulus
     H = d sigma_y / d eps_p of the segment containing each point (constant
     per segment: that is what makes the return-mapping exact)."""
+    if len(cx) == 0:
+        return np.zeros_like(e), np.zeros_like(e)
+    if len(cx) == 1:
+        return np.full_like(e, cy[0]), np.zeros_like(e)
     # maximum/minimum instead of np.clip: same result, but np.clip with
     # Python int bounds pays a np.finfo/np.iinfo promotion check per call
     # in NumPy 2.x — it was ~5% of the notched-plate runtime (M7)

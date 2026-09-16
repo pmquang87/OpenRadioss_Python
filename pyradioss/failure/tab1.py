@@ -29,7 +29,8 @@ def _accumulate(fail, dama, d_epsp, eps_f):
     """
     p = fail.params
     dn = p.get("n", 1.0)
-    dp = np.where((dn != 0.0) & (dama > 0.0), dn * (np.maximum(dama, _TINY) ** (1.0 - 1.0 / dn)), 1.0)
+    inv_dn = 1.0 / dn if dn != 0.0 else 1.0
+    dp = np.where((dn != 0.0) & (dama > 0.0), dn * (np.maximum(dama, _TINY) ** (1.0 - inv_dn)), 1.0)
 
     grow = eps_f > 0.0
     # Fortran: IF (EPSF > ZERO) UVAR = UVAR + DP * DPLA / EPSF

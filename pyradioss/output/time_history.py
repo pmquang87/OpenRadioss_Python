@@ -101,7 +101,7 @@ class TimeHistory:
                 conn = group.state.get("mass_conn", group.conn)
                 if conn is None or conn.size == 0 or conn.shape[1] == 0:
                     continue
-                safe_conn = np.maximum(conn[mask], 0)
+                safe_conn = np.clip(conn[mask], 0, max(0, len(model.v) - 1))
                 ve = model.v[safe_conn]
                 v2 = np.einsum("nib,nib->n", ve, ve) / conn.shape[1]
                 mass = group.state.get("mass")

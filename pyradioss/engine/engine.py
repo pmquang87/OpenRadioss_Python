@@ -163,8 +163,10 @@ _ENERGY_START_FLOOR = 1.0e-6
 def _energies(model: Model, state: EngineState) -> dict:
     ie = he = 0.0
     for _, group in model.element_groups():
-        ie += float(group.state["eint"].sum())
-        he += float(group.state["ehour"].sum())
+        if "eint" in group.state:
+            ie += float(np.sum(group.state["eint"]))
+        if "ehour" in group.state:
+            he += float(np.sum(group.state["ehour"]))
     real = model.mass < 1e29
     ke = float(0.5 * (model.mass[real, None] * model.v[real] ** 2).sum())
     if getattr(model, "inertia", None) is not None and getattr(model, "vr", None) is not None:
