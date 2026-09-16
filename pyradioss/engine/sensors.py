@@ -162,17 +162,24 @@ class Sensors:
                 kind = defn[0]
                 if kind not in ("NOT", "AND", "OR"):
                     continue
-                old_active = self.status.get(sid, False)
                 if kind == "NOT":
                     is1, tdelay = defn[1], defn[2]
-                    new_active = (not self.active(is1)) and (t >= tdelay)
+                    cond = not self.active(is1)
                 elif kind == "AND":
                     is1, is2, tdelay = defn[1], defn[2], defn[3]
-                    new_active = self.active(is1) and self.active(is2) and (t >= tdelay)
+                    cond = self.active(is1) and self.active(is2)
                 elif kind == "OR":
                     is1, is2, tdelay = defn[1], defn[2], defn[3]
-                    new_active = (self.active(is1) or self.active(is2)) and (t >= tdelay)
+                    cond = self.active(is1) or self.active(is2)
                 else:
+                    cond = False
+
+                if cond:
+                    if sid not in self.crit_time:
+                        self.crit_time[sid] = t
+                    new_active = t >= (self.crit_time[sid] + (tdelay or 0.0))
+                else:
+                    self.crit_time.pop(sid, None)
                     new_active = False
 
                 if new_active != old_active:

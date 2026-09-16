@@ -296,7 +296,7 @@ class NodalTimeStep:
 
         The stiffness accumulators are consumed and reset here."""
         model = self.model
-        loaded = (self.stifn > 0.0) & self.free
+        loaded = (self.stifn > 0.0) & self.free & (model.mass > 0.0)
         if ams_nodes is not None:
             loaded &= ~ams_nodes
         # rotational claims: dtnoda.F's IRODDL/IN(N)>0 gating.  stifr > 0

@@ -745,11 +745,11 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # assembled forces in its FSAV blocks.)
         if contacts:
             state.econt -= float(np.einsum(
-                "nb,nb->", fcont, 0.5 * (v_old + model.v))) * dt
+                "nb,nb->", fcont, 0.5 * (v_old + model.v))) * dt12
 
         # external work of the loads: force x actual displacement, booked with
         # midstep average velocity (resol.F:6289, force.F90:322)
-        state.wext += float(np.einsum("nb,nb->", fext, 0.5 * (v_old + model.v))) * dt
+        state.wext += float(np.einsum("nb,nb->", fext, 0.5 * (v_old + model.v))) * dt12
 
         # ---- 6. position update -------------------------------------------
         model.x += model.v * dt
@@ -902,6 +902,9 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             state.stop_reason = (f"TIME STEP COLLAPSED ({dt:.3E}, WAS "
                                  f"{dt_ref:.3E}) — RUN DEAD")
             break
+        if not np.isfinite(dt) or dt <= 0.0:
+            state.stop_reason = "NAN/INF DETECTED — RUN DIVERGED"
+            break
 
     # ======================================================================
     # final state + termination summary (like the original's final page)
@@ -919,6 +922,9 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     # expose the exact accumulated state to callers/tests (not pickled —
     # attached after the restart write)
     model.engine_state = state
+
+    if not state.stop_reason and not np.isfinite(state.t):
+        state.stop_reason = "NAN/INF DETECTED — RUN DIVERGED"
 
     e = _energies(model, state)
     log.info("\n     ------------------------------------------------")
