@@ -614,6 +614,7 @@ class PyradiossGUI:
             self.runner.stop()
             self.runner.join(timeout=5)
         if self.post_runner is not None and self.post_runner.is_running():
+            self.post_runner.stop()
             self.post_runner.join(timeout=5)
         self.root.destroy()
 

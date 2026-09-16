@@ -157,6 +157,16 @@ class T01Data:
         self.columns = columns
         self.rows = rows
         # transpose to column-major series for easy channel access
+        seen = {}
+        unique_cols = []
+        for c in columns:
+            if c in seen:
+                seen[c] += 1
+                unique_cols.append(f"{c}_{seen[c]}")
+            else:
+                seen[c] = 1
+                unique_cols.append(c)
+        columns = unique_cols
         self._series: Dict[str, List[float]] = {c: [] for c in columns}
         for row in rows:
             for c, v in zip(columns, row):
@@ -272,7 +282,7 @@ def build_deck_summary(deck_path: str) -> Dict[str, object]:
             log = MessageLog()
             parse_starter_deck(blocks, model, log)
 
-        summary["title"] = model.title
+        summary["title"] = getattr(model, "title", "")
         summary["nodes"] = int(model.numnod)
 
         # element counts by type (raw_elems is filled at parse time, before
