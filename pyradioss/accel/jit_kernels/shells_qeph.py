@@ -231,7 +231,7 @@ def qeph_pre(xe, ve, vre, dt, npt1, alive):
             c_v13_1 -= ddrx * c_v13_2 + ddrz2 * v13x
             c_v24_1 -= ddrx * c_v24_2 + ddrz2 * v24x
             c_vhi_1 -= ddrx * c_vhi_2 + ddrz2 * vhix
-        is_plat = c_z1 * c_z1 < c_lm * TOL_PLAT or npt1[e]
+        is_plat = c_lm <= EM20 or c_area <= EM20 or c_z1 * c_z1 < c_lm * TOL_PLAT or npt1[e]
         plat[e] = is_plat
         if is_plat:
             c_z1 = 0.0
@@ -241,21 +241,25 @@ def qeph_pre(xe, ve, vre, dt, npt1, alive):
             a_4 = 0.25 * c_area
             sz1 = c_mx13 * c_y24 - c_my13 * c_x24
             sz = z2 * l24[e]
-            sl = 1.0 / np.sqrt(sz + (a_4 + sz1) ** 2)
+            d0 = np.sqrt(sz + (a_4 + sz1) ** 2)
+            sl = 1.0 / (d0 if d0 > EM20 else EM20)
             vqn_0_0 = -c_z1 * c_y24 * sl
             vqn_0_1 = c_z1 * c_x24 * sl
             vqn_0_2 = (a_4 + sz1) * sl
-            sl = 1.0 / np.sqrt(sz + (a_4 - sz1) ** 2)
+            d1 = np.sqrt(sz + (a_4 - sz1) ** 2)
+            sl = 1.0 / (d1 if d1 > EM20 else EM20)
             vqn_2_0 = c_z1 * c_y24 * sl
             vqn_2_1 = -c_z1 * c_x24 * sl
             vqn_2_2 = (a_4 - sz1) * sl
             sz1 = c_mx13 * c_y13 - c_my13 * c_x13
             sz = z2 * l13[e]
-            sl = 1.0 / np.sqrt(sz + (a_4 + sz1) ** 2)
+            d2 = np.sqrt(sz + (a_4 + sz1) ** 2)
+            sl = 1.0 / (d2 if d2 > EM20 else EM20)
             vqn_1_0 = -c_z1 * c_y13 * sl
             vqn_1_1 = c_z1 * c_x13 * sl
             vqn_1_2 = (a_4 + sz1) * sl
-            sl = 1.0 / np.sqrt(sz + (a_4 - sz1) ** 2)
+            d3 = np.sqrt(sz + (a_4 - sz1) ** 2)
+            sl = 1.0 / (d3 if d3 > EM20 else EM20)
             vqn_3_0 = c_z1 * c_y13 * sl
             vqn_3_1 = -c_z1 * c_x13 * sl
             vqn_3_2 = (a_4 - sz1) * sl
