@@ -418,7 +418,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         next_th = saved["next_th"]
         next_anim = saved["next_anim"]
         anim_no = saved["anim_no"]
-        next_state = saved.get("next_state", controls.state_tstart if controls.state_dt > 0 else EP30)
+        next_state = saved.get("next_state", controls.state_tstart) if controls.state_dt > 0 else EP30
         log.info(f" RESUMED TIME STEP  . . . . . . . . . : {dt:12.5E}\n")
     else:
         # initial energy = reference E0 of the balance: kinetic + any
@@ -825,13 +825,13 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             anim_no += 1
             while next_anim <= state.t:
                 next_anim += controls.anim_dt
-        if state.t >= next_state:
+        if controls.state_dt > 0 and state.t >= next_state:
             # /STATE/DT snapshot: a full restart, resumable by the next
             # run of the chain (and the crash-recovery point)
             write_restart(model, rst_path, engine=_engine_snapshot())
             log.info(f" -- /STATE: RESTART SNAPSHOT WRITTEN AT TIME "
                      f"{state.t:12.5E}")
-            while next_state <= state.t:
+            while next_state <= state.t and controls.state_dt > 0:
                 next_state += controls.state_dt
         if state.cycle % controls.print_cycles == 0 or \
                 state.t >= controls.t_end:
