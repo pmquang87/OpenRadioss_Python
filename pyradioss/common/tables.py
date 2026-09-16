@@ -29,8 +29,12 @@ class FunctTable:
         y = np.asarray(y, dtype=float)
         if x.ndim != 1 or y.ndim != 1 or x.size != y.size:
             raise ValueError(f"/FUNCT/{fct_id}: x and y must be 1D arrays of identical length")
-        if x.size < 2:
-            raise ValueError(f"/FUNCT/{fct_id}: needs at least 2 points")
+        if x.size < 1:
+            raise ValueError(f"/FUNCT/{fct_id}: needs at least 1 point")
+        if x.size == 1:
+            self.slope = np.array([0.0])
+        else:
+            self.slope = np.diff(y) / np.diff(x)
         if np.any(np.diff(x) <= 0):
             raise ValueError(f"/FUNCT/{fct_id}: abscissae must be strictly increasing")
         self.id = fct_id
@@ -46,7 +50,9 @@ class FunctTable:
         If scx < 0, reverses the point order so abscissae stay strictly
         increasing (matching hm_read_move_funct.F)."""
         if abs(scx) < 1.0e-20:
-            raise ValueError(f"/MOVE_FUNCT/{self.id}: X scale factor cannot be zero")
+            scx = 1.0
+        if abs(scy) < 1.0e-20:
+            scy = 1.0
         if scx < 0.0:
             self.x = self.x[::-1] * scx + shx
             self.y = self.y[::-1] * scy + shy
@@ -62,6 +68,10 @@ class FunctTable:
         inside [x0, xn], linear *extrapolation* with the end-segment slope
         outside.
         """
+        if self.x.size == 1:
+            t_arr = np.asarray(t)
+            val = float(self.y[0])
+            return val if t_arr.ndim == 0 else np.full_like(t_arr, val, dtype=float)
         t = np.asarray(t, dtype=float)
         # np.interp clamps outside the range; fix up the two ends by
         # extending with the first/last slopes afterwards.

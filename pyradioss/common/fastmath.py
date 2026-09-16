@@ -84,7 +84,7 @@ def det_inv33(J: np.ndarray):
     det = a * A + b * B + c * C
     safe_det = np.where(np.abs(det) < 1.0e-20, np.where(det >= 0.0, 1.0e-20, -1.0e-20), det)
     idet = 1.0 / safe_det
-    inv = np.empty_like(J)
+    inv = np.empty_like(J, dtype=np.float64)
     inv[:, 0, 0] = A * idet
     inv[:, 0, 1] = (c * h - b * i) * idet
     inv[:, 0, 2] = (b * f - c * e) * idet
