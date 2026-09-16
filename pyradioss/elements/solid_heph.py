@@ -683,7 +683,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         if getattr(mat, "law", 1) == 0:
             continue
         if sl.stop > sl.start and not c_from_law[sl.start]:
-            c[sl] = np.sqrt((getattr(mat, "K", 0.0) + 4.0 * getattr(mat, "G", 0.0) / 3.0) / rho[sl])
+            c[sl] = np.sqrt((getattr(mat, "K", 0.0) + 4.0 * getattr(mat, "G", 0.0) / 3.0) / np.maximum(rho[sl], EM20))
         qa[sl] = getattr(prop, "params", {}).get("qa", 1.1)
         qb[sl] = getattr(prop, "params", {}).get("qb", 0.05)
         hcoef[sl] = getattr(prop, "params", {}).get("h", HG_PHYS)

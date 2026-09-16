@@ -310,7 +310,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     n = group.n
     if n == 0 or len(conn) == 0:
         return np.empty(0, dtype=float)
-    if dt < 0.0:
+    if dt is None or dt < 0.0:
         return np.full(n, EP30)
 
     xe = np.zeros((n, 20, 3), dtype=np.float64)

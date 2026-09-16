@@ -233,7 +233,7 @@ def forces6(group, x, v, vr, dt, fint, mint, idx6):
         v = np.zeros_like(x)
     if vr is None:
         vr = np.zeros_like(x)
-    dt_val = max(float(dt), 0.0)
+    dt_val = max(float(dt), 0.0) if dt is not None else 0.0
 
     # relative translation (total form) and its rate, per local axis
     d = (x[n2] - x[n1])
