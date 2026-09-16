@@ -1059,7 +1059,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         if getattr(mat, "law", 1) == 0:
             continue
         nip = len(st["zw"][isl][0])
-        gs_mod[sl] = 0.0 if nip == 1 else SHEAR_FACTOR * mat.G
+        gs_mod[sl] = 0.0 if nip == 1 else SHEAR_FACTOR * (getattr(mat, "G", 0.0) or getattr(mat, "g5", 0.0) or getattr(mat, "g0", 0.0))
         if nip == 1:
             bend_visc[sl] = 0.0
 

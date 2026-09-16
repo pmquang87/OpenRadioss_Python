@@ -320,7 +320,7 @@ def init_group(group, model, log):
 _NEWTON_ITERS = 5
 
 
-def _global_plastic_return(st, sl, mat, p, iters=_NEWTON_ITERS):
+def _global_plastic_return(st, sl, mat, p, iters=_NEWTON_ITERS, prop=None):
     """Radial return of the six resultants onto the Johnson-Cook yield
     stress (rate term ignored — Starter warns). In-place on fres/mres and
     the global plastic strain epsp.
@@ -334,8 +334,13 @@ def _global_plastic_return(st, sl, mat, p, iters=_NEWTON_ITERS):
     MEASURED again here for the resultant return by the M15 tests: 5
     iterations leave an O(1) consistency residual on a first-yield
     implicit-size increment; 60 converge it to round-off)."""
+    if prop is None:
+        prop = p
     mp = mat.params
-    A = p["area"]
+    A = p.get("area", getattr(prop, "area", 0.0))
+    Iyy = p.get("iyy", getattr(prop, "iyy", 0.0))
+    Izz = p.get("izz", getattr(prop, "izz", 0.0))
+    J = p.get("ixx", getattr(prop, "ixx", 0.0))
     fres = st["fres"]
     mres = st["mres"]
     N, Qy, Qz = fres[sl, 0], fres[sl, 1], fres[sl, 2]
@@ -368,8 +373,8 @@ def _global_plastic_return(st, sl, mat, p, iters=_NEWTON_ITERS):
     # the truss return with E as the effective section modulus
     for _ in range(iters):
         sy_i, H_i = sy_h(ep0 + dl)
-        res = seq_p - mat.E * dl - sy_i
-        dl += res / (mat.E + np.maximum(H_i, 0.0))
+        res = seq_p - getattr(mat, "E", 0.0) * dl - sy_i
+        dl += res / (getattr(mat, "E", 0.0) + np.maximum(H_i, 0.0))
         dl = np.maximum(dl, 0.0)
     sy_new, _ = sy_h(ep0 + dl)
     scale = sy_new / seq_p
@@ -444,7 +449,7 @@ def _forces_core(group, x, v, vr, dt, fint, mint, plast_iters):
         # consistency solve on the Johnson-Cook curve, radial scaling of
         # all six resultants back to the yield surface.
         if getattr(mat, "law", 1) == 2:
-            _global_plastic_return(st, sl, mat, p, plast_iters)
+            _global_plastic_return(st, sl, mat, p, plast_iters, prop=prop)
 
     # ---- internal nodal forces & moments (pfint3, see docstring) -----------
     alive = st.get("off", np.ones(group.n, dtype=float)) > 0.0

@@ -562,7 +562,7 @@ def init_group(group, model, log):
     gmod = np.zeros(n)
     shf = np.zeros(n)
     amu = np.zeros(n)
-    cspd = np.ones(n)
+    cspd = np.zeros(n)
     npt1 = np.zeros(n, dtype=bool)
     for sl, mat, prop in group.state["slices"]:
         nu = getattr(mat, "nu", 0.3)
