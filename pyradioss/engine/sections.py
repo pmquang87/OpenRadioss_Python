@@ -54,8 +54,16 @@ class SectionForces:
         self.model = model
         self.sections = []          # (sect, side_idx, ref_node_or_None, x_ref0)
         for sc in model.sections:
-            side = model.node_groups[sc.grnod_id].node_idx
-            ref = model.node_index(sc.node_id_ref) if sc.node_id_ref else -1
+            g = model.node_groups.get(sc.grnod_id)
+            if g is None:
+                continue
+            side = g.node_idx
+            if len(side) == 0:
+                continue
+            try:
+                ref = model.node_index(sc.node_id_ref) if sc.node_id_ref else -1
+            except KeyError:
+                ref = -1
             x_ref0 = (model.x0[side].mean(axis=0) if ref < 0
                       else None)
             self.sections.append((sc, side, ref, x_ref0))

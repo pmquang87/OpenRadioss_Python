@@ -69,7 +69,9 @@ def update_airbag_volume(mv, model: Model, x: np.ndarray) -> None:
     Recompute volume based on current nodal coordinates.
     Matches volpvga.F90 / get_volume_area.F90.
     """
-    surf = model.surfaces[mv.surf_id]
+    surf = model.surfaces.get(mv.surf_id)
+    if surf is None:
+        return
     total_vol = 0.0
     if surf.segments is None:
         mv.volume = 0.0

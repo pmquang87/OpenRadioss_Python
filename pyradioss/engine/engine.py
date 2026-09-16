@@ -418,6 +418,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         next_th = saved["next_th"]
         next_anim = saved["next_anim"]
         anim_no = saved["anim_no"]
+        next_state = saved.get("next_state", controls.state_tstart if controls.state_dt > 0 else EP30)
         log.info(f" RESUMED TIME STEP  . . . . . . . . . : {dt:12.5E}\n")
     else:
         # initial energy = reference E0 of the balance: kinetic + any
@@ -486,7 +487,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
 
     # /STATE/DT (M6): periodic restart snapshots (crash recovery / early
     # chaining points) — each write refreshes RunName_{nn}.rst
-    next_state = controls.state_tstart if controls.state_dt > 0 else EP30
+    if not resumed:
+        next_state = controls.state_tstart if controls.state_dt > 0 else EP30
 
     def _engine_snapshot():
         """The accumulated-state dict of the restart contract (see
@@ -498,6 +500,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             "e_damp": state.e_damp, "e0": _energies.e0, "dt": dt,
             "dt_prev": state.dt_prev,
             "next_th": next_th, "next_anim": next_anim, "anim_no": anim_no,
+            "next_state": next_state,
             "sensors": dict(sensors.fire_time),
             "sensors_status": dict(sensors.status),
             "rbodies": {rb.rb.id: {
@@ -812,21 +815,24 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             svals = sections.compute(model.x, fint, mint) if len(sections) \
                 else None
             th.write(state.t, e, float(model.mass[real].sum()), mom, svals)
-            next_th += controls.th_dt
+            while next_th <= state.t:
+                next_th += controls.th_dt
         if controls.anim_dt > 0 and state.t >= next_anim:
             path = os.path.join(out_dir, f"{run_name}A{anim_no:03d}.vtk")
             write_anim_state(path, model, state.t,
                              controls.anim_vect, controls.anim_elem,
                              cycle=state.cycle)
             anim_no += 1
-            next_anim += controls.anim_dt
+            while next_anim <= state.t:
+                next_anim += controls.anim_dt
         if state.t >= next_state:
             # /STATE/DT snapshot: a full restart, resumable by the next
             # run of the chain (and the crash-recovery point)
             write_restart(model, rst_path, engine=_engine_snapshot())
             log.info(f" -- /STATE: RESTART SNAPSHOT WRITTEN AT TIME "
                      f"{state.t:12.5E}")
-            next_state += controls.state_dt
+            while next_state <= state.t:
+                next_state += controls.state_dt
         if state.cycle % controls.print_cycles == 0 or \
                 state.t >= controls.t_end:
             # element-deletion report (the original prints a "RUPTURE /
@@ -857,7 +863,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             if e["REF"] > _ENERGY_START_FLOOR:
                 if abs(e["ERR"]) > controls.energy_error_stop:
                     state.stop_reason = (
-                        f"/STOP/ENERGY ERROR {e['ERR']:.1f}% EXCEEDS "
+                        f"ENERGY ERROR {e['ERR']:.1f}% EXCEEDS "
                         f"LIMIT {controls.energy_error_stop}%")
                     break
                 # a strongly NEGATIVE numerical-dissipation ledger is
