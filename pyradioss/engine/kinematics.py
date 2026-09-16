@@ -267,7 +267,7 @@ class LoadsAndConstraints:
             if len(segs) == 0 and log is not None:
                 log.warning(f"/PLOAD/{pl.id}: surface {pl.surf_id} has no "
                             f"segments — load inactive", "PLOAD INIT")
-            tri = ((segs[:, 3] == segs[:, 2]) | (segs[:, 3] <= 0)) if len(segs) else \
+            tri = ((segs[:, 3] == segs[:, 2]) | (segs[:, 3] < 0)) if len(segs) else \
                 np.zeros(0, dtype=bool)
             # corner lumping weights: 1/4 per quad corner; triangles put
             # 1/3 on each distinct corner and 0 on the repeated slot
@@ -316,7 +316,7 @@ class LoadsAndConstraints:
             if p == 0.0:
                 continue
             xs = x[segs].copy()                                  # (nseg, 4, 3)
-            degen = (segs[:, 3] == segs[:, 2]) | (segs[:, 3] <= 0)
+            degen = (segs[:, 3] == segs[:, 2]) | (segs[:, 3] < 0)
             if np.any(degen):
                 xs[degen, 3] = xs[degen, 2]
             # area vector = 1/2 (d13 x d24): exact for the bilinear quad

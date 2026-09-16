@@ -120,7 +120,8 @@ def cqc_correlation(omega, zeta):
     num = 8.0 * np.sqrt(zi * zk) * (zi + r * zk) * r ** 1.5
     den = ((1.0 - r ** 2) ** 2 + 4.0 * zi * zk * r * (1.0 + r ** 2)
            + 4.0 * (zi ** 2 + zk ** 2) * r ** 2)
-    rho = num / den
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rho = np.where(den > 1e-14, num / den, np.where(np.abs(r - 1.0) < 1e-6, 1.0, 0.0))
     # numerical guard: the diagonal is exactly 1 (r = 1, zi = zk analytically),
     # clip round-off outside [0, 1]
     rho = np.clip(rho, 0.0, 1.0)
@@ -273,9 +274,10 @@ def run_response_spectrum(model, ip, log, result, constr=None, contacts=(),
              "MODAL PEAK(|Gamma Sa/w^2|)")
     for i in range(basis.nmode):
         wi = basis.omega[i]
+        peak = abs(res['gamma'][i] * res['Sa'][i] / (wi * wi)) if wi > 1e-12 else 0.0
         log.info(f"      {i + 1:4d}  {basis.freqs[i]:12.5E} "
                  f"{res['gamma'][i]:12.4E} {res['Sa'][i]:12.5E}  "
-                 f"{abs(res['gamma'][i] * res['Sa'][i] / (wi * wi)):12.5E}")
+                 f"{peak:12.5E}")
     js = int(np.argmax(res["srss"]))
     jc = int(np.argmax(res["cqc"]))
     log.info(f"      PEAK RESPONSE  SRSS / CQC  . . . : "

@@ -662,7 +662,7 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
                 f"({ctrl.total_cuts} automatic cuts — imp_dt.F control)")
             for gname, group in model.element_groups():
                 if gname in committed:
-                    group.state = committed[gname]
+                    _restore(group, committed[gname])
             break
         log.info(f" {inc_no:9d} {lam_new:13.5E} {inc.iterations:6d} "
                  f"{inc.residuals[-1]:14.5E}   converged")

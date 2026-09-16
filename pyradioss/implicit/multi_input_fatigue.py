@@ -101,7 +101,8 @@ def synthesize_input_spectra(freqs_hz, Sff, duration, seed, fs=None):
     ``(fft_f, Finput, nt, fs)`` with ``Finput`` of shape (nbin, ninput) the
     complex input spectra (DC and Nyquist handled by the caller's irfft)."""
     if fs is None:
-        fs = 8.0 * float(np.asarray(freqs_hz).max())
+        fmax = float(np.asarray(freqs_hz).max()) if len(freqs_hz) > 0 else 0.0
+        fs = max(8.0 * fmax, 1.0)
     fft_f, G, nt, df = _one_sided_grid(freqs_hz, Sff, duration, fs)
     nbin, n = fft_f.size, G.shape[1]
     lam, V = np.linalg.eigh(G)                    # lam (nbin,n), V (nbin,n,n)

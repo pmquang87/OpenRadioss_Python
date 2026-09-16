@@ -153,8 +153,9 @@ def buckling_factors(model, nev=4, log=None, constraints=None, contacts=None):
     try:
         theta, vecs = sla.eigh(-Kg, Km)
     except (sla.LinAlgError, ValueError) as err:
-        log.error(f"/IMPL/BUCKL: generalized eigensolve failed ({err})")
-        return [], []
+        if log is not None:
+            log.error(f"/IMPL/BUCKL: generalized eigensolve failed ({err})")
+        return np.zeros(0), []
     order = np.argsort(-theta)                    # largest theta first
     factors = []
     modes = []
