@@ -13,8 +13,8 @@ def make_deck(tmp_path):
     def _make(run_name: str, starter_text: str, engine_text: str):
         s = tmp_path / f"{run_name}_0000.rad"
         e = tmp_path / f"{run_name}_0001.rad"
-        s.write_text(textwrap.dedent(starter_text))
-        e.write_text(textwrap.dedent(engine_text))
+        s.write_text(textwrap.dedent(starter_text), encoding="utf-8")
+        e.write_text(textwrap.dedent(engine_text), encoding="utf-8")
         return str(s), str(e)
 
     return _make
@@ -68,8 +68,6 @@ _KNOWN_XFAIL = {
     "test_m561_law73_integration.py::test_shell_bt4_dynamic_thickness_thinning",
     "test_m562_law66_integration.py::test_shell_bt4_thickness_thinning",
     # LAW74 keyword synonyms / containers
-    "test_m563_law74_roundtrip.py::TestLaw74Synonyms::test_all_keyword_synonyms_populate_containers",
-    "test_m563_starter_model.py::test_model_mat_law74_containers",
     # Restart roundtrip parity / cycle count
     "test_m551_law60_roundtrip.py::TestLaw60RestartSerialization::test_engine_restart_unchained_parity",
     "test_m552_law48_roundtrip.py::TestLaw48RestartSerialization::test_dynamic_restart_continuation_vs_uninterrupted_run",

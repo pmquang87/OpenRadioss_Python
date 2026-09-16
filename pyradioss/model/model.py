@@ -1321,6 +1321,7 @@ class Model:
         self.mat_law74s: Dict[int, MatLaw74] = {}                   # /MAT/LAW74, /MAT/HILL_3D, /MAT/ORTH_PLAS, /MAT/THERM_HILL (M193, M563)
         self.mat_hill_3ds = self.mat_law74s
         self.mat_orth_plass = self.mat_law74s
+        self.mat_hill_therms = self.mat_law74s
         self.mat_law82s: Dict[int, MatLaw82] = {}                   # /MAT/LAW82, /MAT/OGDEN (M193)
         self.mat_ogdens = self.mat_law82s
         self.prop_int_beams: Dict[int, PropType18] = {}             # /PROP/TYPE18, /PROP/INT_BEAM (M193)
