@@ -34,7 +34,7 @@ from typing import Dict, List, Optional, Tuple
 
 from ..common.messages import MessageLog
 from ..model.entities import Property
-from .deck_reader import Card, KeywordBlock
+from .deck_reader import Card, KeywordBlock, parse_fortran_float
 
 # ============================================================================
 # Property TYPE numbering (IGTYP) and family rules — from the upstream
@@ -159,8 +159,8 @@ def _fv(s, default: float = 0.0) -> float:
     if s in ("", None):
         return default
     try:
-        return float(str(s).replace("D", "E").replace("d", "e"))
-    except ValueError:
+        return parse_fortran_float(str(s))
+    except (ValueError, TypeError):
         return default
 
 
@@ -168,8 +168,8 @@ def _iv(s, default: int = 0) -> int:
     if s in ("", None):
         return default
     try:
-        return int(float(str(s).replace("D", "E").replace("d", "e")))
-    except ValueError:
+        return int(parse_fortran_float(str(s)))
+    except (ValueError, TypeError):
         return default
 
 

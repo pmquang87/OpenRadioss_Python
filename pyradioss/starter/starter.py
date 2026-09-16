@@ -136,9 +136,7 @@ def apply_transforms(model: Model, log: MessageLog) -> None:
                     idx1 = model.node_index(n1)
                     idx2 = model.node_index(n2)
                     v = model.x0[idx2] - model.x0[idx1]
-                    tx += v[0]
-                    ty += v[1]
-                    tz += v[2]
+                    tx, ty, tz = float(v[0]), float(v[1]), float(v[2])
                 except KeyError as exc:
                     log.warning(f"/TRANSFORM/TRA/{tr_id}: node {exc} for "
                                 f"node-pair vector not found")

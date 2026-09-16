@@ -1165,12 +1165,14 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
                 if box:
                     bn = _nodes_in_box(model, box, log, f"/SURF/{s.id}")
                     box_nodes.update(bn)
-            if box_nodes:
-                all_s = np.vstack(segs)
-                all_gt = np.concatenate(gtypes)
-                all_el = np.concatenate(elems)
-                in_box = np.isin(all_s, list(box_nodes)).all(axis=1)
-                return (all_s[in_box], all_gt[in_box], all_el[in_box])
+            if not box_nodes:
+                return (np.zeros((0, 4), dtype=np.int64),
+                        np.zeros(0, dtype="<U8"), np.zeros(0, dtype=np.int64))
+            all_s = np.vstack(segs)
+            all_gt = np.concatenate(gtypes)
+            all_el = np.concatenate(elems)
+            in_box = np.isin(all_s, list(box_nodes)).all(axis=1)
+            return (all_s[in_box], all_gt[in_box], all_el[in_box])
 
         if segs:
             return (np.vstack(segs), np.concatenate(gtypes),

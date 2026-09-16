@@ -43,7 +43,8 @@ class FunctTable:
         self.y = y
         # Pre-computed segment slopes (dy/dx); used both for interpolation
         # and for the extrapolation beyond the ends.
-        self.slope = np.diff(y) / np.diff(x)
+        if x.size > 1:
+            self.slope = np.diff(y) / np.diff(x)
 
     def transform(self, scx: float, scy: float, shx: float, shy: float) -> None:
         """Apply a /MOVE_FUNCT scale and shift to the curve in place.
@@ -114,6 +115,10 @@ class SmoothFunctTable(FunctTable):
     """
 
     def eval(self, t):
+        if self.x.size == 1:
+            t_arr = np.asarray(t)
+            val = float(self.y[0])
+            return val if t_arr.ndim == 0 else np.full_like(t_arr, val, dtype=float)
         t = np.asarray(t, dtype=float)
         # segment index: i such that x[i] <= t < x[i+1]
         i = np.clip(np.searchsorted(self.x, t, side="right") - 1,

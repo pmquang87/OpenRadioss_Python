@@ -1023,6 +1023,9 @@ def forces(group, x, v, vr, dt, fint, mint):
 
     from pyradioss.accel import get as accel_get
     jit_pre = accel_get("qbat_pre")
+    jit_post = accel_get("qbat_post")
+    if jit_pre is None or jit_post is None:
+        jit_pre = jit_post = None
     if jit_pre is not None:
         E, area, lc, vdef3, cdet, vdef, i_f, i_w, bm_f, bc_f, bmw_w, bmfw_w, bfw_w, bcq_w, tc_w, vqn_w, corel_w, di_w, x13n_f, x24n_f, y13n_f, y24n_f, x13n_w, x24n_w, y13n_w, y24n_w = jit_pre(x[conn], v[conn], vr[conn], off, dt, force_flat)
         g = {"lc": lc}

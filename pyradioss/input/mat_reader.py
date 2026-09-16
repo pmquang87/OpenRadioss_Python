@@ -81,7 +81,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from ..common.messages import MessageLog
 from ..model.entities import Material
-from .deck_reader import Card, KeywordBlock
+from .deck_reader import Card, KeywordBlock, parse_fortran_float
 
 # ============================================================================
 # Configuration: where the cfg tree lives, and which input version to target
@@ -837,8 +837,8 @@ class _CfgInterpreter:
         if not raw:
             return None
         try:
-            val = float(raw.replace("D", "E").replace("d", "e"))
-        except ValueError:
+            val = parse_fortran_float(raw)
+        except (ValueError, TypeError):
             return None
         return int(val) if typ in _INT_SPECS else val
 

@@ -60,13 +60,15 @@ def fmt_float(v, width: int = 20) -> str:
             s = f"{v:.{prec}G}"
             if len(s) <= width:
                 break
-        if len(s) > width:
-            for exp_prec in range(max(0, width - 6), -1, -1):
-                s = f"{v:.{exp_prec}E}"
-                if len(s) <= width:
-                    break
-        if len(s) > width:
-            s = s[:width]
+    if len(s) > width:
+        for exp_prec in range(max(0, width - 4), -1, -1):
+            s = f"{v:.{exp_prec}E}"
+            if len(s) <= width:
+                break
+            s_cond = re.sub(r'E([+-])', r'\1', s)
+            if len(s_cond) <= width:
+                s = s_cond
+                break
     return f"{s:>{width}}"
 
 
