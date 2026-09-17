@@ -354,7 +354,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             # body still claims a nodal dt (rgbodfp.F/dtnoda.F — otherwise a
             # stiff shell welded into the body never constrains dt; the
             # RD-E-1000 rolling bug). No-op where no /RBODY exists.
-            noda.add_rigid_body(rb.nodes, rb.master, rb.M, rb.J0, model.x0)
+            noda.add_rigid_body(rb.nodes, rb.master, rb.M, rb.J0, model.x0, rb=rb)
         for t2 in tied:
             noda.set_prescribed(t2.snode[t2.active])
         for r3 in rbe3s:
@@ -523,6 +523,17 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     # this, a deck with dT_min = 0 can spin forever at dt ~ 1e-18
     dt_ref = dt
     t_wall0 = time.time()
+
+    # Write t = 0.0 initial state to TimeHistory (BUG-OUT-04)
+    if not resumed and controls.th_dt > 0:
+        model.fint = fint
+        model.fext = fext
+        e0 = _energies(model, state)
+        mom0 = (model.mass[real, None] * model.v[real]).sum(axis=0)
+        svals0 = sections.compute(model.x, fint, mint) if len(sections) else None
+        th.write(0.0, e0, float(model.mass[real].sum()), mom0, svals0)
+        while next_th <= state.t:
+            next_th += controls.th_dt
 
     # ======================================================================
     #                       THE EXPLICIT TIME LOOP
@@ -725,7 +736,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # balance instead of booking twice the work at cycle 1.)
         state.wext += loads.apply_kinematic(state.t + dt, model.v, model.vr,
                                             mass_eff, model.x, dt, v_old,
-                                            model.inertia, vr_old)
+                                            model.inertia, vr_old,
+                                            sensors=sensors)
         de_wall, dw_wall = walls.apply(model.x, model.v, v_old,
                                        model.mass, dt)
         state.econt += de_wall
@@ -751,6 +763,13 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # midstep average velocity (resol.F:6289, force.F90:322)
         state.wext += float(np.einsum("nb,nb->", fext, 0.5 * (v_old + model.v))) * dt12
 
+        # /MPC and /LAGMUL velocity cleanup: enforce constraints on velocities
+        # BEFORE position update to prevent geometric drift (BUG-ENG-05)
+        if mpc is not None:
+            mpc.enforce(model.v, model.vr, inv_mass, inv_inertia)
+        if len(lagmul) > 0:
+            lagmul.enforce(model.v, model.vr, inv_mass, inv_inertia)
+
         # ---- 6. position update -------------------------------------------
         model.x += model.v * dt
 
@@ -763,12 +782,6 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             t2.enforce(model.x, model.v, model.vr, dt)
         for r3 in rbe3s:
             r3.enforce(model.x, model.v, model.vr, dt)
-        # /MPC velocity cleanup: remove what walls/BCS/placements may have
-        # re-injected into G v (zero booked work — see mpc.py)
-        if mpc is not None:
-            mpc.enforce(model.v, model.vr, inv_mass, inv_inertia)
-        if len(lagmul) > 0:
-            lagmul.enforce(model.v, model.vr, inv_mass, inv_inertia)
 
         # ---- 6c. numerical-dissipation ledger (M6) --------------------------
         # The kernels book internal energy as a STATE FUNCTION
@@ -800,9 +813,9 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         #   law that misbooks its own work now surfaces in EN instead of
         #   ERR; EN is printed in the listing and T01 so it cannot hide.
         e_booked = _element_energy_sum(model)
-        w_leave = -0.5 * dt12 * (
-            float(np.einsum("nb,nb->", fint, v_old + model.v))
-            + float(np.einsum("nb,nb->", mint, vr_old + model.vr)))
+        w_leave = -dt * (
+            float(np.einsum("nb,nb->", fint, model.v))
+            + float(np.einsum("nb,nb->", mint, model.vr)))
         state.e_num += w_leave - (e_booked - state.e_booked_prev)
         state.e_booked_prev = e_booked
 

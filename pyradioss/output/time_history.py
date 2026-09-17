@@ -221,6 +221,36 @@ class TimeHistory:
                         elif var_upper in ("VM", "VONM", "VON_MISES"):
                             from .anim_vtk import _von_mises
                             return float(_von_mises(attr, g)[r])
+                        elif var_upper in ("N", "FX", "FY", "FZ"):
+                            if "fres" in st:
+                                f = st["fres"]
+                                c = {"N": 0, "FX": 0, "FY": 1, "FZ": 2}[var_upper]
+                                if f.ndim > 1 and f.shape[1] > c:
+                                    return float(f[r, c])
+                                elif f.ndim == 1 and c == 0:
+                                    return float(f[r])
+                            return 0.0
+                        elif var_upper in ("MX", "MY", "MZ"):
+                            c = {"MX": 0, "MY": 1, "MZ": 2}[var_upper]
+                            if "mres" in st:
+                                m = st["mres"]
+                                if m.ndim > 1 and m.shape[1] > c:
+                                    return float(m[r, c])
+                            elif "fres" in st:
+                                f = st["fres"]
+                                if f.ndim > 1 and f.shape[1] > (3 + c):
+                                    return float(f[r, 3 + c])
+                            return 0.0
+                        elif var_upper in ("F", "FORCE"):
+                            if "fres" in st:
+                                f = st["fres"][r]
+                                return float(np.linalg.norm(f) if hasattr(f, "__len__") else f)
+                            return 0.0
+                        elif var_upper in ("M", "MOM", "MOMENT"):
+                            if "mres" in st:
+                                m = st["mres"][r]
+                                return float(np.linalg.norm(m) if hasattr(m, "__len__") else m)
+                            return 0.0
                         elif var_upper in _STRESS_MAP:
                             c_idx = _STRESS_MAP[var_upper]
                             sig = st.get("sig")

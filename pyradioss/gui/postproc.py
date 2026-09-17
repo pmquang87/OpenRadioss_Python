@@ -343,6 +343,10 @@ def convert_anim_to_vtk(run_dir: str, exec_dir: Optional[str] = None,
                     _active_procs.append(proc)
                 try:
                     _, err_data = proc.communicate(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+                    raise
                 finally:
                     with _active_procs_lock:
                         if proc in _active_procs:

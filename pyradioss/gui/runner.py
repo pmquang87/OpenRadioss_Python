@@ -108,7 +108,7 @@ def parse_listing_line(line: str) -> Optional[Dict[str, float]]:
     except ValueError:
         return None
     try:
-        vals = [float(t) for t in tokens[1:]]
+        vals = [float(t.rstrip("%")) for t in tokens[1:]]
     except ValueError:
         return None
     status: Dict[str, float] = {"cycle": cycle}
@@ -154,7 +154,6 @@ class T01Data:
     """
 
     def __init__(self, columns: List[str], rows: List[List[float]]):
-        self.columns = columns
         self.rows = rows
         # transpose to column-major series for easy channel access
         seen = {}
@@ -166,10 +165,10 @@ class T01Data:
             else:
                 seen[c] = 1
                 unique_cols.append(c)
-        columns = unique_cols
-        self._series: Dict[str, List[float]] = {c: [] for c in columns}
+        self.columns = unique_cols
+        self._series: Dict[str, List[float]] = {c: [] for c in self.columns}
         for row in rows:
-            for c, v in zip(columns, row):
+            for c, v in zip(self.columns, row):
                 self._series[c].append(v)
 
     @property
