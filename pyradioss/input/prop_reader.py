@@ -93,6 +93,8 @@ def prop_type_ok(req_prop: int, prop: Property) -> bool:
         return True
     if req_prop == 1 and pt in (9, 16):
         return True
+    if req_prop == 3 and pt in (18,):
+        return True
     if req_prop == 4 and pt in (8, 12, 13, 19, 23, 25, 26, 27, 32, 35, 36, 44, 45, 46):
         return True
     if req_prop == 14 and pt in (20, 21, 22, 23, 43):

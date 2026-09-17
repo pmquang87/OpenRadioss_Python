@@ -42376,7 +42376,11 @@ def read_prop_type18(block: KeywordBlock, model: Model, log: MessageLog) -> None
                 if icard < len(cards):
                     toks = cards[icard].tokens()
                     params["nitrs"] = _ival(toks[0]) if len(toks) > 0 else 0
-                    l1_4 = [_fval(x) for x in toks[1:5]]
+                    if len(toks) >= 6:
+                        params["iref"] = _ival(toks[1])
+                        l1_4 = [_fval(x) for x in toks[2:6]]
+                    else:
+                        l1_4 = [_fval(x) for x in toks[1:5]]
                     while len(l1_4) < 4:
                         l1_4.append(0.0)
                     icard += 1
