@@ -1538,6 +1538,10 @@ class Interface:
     c3: float = 0.0       # type 25: friction constant 3
     c4: float = 0.0       # type 25: friction constant 4
     c5: float = 0.0       # type 25: friction constant 5
+    depth: float = 0.0    # type 21: drawbead depth
+    pmax: float = 1e30    # type 21: maximum contact pressure / force limit
+    itlim: int = 0        # type 21: tangential force limit flag (0=limited, 1=deactivated)
+    fpenmax: float = 1.0  # type 23: max fraction of initial penetration
 
 
 @dataclass
@@ -3280,14 +3284,141 @@ class IncludeDyna:
 
 
 @dataclass
-class MonvolFvmBag1:
-    """/MONVOL/FVMBAG1 (M108): Finite Volume Method Airbag model.
+class FvmChamber:
+    id: int
+    surf_id: int = 0
+    mat_id: int = 0
+    pext: float = 0.0
+    t_initial: float = 293.15
+    iequil: int = 0
+    volume: float = 0.0
+    volume_old: float = 0.0
+    area: float = 0.0
+    mass: float = 0.0
+    energy: float = 0.0
+    temperature: float = 293.15
+    pressure: float = 0.0
+    density: float = 0.0
+    gamma: float = 1.4
+    cpa: float = 1004.0
+    cpb: float = 0.0
+    cpc: float = 0.0
+    cpd: float = 0.0
+    cpe: float = 0.0
+    cpf: float = 0.0
+    r_spec: float = 287.0
+    element_ids: List[int] = field(default_factory=list)
 
-    Fortran origin: ``starter/source/control_volume/fvmbag1.F`` / CFG ``monvol_fvmbag1.cfg``.
+
+@dataclass
+class FvmOrifice:
+    id: int = 0
+    surf_id: int = 0
+    chamber1_id: int = 1
+    chamber2_id: int = 2
+    area: float = 0.0
+    cd: float = 0.8
+    pdef: float = 0.0
+    dtpdef: float = 0.0
+    tstart: float = 0.0
+    tstop: float = 1e30
+    is_open: bool = True
+    fct_t: int = 0
+    fct_p: int = 0
+    title: str = ""
+
+
+@dataclass
+class FvmVent:
+    id: int = 0
+    surf_id: int = 0
+    chamber_id: int = 1
+    iform: int = 1
+    avent: float = 1.0
+    bvent: float = 0.0
+    area: float = 0.0
+    cd: float = 0.6
+    tstart: float = 0.0
+    tstop: float = 1e30
+    dpdef: float = 0.0
+    dtpdef: float = 0.0
+    idtpdef: int = 0
+    is_open: bool = True
+    fct_t: int = 0
+    fct_p: int = 0
+    fct_a: int = 0
+    fscale_t: float = 1.0
+    fscale_p: float = 1.0
+    fscale_a: float = 1.0
+    fct_v: int = 0
+    fscale_v: float = 1.0
+    title: str = ""
+
+
+@dataclass
+class FvmPorousSurface:
+    id: int = 0
+    surf_id: int = 0
+    chamber_id: int = 1
+    iformps: int = 1
+    iblockage: int = 0
+    tstart: float = 0.0
+    tstop: float = 1e30
+    dpdef: float = 0.0
+    dtpdef: float = 0.0
+    idtpdef: int = 0
+    is_open: bool = True
+    fct_v: int = 0
+    fscale_v: float = 1.0
+    title: str = ""
+    lr1: float = 0.0
+    fthk: float = 0.0
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+
+
+@dataclass
+class FvmInjector:
+    id: int = 0
+    inject_id: int = 0
+    sens_id: int = 0
+    surf_id: int = 0
+    chamber_id: int = 1
+    fct_vel: int = 0
+    scale_vel: float = 1.0
+    mass_flow: float = 0.0
+    fct_mass: int = 0
+    scale_mass: float = 1.0
+    temperature: float = 293.15
+    fct_temp: int = 0
+    scale_temp: float = 1.0
+    cpa: float = 1004.0
+    cpb: float = 0.0
+    cpc: float = 0.0
+    cpd: float = 0.0
+    cpe: float = 0.0
+    cpf: float = 0.0
+    r_spec: float = 287.0
+    normal: Tuple[float, float, float] = (0.0, 0.0, 1.0)
+    area: float = 0.0
+    is_active: bool = False
+
+
+@dataclass
+class MonvolFvmbag:
+    """/MONVOL/FVMBAG, /MONVOL/FVMBAG1, /MONVOL/FVMBAG2 (M108, M111, M583):
+    Finite Volume Method Airbag model with multiple chambers, internal orifices,
+    external vents, fabric porosity, and gas injectors.
     """
     id: int
     title: str = ""
+    vol_type: str = "FVMBAG1"
     surf_id: int = 0
+    surf_id_ex: int = 0
+    surf_id_in: int = 0
+    hconv: float = 0.0
+    ih3d: int = 0
     scale_t: float = 1.0
     scale_p: float = 1.0
     scale_s: float = 1.0
@@ -3296,26 +3427,47 @@ class MonvolFvmBag1:
     mat_id: int = 0
     pext: float = 0.0
     ttot: float = 0.0
-    params: Dict = field(default_factory=dict)
-
-
-@dataclass
-class MonvolFvmBag2:
-    """/MONVOL/FVMBAG2 (M111): Dual-Chamber Finite Volume Method Airbag model.
-
-    Fortran origin: ``starter/source/control_volume/fvmbag2.F`` / CFG ``monvol_fvmbag2.cfg``.
-    """
-    id: int
-    title: str = ""
-    surf_id_ex: int = 0
-    surf_id_in: int = 0
-    hconv: float = 0.0
-    ih3d: int = 0
-    mat_id: int = 0
-    pext: float = 0.0
     t0: float = 0.0
+    t_initial: float = 293.15
+    iequil: int = 0
     i_ttf: int = 0
+    injectors: List[FvmInjector] = field(default_factory=list)
+    vents: List[FvmVent] = field(default_factory=list)
+    porous_surfaces: List[FvmPorousSurface] = field(default_factory=list)
+    orifices: List[FvmOrifice] = field(default_factory=list)
+    chambers: Dict[int, FvmChamber] = field(default_factory=dict)
+    kmesh: int = 1
+    cgmerg: float = 0.0
+    tswitch: float = 1e30
+    iswitch: int = 0
+    pswitch: float = 0.0
+    dtsca: float = 0.9
+    dtmin: float = 0.0
+    qa: float = 0.0
+    qb: float = 0.0
+    hmin: float = 0.0
     params: Dict = field(default_factory=dict)
+    volume: float = 0.0
+    pressure: float = 0.0
+    temperature: float = 293.15
+    mass: float = 0.0
+    energy: float = 0.0
+    is_initialized: bool = False
+
+    def __post_init__(self):
+        if self.surf_id_ex == 0 and self.surf_id != 0:
+            self.surf_id_ex = self.surf_id
+        elif self.surf_id == 0 and self.surf_id_ex != 0:
+            self.surf_id = self.surf_id_ex
+        if self.t0 != 0.0 and self.t_initial == 293.15:
+            self.t_initial = self.t0
+        elif self.t_initial != 293.15 and self.t0 == 0.0:
+            self.t0 = self.t_initial
+
+
+# Aliases for backwards compatibility with earlier milestones
+MonvolFvmBag1 = MonvolFvmbag
+MonvolFvmBag2 = MonvolFvmbag
 
 
 @dataclass

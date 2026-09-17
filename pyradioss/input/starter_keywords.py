@@ -57,7 +57,8 @@ from ..model.entities import (
     InivelPart, InivelSph, DetLine, DetCirc, IniMap3D, SetGeneric,
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
-    Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
+    Drape, IniBriEref, IncludeDyna, MonvolFvmBag1, MonvolFvmbag,
+    FvmInjector, FvmVent, FvmOrifice, FvmPorousSurface, FvmChamber,
     GaugePoint, SphGlo, AnalyOptions, AleCfdSph,
     FailOrthBiquad, SlipringShell,
     Upbeam, RelaxSystem, MonvolComm,
@@ -472,6 +473,11 @@ def read_brick(block, model, log):
     elements by the Starter; other repeated-node patterns (penta/pyramid)
     are rejected with a clear error (see initialization.py)."""
     _read_elems(block, model, log, "BRICK", 8)
+
+
+def read_tshell(block, model, log):
+    """``/TSHELL/part_ID``: 8-node thick shell elements (elem_ID + 8 node IDs)."""
+    _read_elems(block, model, log, "TSHELL", 8)
 
 
 def read_tetra4(block, model, log):
@@ -1215,7 +1221,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW97", "EXPLOSIVE_JWLS", "JWLS", "MAT_EXPLOSIVE_JWLS", "MAT_JWLS", "LAW97_EXPLOSIVE_JWLS"):
         read_mat_law97(block, model, log)
         return
-    if lawname in ("LAW71", "SUPER_ELAS", "NITINOL", "MAT_SUPER_ELAS", "MAT_NITINOL", "LAW71_SUPER_ELAS"):
+    if lawname in ("71", "LAW71", "SUPER_ELAS", "NITINOL", "MAT_71", "MAT_LAW71", "MAT_SUPER_ELAS", "MAT_NITINOL", "LAW71_SUPER_ELAS", "LAW71_NITINOL"):
         read_mat_law71(block, model, log)
         return
     if lawname in ("73", "LAW73", "LAW73_THERM_HILL", "LAW73_HILL_THERM", "MAT_LAW73", "MAT_73"):
@@ -14290,58 +14296,8 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         ))
         return
 
-    if kind == "TYPE21":
-        if block.fixed:
-            f0 = _fixed_vals(cards[0], [10, 10, 10, 10, 10, 10, 30, 10])
-            surf_id1 = _ival(f0[0])
-            surf_id2 = _ival(f0[1])
-            istf = _ival(f0[2])
-            igap = _ival(f0[4])
-            multimp = _ival(f0[5])
-            iadm = _ival(f0[7])
-
-            gap_scale = 1.0
-            gap_max = 0.0
-            dsearch = 0.0
-            if len(cards) > 1 and not cards[1].is_blank:
-                f1 = _fixed_vals(cards[1], [20, 20, 20, 20, 20])
-                gap_scale = _fval(f1[0], 1.0)
-                gap_max = _fval(f1[1], 0.0)
-                dsearch = _fval(f1[2], 0.0)
-
-            stfac = 1.0
-            fric = 0.0
-            if len(cards) > 2 and not cards[2].is_blank:
-                f2 = _fixed_vals(cards[2], [20, 20, 20, 20, 20])
-                stfac = _fval(f2[2], 1.0)
-                fric = _fval(f2[3], 0.0)
-        else:
-            t0 = cards[0].tokens()
-            surf_id1 = int(float(t0[0])) if len(t0) > 0 else 0
-            surf_id2 = int(float(t0[1])) if len(t0) > 1 else 0
-            istf = int(float(t0[2])) if len(t0) > 2 else 0
-            igap = int(float(t0[3])) if len(t0) > 3 else 0
-            multimp = int(float(t0[4])) if len(t0) > 4 else 0
-            iadm = int(float(t0[5])) if len(t0) > 5 else 0
-
-            gap_scale, gap_max, dsearch = 1.0, 0.0, 0.0
-            if len(cards) > 1 and not cards[1].is_blank:
-                t1 = cards[1].tokens()
-                gap_scale = float(t1[0]) if len(t1) > 0 else 1.0
-                gap_max = float(t1[1]) if len(t1) > 1 else 0.0
-                dsearch = float(t1[2]) if len(t1) > 2 else 0.0
-
-            stfac, fric = 1.0, 0.0
-            if len(cards) > 2 and not cards[2].is_blank:
-                t2 = cards[2].tokens()
-                stfac = float(t2[2] if len(t2) > 2 else t2[0]) if len(t2) > 0 else 1.0
-                fric = float(t2[3] if len(t2) > 3 else (t2[1] if len(t2) > 1 else 0.0)) if len(t2) > 1 else 0.0
-
-        model.interfaces.append(Interface(
-            id=block.user_id, type=21, surf_id=surf_id1, surf_id1=surf_id2,
-            istf=istf, igap=igap, multimp=multimp, iadm=iadm, dsearch=dsearch,
-            gap_scale=gap_scale, gap_max=gap_max, stfac=stfac, fric=fric, title=title
-        ))
+    if kind in ("TYPE21", "21"):
+        read_inter_type21(block, model, log)
         return
 
     if kind == "GUIDED_CABLE":
@@ -14686,38 +14642,8 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         ))
         return
 
-    if kind == "TYPE23":
-        if block.fixed:
-            f0 = cards[0].cut("INTER_TYPE23_1")
-            surf_s = _ival(f0[0]) if len(f0) > 0 else 0
-            surf_m = _ival(f0[1]) if len(f0) > 1 else 0
-            istf = _ival(f0[2]) if len(f0) > 2 else 0
-            igap = _ival(f0[4]) if len(f0) > 4 else 0
-            ibag = _ival(f0[6]) if len(f0) > 6 else 0
-            idel = _ival(f0[7]) if len(f0) > 7 else 0
-            fscale_gap, gap_max = 1.0, 0.0
-            if len(cards) > 1 and not cards[1].is_blank:
-                f1 = cards[1].cut("INTER_TYPE23_2")
-                fscale_gap = _fval(f1[0], 1.0) if len(f1) > 0 else 1.0
-                gap_max = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
-        else:
-            t0 = cards[0].tokens()
-            surf_s = int(float(t0[0])) if len(t0) > 0 else 0
-            surf_m = int(float(t0[1])) if len(t0) > 1 else 0
-            istf = int(float(t0[2])) if len(t0) > 2 else 0
-            igap = int(float(t0[3])) if len(t0) > 3 else 0
-            ibag = int(float(t0[4])) if len(t0) > 4 else 0
-            idel = int(float(t0[5])) if len(t0) > 5 else 0
-            fscale_gap, gap_max = 1.0, 0.0
-            if len(cards) > 1 and not cards[1].is_blank:
-                t1 = cards[1].tokens()
-                fscale_gap = float(t1[0]) if len(t1) > 0 else 1.0
-                gap_max = float(t1[1]) if len(t1) > 1 else 0.0
-        model.interfaces.append(Interface(
-            id=block.user_id, type=23, surf_id=surf_m, surf_id1=surf_s,
-            istf=istf, igap=igap, ibag=ibag, idel=idel, fscale_gap=fscale_gap,
-            gap_max=gap_max, title=title
-        ))
+    if kind in ("TYPE23", "23"):
+        read_inter_type23(block, model, log)
         return
 
     if kind == "TYPE9":
@@ -15321,6 +15247,383 @@ def read_guided_cable(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     model.interfaces.append(Interface(
         id=block.user_id, type=29, grnod_id=grnod_id, grpart_id=grpart_id,
         istf=istiff, stfac=stfac, fric=fric, title=title
+    ))
+
+
+def read_inter_type21(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INTER/TYPE21/inter_ID`` (M585): Drawbead contact interface.
+
+    Fortran origin: ``starter/source/interfaces/int21/hm_read_inter_type21.F``
+    and CFG ``inter_type21.cfg``.
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/INTER/TYPE21/{block.user_id}: missing data card", block.source)
+        return
+
+    surf_s = 0
+    surf_m = 0
+    istf = 0
+    igap = 0
+    multimp = 4
+    iadm = 0
+    gap_scale = 1.0
+    gap_max = 0.0
+    depth = 0.0
+    pmax = 1e30
+    itlim = 0
+    stmin = 0.0
+    stmax = 1e30
+    stfac = 1.0
+    fric = 0.0
+    gap_min = 0.0
+    tstart = 0.0
+    tstop = 1e30
+    inactiv = 0
+    viss = 0.05
+    sort_fact = 0.2
+    ifric = 0
+    ifiltr = 0
+    xfreq = 0.0
+    sens_id = 0
+    c1, c2, c3, c4, c5, c6 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+
+    if block.fixed:
+        f0 = cards[0].cut("INTER_TYPE21_1")
+        surf_s = _ival(f0[0]) if len(f0) > 0 else 0
+        surf_m = _ival(f0[1]) if len(f0) > 1 else 0
+        istf = _ival(f0[2]) if len(f0) > 2 else 0
+        igap = _ival(f0[4]) if len(f0) > 4 else 0
+        multimp = _ival(f0[5]) if len(f0) > 5 else 4
+        iadm = _ival(f0[8]) if len(f0) > 8 else (_ival(f0[7]) if len(f0) > 7 else 0)
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f1 = cards[1].cut("INTER_TYPE21_2")
+            gap_scale = _fval(f1[0], 1.0) if len(f1) > 0 else 1.0
+            gap_max = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+            depth = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+            pmax = _fval(f1[3], 1e30) if len(f1) > 3 and _fval(f1[3], 0.0) > 0.0 else 1e30
+            itlim = _ival(f1[4]) if len(f1) > 4 else 0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            if len(cards) == 3:
+                # compact legacy format: Stmin, Stmax, Stfac, Fric
+                f2 = _fixed_vals(cards[2], [20, 20, 20, 20, 20])
+                if len(f2) >= 4 and (_fval(f2[2], 0.0) != 0.0 or _fval(f2[3], 0.0) != 0.0):
+                    stfac = _fval(f2[2], 1.0)
+                    fric = _fval(f2[3], 0.0)
+                else:
+                    stmin = _fval(f2[0], 0.0)
+                    stmax = _fval(f2[1], 1e30) if _fval(f2[1], 0.0) > 0.0 else 1e30
+            else:
+                f2 = cards[2].cut("INTER_TYPE21_3")
+                stmin = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                stmax = _fval(f2[1], 1e30) if len(f2) > 1 and _fval(f2[1], 0.0) > 0.0 else 1e30
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            f3 = cards[3].cut("INTER_TYPE21_4")
+            stfac = _fval(f3[0], 1.0) if len(f3) > 0 else 1.0
+            fric = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+            gap_min = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+            tstart = _fval(f3[3], 0.0) if len(f3) > 3 else 0.0
+            tstop = _fval(f3[4], 1e30) if len(f3) > 4 and _fval(f3[4], 0.0) > 0.0 else 1e30
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            f4 = cards[4].cut("INTER_TYPE21_5")
+            inactiv = _ival(f4[5]) if len(f4) > 5 else 0
+            viss = _fval(f4[6], 0.05) if len(f4) > 6 else 0.05
+            sort_fact = _fval(f4[8], 0.2) if len(f4) > 8 else 0.2
+
+        if len(cards) > 5 and not cards[5].is_blank:
+            f5 = cards[5].cut("INTER_TYPE21_6")
+            ifric = _ival(f5[0]) if len(f5) > 0 else 0
+            ifiltr = _ival(f5[1]) if len(f5) > 1 else 0
+            xfreq = _fval(f5[2], 0.0) if len(f5) > 2 else 0.0
+            sens_id = _ival(f5[4]) if len(f5) > 4 else 0
+
+        card_idx = 6
+        if ifric > 0 and len(cards) > card_idx and not cards[card_idx].is_blank:
+            fc1 = _fixed_vals(cards[card_idx], [20, 20, 20, 20, 20])
+            c1 = _fval(fc1[0], 0.0)
+            c2 = _fval(fc1[1], 0.0) if len(fc1) > 1 else 0.0
+            c3 = _fval(fc1[2], 0.0) if len(fc1) > 2 else 0.0
+            c4 = _fval(fc1[3], 0.0) if len(fc1) > 3 else 0.0
+            c5 = _fval(fc1[4], 0.0) if len(fc1) > 4 else 0.0
+            card_idx += 1
+        if ifric > 1 and len(cards) > card_idx and not cards[card_idx].is_blank:
+            fc2 = _fixed_vals(cards[card_idx], [20])
+            c6 = _fval(fc2[0], 0.0)
+    else:
+        t0 = cards[0].tokens()
+        surf_s = int(float(t0[0])) if len(t0) > 0 else 0
+        surf_m = int(float(t0[1])) if len(t0) > 1 else 0
+        istf = int(float(t0[2])) if len(t0) > 2 else 0
+        igap = int(float(t0[3])) if len(t0) > 3 else 0
+        multimp = int(float(t0[4])) if len(t0) > 4 else 4
+        iadm = int(float(t0[5])) if len(t0) > 5 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t1 = cards[1].tokens()
+            gap_scale = float(t1[0]) if len(t1) > 0 else 1.0
+            gap_max = float(t1[1]) if len(t1) > 1 else 0.0
+            depth = float(t1[2]) if len(t1) > 2 else 0.0
+            pmax = float(t1[3]) if len(t1) > 3 and float(t1[3]) > 0.0 else 1e30
+            itlim = int(float(t1[4])) if len(t1) > 4 else 0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t2 = cards[2].tokens()
+            if len(cards) == 3:
+                stfac = float(t2[2] if len(t2) > 2 else t2[0]) if len(t2) > 0 else 1.0
+                fric = float(t2[3] if len(t2) > 3 else (t2[1] if len(t2) > 1 else 0.0)) if len(t2) > 1 else 0.0
+            else:
+                stmin = float(t2[0]) if len(t2) > 0 else 0.0
+                stmax = float(t2[1]) if len(t2) > 1 and float(t2[1]) > 0.0 else 1e30
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            t3 = cards[3].tokens()
+            stfac = float(t3[0]) if len(t3) > 0 else 1.0
+            fric = float(t3[1]) if len(t3) > 1 else 0.0
+            gap_min = float(t3[2]) if len(t3) > 2 else 0.0
+            tstart = float(t3[3]) if len(t3) > 3 else 0.0
+            tstop = float(t3[4]) if len(t3) > 4 and float(t3[4]) > 0.0 else 1e30
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            t4 = cards[4].tokens()
+            inactiv = int(float(t4[1])) if len(t4) > 1 else 0
+            viss = float(t4[2]) if len(t4) > 2 else 0.05
+            sort_fact = float(t4[3]) if len(t4) > 3 else 0.2
+
+        if len(cards) > 5 and not cards[5].is_blank:
+            t5 = cards[5].tokens()
+            ifric = int(float(t5[0])) if len(t5) > 0 else 0
+            ifiltr = int(float(t5[1])) if len(t5) > 1 else 0
+            xfreq = float(t5[2]) if len(t5) > 2 else 0.0
+            sens_id = int(float(t5[4])) if len(t5) > 4 else 0
+
+        card_idx = 6
+        if ifric > 0 and len(cards) > card_idx and not cards[card_idx].is_blank:
+            tc1 = cards[card_idx].tokens()
+            c1 = float(tc1[0]) if len(tc1) > 0 else 0.0
+            c2 = float(tc1[1]) if len(tc1) > 1 else 0.0
+            c3 = float(tc1[2]) if len(tc1) > 2 else 0.0
+            c4 = float(tc1[3]) if len(tc1) > 3 else 0.0
+            c5 = float(tc1[4]) if len(tc1) > 4 else 0.0
+            card_idx += 1
+        if ifric > 1 and len(cards) > card_idx and not cards[card_idx].is_blank:
+            tc2 = cards[card_idx].tokens()
+            c6 = float(tc2[0]) if len(tc2) > 0 else 0.0
+
+    model.interfaces.append(Interface(
+        id=block.user_id,
+        type=21,
+        surf_id=surf_s,
+        surf_id1=surf_m,
+        istf=istf,
+        igap=igap,
+        multimp=multimp,
+        iadm=iadm,
+        gap_scale=gap_scale,
+        fscale_gap=gap_scale,
+        gap_max=gap_max,
+        depth=depth,
+        dsearch=depth,
+        pmax=pmax,
+        itlim=itlim,
+        stmin=stmin,
+        stmax=stmax,
+        stfac=stfac,
+        fric=fric,
+        gap=gap_min,
+        gap_min=gap_min,
+        tstart=tstart,
+        tstop=tstop,
+        inactiv=inactiv,
+        viss=viss,
+        stiff_dc=viss,
+        sort_fact=sort_fact,
+        sens_id=sens_id,
+        ifric=ifric,
+        mfrot=ifric,
+        ifiltr=ifiltr,
+        ifq=ifiltr,
+        xfreq=xfreq,
+        fric_c=(c1, c2, c3, c4, c5, c6),
+        title=title,
+    ))
+
+
+def read_inter_type23(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INTER/TYPE23/inter_ID`` (M585): Mortar segment-to-segment contact interface.
+
+    Fortran origin: ``starter/source/interfaces/int23/hm_read_inter_type23.F``
+    and CFG ``inter_type23.cfg``.
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/INTER/TYPE23/{block.user_id}: missing data card", block.source)
+        return
+
+    surf_s = 0
+    surf_m = 0
+    istf = 0
+    igap = 0
+    ibag = 0
+    idel = 0
+    fscale_gap = 1.0
+    gap_max = 0.0
+    fpenmax = 1.0
+    stmin = 0.0
+    stmax = 1e30
+    stfac = 1.0
+    fric = 0.0
+    gap_min = 0.0
+    tstart = 0.0
+    tstop = 1e30
+    inactiv = 0
+    viss = 0.05
+    sort_fact = 0.2
+    ifric = 0
+    ifiltr = 0
+    xfreq = 0.0
+    c1, c2, c3, c4, c5, c6 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+
+    if block.fixed:
+        f0 = cards[0].cut("INTER_TYPE23_1")
+        surf_s = _ival(f0[0]) if len(f0) > 0 else 0
+        surf_m = _ival(f0[1]) if len(f0) > 1 else 0
+        istf = _ival(f0[2]) if len(f0) > 2 else 0
+        igap = _ival(f0[4]) if len(f0) > 4 else 0
+        ibag = _ival(f0[6]) if len(f0) > 6 else 0
+        idel = _ival(f0[7]) if len(f0) > 7 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f1 = cards[1].cut("INTER_TYPE23_2")
+            fscale_gap = _fval(f1[0], 1.0) if len(f1) > 0 else 1.0
+            gap_max = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+            fpenmax = _fval(f1[2], 1.0) if len(f1) > 2 and _fval(f1[2], 0.0) > 0.0 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f2 = cards[2].cut("INTER_TYPE23_3")
+            stmin = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            stmax = _fval(f2[1], 1e30) if len(f2) > 1 and _fval(f2[1], 0.0) > 0.0 else 1e30
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            f3 = cards[3].cut("INTER_TYPE23_4")
+            stfac = _fval(f3[0], 1.0) if len(f3) > 0 else 1.0
+            fric = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+            gap_min = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+            tstart = _fval(f3[3], 0.0) if len(f3) > 3 else 0.0
+            tstop = _fval(f3[4], 1e30) if len(f3) > 4 and _fval(f3[4], 0.0) > 0.0 else 1e30
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            f4 = cards[4].cut("INTER_TYPE23_5")
+            inactiv = _ival(f4[6]) if len(f4) > 6 else 0
+            viss = _fval(f4[7], 0.05) if len(f4) > 7 else 0.05
+            sort_fact = _fval(f4[9], 0.2) if len(f4) > 9 else 0.2
+
+        if len(cards) > 5 and not cards[5].is_blank:
+            f5 = cards[5].cut("INTER_TYPE23_6")
+            ifric = _ival(f5[0]) if len(f5) > 0 else 0
+            ifiltr = _ival(f5[1]) if len(f5) > 1 else 0
+            xfreq = _fval(f5[2], 0.0) if len(f5) > 2 else 0.0
+
+        card_idx = 6
+        if ifric > 0 and len(cards) > card_idx and not cards[card_idx].is_blank:
+            fc1 = cards[card_idx].cut("INTER_TYPE23_7") if cards[card_idx].length >= 100 else _fixed_vals(cards[card_idx], [20, 20, 20, 20, 20])
+            c1 = _fval(fc1[0], 0.0)
+            c2 = _fval(fc1[1], 0.0) if len(fc1) > 1 else 0.0
+            c3 = _fval(fc1[2], 0.0) if len(fc1) > 2 else 0.0
+            c4 = _fval(fc1[3], 0.0) if len(fc1) > 3 else 0.0
+            c5 = _fval(fc1[4], 0.0) if len(fc1) > 4 else 0.0
+            card_idx += 1
+        if ifric > 1 and len(cards) > card_idx and not cards[card_idx].is_blank:
+            fc2 = cards[card_idx].cut("INTER_TYPE23_8") if cards[card_idx].length >= 20 else _fixed_vals(cards[card_idx], [20])
+            c6 = _fval(fc2[0], 0.0)
+    else:
+        t0 = cards[0].tokens()
+        surf_s = int(float(t0[0])) if len(t0) > 0 else 0
+        surf_m = int(float(t0[1])) if len(t0) > 1 else 0
+        istf = int(float(t0[2])) if len(t0) > 2 else 0
+        igap = int(float(t0[3])) if len(t0) > 3 else 0
+        ibag = int(float(t0[4])) if len(t0) > 4 else 0
+        idel = int(float(t0[5])) if len(t0) > 5 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t1 = cards[1].tokens()
+            fscale_gap = float(t1[0]) if len(t1) > 0 else 1.0
+            gap_max = float(t1[1]) if len(t1) > 1 else 0.0
+            fpenmax = float(t1[2]) if len(t1) > 2 and float(t1[2]) > 0.0 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t2 = cards[2].tokens()
+            stmin = float(t2[0]) if len(t2) > 0 else 0.0
+            stmax = float(t2[1]) if len(t2) > 1 and float(t2[1]) > 0.0 else 1e30
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            t3 = cards[3].tokens()
+            stfac = float(t3[0]) if len(t3) > 0 else 1.0
+            fric = float(t3[1]) if len(t3) > 1 else 0.0
+            gap_min = float(t3[2]) if len(t3) > 2 else 0.0
+            tstart = float(t3[3]) if len(t3) > 3 else 0.0
+            tstop = float(t3[4]) if len(t3) > 4 and float(t3[4]) > 0.0 else 1e30
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            t4 = cards[4].tokens()
+            inactiv = int(float(t4[1])) if len(t4) > 1 else 0
+            viss = float(t4[2]) if len(t4) > 2 else 0.05
+            sort_fact = float(t4[3]) if len(t4) > 3 else 0.2
+
+        if len(cards) > 5 and not cards[5].is_blank:
+            t5 = cards[5].tokens()
+            ifric = int(float(t5[0])) if len(t5) > 0 else 0
+            ifiltr = int(float(t5[1])) if len(t5) > 1 else 0
+            xfreq = float(t5[2]) if len(t5) > 2 else 0.0
+
+        card_idx = 6
+        if ifric > 0 and len(cards) > card_idx and not cards[card_idx].is_blank:
+            tc1 = cards[card_idx].tokens()
+            c1 = float(tc1[0]) if len(tc1) > 0 else 0.0
+            c2 = float(tc1[1]) if len(tc1) > 1 else 0.0
+            c3 = float(tc1[2]) if len(tc1) > 2 else 0.0
+            c4 = float(tc1[3]) if len(tc1) > 3 else 0.0
+            c5 = float(tc1[4]) if len(tc1) > 4 else 0.0
+            card_idx += 1
+        if ifric > 1 and len(cards) > card_idx and not cards[card_idx].is_blank:
+            tc2 = cards[card_idx].tokens()
+            c6 = float(tc2[0]) if len(tc2) > 0 else 0.0
+
+    model.interfaces.append(Interface(
+        id=block.user_id,
+        type=23,
+        surf_id=surf_m,
+        surf_id1=surf_s,
+        istf=istf,
+        igap=igap,
+        ibag=ibag,
+        idel=idel,
+        fscale_gap=fscale_gap,
+        gap_scale=fscale_gap,
+        gap_max=gap_max,
+        fpenmax=fpenmax,
+        stmin=stmin,
+        stmax=stmax,
+        stfac=stfac,
+        fric=fric,
+        gap=gap_min,
+        gap_min=gap_min,
+        tstart=tstart,
+        tstop=tstop,
+        inactiv=inactiv,
+        viss=viss,
+        stiff_dc=viss,
+        sort_fact=sort_fact,
+        ifric=ifric,
+        mfrot=ifric,
+        ifiltr=ifiltr,
+        ifq=ifiltr,
+        xfreq=xfreq,
+        fric_c=(c1, c2, c3, c4, c5, c6),
+        title=title,
     ))
 
 
@@ -20555,12 +20858,23 @@ def read_monvol_lfluid(block: KeywordBlock, model: Model, log: MessageLog) -> No
 
 
 def read_monvol_fvmbag1(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MONVOL/FVMBAG1/monvol_ID`` (M108)::
+    """``/MONVOL/FVMBAG1/monvol_ID`` (M108, M583)::
 
         card 1:  title
-        card 2:  surf_ID
+        card 2:  surf_IDex  [Hconv]
         card 3:  Scale_t  Scale_p  Scale_s  Scale_a  Scale_d
-        card 4:  mat_ID  _blank_  Pext  Ttot
+        card 4:  mat_ID  _blank_  Pext  Ttot  [Iequil  Ittf]
+        card 5:  Njet
+        card 5a: inject_ID  sens_ID  surf_IDinj
+        card 5b: fct_IDvel  _blank_  Fscalevel
+        card 6:  Nvent  Nporsurf
+        card 7a: surf_IDv  Iform  Avent  Bvent  [vent_title]
+        card 7b: Tstart  Tstop  dPdef  dtPdef  _blank_  IdtPdef
+        card 7c: fct_IDt  fct_IDP  fct_IDA  _blank_  Fscalet  FscaleP  FscaleA
+        card 7d: fct_IDt' fct_IDP' fct_IDA' _blank_  Fscalet' FscaleP' FscaleA'
+        (if Iform==2: fct_IDV  _blank_  FscaleV)
+        card 8:  Porous surfaces (surf_IDps, Iformps, Iblockage, title; Tstart, Tstop, dPdef, dtPdef, IdtPdef)
+        card 9:  meshing & numerical parameters
     """
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
@@ -20568,100 +20882,318 @@ def read_monvol_fvmbag1(block: KeywordBlock, model: Model, log: MessageLog) -> N
         return
 
     surf_id = 0
+    hconv = 0.0
     scal_t, scal_p, scal_s, scal_a, scal_d = 1.0, 1.0, 1.0, 1.0, 1.0
     mat_id = 0
     pext, ttot = 0.0, 0.0
+    iequil, ittf = 0, 0
+    c_idx = 0
 
     if block.fixed:
-        f1 = cards[0].cut("MONVOL_FVMBAG1_1")
+        f1 = cards[c_idx].cut("MONVOL_FVMBAG1_1")
         surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+        if len(f1) > 2 and f1[2].strip():
+            hconv = _fval(f1[2], 0.0)
+        c_idx += 1
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            f2 = cards[1].cut("MONVOL_FVMBAG1_2")
+        if len(cards) > c_idx and not cards[c_idx].is_blank:
+            f2 = cards[c_idx].cut("MONVOL_FVMBAG1_2")
             scal_t = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
             scal_p = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
             scal_s = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
             scal_a = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
             scal_d = _fval(f2[4], 1.0) if len(f2) > 4 else 1.0
+            c_idx += 1
 
-        if len(cards) > 2 and not cards[2].is_blank:
-            f3 = cards[2].cut("MONVOL_FVMBAG1_3")
+        if len(cards) > c_idx and not cards[c_idx].is_blank:
+            f3 = cards[c_idx].cut("MONVOL_FVMBAG1_3")
             mat_id = _ival(f3[0]) if len(f3) > 0 else 0
             pext = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
             ttot = _fval(f3[3], 0.0) if len(f3) > 3 else 0.0
+            iequil = _ival(f3[4]) if len(f3) > 4 and f3[4].strip() else 0
+            ittf = _ival(f3[5]) if len(f3) > 5 and f3[5].strip() else 0
+            c_idx += 1
     else:
-        t1 = cards[0].tokens()
+        t1 = cards[c_idx].tokens()
         surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+        if len(t1) > 1:
+            hconv = float(t1[1])
+        c_idx += 1
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            t2 = cards[1].tokens()
+        if len(cards) > c_idx and not cards[c_idx].is_blank:
+            t2 = cards[c_idx].tokens()
             scal_t = float(t2[0]) if len(t2) > 0 else 1.0
             scal_p = float(t2[1]) if len(t2) > 1 else 1.0
             scal_s = float(t2[2]) if len(t2) > 2 else 1.0
             scal_a = float(t2[3]) if len(t2) > 3 else 1.0
             scal_d = float(t2[4]) if len(t2) > 4 else 1.0
+            c_idx += 1
 
-        if len(cards) > 2 and not cards[2].is_blank:
-            t3 = cards[2].tokens()
+        if len(cards) > c_idx and not cards[c_idx].is_blank:
+            t3 = cards[c_idx].tokens()
             mat_id = int(float(t3[0])) if len(t3) > 0 else 0
             pext = float(t3[1]) if len(t3) > 1 else 0.0
             ttot = float(t3[2]) if len(t3) > 2 else 0.0
+            iequil = int(float(t3[3])) if len(t3) > 3 else 0
+            ittf = int(float(t3[4])) if len(t3) > 4 else 0
+            c_idx += 1
 
-    model.monvol_fvmbags[block.user_id] = MonvolFvmBag1(
-        id=block.user_id, title=title, surf_id=surf_id,
+    mv = MonvolFvmbag(
+        id=block.user_id, title=title, vol_type="FVMBAG1",
+        surf_id=surf_id, surf_id_ex=surf_id,
         scale_t=scal_t, scale_p=scal_p, scale_s=scal_s, scale_a=scal_a, scale_d=scal_d,
-        mat_id=mat_id, pext=pext, ttot=ttot
+        mat_id=mat_id, pext=pext, ttot=ttot, t0=ttot if ttot > 0.0 else 293.15,
+        t_initial=ttot if ttot > 0.0 else 293.15, hconv=hconv, iequil=iequil, i_ttf=ittf
     )
+
+    # Parse injectors if present
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        toks = cards[c_idx].tokens()
+        n_jet = int(float(toks[0])) if toks else 0
+        c_idx += 1
+        for j_idx in range(n_jet):
+            if c_idx >= len(cards):
+                break
+            tj = cards[c_idx].tokens()
+            c_idx += 1
+            inj_id = int(float(tj[0])) if len(tj) > 0 else 0
+            sens_id = int(float(tj[1])) if len(tj) > 1 else 0
+            surf_inj = int(float(tj[2])) if len(tj) > 2 else 0
+
+            fct_vel = 0
+            scale_vel = 1.0
+            if c_idx < len(cards) and not cards[c_idx].is_blank:
+                tv = cards[c_idx].tokens()
+                if len(tv) >= 1 and not (len(tv) == 2 and "." not in tv[0] and "." not in tv[1] and len(tv[0]) <= 4 and len(tv[1]) <= 4 and j_idx == n_jet - 1):
+                    c_idx += 1
+                    fct_vel = int(float(tv[0])) if len(tv) > 0 else 0
+                    scale_vel = float(tv[1]) if len(tv) > 1 else 1.0
+
+            mv.injectors.append(
+                FvmInjector(
+                    id=j_idx + 1,
+                    inject_id=inj_id,
+                    sens_id=sens_id,
+                    surf_id=surf_inj,
+                    chamber_id=1,
+                    fct_vel=fct_vel,
+                    scale_vel=scale_vel,
+                )
+            )
+
+    # Parse vents and porous surfaces if present
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        toks = cards[c_idx].tokens()
+        n_vent = int(float(toks[0])) if len(toks) > 0 else 0
+        n_porsurf = int(float(toks[1])) if len(toks) > 1 else 0
+        c_idx += 1
+
+        for v_idx in range(n_vent):
+            if c_idx >= len(cards):
+                break
+            tv1 = cards[c_idx].tokens()
+            c_idx += 1
+            surf_v = int(float(tv1[0])) if len(tv1) > 0 else 0
+            iform = int(float(tv1[1])) if len(tv1) > 1 else 1
+            avent = float(tv1[2]) if len(tv1) > 2 else 1.0
+            bvent = float(tv1[3]) if len(tv1) > 3 else 0.0
+
+            tstart, tstop, dpdef, dtpdef, idtpdef = 0.0, 1e30, 0.0, 0.0, 0
+            if c_idx < len(cards) and not cards[c_idx].is_blank:
+                tv2 = cards[c_idx].tokens()
+                c_idx += 1
+                tstart = float(tv2[0]) if len(tv2) > 0 else 0.0
+                tstop = float(tv2[1]) if len(tv2) > 1 else 1e30
+                dpdef = float(tv2[2]) if len(tv2) > 2 else 0.0
+                dtpdef = float(tv2[3]) if len(tv2) > 3 else 0.0
+                idtpdef = int(float(tv2[4])) if len(tv2) > 4 else 0
+
+            fct_t, fct_p, fct_a = 0, 0, 0
+            fscale_t, fscale_p, fscale_a = 1.0, 1.0, 1.0
+            if c_idx < len(cards) and not cards[c_idx].is_blank:
+                tv3 = cards[c_idx].tokens()
+                c_idx += 1
+                if len(tv3) >= 6:
+                    fct_t, fct_p, fct_a = int(float(tv3[0])), int(float(tv3[1])), int(float(tv3[2]))
+                    fscale_t, fscale_p, fscale_a = float(tv3[3]), float(tv3[4]), float(tv3[5])
+
+            if c_idx < len(cards) and not cards[c_idx].is_blank:
+                c_idx += 1
+            if iform == 2 and c_idx < len(cards) and not cards[c_idx].is_blank:
+                c_idx += 1
+
+            mv.vents.append(
+                FvmVent(
+                    id=v_idx + 1,
+                    surf_id=surf_v,
+                    chamber_id=1,
+                    iform=iform,
+                    avent=avent,
+                    bvent=bvent,
+                    tstart=tstart,
+                    tstop=tstop,
+                    dpdef=dpdef,
+                    dtpdef=dtpdef,
+                    idtpdef=idtpdef,
+                    fct_t=fct_t,
+                    fct_p=fct_p,
+                    fct_a=fct_a,
+                    fscale_t=fscale_t,
+                    fscale_p=fscale_p,
+                    fscale_a=fscale_a,
+                )
+            )
+
+    model.monvol_fvmbags[block.user_id] = mv
 
 
 def read_monvol_fvmbag2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MONVOL/FVMBAG2/monvol_ID`` (M111)::
+    """``/MONVOL/FVMBAG2/monvol_ID`` (M111, M583)::
 
         card 1:  title
         card 2:  surf_IDex  surf_IDin  Hconv  IH3D
         card 3:  mat_ID  _blank_  Pext  T0  _blank_  Ittf
+        card 4:  Njet
+        ...
+        card 5:  Nvent  Nporsurf
+        ...
     """
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/MONVOL/FVMBAG2/{block.user_id}: missing data card", block.source)
         return
-    from ..model.entities import MonvolFvmBag2
 
     surf_id_ex, surf_id_in, hconv, ih3d = 0, 0, 0.0, 0
     mat_id, pext, t0, i_ttf = 0, 0.0, 0.0, 0
+    c_idx = 0
 
     if block.fixed:
-        f1 = cards[0].cut("MONVOL_FVMBAG2_1")
+        f1 = cards[c_idx].cut("MONVOL_FVMBAG2_1")
         surf_id_ex = _ival(f1[0]) if len(f1) > 0 else 0
         surf_id_in = _ival(f1[1]) if len(f1) > 1 else 0
         hconv = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
         ih3d = _ival(f1[3], 0) if len(f1) > 3 else 0
+        c_idx += 1
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            f2 = cards[1].cut("MONVOL_FVMBAG2_2")
+        if len(cards) > c_idx and not cards[c_idx].is_blank:
+            f2 = cards[c_idx].cut("MONVOL_FVMBAG2_2")
             mat_id = _ival(f2[0]) if len(f2) > 0 else 0
             pext = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
             t0 = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
             i_ttf = _ival(f2[5], 0) if len(f2) > 5 else 0
+            c_idx += 1
     else:
-        t1 = cards[0].tokens()
+        t1 = cards[c_idx].tokens()
         surf_id_ex = int(float(t1[0])) if len(t1) > 0 else 0
         surf_id_in = int(float(t1[1])) if len(t1) > 1 else 0
         hconv = float(t1[2]) if len(t1) > 2 else 0.0
         ih3d = int(float(t1[3])) if len(t1) > 3 else 0
+        c_idx += 1
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            t2 = cards[1].tokens()
+        if len(cards) > c_idx and not cards[c_idx].is_blank:
+            t2 = cards[c_idx].tokens()
             mat_id = int(float(t2[0])) if len(t2) > 0 else 0
             pext = float(t2[1]) if len(t2) > 1 else 0.0
             t0 = float(t2[2]) if len(t2) > 2 else 0.0
             i_ttf = int(float(t2[3])) if len(t2) > 3 else 0
+            c_idx += 1
 
-    model.monvol_fvmbag2s[block.user_id] = MonvolFvmBag2(
-        id=block.user_id, title=title, surf_id_ex=surf_id_ex,
-        surf_id_in=surf_id_in, hconv=hconv, ih3d=ih3d,
-        mat_id=mat_id, pext=pext, t0=t0, i_ttf=i_ttf
+    mv = MonvolFvmbag(
+        id=block.user_id, title=title, vol_type="FVMBAG2",
+        surf_id=surf_id_ex, surf_id_ex=surf_id_ex, surf_id_in=surf_id_in,
+        hconv=hconv, ih3d=ih3d, mat_id=mat_id, pext=pext, t0=t0,
+        t_initial=t0 if t0 > 0.0 else 293.15, i_ttf=i_ttf
     )
+
+    # Parse injectors if present
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        toks = cards[c_idx].tokens()
+        n_jet = int(float(toks[0])) if toks else 0
+        c_idx += 1
+        for j_idx in range(n_jet):
+            if c_idx >= len(cards):
+                break
+            tj = cards[c_idx].tokens()
+            c_idx += 1
+            inj_id = int(float(tj[0])) if len(tj) > 0 else 0
+            sens_id = int(float(tj[1])) if len(tj) > 1 else 0
+            surf_inj = int(float(tj[2])) if len(tj) > 2 else 0
+
+            ch_target = 2 if (surf_id_in > 0 and surf_inj == surf_id_in) else 1
+            mv.injectors.append(
+                FvmInjector(
+                    id=j_idx + 1,
+                    inject_id=inj_id,
+                    sens_id=sens_id,
+                    surf_id=surf_inj,
+                    chamber_id=ch_target,
+                )
+            )
+
+    # Parse vents and porous surfaces if present
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        toks = cards[c_idx].tokens()
+        n_vent = int(float(toks[0])) if len(toks) > 0 else 0
+        n_porsurf = int(float(toks[1])) if len(toks) > 1 else 0
+        c_idx += 1
+
+        for v_idx in range(n_vent):
+            if c_idx >= len(cards):
+                break
+            tv1 = cards[c_idx].tokens()
+            c_idx += 1
+            surf_v = int(float(tv1[0])) if len(tv1) > 0 else 0
+            iform = int(float(tv1[1])) if len(tv1) > 1 else 1
+            avent = float(tv1[2]) if len(tv1) > 2 else 1.0
+            bvent = float(tv1[3]) if len(tv1) > 3 else 0.0
+
+            tstart, tstop, dpdef, dtpdef, idtpdef = 0.0, 1e30, 0.0, 0.0, 0
+            if c_idx < len(cards) and not cards[c_idx].is_blank:
+                tv2 = cards[c_idx].tokens()
+                c_idx += 1
+                tstart = float(tv2[0]) if len(tv2) > 0 else 0.0
+                tstop = float(tv2[1]) if len(tv2) > 1 else 1e30
+                dpdef = float(tv2[2]) if len(tv2) > 2 else 0.0
+                dtpdef = float(tv2[3]) if len(tv2) > 3 else 0.0
+                idtpdef = int(float(tv2[4])) if len(tv2) > 4 else 0
+
+            fct_t, fct_p, fct_a = 0, 0, 0
+            fscale_t, fscale_p, fscale_a = 1.0, 1.0, 1.0
+            if c_idx < len(cards) and not cards[c_idx].is_blank:
+                tv3 = cards[c_idx].tokens()
+                c_idx += 1
+                if len(tv3) >= 6:
+                    fct_t, fct_p, fct_a = int(float(tv3[0])), int(float(tv3[1])), int(float(tv3[2]))
+                    fscale_t, fscale_p, fscale_a = float(tv3[3]), float(tv3[4]), float(tv3[5])
+
+            if c_idx < len(cards) and not cards[c_idx].is_blank:
+                c_idx += 1
+            if iform == 2 and c_idx < len(cards) and not cards[c_idx].is_blank:
+                c_idx += 1
+
+            mv.vents.append(
+                FvmVent(
+                    id=v_idx + 1,
+                    surf_id=surf_v,
+                    chamber_id=1,
+                    iform=iform,
+                    avent=avent,
+                    bvent=bvent,
+                    tstart=tstart,
+                    tstop=tstop,
+                    dpdef=dpdef,
+                    dtpdef=dtpdef,
+                    idtpdef=idtpdef,
+                    fct_t=fct_t,
+                    fct_p=fct_p,
+                    fct_a=fct_a,
+                    fscale_t=fscale_t,
+                    fscale_p=fscale_p,
+                    fscale_a=fscale_a,
+                )
+            )
+
+    model.monvol_fvmbag2s[block.user_id] = mv
 
 
 
@@ -45062,77 +45594,103 @@ def read_mat_law97(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law71(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW71`` or ``/MAT/SUPER_ELAS`` (M191): Nitinol / superelastic shape memory alloy."""
+    """``/MAT/LAW71`` or ``/MAT/SUPER_ELAS`` (M191, M582): Nitinol / superelastic shape memory alloy."""
     from ..model.entities import MatLaw71, Material
+    from ..materials.law71_nitinol import build_law71
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
     rho0, rhor = 0.0, 0.0
-    e, nu, e_mart, sig_sas, sig_fas = 0.0, 0.0, 0.0, 0.0, 0.0
-    sig_ssa, sig_fsa, alpha, epsl, cas = 0.0, 0.0, 0.0, 0.0, 0.0
-    csa, tsas, tfas, tssa, tfsa = 0.0, 0.0, 0.0, 0.0, 0.0
-    cp, tini = 0.0, 0.0
+    e, nu, e_mart = 0.0, 0.0, 0.0
+    sig_sas, sig_fas, sig_ssa, sig_fsa, alpha = 0.0, 0.0, 0.0, 0.0, 0.0
+    epsl, cas, csa, tsas, tfas = 0.0, 0.0, 0.0, 0.0, 0.0
+    tssa, tfsa, cp, tini = 0.0, 0.0, 0.0, 0.0
 
     if block.fixed:
+        # Card 1: RHO_I, Refer_Rho
         if len(valid_cards) > 0:
             c0 = valid_cards[0].cut("MAT_LAW71_1")
             rho0 = _safe_float(c0[0]) if len(c0) > 0 else 0.0
             rhor = _safe_float(c0[1]) if len(c0) > 1 else 0.0
+        # Card 2: E, nu, E_mart
         if len(valid_cards) > 1:
             c1 = valid_cards[1].cut("MAT_LAW71_2")
             e = _safe_float(c1[0]) if len(c1) > 0 else 0.0
             nu = _safe_float(c1[1]) if len(c1) > 1 else 0.0
             e_mart = _safe_float(c1[2]) if len(c1) > 2 else 0.0
-            sig_sas = _safe_float(c1[3]) if len(c1) > 3 else 0.0
-            sig_fas = _safe_float(c1[4]) if len(c1) > 4 else 0.0
+        # Card 3: Sig_sas, Sig_fas, Sig_ssa, Sig_fsa, Alpha
         if len(valid_cards) > 2:
             c2 = valid_cards[2].cut("MAT_LAW71_3")
-            sig_ssa = _safe_float(c2[0]) if len(c2) > 0 else 0.0
-            sig_fsa = _safe_float(c2[1]) if len(c2) > 1 else 0.0
-            alpha = _safe_float(c2[2]) if len(c2) > 2 else 0.0
-            epsl = _safe_float(c2[3]) if len(c2) > 3 else 0.0
-            cas = _safe_float(c2[4]) if len(c2) > 4 else 0.0
+            sig_sas = _safe_float(c2[0]) if len(c2) > 0 else 0.0
+            sig_fas = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+            sig_ssa = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+            sig_fsa = _safe_float(c2[3]) if len(c2) > 3 else 0.0
+            alpha = _safe_float(c2[4]) if len(c2) > 4 else 0.0
+        # Card 4: EpsL, CAS, CSA, TSAS, TFAS
         if len(valid_cards) > 3:
             c3 = valid_cards[3].cut("MAT_LAW71_4")
-            csa = _safe_float(c3[0]) if len(c3) > 0 else 0.0
-            tsas = _safe_float(c3[1]) if len(c3) > 1 else 0.0
-            tfas = _safe_float(c3[2]) if len(c3) > 2 else 0.0
-            tssa = _safe_float(c3[3]) if len(c3) > 3 else 0.0
-            tfsa = _safe_float(c3[4]) if len(c3) > 4 else 0.0
+            epsl = _safe_float(c3[0]) if len(c3) > 0 else 0.0
+            cas = _safe_float(c3[1]) if len(c3) > 1 else 0.0
+            csa = _safe_float(c3[2]) if len(c3) > 2 else 0.0
+            tsas = _safe_float(c3[3]) if len(c3) > 3 else 0.0
+            tfas = _safe_float(c3[4]) if len(c3) > 4 else 0.0
+        # Card 5: TSSA, TFSA, CP, TINI
         if len(valid_cards) > 4:
             c4 = valid_cards[4].cut("MAT_LAW71_5")
-            cp = _safe_float(c4[0]) if len(c4) > 0 else 0.0
-            tini = _safe_float(c4[1]) if len(c4) > 1 else 0.0
+            tssa = _safe_float(c4[0]) if len(c4) > 0 else 0.0
+            tfsa = _safe_float(c4[1]) if len(c4) > 1 else 0.0
+            cp = _safe_float(c4[2]) if len(c4) > 2 else 0.0
+            tini = _safe_float(c4[3]) if len(c4) > 3 else 0.0
     else:
+        # Card 1: RHO_I, Refer_Rho
         if len(valid_cards) > 0:
             t0 = valid_cards[0].tokens()
             rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
             rhor = _safe_float(t0[1]) if len(t0) > 1 else 0.0
+        # Card 2: E, nu, E_mart
         if len(valid_cards) > 1:
             t1 = valid_cards[1].tokens()
             e = _safe_float(t1[0]) if len(t1) > 0 else 0.0
             nu = _safe_float(t1[1]) if len(t1) > 1 else 0.0
             e_mart = _safe_float(t1[2]) if len(t1) > 2 else 0.0
-            sig_sas = _safe_float(t1[3]) if len(t1) > 3 else 0.0
-            sig_fas = _safe_float(t1[4]) if len(t1) > 4 else 0.0
+        # Card 3: Sig_sas, Sig_fas, Sig_ssa, Sig_fsa, Alpha
         if len(valid_cards) > 2:
             t2 = valid_cards[2].tokens()
-            sig_ssa = _safe_float(t2[0]) if len(t2) > 0 else 0.0
-            sig_fsa = _safe_float(t2[1]) if len(t2) > 1 else 0.0
-            alpha = _safe_float(t2[2]) if len(t2) > 2 else 0.0
-            epsl = _safe_float(t2[3]) if len(t2) > 3 else 0.0
-            cas = _safe_float(t2[4]) if len(t2) > 4 else 0.0
+            sig_sas = _safe_float(t2[0]) if len(t2) > 0 else 0.0
+            sig_fas = _safe_float(t2[1]) if len(t2) > 1 else 0.0
+            sig_ssa = _safe_float(t2[2]) if len(t2) > 2 else 0.0
+            sig_fsa = _safe_float(t2[3]) if len(t2) > 3 else 0.0
+            alpha = _safe_float(t2[4]) if len(t2) > 4 else 0.0
+        # Card 4: EpsL, CAS, CSA, TSAS, TFAS
         if len(valid_cards) > 3:
             t3 = valid_cards[3].tokens()
-            csa = _safe_float(t3[0]) if len(t3) > 0 else 0.0
-            tsas = _safe_float(t3[1]) if len(t3) > 1 else 0.0
-            tfas = _safe_float(t3[2]) if len(t3) > 2 else 0.0
-            tssa = _safe_float(t3[3]) if len(t3) > 3 else 0.0
-            tfsa = _safe_float(t3[4]) if len(t3) > 4 else 0.0
+            epsl = _safe_float(t3[0]) if len(t3) > 0 else 0.0
+            cas = _safe_float(t3[1]) if len(t3) > 1 else 0.0
+            csa = _safe_float(t3[2]) if len(t3) > 2 else 0.0
+            tsas = _safe_float(t3[3]) if len(t3) > 3 else 0.0
+            tfas = _safe_float(t3[4]) if len(t3) > 4 else 0.0
+        # Card 5: TSSA, TFSA, CP, TINI
         if len(valid_cards) > 4:
             t4 = valid_cards[4].tokens()
-            cp = _safe_float(t4[0]) if len(t4) > 0 else 0.0
-            tini = _safe_float(t4[1]) if len(t4) > 1 else 0.0
+            tssa = _safe_float(t4[0]) if len(t4) > 0 else 0.0
+            tfsa = _safe_float(t4[1]) if len(t4) > 1 else 0.0
+            cp = _safe_float(t4[2]) if len(t4) > 2 else 0.0
+            tini = _safe_float(t4[3]) if len(t4) > 3 else 0.0
+
+    if rhor == 0.0:
+        rhor = rho0
+    if tssa == 0.0:
+        tssa = 298.0
+    if tfsa == 0.0:
+        tfsa = 298.0
+    if tsas == 0.0:
+        tsas = 298.0
+    if tfas == 0.0:
+        tfas = 298.0
+    if cp == 0.0:
+        cp = 1.0e20
+    if tini == 0.0:
+        tini = 360.0
 
     mat = MatLaw71(
         id=mat_id, rho0=rho0, rhor=rhor, e=e, nu=nu, e_mart=e_mart,
@@ -45141,15 +45699,7 @@ def read_mat_law71(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         tsas=tsas, tfas=tfas, tssa=tssa, tfsa=tfsa, cp=cp, tini=tini, title=title
     )
     model.mat_law71s[mat_id] = mat
-    model.materials[mat_id] = Material(
-        id=mat_id, law=71, rho0=rho0, title=title,
-        params={
-            "rho": rho0, "rhor": rhor, "e": e, "nu": nu, "e_mart": e_mart,
-            "sig_sas": sig_sas, "sig_fas": sig_fas, "sig_ssa": sig_ssa, "sig_fsa": sig_fsa,
-            "alpha": alpha, "epsl": epsl, "cas": cas, "csa": csa,
-            "tsas": tsas, "tfas": tfas, "tssa": tssa, "tfsa": tfsa, "cp": cp, "tini": tini,
-        }
-    )
+    model.materials[mat_id] = build_law71(mat)
 
 
 def read_mat_law73(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -86220,6 +86770,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SHEL": read_shell,
     "BRICK": read_brick,
     "BRIC": read_brick,
+    "TSHELL": read_tshell,
     "TETRA4": read_tetra4,
     "TRUSS": read_truss,
     "SPRING": read_spring,
@@ -86453,7 +87004,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PROP_SPR_TORS": read_prop,
     "PROP_P19_SPR_TORS": read_prop,
     "INTER_TYPE19": read_inter,
-    "INTER_TYPE21": read_inter,
+    "INTER_TYPE21": read_inter_type21,
     "INTER_SUB_SURF": read_inter,
     "INTER_SUB-SURF": read_inter,
     "INTER_SUBSURF": read_inter,
@@ -87272,12 +87823,12 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "EXPLOSIVE_JWLS": read_mat,
     "JWLS": read_mat,
     "LAW97": read_mat,
-    "MAT_LAW71": read_mat,
-    "MAT_SUPER_ELAS": read_mat,
-    "MAT_NITINOL": read_mat,
-    "SUPER_ELAS": read_mat,
-    "NITINOL": read_mat,
-    "LAW71": read_mat,
+    "MAT_LAW71": read_mat_law71,
+    "MAT_SUPER_ELAS": read_mat_law71,
+    "MAT_NITINOL": read_mat_law71,
+    "SUPER_ELAS": read_mat_law71,
+    "NITINOL": read_mat_law71,
+    "LAW71": read_mat_law71,
     "MAT_LAW73": read_mat,
     "MAT_THERM_HILL": read_mat,
     "MAT_HILL_THERM": read_mat,
@@ -87337,7 +87888,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAXSTRAIN": read_fail,
     "FABR": read_fail,
     "INTER_TYPE20": read_inter,
-    "INTER_TYPE23": read_inter,
+    "INTER_TYPE23": read_inter_type23,
     "INTER_TYPE24": read_inter,
     # --- M193: Extended Failure Criteria, Specialized Materials, Integrated Beam & State Directives ---
     "FAIL_EMC": read_fail,

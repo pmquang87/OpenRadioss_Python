@@ -16,6 +16,7 @@ avoid division by zero.
 # Tiny value used to protect divisions (Fortran: EM20). Any length, area or
 # velocity magnitude smaller than this is treated as zero.
 EM20 = 1.0e-20
+EM30 = 1.0e-30
 
 # Huge value used to initialize minima (Fortran: EP30), e.g. the search for
 # the smallest element time step starts from EP30.

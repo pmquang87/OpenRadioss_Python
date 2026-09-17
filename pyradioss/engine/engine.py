@@ -62,6 +62,7 @@ from ..model.model import EngineControls, Model
 from ..output import TimeHistory, write_anim_state
 from ..starter.restart import read_restart, write_restart
 from .airbag import update_airbag_thermodynamics, update_airbag_volume, apply_airbag_forces
+from .airbag_fvm import update_fvmbag_volume, update_fvmbag_thermodynamics, apply_fvmbag_forces
 from .damping import Dampers, DynamicRelaxation
 from .kinematics import LoadsAndConstraints
 from .lagmul import LagmulSolver
@@ -664,6 +665,19 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                 update_airbag_volume(mv, model, model.x)
                 update_airbag_thermodynamics(mv, model, dt, state.t)
                 apply_airbag_forces(mv, model, model.x, fext)
+
+        # /MONVOL/FVMBAG1 and /MONVOL/FVMBAG2 (M108, M111, M583)
+        if hasattr(model, "monvol_fvmbags") and model.monvol_fvmbags:
+            for _, fv in model.monvol_fvmbags.items():
+                update_fvmbag_volume(fv, model, model.x)
+                update_fvmbag_thermodynamics(fv, model, dt, state.t)
+                apply_fvmbag_forces(fv, model, model.x, fext)
+
+        if hasattr(model, "monvol_fvmbag2s") and model.monvol_fvmbag2s:
+            for _, fv in model.monvol_fvmbag2s.items():
+                update_fvmbag_volume(fv, model, model.x)
+                update_fvmbag_thermodynamics(fv, model, dt, state.t)
+                apply_fvmbag_forces(fv, model, model.x, fext)
 
         # ---- 3b. tied interfaces (/INTER/TYPE2, i2for3): move the tied
         # nodes' internal + external forces onto their main segments (the
