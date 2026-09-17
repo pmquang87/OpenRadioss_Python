@@ -73,8 +73,79 @@ from __future__ import annotations
 import numpy as np
 
 
-def coefficients(eos, mu: np.ndarray):
+def _coefficients_gruneisen(eos, mu: np.ndarray):
+    """A(mu), B(mu) for Mie-Grüneisen EOS (common_source/eos/gruneisen.F)."""
+    p = eos.params
+    c = p.get("c", 0.0)
+    s1 = p.get("s1", 0.0)
+    s2 = p.get("s2", 0.0)
+    s3 = p.get("s3", 0.0)
+    gamma0 = p.get("gamma0", 0.0)
+    a = p.get("a", 0.0)
+    rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
+
+    mu_pos = np.maximum(mu, 0.0)
+    eta = 1.0 + mu
+    xx = np.where(mu > 0.0, mu / np.maximum(eta, 1e-12), 0.0)
+    ff = 1.0 + (1.0 - 0.5 * gamma0) * mu - 0.5 * a * (mu_pos ** 2)
+    fg = 1.0 - (s1 - 1.0 + s2 * xx + s3 * (xx ** 2)) * mu
+    fg_safe = np.where(np.abs(fg) < 1e-12, 1e-12, fg)
+    fac = np.where(mu > 0.0, ff / (fg_safe ** 2), 1.0)
+
+    A = fac * rho0 * (c ** 2) * mu
+    B = gamma0 + a * mu
+    return A, B
+
+
+def _coefficients_tillotson(eos, mu: np.ndarray, e: np.ndarray | float | None = None):
+    """A(mu), B(mu, e) for Tillotson EOS (common_source/eos/tillotson.F)."""
+    p = eos.params
+    c1 = p.get("c1", 0.0)
+    c2 = p.get("c2", 0.0)
+    a = p.get("a", 0.0)
+    b = p.get("b", 0.0)
+    er = p.get("er", p.get("ezero", p.get("e0_ref", 1.0)))
+    es = p.get("es", p.get("esubl", 0.0))
+    vs = p.get("vs", p.get("vsubl", 1.0))
+    alpha = p.get("alpha", 0.0)
+    beta = p.get("beta", 0.0)
+
+    if e is None:
+        e = p.get("e0", 0.0)
+    e = np.asarray(e, dtype=float)
+
+    eta = 1.0 + mu
+    df = 1.0 / np.maximum(eta, 1e-12)
+    xx = np.where(np.abs(eta) > 1e-12, mu / eta, 0.0)
+    expa = np.exp(-alpha * (xx ** 2))
+    expb = np.exp(beta * xx)
+
+    hot = (mu < 0.0) & ((df > vs) | ((df <= vs) & (e >= es)))
+    facc1 = np.where(hot, expa * expb, 1.0)
+    facc2 = np.where(mu >= 0.0, 1.0, 0.0)
+    facpb = np.where(hot, expa, 1.0)
+
+    omega = 1.0 + e / np.maximum(er * (eta ** 2), 1e-15)
+    A = facc1 * c1 * mu + facc2 * c2 * (mu ** 2)
+    B = (a + facpb * b / omega) * eta
+    return A, B
+
+
+def coefficients(eos, mu: np.ndarray, e: np.ndarray | float | None = None):
     """A(mu), B(mu) of p = A + B E (see module docstring)."""
+    if eos.kind == "GRUNEISEN":
+        return _coefficients_gruneisen(eos, mu)
+    if eos.kind == "TILLOTSON":
+        return _coefficients_tillotson(eos, mu, e)
+    if eos.kind == "STIFF-GAS":
+        p = eos.params
+        gamma = p["gamma"]
+        p_star = p["p_star"]
+        psh = p.get("psh", 0.0)
+        A = -gamma * p_star - psh
+        B = (gamma - 1.0) * (1.0 + mu)
+        return A, B
+
     p = eos.params
     mubar = np.maximum(mu, 0.0)
     A = p["c0"] + p["c1"] * mu + p["c2"] * mubar ** 2 + p["c3"] * mu ** 3
@@ -112,6 +183,96 @@ def update(eos, mu: np.ndarray, dv: np.ndarray, e_old: np.ndarray,
         c2 = (dpdmu + B * (p_new + psh) / (1.0 + mu) ** 2) / eos.rho0
         return p_new, e_new, np.maximum(c2, 0.0)
 
+    if eos.kind == "GRUNEISEN":
+        c = p.get("c", 0.0)
+        s1 = p.get("s1", 0.0)
+        s2 = p.get("s2", 0.0)
+        s3 = p.get("s3", 0.0)
+        gamma0 = p.get("gamma0", 0.0)
+        a = p.get("a", 0.0)
+        psh = p.get("psh", 0.0)
+        pmin = p.get("pmin", -1e30)
+        rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
+
+        A, B = _coefficients_gruneisen(eos, mu)
+        denom = 1.0 + 0.5 * B * dv
+        e_new = (e_old + de_other - 0.5 * dv * (p_old + A)) / np.maximum(denom, 1e-6)
+        p_new = A + B * e_new
+        p_tot = np.maximum(p_new, pmin)
+        p_new = p_tot - psh
+
+        mu_pos = np.maximum(mu, 0.0)
+        eta = 1.0 + mu
+        xx = np.where(mu > 0.0, mu / np.maximum(eta, 1e-12), 0.0)
+        ff = 1.0 + (1.0 - 0.5 * gamma0) * mu - 0.5 * a * (mu_pos ** 2)
+        fg = 1.0 - (s1 - 1.0 + s2 * xx + s3 * (xx ** 2)) * mu
+        fg_safe = np.where(np.abs(fg) < 1e-12, 1e-12, fg)
+        ff_safe = np.where(np.abs(ff) < 1e-12, 1e-12, ff)
+        fac = np.where(mu > 0.0, ff / (fg_safe ** 2), 1.0)
+        dff = 1.0 - 0.5 * gamma0 - a * mu
+        dfg = 1.0 - s1 + xx * (-2.0 * s2 + xx * (s2 - 3.0 * s3) + 2.0 * s3 * (xx ** 2))
+        fac1 = np.where(mu > 0.0, fac * (1.0 + mu * (dff / ff_safe - 2.0 * dfg / fg_safe)), 1.0)
+
+        dpdmu = fac1 * rho0 * (c ** 2) + a * e_new
+        dpdm = dpdmu + B * p_tot / (np.maximum(eta, 1e-12) ** 2)
+        c2 = dpdm / rho0
+        return p_new, e_new, np.maximum(c2, 0.0)
+
+    if eos.kind == "TILLOTSON":
+        c1 = p.get("c1", 0.0)
+        c2 = p.get("c2", 0.0)
+        a = p.get("a", 0.0)
+        b = p.get("b", 0.0)
+        er = p.get("er", p.get("ezero", p.get("e0_ref", 1.0)))
+        es = p.get("es", p.get("esubl", 0.0))
+        vs = p.get("vs", p.get("vsubl", 1.0))
+        alpha = p.get("alpha", 0.0)
+        beta = p.get("beta", 0.0)
+        psh = p.get("psh", 0.0)
+        pmin = p.get("pmin", -1e30)
+        rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
+
+        eta = 1.0 + mu
+        df = 1.0 / np.maximum(eta, 1e-12)
+        xx = np.where(np.abs(eta) > 1e-12, mu / eta, 0.0)
+        expa = np.exp(-alpha * (xx ** 2))
+        expb = np.exp(beta * xx)
+
+        # Predictor step using e_old
+        hot0 = (mu < 0.0) & ((df > vs) | ((df <= vs) & (e_old >= es)))
+        facc1_0 = np.where(hot0, expa * expb, 1.0)
+        facc2_0 = np.where(mu >= 0.0, 1.0, 0.0)
+        facpb_0 = np.where(hot0, expa, 1.0)
+        A0 = facc1_0 * c1 * mu + facc2_0 * c2 * (mu ** 2)
+        omega0 = 1.0 + e_old / np.maximum(er * (eta ** 2), 1e-15)
+        B0 = (a + facpb_0 * b / omega0) * eta
+
+        denom0 = 1.0 + 0.5 * B0 * dv
+        e_pred = (e_old + de_other - 0.5 * dv * (p_old + A0)) / np.maximum(denom0, 1e-6)
+
+        # Corrector step using e_pred
+        hot1 = (mu < 0.0) & ((df > vs) | ((df <= vs) & (e_pred >= es)))
+        facc1_1 = np.where(hot1, expa * expb, 1.0)
+        facc2_1 = np.where(mu >= 0.0, 1.0, 0.0)
+        facpb_1 = np.where(hot1, expa, 1.0)
+        A1 = facc1_1 * c1 * mu + facc2_1 * c2 * (mu ** 2)
+        omega1 = 1.0 + e_pred / np.maximum(er * (eta ** 2), 1e-15)
+        B1 = (a + facpb_1 * b / omega1) * eta
+
+        denom1 = 1.0 + 0.5 * B1 * dv
+        e_new = (e_old + de_other - 0.5 * dv * (p_old + A1)) / np.maximum(denom1, 1e-6)
+        p_new = A1 + B1 * e_new
+        p_tot = np.maximum(p_new, pmin)
+        p_new = p_tot - psh
+
+        b_unscaled = a + facpb_1 * b / omega1
+        dpdm = (facc1_1 * c1 + 2.0 * facc2_1 * c2 * mu
+                + B1 * p_tot / (np.maximum(eta, 1e-12) ** 2)
+                + e_new * (b_unscaled + (2.0 * e_new / np.maximum(eta, 1e-12) - p_tot / (np.maximum(eta, 1e-12) ** 2))
+                           * b * facpb_1 / (er * np.maximum(eta, 1e-12) * (omega1 ** 2))))
+        c2 = dpdm / rho0
+        return p_new, e_new, np.maximum(c2, 0.0)
+
     A, B = coefficients(eos, mu)
     denom = 1.0 + 0.5 * B * dv
     # denom <= 0 would need a catastrophic single-cycle expansion of a
@@ -130,6 +291,58 @@ def update(eos, mu: np.ndarray, dv: np.ndarray, e_old: np.ndarray,
     return p_new, e_new, np.maximum(c2, 0.0)
 
 
+def pressure(eos, mu: np.ndarray | float, e: np.ndarray | float) -> np.ndarray | float:
+    """Evaluate EOS pressure p(mu, E) at given compression mu and internal energy E."""
+    is_scalar = np.isscalar(mu) and np.isscalar(e)
+    mu_arr = np.asarray(mu, dtype=float)
+    e_arr = np.asarray(e, dtype=float)
+
+    if eos.kind == "STIFF-GAS":
+        p = eos.params
+        gamma = p["gamma"]
+        p_star = p["p_star"]
+        psh = p.get("psh", 0.0)
+        A = -gamma * p_star - psh
+        B = (gamma - 1.0) * (1.0 + mu_arr)
+        p_val = np.maximum(A + B * e_arr, -psh)
+        return float(p_val) if is_scalar else p_val
+
+    if eos.kind == "GRUNEISEN":
+        A, B = _coefficients_gruneisen(eos, mu_arr)
+        p_val = A + B * e_arr
+        psh = eos.params.get("psh", 0.0)
+        pmin = eos.params.get("pmin", -1e30)
+        p_val = np.maximum(p_val, pmin) - psh
+        return float(p_val) if is_scalar else p_val
+
+    if eos.kind == "TILLOTSON":
+        A, B = _coefficients_tillotson(eos, mu_arr, e_arr)
+        p_val = A + B * e_arr
+        psh = eos.params.get("psh", 0.0)
+        pmin = eos.params.get("pmin", -1e30)
+        p_val = np.maximum(p_val, pmin) - psh
+        return float(p_val) if is_scalar else p_val
+
+    A, B = coefficients(eos, mu_arr)
+    p_val = A + B * e_arr
+    if eos.kind == "IDEAL-GAS":
+        p_val = np.maximum(p_val, 0.0)
+    return float(p_val) if is_scalar else p_val
+
+
+def sound_speed(eos, mu: np.ndarray | float, e: np.ndarray | float) -> np.ndarray | float:
+    """Evaluate bulk sound speed c = sqrt(max(c2_bulk, 0)) at given mu and energy E."""
+    is_scalar = np.isscalar(mu) and np.isscalar(e)
+    mu_arr = np.atleast_1d(np.asarray(mu, dtype=float))
+    e_arr = np.atleast_1d(np.asarray(e, dtype=float))
+    dv = np.zeros_like(mu_arr)
+    p_arr = np.atleast_1d(np.asarray(pressure(eos, mu_arr, e_arr), dtype=float))
+    de = np.zeros_like(mu_arr)
+    _, _, c2 = update(eos, mu_arr, dv, e_arr, p_arr, de)
+    c = np.sqrt(np.maximum(c2, 0.0))
+    return float(c[0]) if is_scalar else c
+
+
 def initial_state(eos):
     """(e0, p0) at mu = 0 — p0 evaluated from the coefficients so the
     stored pair is always consistent with the polynomial."""
@@ -137,9 +350,31 @@ def initial_state(eos):
         p = eos.params
         gamma = p["gamma"]
         e0 = (p["p0"] + gamma * p["p_star"]) / (gamma - 1.0)
-        p0 = p["p0"] - p["psh"]
+        p0 = p["p0"] - p.get("psh", 0.0)
         return e0, p0
-        
+
+    if eos.kind == "GRUNEISEN":
+        p = eos.params
+        e0 = p.get("e0", 0.0)
+        gamma0 = p.get("gamma0", 0.0)
+        p0_param = p.get("p0", 0.0)
+        if p0_param > 0.0 and e0 == 0.0 and gamma0 > 0.0:
+            e0 = p0_param / gamma0
+        psh = p.get("psh", 0.0)
+        p0 = gamma0 * e0 - psh
+        return e0, p0
+
+    if eos.kind == "TILLOTSON":
+        p = eos.params
+        e0 = p.get("e0", 0.0)
+        a = p.get("a", 0.0)
+        b = p.get("b", 0.0)
+        er = p.get("er", p.get("ezero", p.get("e0_ref", 1.0)))
+        omega = 1.0 + e0 / er if er > 0.0 else 1.0
+        psh = p.get("psh", 0.0)
+        p0 = (a + b / omega) * e0 - psh
+        return e0, p0
+
     e0 = eos.params.get("e0", 0.0)
-    p0 = eos.params["c0"] + eos.params["c4"] * e0
+    p0 = eos.params.get("c0", 0.0) + eos.params.get("c4", 0.0) * e0
     return e0, p0

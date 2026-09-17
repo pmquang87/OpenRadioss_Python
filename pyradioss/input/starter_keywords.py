@@ -14258,6 +14258,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
         model.interfaces.append(Interface(
             id=block.user_id, type=19, grnod_id=grnod_id, surf_id=surf_id,
+            line_id1=n1, line_id2=n2,
             istf=istf, igap=igap, multimp=iedge, ibag=ibag, idel=idel, icurv=icurv,
             gap_scale=gap_scale, gap_max=gap_max, gap=gap, stmin=stmin, stmax=stmax,
             stfac=stfac, fric=fric, tstart=tstart, tstop=tstop, title=title

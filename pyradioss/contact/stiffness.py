@@ -110,6 +110,11 @@ def segment_stiffness_gap(model: Model, segments: np.ndarray,
     gap = np.zeros(n)
     area = _segment_areas(model.x0, segments)
 
+    if seg_gtype is None:
+        seg_gtype = np.full(n, "", dtype="<U8")
+    if seg_elem is None:
+        seg_elem = np.full(n, -1, dtype=np.int64)
+
     for gname in np.unique(seg_gtype):
         sel = seg_gtype == gname
         if gname == "":

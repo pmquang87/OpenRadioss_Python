@@ -33,6 +33,10 @@ def build_contacts(model, log):
             penalty.append(ContactType7(itf, model, log))
         elif itf.type == 11:
             penalty.append(ContactType11(itf, model, log))
+        elif itf.type == 19:
+            penalty.append(ContactType7(itf, model, log))
+            if getattr(itf, 'line_id1', 0) > 0 and getattr(itf, 'line_id2', 0) > 0:
+                penalty.append(ContactType11(itf, model, log))
         elif itf.type == 2:
             tied.append(ContactType2(itf, model, log))
         elif itf.type == 24:
