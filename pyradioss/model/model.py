@@ -722,10 +722,11 @@ class Model:
         self.beams: Optional[ElementGroup] = None     # /BEAM   (IXP)
         self.shel16s: Optional[ElementGroup] = None   # /SHEL16 (IXS16)
         self.bric20s: Optional[ElementGroup] = None   # /BRIC20 / /HEXA20 (M122)
+        self.tshells: Optional[ElementGroup] = None   # /TSHELL / /PROP/TYPE20 (solid shell)
         # raw (id, part_id, node ids...) tuples collected during parsing,
         # converted to ElementGroups in Starter finalization:
         self.raw_elems: Dict[str, list] = {
-            "BRICK": [], "QUAD": [], "TETRA4": [], "TETRA10": [], "SHELL": [], "SH3N": [],
+            "BRICK": [], "TSHELL": [], "QUAD": [], "TETRA4": [], "TETRA10": [], "SHELL": [], "SH3N": [],
             "TRUSS": [], "SPRING": [], "BEAM": [], "SHEL16": [], "BRIC20": [], "HEXA20": [], "SPH": []}
 
         # ------------------------------------------------------------------
@@ -3789,7 +3790,7 @@ class Model:
     # ----------------------------------------------------------------------
     def element_groups(self):
         """Iterate (name, group) over the non-empty element groups."""
-        for name in ("bricks", "bricks_heph", "bric20s", "quads", "tetras", "tetra10s", "shel16s", "shells", "shells_qbat",
+        for name in ("bricks", "bricks_heph", "tshells", "bric20s", "quads", "tetras", "tetra10s", "shel16s", "shells", "shells_qbat",
                      "shells_qeph", "sh3n", "sh3n_dkt18", "trusses", "springs", "beams"):
             g = getattr(self, name)
             if g is not None and g.n:

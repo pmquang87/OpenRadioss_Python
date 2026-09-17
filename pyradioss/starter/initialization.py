@@ -31,6 +31,7 @@ _ETYPES = {
     "TRUSS": ("trusses", 2, 2),
     "SPRING": ("springs", 2, 4),
     "BEAM": ("beams", 3, 3),
+    "TSHELL": ("tshells", 8, 20),
     "SHEL16": ("shel16s", 16, 20),
     "BRIC20": ("bric20s", 20, 23),
 }
@@ -292,7 +293,10 @@ def _dispatch_solid_formulations(model: Model, log: MessageLog) -> None:
     masks: Dict[str, np.ndarray] = {}
     for sl, mat, prop in src.state["slices"]:
         isolid = int(prop.params.get("isolid", 0) or 0)
+        ptype = getattr(prop, "type", 14)
         gname = SOLID_ISOLID_GROUPS.get(isolid)
+        if gname is None and ptype in (20, 21, 22):
+            gname = "tshells"
         if gname is not None:
             masks.setdefault(gname, np.zeros(src.n, dtype=bool))[sl] = True
     if not masks:
@@ -301,8 +305,9 @@ def _dispatch_solid_formulations(model: Model, log: MessageLog) -> None:
     for gname, mask in masks.items():
         keep &= ~mask
         setattr(model, gname, _subset_element_group(src, mask))
+        kname = gname.split('_', 1)[1].upper() if '_' in gname else gname.upper()
         log.info(f"     {int(mask.sum())} /BRICK ELEMENT(S) ROUTED TO THE "
-                 f"{gname.split('_', 1)[1].upper()} FORMULATION KERNEL "
+                 f"{kname} FORMULATION KERNEL "
                  f"(Isolid dispatch)")
     model.bricks = _subset_element_group(src, keep) if keep.any() else None
 
@@ -657,7 +662,8 @@ def _nodes_of_parts(model: Model, part_ids: List[int]) -> np.ndarray:
 _EGROUP_FAMILIES = {
     "SHEL": ("shells", "shells_qbat", "shells_qeph", "shel16s"),
     "SH3N": ("sh3n", "sh3n_dkt18"),
-    "BRIC": ("bricks", "bricks_heph", "tetras", "tetra10s", "bric20s"),
+    "BRIC": ("bricks", "bricks_heph", "tshells", "tetras", "tetra10s", "bric20s"),
+    "TSHELL": ("tshells",),
     "QUAD": ("quads",),
     "TRUS": ("trusses",),
     "BEAM": ("beams",),
@@ -991,7 +997,7 @@ def _free_faces_of_bricks(model: Model, part_ids: List[int], modifier: str = "EX
     all_owners: List[np.ndarray] = []
     all_attrs: List[np.ndarray] = []
 
-    for attr in ("bricks", "bricks_heph", "bric20s", "shel16s"):
+    for attr in ("bricks", "bricks_heph", "tshells", "bric20s", "shel16s"):
         g = getattr(model, attr, None)
         if g is None:
             continue
@@ -1152,7 +1158,7 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
                     if np.any(free):
                         ff = faces[free]
                         _add(np.column_stack([ff, ff[:, 2]]), attr, owner[free])
-                elif attr in ("bricks", "bricks_heph", "bric20s", "shel16s"):
+                elif attr in ("bricks", "bricks_heph", "tshells", "bric20s", "shel16s"):
                     from ..elements.solid_hexa8 import _FACES
                     faces = conn[:, :8][:, _FACES.reshape(-1)].reshape(-1, 4)
                     owner = np.repeat(rows, 6)

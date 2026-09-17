@@ -29,12 +29,13 @@ where internal forces enter negated).
 
 from . import (beam_type3, shell_bt4, shell_dkt18, shell_qbat, shell_qeph,  # noqa: F401
                shell_thick16, shell_tri3, solid_bric20, solid_heph, solid_hexa8, solid_quad,
-               solid_tetra10, solid_tetra4, spring, truss)
+               solid_tetra10, solid_tetra4, solid_tshell8, spring, truss)
 
 KERNELS = {
     "bricks": solid_hexa8,
     "bricks_heph": solid_heph,
     "bric20s": solid_bric20,
+    "tshells": solid_tshell8,
     "quads": solid_quad,
     "tetra10s": solid_tetra10,
     "tetras": solid_tetra4,
@@ -72,7 +73,11 @@ SH3N_ISHELL_GROUPS = {
 }
 
 #: /PROP/SOLID Isolid -> dedicated element-technology group.
+#: 14 = TSHELL (8-node thick shell with through-thickness integration)
+#: 15 = TSHELL (8-node thick shell with through-thickness integration)
 #: 24 = HEPH (physically-stabilized 8-node hexahedral element).
 SOLID_ISOLID_GROUPS = {
+    14: "tshells",
+    15: "tshells",
     24: "bricks_heph",
 }

@@ -15257,6 +15257,9 @@ def read_inter_type21(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     and CFG ``inter_type21.cfg``.
     """
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    is_fixed = block.fixed or (len(cards) > 0 and len(cards[0].raw) >= 60)
+    if is_fixed and not block.fixed:
+        title, cards = _fixed_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/INTER/TYPE21/{block.user_id}: missing data card", block.source)
         return
@@ -15288,7 +15291,7 @@ def read_inter_type21(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     sens_id = 0
     c1, c2, c3, c4, c5, c6 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
-    if block.fixed:
+    if is_fixed:
         f0 = cards[0].cut("INTER_TYPE21_1")
         surf_s = _ival(f0[0]) if len(f0) > 0 else 0
         surf_m = _ival(f0[1]) if len(f0) > 1 else 0
@@ -15416,8 +15419,8 @@ def read_inter_type21(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     model.interfaces.append(Interface(
         id=block.user_id,
         type=21,
-        surf_id=surf_s,
-        surf_id1=surf_m,
+        surf_id=surf_m,
+        surf_id1=surf_s,
         istf=istf,
         igap=igap,
         multimp=multimp,
@@ -15459,6 +15462,9 @@ def read_inter_type23(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     and CFG ``inter_type23.cfg``.
     """
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    is_fixed = block.fixed or (len(cards) > 0 and len(cards[0].raw) >= 60)
+    if is_fixed and not block.fixed:
+        title, cards = _fixed_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/INTER/TYPE23/{block.user_id}: missing data card", block.source)
         return
@@ -15487,7 +15493,7 @@ def read_inter_type23(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     xfreq = 0.0
     c1, c2, c3, c4, c5, c6 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
-    if block.fixed:
+    if is_fixed:
         f0 = cards[0].cut("INTER_TYPE23_1")
         surf_s = _ival(f0[0]) if len(f0) > 0 else 0
         surf_m = _ival(f0[1]) if len(f0) > 1 else 0
@@ -87331,7 +87337,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "FAIL_CHANG": read_fail,
     "PROP_TYPE20": read_prop,
     "PROP_TSHELL": read_prop,
-    "TSHELL": read_prop,
     "PROP_P20_TSHELL": read_prop,
     "PROP_TYPE21": read_prop,
     "PROP_TSH_ORTH": read_prop,
