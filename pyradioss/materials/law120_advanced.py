@@ -140,25 +140,7 @@ def build_law124(rec) -> Material:
     return Material(id=rec.id, law=124, rho0=rec.density, title=rec.title, params=params)
 
 
-def build_law90(rec) -> Material:
-    """Constructor for /MAT/LAW90 tabulated foam with hysteresis."""
-    p = rec.params
-    e0 = float(p.get("MAT_E0", 1.0))
-    nu = float(p.get("MAT_NU", 0.3))
-    params = {
-        "E": e0 if e0 > 0 else 1.0,
-        "nu": nu if (0.0 <= nu < 0.5) else 0.3,
-        "ismooth": int(p.get("Ismooth", 0)),
-        "fcut": float(p.get("Fcut", 0.0)),
-        "shape": float(p.get("MAT_SHAPE", 0.0)),
-        "hys": float(p.get("Hys", 0.0)),
-        "alpha": float(p.get("MAT_ALPHA", 0.0)),
-        "nl": int(p.get("NL", 0)),
-        "fct_idl": p.get("fct_IDL", []),
-        "epsilondotl": p.get("EpsilondotL", []),
-        "fscalel": p.get("FscaleL", []),
-    }
-    return Material(id=rec.id, law=90, rho0=rec.density, title=rec.title, params=params)
+from .law90_foam import build_law90
 
 
 def _register() -> None:
