@@ -56,22 +56,33 @@ import numpy as np
 _TINY = 1e-20
 
 
-def _rate_factor(fail, deps, dt, dev_from_6):
+def _rate_factor(fail, deps=None, dt=0.0, dev_from_6=True, d_epsp=None, epsd=None):
     """1 + D4*ln(rate/rate0), clamped at 1 below the reference rate."""
-    D4 = fail.params["D4"]
+    D4 = fail.params.get("D4", 0.0)
     if D4 == 0.0:
         return 1.0
-    if dev_from_6:
-        tr3 = (deps[:, 0] + deps[:, 1] + deps[:, 2]) / 3.0
-        ee = (deps[:, 0] - tr3) ** 2 + (deps[:, 1] - tr3) ** 2 \
-            + (deps[:, 2] - tr3) ** 2 \
-            + 0.5 * (deps[:, 3] ** 2 + deps[:, 4] ** 2 + deps[:, 5] ** 2)
-    else:  # plane stress: thickness strain from incompressibility
-        dzz = -(deps[:, 0] + deps[:, 1])
-        tr3 = (deps[:, 0] + deps[:, 1] + dzz) / 3.0
-        ee = (deps[:, 0] - tr3) ** 2 + (deps[:, 1] - tr3) ** 2 \
-            + (dzz - tr3) ** 2 + 0.5 * deps[:, 2] ** 2
-    rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, _TINY)
+    if epsd is not None:
+        rate = np.asarray(epsd, dtype=float)
+    elif d_epsp is not None:
+        rate = np.maximum(d_epsp, 0.0) / max(dt, _TINY)
+    elif deps is not None and (np.ndim(deps) == 0 or (isinstance(deps, np.ndarray) and deps.ndim == 1 and len(deps) not in (3, 6))):
+        rate = np.maximum(deps, 0.0) / max(dt, _TINY)
+    else:
+        deps_arr = np.asarray(deps, dtype=float)
+        if dev_from_6 and deps_arr.ndim == 2 and deps_arr.shape[1] >= 6:
+            tr3 = (deps_arr[:, 0] + deps_arr[:, 1] + deps_arr[:, 2]) / 3.0
+            ee = (deps_arr[:, 0] - tr3) ** 2 + (deps_arr[:, 1] - tr3) ** 2 \
+                + (deps_arr[:, 2] - tr3) ** 2 \
+                + 0.5 * (deps_arr[:, 3] ** 2 + deps_arr[:, 4] ** 2 + deps_arr[:, 5] ** 2)
+            rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, _TINY)
+        elif not dev_from_6 and deps_arr.ndim == 2 and deps_arr.shape[1] >= 3:
+            dzz = -(deps_arr[:, 0] + deps_arr[:, 1])
+            tr3 = (deps_arr[:, 0] + deps_arr[:, 1] + dzz) / 3.0
+            ee = (deps_arr[:, 0] - tr3) ** 2 + (deps_arr[:, 1] - tr3) ** 2 \
+                + (dzz - tr3) ** 2 + 0.5 * deps_arr[:, 2] ** 2
+            rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, _TINY)
+        else:
+            rate = np.maximum(deps_arr, 0.0) / max(dt, _TINY)
     eps0 = max(fail.params.get("eps_dot_0", 1.0), _TINY)
     r = np.maximum(rate / eps0, 1.0)
     return 1.0 + D4 * np.log(r)
@@ -114,7 +125,7 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
                  + 3.0 * (sig[:, 3] ** 2 + sig[:, 4] ** 2 + sig[:, 5] ** 2))
     triax = sm / np.maximum(vm, _TINY)
     eps_f = (p["D1"] + p["D2"] * np.exp(np.clip(p["D3"] * triax, -100.0, 100.0))) \
-        * _rate_factor(fail, deps, dt, True) \
+        * _rate_factor(fail, deps, dt, True, d_epsp=d_epsp) \
         * _thermal_factor(fail, tstar)
     _accumulate(fail, dama, d_epsp, eps_f)
     return dama >= 1.0
@@ -128,7 +139,7 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
                  + 3.0 * sig[:, 2] ** 2)
     triax = sm / np.maximum(vm, _TINY)
     eps_f = (p["D1"] + p["D2"] * np.exp(np.clip(p["D3"] * triax, -100.0, 100.0))) \
-        * _rate_factor(fail, deps, dt, False) \
+        * _rate_factor(fail, deps, dt, False, d_epsp=d_epsp) \
         * _thermal_factor(fail, tstar)
     _accumulate(fail, dama, d_epsp, eps_f)
     return dama >= 1.0

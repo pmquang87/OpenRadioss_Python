@@ -151,7 +151,7 @@ def _yield_stress(mat, epsp: np.ndarray, rate: np.ndarray):
     else:
         denom = np.maximum(rates[j + 1] - rates[j], 1e-20)
         w = (r - rates[j]) / denom
-    w = np.maximum(w, 0.0)
+    w = np.clip(w, 0.0, 1.0)
     cols = np.arange(len(epsp))
     sy = (1.0 - w) * vals[j, cols] + w * vals[j + 1, cols]
     H = (1.0 - w) * slps[j, cols] + w * slps[j + 1, cols]

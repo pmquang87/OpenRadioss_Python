@@ -533,7 +533,7 @@ def _plas24_one(p, sigc, dam, crak, eps6, scle2, vk0_a, vk_a, rob_a,
         elif sm > rok:
             vk = vk0
         elif sm > rob:
-            vk = vk0 * (1.0 - ((sm - rok) / (rob - rok)) ** 2)
+            vk = vk0 * (1.0 - ((sm - rok) / max(abs(rob - rok), 1e-20)) ** 2)
         else:
             vk = 0.0
 
@@ -555,7 +555,7 @@ def _plas24_one(p, sigc, dam, crak, eps6, scle2, vk0_a, vk_a, rob_a,
         elif sm > rok:
             dkdsm = 0.0
         else:
-            dkdsm = -2.0 * vk0 * (sm - rok) / (rob - rok) ** 2
+            dkdsm = -2.0 * vk0 * (sm - rok) / max(abs(rob - rok), 1e-20) ** 2
         drfdsm = -0.5 / df
         b0 = -vk * drfdsm / 3.0 - rf * dkdsm / 3.0
         if ajj > 1e-3 * fc:
@@ -633,7 +633,7 @@ def _plas24_one(p, sigc, dam, crak, eps6, scle2, vk0_a, vk_a, rob_a,
                 phi = (alpha * 3.0 * sm + ajj) / to
                 ecr = phi * hp * dfdto1 * (1.0 if vk < 1.0 else 0.0)
             else:
-                dfdro = -2.0 * vk0 * rf * (sm - rok) / (ro0 - rok0) ** 2
+                dfdro = -2.0 * vk0 * rf * (sm - rok) / max(abs(rob - rok), 1e-20) ** 2
                 ecr = dfdto2 * dfdro * hpv
                 dgs = dfs.copy()
 
@@ -1062,7 +1062,7 @@ def _carm24(yms, y0s, ets, epsa, siga, deps_norm):
     scal = np.maximum(np.abs(s_trial) - s_yield, 0.0) / np.maximum(np.abs(yms * deps_norm), 1e-20)
     d_eps_plas = yielded * scal * (1.0 - ets / (yms + 1e-10)) * deps_norm
     
-    epsa += d_eps_plas
+    epsa += np.abs(d_eps_plas)
     s_yield_new = s_yield * np.sign(s_trial) + hs * d_eps_plas
     siga[:] = np.where(yielded, s_yield_new, s_trial)
 

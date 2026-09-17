@@ -238,6 +238,9 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
                 yld_i = (p_A + p_B * (e_new ** p_n)) * rf
                 if p_sigmax > 0.0:
                     yld_i = np.where(yld_i > p_sigmax, p_sigmax, yld_i)
+                H_i = p_n * p_B * ((e_new + 1e-7) ** (p_n - 1.0)) * rf
+                if p_sigmax > 0.0:
+                    H_i = np.where(yld_i >= p_sigmax, 0.0, H_i)
                     
                 dr = 0.5 * E * dpla_i / yld_i
                 

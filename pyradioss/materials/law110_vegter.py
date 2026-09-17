@@ -793,7 +793,7 @@ def _single_law110_shell_update(
     # Elastic through-thickness strain
     deelzz = -params.nu * ((sign_xx - so_xx) + (sign_yy - so_yy)) / max(1.0e-12, params.young)
     dezz_total = deelzz + dezz_pl
-    thk_new = thk * (1.0 + dezz_total * thkly)
+    thk_new = thk + dezz_total * thkly
 
     # Sound speed in sheet plane
     soundsp = math.sqrt(params.a11 / max(1.0e-12, params.rho0))
