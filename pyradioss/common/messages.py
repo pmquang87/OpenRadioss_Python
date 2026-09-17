@@ -79,6 +79,11 @@ class MessageLog:
         return bool(self.errors)
 
     @property
+    def nerror(self) -> int:
+        """Total number of fatal errors recorded (Fortran NERROR)."""
+        return len(self.errors)
+
+    @property
     def has_warnings(self) -> bool:
         """True if any warning was logged."""
         return bool(self.warnings)

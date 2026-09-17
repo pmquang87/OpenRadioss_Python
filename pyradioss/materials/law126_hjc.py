@@ -117,6 +117,7 @@ class Law126Params:
     powt: float = 1.0
     csc: float = 0.0
     powc: float = 1.0
+    icowpsym: int = 0
     title: str = ""
 
     def __post_init__(self) -> None:
@@ -132,13 +133,72 @@ class Law126Params:
             self.efmin = _EM20
         self.idel = max(0, min(int(self.idel), 4))
         self.ifailso = max(1, min(int(self.ifailso), 5))
-        if self.cst != 0.0:
+        if self.cst != 0.0 or self.csc != 0.0:
+            self.icowpsym = 1
             if self.powt == 0.0:
                 self.powt = 1.0
             if self.csc == 0.0:
                 self.csc = self.cst
             if self.powc == 0.0:
                 self.powc = self.powt
+
+    @property
+    def kav(self) -> float:
+        """Transitional bulk modulus Kav = (Pl - Pc) / (mul - muc)."""
+        denom = self.mul - self.muc
+        return ((self.pl - self.pc) / denom) if denom != 0.0 else 0.0
+
+    def eval_eos(self, mu: float) -> float:
+        """Evaluate hydrostatic pressure P(mu) from the 3-region compacting EOS."""
+        if mu <= self.muc:
+            return self.k0 * mu
+        elif mu <= self.mul:
+            return self.pc + self.kav * (mu - self.muc)
+        else:
+            mu_bar = (mu - self.mul) / (1.0 + self.mul)
+            return self.k1 * mu_bar + self.k2 * (mu_bar**2) + self.k3 * (mu_bar**3)
+
+    def eval_rate_factor(self, epsd: float = 0.0, is_comp: bool = True) -> float:
+        """Evaluate strain rate scaling factor (Johnson-Cook or Cowper-Symonds)."""
+        if self.icowpsym == 1 or self.cst > 0.0:
+            if is_comp:
+                csc = self.csc if self.csc > 0.0 else self.cst
+                powc = self.powc if self.powc > 0.0 else self.powt
+                return 1.0 + ((max(0.0, epsd)) / csc)**(1.0 / powc) if csc > 0.0 else 1.0
+            else:
+                return 1.0 + ((max(0.0, epsd)) / self.cst)**(1.0 / self.powt) if self.cst > 0.0 else 1.0
+        else:
+            if epsd > self.eps0 and self.eps0 > 0.0:
+                return 1.0 + self.cc * math.log(epsd / self.eps0)
+            return 1.0
+
+    def eval_yield_strength(
+        self, p_hydro: float, dmg: float = 0.0, epsd: float = 0.0
+    ) -> float:
+        """Evaluate normalized yield strength sigma* = sigma_y / fc."""
+        pstar = p_hydro / self.fc if self.fc > 0.0 else 0.0
+        if pstar > 0.0:
+            sig_star = self.aa * (1.0 - dmg) + self.bb * (pstar**self.nn)
+            rate_fac = self.eval_rate_factor(epsd=epsd, is_comp=True)
+            sig_star *= rate_fac
+            return min(self.sfmax, sig_star)
+        else:
+            tens_factor = max(0.0, 1.0 + p_hydro / self.t0) if self.t0 > 0.0 else 0.0
+            sig_star = self.aa * tens_factor * (1.0 - dmg)
+            rate_fac = self.eval_rate_factor(epsd=epsd, is_comp=False)
+            sig_star *= rate_fac
+            return sig_star
+
+    def eval_fracture_plastic_strain(self, p_hydro: float) -> float:
+        """Evaluate fracture plastic strain Dp = max(D1 * (P* + T*)^D2, EFMIN)."""
+        pstar = p_hydro / self.fc if self.fc > 0.0 else 0.0
+        tstar = self.t0 / self.fc if self.fc > 0.0 else 0.0
+        p_sum = pstar + tstar
+        if p_sum >= 0.0:
+            dp = self.d1 * (p_sum**self.d2)
+        else:
+            dp = 0.0
+        return max(dp, self.efmin)
 
     @property
     def k0(self) -> float:
@@ -205,6 +265,15 @@ def _get_params(mat: Any) -> Law126Params:
 
     if hasattr(mat, "law126_params") and isinstance(mat.law126_params, Law126Params):
         return mat.law126_params
+
+    if isinstance(mat, Material):
+        if mat.params and "law126_params" in mat.params and isinstance(mat.params["law126_params"], Law126Params):
+            return mat.params["law126_params"]
+    elif isinstance(mat, dict):
+        if "law126_params" in mat and isinstance(mat["law126_params"], Law126Params):
+            return mat["law126_params"]
+        if "params" in mat and isinstance(mat["params"], dict) and "law126_params" in mat["params"] and isinstance(mat["params"]["law126_params"], Law126Params):
+            return mat["params"]["law126_params"]
 
     p: Dict[str, Any] = {}
     title = ""
@@ -277,6 +346,7 @@ def _get_params(mat: Any) -> Law126Params:
     powt = float(_extract_param(p, ("powt", "POWT", "MAT_POWT"), 1.0))
     csc = float(_extract_param(p, ("csc", "cc_cs", "CC", "MAT_CC"), 0.0))
     powc = float(_extract_param(p, ("powc", "POWC", "MAT_POWC"), 1.0))
+    icowpsym = int(_extract_param(p, ("icowpsym", "ICOWPSYM"), 1 if cst > 0.0 else 0))
 
     return Law126Params(
         rho0=rho0,
@@ -308,6 +378,7 @@ def _get_params(mat: Any) -> Law126Params:
         powt=powt,
         csc=csc,
         powc=powc,
+        icowpsym=icowpsym,
         title=title,
     )
 
@@ -318,11 +389,20 @@ def build_law126(rec: Any) -> Material:
     Receives GenericMaterialRecord or dictionary and constructs Material
     with consistent elastic and HJC plastic parameters.
     """
-    mat_id = getattr(rec, "id", 1)
-    title = getattr(rec, "title", "")
-    params_dict = dict(getattr(rec, "params", {})) if hasattr(rec, "params") and rec.params else {}
-    if hasattr(rec, "density") and rec.density:
-        params_dict["rho0"] = rec.density
+    if isinstance(rec, dict):
+        mat_id = rec.get("id", 1)
+        title = rec.get("title", "")
+        params_dict = dict(rec.get("params", rec))
+        if "density" in rec and "rho0" not in params_dict:
+            params_dict["rho0"] = rec["density"]
+        if "rho" in rec and "rho0" not in params_dict:
+            params_dict["rho0"] = rec["rho"]
+    else:
+        mat_id = getattr(rec, "id", 1)
+        title = getattr(rec, "title", "")
+        params_dict = dict(getattr(rec, "params", {})) if hasattr(rec, "params") and rec.params else {}
+        if hasattr(rec, "density") and rec.density:
+            params_dict["rho0"] = rec.density
 
     p = _get_params(params_dict)
     p.title = title

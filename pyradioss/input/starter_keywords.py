@@ -29205,92 +29205,114 @@ def read_mat_law126(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     valid_cards = [c for c in cards if not c.is_blank]
 
+    parsed = False
     if block.fixed:
-        if len(valid_cards) > 0:
-            f1 = cut(valid_cards[0].raw, "MAT_LAW126_1")
-            rho0 = _f(f1[0])
-        if len(valid_cards) > 1:
-            f2 = cut(valid_cards[1].raw, "MAT_LAW126_2")
-            g = _f(f2[0])
-        if len(valid_cards) > 2:
-            f3 = cut(valid_cards[2].raw, "MAT_LAW126_3")
-            a = _f(f3[0])
-            b = _f(f3[1]) if len(f3) > 1 else 0.0
-            n = _f(f3[2]) if len(f3) > 2 else 0.0
-            fc = _f(f3[3]) if len(f3) > 3 else 0.0
-            t0 = _f(f3[4]) if len(f3) > 4 else 0.0
-        if len(valid_cards) > 3:
-            f4 = cut(valid_cards[3].raw, "MAT_LAW126_4")
-            c = _f(f4[0])
-            eps0 = _f(f4[1]) if len(f4) > 1 else 0.0
-            fcut = _f(f4[2]) if len(f4) > 2 else 0.0
-            sfmax = _f(f4[3]) if len(f4) > 3 else 0.0
-            efmin = _f(f4[4]) if len(f4) > 4 else 0.0
-        if len(valid_cards) > 4:
-            f5 = cut(valid_cards[4].raw, "MAT_LAW126_5")
-            pc = _f(f5[0])
-            muc = _f(f5[1]) if len(f5) > 1 else 0.0
-            pl = _f(f5[2]) if len(f5) > 2 else 0.0
-            mul = _f(f5[3]) if len(f5) > 3 else 0.0
-        if len(valid_cards) > 5:
-            f6 = cut(valid_cards[5].raw, "MAT_LAW126_6")
-            k1 = _f(f6[0])
-            k2 = _f(f6[1]) if len(f6) > 1 else 0.0
-            k3 = _f(f6[2]) if len(f6) > 2 else 0.0
-        if len(valid_cards) > 6:
-            f7 = cut(valid_cards[6].raw, "MAT_LAW126_7")
-            d1 = _f(f7[0])
-            d2 = _f(f7[1]) if len(f7) > 1 else 0.0
-            idel = _i(f7[3]) if len(f7) > 3 else 0
-            eps_max = _f(f7[4]) if len(f7) > 4 else 0.0
-            ifailso = _i(f7[6]) if len(f7) > 6 else 0
-        if len(valid_cards) > 7:
-            f8 = cut(valid_cards[7].raw, "MAT_LAW126_8")
-            ct = _f(f8[0])
-            powt = _f(f8[1]) if len(f8) > 1 else 0.0
-            cc = _f(f8[2]) if len(f8) > 2 else 0.0
-            powc = _f(f8[3]) if len(f8) > 3 else 0.0
-    else:
+        try:
+            if len(valid_cards) > 0:
+                f1 = cut(valid_cards[0].raw, "MAT_LAW126_1")
+                rho0 = _f(f1[0])
+            if len(valid_cards) > 1:
+                f2 = cut(valid_cards[1].raw, "MAT_LAW126_2")
+                g = _f(f2[0])
+            if len(valid_cards) > 2:
+                f3 = cut(valid_cards[2].raw, "MAT_LAW126_3")
+                a = _f(f3[0])
+                b = _f(f3[1]) if len(f3) > 1 else 0.0
+                n = _f(f3[2]) if len(f3) > 2 else 0.0
+                fc = _f(f3[3]) if len(f3) > 3 else 0.0
+                t0 = _f(f3[4]) if len(f3) > 4 else 0.0
+            if len(valid_cards) > 3:
+                f4 = cut(valid_cards[3].raw, "MAT_LAW126_4")
+                c = _f(f4[0])
+                eps0 = _f(f4[1]) if len(f4) > 1 else 0.0
+                fcut = _f(f4[2]) if len(f4) > 2 else 0.0
+                sfmax = _f(f4[3]) if len(f4) > 3 else 0.0
+                efmin = _f(f4[4]) if len(f4) > 4 else 0.0
+            if len(valid_cards) > 4:
+                f5 = cut(valid_cards[4].raw, "MAT_LAW126_5")
+                pc = _f(f5[0])
+                muc = _f(f5[1]) if len(f5) > 1 else 0.0
+                pl = _f(f5[2]) if len(f5) > 2 else 0.0
+                mul = _f(f5[3]) if len(f5) > 3 else 0.0
+            if len(valid_cards) > 5:
+                f6 = cut(valid_cards[5].raw, "MAT_LAW126_6")
+                k1 = _f(f6[0])
+                k2 = _f(f6[1]) if len(f6) > 1 else 0.0
+                k3 = _f(f6[2]) if len(f6) > 2 else 0.0
+            if len(valid_cards) > 6:
+                f7 = cut(valid_cards[6].raw, "MAT_LAW126_7")
+                d1 = _f(f7[0])
+                d2 = _f(f7[1]) if len(f7) > 1 else 0.0
+                idel = _i(f7[3]) if len(f7) > 3 else 0
+                eps_max = _f(f7[4]) if len(f7) > 4 else 0.0
+                ifailso = _i(f7[6]) if len(f7) > 6 else 0
+            if len(valid_cards) > 7:
+                f8 = cut(valid_cards[7].raw, "MAT_LAW126_8")
+                ct = _f(f8[0])
+                powt = _f(f8[1]) if len(f8) > 1 else 0.0
+                cc = _f(f8[2]) if len(f8) > 2 else 0.0
+                powc = _f(f8[3]) if len(f8) > 3 else 0.0
+            parsed = True
+        except (ValueError, IndexError):
+            parsed = False
+
+    if not parsed:
         if len(valid_cards) > 0:
             t1 = valid_cards[0].tokens()
             rho0 = float(t1[0]) if len(t1) > 0 else 0.0
+        offset = 0
         if len(valid_cards) > 1:
             t2 = valid_cards[1].tokens()
-            g = float(t2[0]) if len(t2) > 0 else 0.0
-        if len(valid_cards) > 2:
+            if len(t2) >= 6:
+                g = float(t2[0])
+                a = float(t2[1])
+                b = float(t2[2])
+                n = float(t2[3])
+                fc = float(t2[4])
+                t0 = float(t2[5])
+                offset = 1
+            else:
+                g = float(t2[0]) if len(t2) > 0 else 0.0
+        if offset == 0 and len(valid_cards) > 2:
             t3 = valid_cards[2].tokens()
             a = float(t3[0]) if len(t3) > 0 else 0.0
             b = float(t3[1]) if len(t3) > 1 else 0.0
             n = float(t3[2]) if len(t3) > 2 else 0.0
             fc = float(t3[3]) if len(t3) > 3 else 0.0
             t0 = float(t3[4]) if len(t3) > 4 else 0.0
-        if len(valid_cards) > 3:
-            t4 = valid_cards[3].tokens()
+
+        c_idx = 3 - offset
+        if len(valid_cards) > c_idx:
+            t4 = valid_cards[c_idx].tokens()
             c = float(t4[0]) if len(t4) > 0 else 0.0
             eps0 = float(t4[1]) if len(t4) > 1 else 0.0
             fcut = float(t4[2]) if len(t4) > 2 else 0.0
             sfmax = float(t4[3]) if len(t4) > 3 else 0.0
             efmin = float(t4[4]) if len(t4) > 4 else 0.0
-        if len(valid_cards) > 4:
-            t5 = valid_cards[4].tokens()
+        c_idx += 1
+        if len(valid_cards) > c_idx:
+            t5 = valid_cards[c_idx].tokens()
             pc = float(t5[0]) if len(t5) > 0 else 0.0
             muc = float(t5[1]) if len(t5) > 1 else 0.0
             pl = float(t5[2]) if len(t5) > 2 else 0.0
             mul = float(t5[3]) if len(t5) > 3 else 0.0
-        if len(valid_cards) > 5:
-            t6 = valid_cards[5].tokens()
+        c_idx += 1
+        if len(valid_cards) > c_idx:
+            t6 = valid_cards[c_idx].tokens()
             k1 = float(t6[0]) if len(t6) > 0 else 0.0
             k2 = float(t6[1]) if len(t6) > 1 else 0.0
             k3 = float(t6[2]) if len(t6) > 2 else 0.0
-        if len(valid_cards) > 6:
-            t7 = valid_cards[6].tokens()
+        c_idx += 1
+        if len(valid_cards) > c_idx:
+            t7 = valid_cards[c_idx].tokens()
             d1 = float(t7[0]) if len(t7) > 0 else 0.0
             d2 = float(t7[1]) if len(t7) > 1 else 0.0
             idel = int(float(t7[2])) if len(t7) > 2 else 0
             eps_max = float(t7[3]) if len(t7) > 3 else 0.0
             ifailso = int(float(t7[4])) if len(t7) > 4 else 0
-        if len(valid_cards) > 7:
-            t8 = valid_cards[7].tokens()
+        c_idx += 1
+        if len(valid_cards) > c_idx:
+            t8 = valid_cards[c_idx].tokens()
             ct = float(t8[0]) if len(t8) > 0 else 0.0
             powt = float(t8[1]) if len(t8) > 1 else 0.0
             cc = float(t8[2]) if len(t8) > 2 else 0.0
@@ -29327,6 +29349,8 @@ def read_mat_law126(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "ct": ct, "powt": powt, "cc": cc, "powc": powc,
         }
     )
+    from ..materials.law126_hjc import build_law126
+    mat126 = build_law126(mat126)
     mat126.record = GenericMaterialRecord(
         law_name="LAW126", law_number=126, id=mat_id, title=title,
         params=mat126.params, density=rho0, unit_id=block.unit_id,
@@ -32869,25 +32893,31 @@ def read_mat_law169(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     pwrt, pwrs = 2, 2
     shrp = 0.0
 
+    parsed = False
     if block.fixed:
-        if len(valid_cards) > 0:
-            f1 = cut(valid_cards[0].raw, "MAT_LAW169_1")
-            rho0 = _f(f1[0]) if len(f1) > 0 else 0.0
-        if len(valid_cards) > 1:
-            f2 = cut(valid_cards[1].raw, "MAT_LAW169_2")
-            young = _f(f2[0]) if len(f2) > 0 else 0.0
-            nu = _f(f2[1]) if len(f2) > 1 else 0.0
-            sht_sl = _f(f2[2]) if len(f2) > 2 else 0.0
-            tenmax = _f(f2[3]) if len(f2) > 3 and f2[3].strip() else 1e20
-            gcten = _f(f2[4]) if len(f2) > 4 and f2[4].strip() else 1e20
-        if len(valid_cards) > 2:
-            f3 = cut(valid_cards[2].raw, "MAT_LAW169_3")
-            shrmax = _f(f3[0]) if len(f3) > 0 and f3[0].strip() else 1e20
-            gcshr = _f(f3[1]) if len(f3) > 1 and f3[1].strip() else 1e20
-            pwrt = _i(f3[2]) if len(f3) > 2 and f3[2].strip() else 2
-            pwrs = _i(f3[3]) if len(f3) > 3 and f3[3].strip() else 2
-            shrp = _f(f3[4]) if len(f3) > 4 else 0.0
-    else:
+        try:
+            if len(valid_cards) > 0:
+                f1 = cut(valid_cards[0].raw, "MAT_LAW169_1")
+                rho0 = _f(f1[0]) if len(f1) > 0 else 0.0
+            if len(valid_cards) > 1:
+                f2 = cut(valid_cards[1].raw, "MAT_LAW169_2")
+                young = _f(f2[0]) if len(f2) > 0 else 0.0
+                nu = _f(f2[1]) if len(f2) > 1 else 0.0
+                sht_sl = _f(f2[2]) if len(f2) > 2 else 0.0
+                tenmax = _f(f2[3]) if len(f2) > 3 and f2[3].strip() else 1e20
+                gcten = _f(f2[4]) if len(f2) > 4 and f2[4].strip() else 1e20
+            if len(valid_cards) > 2:
+                f3 = cut(valid_cards[2].raw, "MAT_LAW169_3")
+                shrmax = _f(f3[0]) if len(f3) > 0 and f3[0].strip() else 1e20
+                gcshr = _f(f3[1]) if len(f3) > 1 and f3[1].strip() else 1e20
+                pwrt = _i(f3[2]) if len(f3) > 2 and f3[2].strip() else 2
+                pwrs = _i(f3[3]) if len(f3) > 3 and f3[3].strip() else 2
+                shrp = _f(f3[4]) if len(f3) > 4 else 0.0
+            parsed = True
+        except (ValueError, IndexError):
+            parsed = False
+
+    if not parsed:
         if len(valid_cards) > 0:
             t1 = valid_cards[0].tokens()
             rho0 = float(t1[0]) if len(t1) > 0 else 0.0
@@ -32926,6 +32956,8 @@ def read_mat_law169(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "SHRP": shrp, "MAT169_SHRP": shrp,
         }
     )
+    from ..materials.law169_arup import build_law169
+    mat169 = build_law169(mat169)
     mat169.record = GenericMaterialRecord(
         law_name="LAW169", law_number=169, id=mat_id, title=title,
         params=mat169.params, density=rho0, unit_id=block.unit_id,
@@ -36141,77 +36173,7 @@ def read_mat_law163(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
-def read_mat_law169(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW169/id`` or ``/MAT/ARUP_ADHESIVE/id`` (M183): 3D cohesive adhesive material."""
-    from ..model.entities import MatLaw169
-    mat_id = block.user_id or 0
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank]
-    if not valid_cards:
-        log.error(f"/MAT/LAW169/{mat_id}: missing data cards", block.source)
-        return
-
-    rho = 0.0
-    e, nu = 0.0, 0.0
-    sht_sl, tenmax, gcten = 0.0, 0.0, 0.0
-    shrmax, gcshr = 0.0, 0.0
-    pwrt, pwrs = 1, 1
-    shrp = 0.0
-
-    if block.fixed:
-        f1 = valid_cards[0].cut("MAT_LAW169_1")
-        rho = _fval(f1[0]) if len(f1) > 0 else 0.0
-
-        if len(valid_cards) > 1:
-            f2 = valid_cards[1].cut("MAT_LAW169_2")
-            e = _fval(f2[0]) if len(f2) > 0 else 0.0
-            nu = _fval(f2[1]) if len(f2) > 1 else 0.0
-            sht_sl = _fval(f2[2]) if len(f2) > 2 else 0.0
-            tenmax = _fval(f2[3]) if len(f2) > 3 else 0.0
-            gcten = _fval(f2[4]) if len(f2) > 4 else 0.0
-
-        if len(valid_cards) > 2:
-            f3 = valid_cards[2].cut("MAT_LAW169_3")
-            shrmax = _fval(f3[0]) if len(f3) > 0 else 0.0
-            gcshr = _fval(f3[1]) if len(f3) > 1 else 0.0
-            pwrt = _ival(f3[2], 1) if len(f3) > 2 and f3[2].strip() else 1
-            pwrs = _ival(f3[3], 1) if len(f3) > 3 and f3[3].strip() else 1
-            shrp = _fval(f3[4]) if len(f3) > 4 else 0.0
-    else:
-        toks1 = valid_cards[0].tokens()
-        rho = float(toks1[0]) if len(toks1) > 0 else 0.0
-
-        if len(valid_cards) > 1:
-            toks2 = valid_cards[1].tokens()
-            e = float(toks2[0]) if len(toks2) > 0 else 0.0
-            nu = float(toks2[1]) if len(toks2) > 1 else 0.0
-            sht_sl = float(toks2[2]) if len(toks2) > 2 else 0.0
-            tenmax = float(toks2[3]) if len(toks2) > 3 else 0.0
-            gcten = float(toks2[4]) if len(toks2) > 4 else 0.0
-
-        if len(valid_cards) > 2:
-            toks3 = valid_cards[2].tokens()
-            shrmax = float(toks3[0]) if len(toks3) > 0 else 0.0
-            gcshr = float(toks3[1]) if len(toks3) > 1 else 0.0
-            pwrt = int(float(toks3[2])) if len(toks3) > 2 else 1
-            pwrs = int(float(toks3[3])) if len(toks3) > 3 else 1
-            shrp = float(toks3[4]) if len(toks3) > 4 else 0.0
-
-    m169 = MatLaw169(
-        id=mat_id, rho=rho, e=e, nu=nu, sht_sl=sht_sl, tenmax=tenmax,
-        gcten=gcten, shrmax=shrmax, gcshr=gcshr, pwrt=pwrt, pwrs=pwrs,
-        shrp=shrp, title=title,
-    )
-    model.mat_law169s[mat_id] = m169
-    model.materials[mat_id] = Material(
-        id=mat_id, law=169, rho0=rho, title=title,
-        params={
-            "rho": rho, "rho0": rho, "e": e, "nu": nu, "E": e, "Nu": nu, "pr": nu,
-            "sht_sl": sht_sl, "tenmax": tenmax, "gcten": gcten,
-            "shrmax": shrmax, "gcshr": gcshr, "pwrt": pwrt, "pwrs": pwrs,
-            "shrp": shrp,
-        }
-    )
+# read_mat_law169 is defined under M591 above
 
 
 # =========================================================================

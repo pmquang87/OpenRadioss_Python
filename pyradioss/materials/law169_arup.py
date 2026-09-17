@@ -155,13 +155,18 @@ class Law169Params:
 
     @property
     def eps_n0(self) -> float:
-        """Initial elastic limit strain in tension: tenmax / wave (line 125)."""
-        return (self.tenmax / self.wave) if self.wave > 0.0 else 0.0
+        """Initial elastic limit strain in tension: tenmax / young (hm_read_mat169.F90 line 124)."""
+        return (self.tenmax / self.young) if self.young > 0.0 else 0.0
 
     @property
     def eps_sh0(self) -> float:
-        """Initial elastic limit strain in shear: shrmax / shear + dp (line 126)."""
+        """Initial elastic limit strain in shear: shrmax / shear + dp (line 125)."""
         return (self.shrmax / self.shear + self.dp) if self.shear > 0.0 else 0.0
+
+    @property
+    def eps_s0(self) -> float:
+        """Alias for eps_sh0."""
+        return self.eps_sh0
 
     @property
     def E(self) -> float:
@@ -194,6 +199,15 @@ def _get_params(mat: Any) -> Law169Params:
 
     if hasattr(mat, "law169_params") and isinstance(mat.law169_params, Law169Params):
         return mat.law169_params
+
+    if isinstance(mat, Material):
+        if mat.params and "law169_params" in mat.params and isinstance(mat.params["law169_params"], Law169Params):
+            return mat.params["law169_params"]
+    elif isinstance(mat, dict):
+        if "law169_params" in mat and isinstance(mat["law169_params"], Law169Params):
+            return mat["law169_params"]
+        if "params" in mat and isinstance(mat["params"], dict) and "law169_params" in mat["params"] and isinstance(mat["params"]["law169_params"], Law169Params):
+            return mat["params"]["law169_params"]
 
     p: Dict[str, Any] = {}
     title = ""
@@ -267,11 +281,20 @@ def _get_params(mat: Any) -> Law169Params:
 
 def build_law169(rec: Any) -> Material:
     """Build a Material instance for /MAT/LAW169 (Arup Structural Adhesive)."""
-    mat_id = getattr(rec, "id", 1)
-    title = getattr(rec, "title", "")
-    params_dict = dict(getattr(rec, "params", {})) if hasattr(rec, "params") and rec.params else {}
-    if hasattr(rec, "density") and rec.density:
-        params_dict["rho0"] = rec.density
+    if isinstance(rec, dict):
+        mat_id = rec.get("id", 1)
+        title = rec.get("title", "")
+        params_dict = dict(rec.get("params", rec))
+        if "density" in rec and "rho0" not in params_dict:
+            params_dict["rho0"] = rec["density"]
+        if "rho" in rec and "rho0" not in params_dict:
+            params_dict["rho0"] = rec["rho"]
+    else:
+        mat_id = getattr(rec, "id", 1)
+        title = getattr(rec, "title", "")
+        params_dict = dict(getattr(rec, "params", {})) if hasattr(rec, "params") and rec.params else {}
+        if hasattr(rec, "density") and rec.density:
+            params_dict["rho0"] = rec.density
 
     p = _get_params(params_dict)
     p.title = title
