@@ -47116,6 +47116,11 @@ def read_fail_voids(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_hc_dsse(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/HC_DSSE/mat_ID`` (M162/M589): Hosford-Coulomb fracture locus with DSSE."""
+    read_fail(block, model, log)
+
+
 def read_fail_hc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/HC/mat_ID`` or ``/FAIL/HOSFORD_COULOMB/mat_ID`` (M215): Hosford-Coulomb fracture initiation model."""
     if len(block.parts) > 2 and block.parts[2].upper() in ("DSSE", "FAIL_HC_DSSE"):

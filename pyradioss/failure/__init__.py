@@ -42,10 +42,13 @@ D5 term reads it). All vectorized over the element slice.
 from . import (  # noqa: F401
     biquad,
     chang,
+    cockcroft,
     fld,
     hashin,
+    hc_dsse,
     johnson,
     mmc,
+    puck,
     snconnect,
     tab1,
     tbutcher,
@@ -79,6 +82,12 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
         return tbutcher.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     if ftype in ("TVERGAARD", "GURSON"):
         return tvergaard.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("PUCK", "PUCK_COMPOSITE"):
+        return puck.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("COCKCROFT", "COCKCROFT_LATHAM", "COCKCROFT-LATHAM", "COCKROFT", "COCKROFT_LATHAM"):
+        return cockcroft.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("HC_DSSE", "HC-DSSE", "HCDSSE", "HC/DSSE", "HC"):
+        return hc_dsse.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")
 
 
@@ -107,6 +116,12 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
         return tbutcher.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     if ftype in ("TVERGAARD", "GURSON"):
         return tvergaard.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("PUCK", "PUCK_COMPOSITE"):
+        return puck.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("COCKCROFT", "COCKCROFT_LATHAM", "COCKCROFT-LATHAM", "COCKROFT", "COCKROFT_LATHAM"):
+        return cockcroft.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("HC_DSSE", "HC-DSSE", "HCDSSE", "HC/DSSE", "HC"):
+        return hc_dsse.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")
 
 
