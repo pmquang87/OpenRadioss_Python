@@ -181,18 +181,37 @@ def _reduced_pencil(model, nev, log, constraints, contacts, prestress,
 
 def _state_space_eig(Kr, Cr, Mr):
     """Solve the QEP (lambda^2 M + lambda C + K) phi = 0 through the symmetric
-    state-space linearization A z = lambda B z (module docstring). Returns
-    ``(lam, Z)`` — the 2 n_red complex eigenvalues and the 2 n_red-row
-    eigenvectors z = [phi; lambda phi] (columns), as ``scipy.linalg.eig``
-    returns them (unordered)."""
+    state-space linearization A z = lambda B z (module docstring). When Kr has
+    rigid body / zero modes, use the standard companion form:
+        A1 = [[0, I], [-Kr, -Cr]], B1 = [[I, 0], [0, Mr]]
+    so the pencil is regular and does not produce NaNs. Returns ``(lam, Z)`` —
+    the 2 n_red complex eigenvalues and the 2 n_red-row eigenvectors
+    z = [phi; lambda phi] (columns), as ``scipy.linalg.eig`` returns them
+    (unordered)."""
     _, _ = require_scipy()
     import scipy.linalg as sla
     n = Kr.shape[0]
     Z = np.zeros((n, n))
-    # A = [[0, K], [K, C]] ,  B = [[K, 0], [0, -M]]  (both symmetric)
-    A = np.block([[Z, Kr], [Kr, Cr]])
-    B = np.block([[Kr, Z], [Z, -Mr]])
-    lam, vecs = sla.eig(A, B)
+
+    evals_K = sla.eigvalsh(Kr)
+    k_scale = float(np.max(np.abs(evals_K))) if evals_K.size else 1.0
+    has_zero_modes = (evals_K.size > 0 and evals_K[0] <= 1e-12 * k_scale)
+
+    if has_zero_modes:
+        In = np.eye(n)
+        A1 = np.block([[Z, In], [-Kr, -Cr]])
+        B1 = np.block([[In, Z], [Z, Mr]])
+        lam, vecs = sla.eig(A1, B1)
+    else:
+        # A = [[0, K], [K, C]] ,  B = [[K, 0], [0, -M]]  (both symmetric)
+        A = np.block([[Z, Kr], [Kr, Cr]])
+        B = np.block([[Kr, Z], [Z, -Mr]])
+        lam, vecs = sla.eig(A, B)
+        if np.any(np.isnan(lam)):
+            In = np.eye(n)
+            A1 = np.block([[Z, In], [-Kr, -Cr]])
+            B1 = np.block([[In, Z], [Z, Mr]])
+            lam, vecs = sla.eig(A1, B1)
     return lam, vecs
 
 
@@ -228,7 +247,7 @@ def _filter_modes(lam, Z, nred):
     scale = float(np.median(mag_pos)) if mag_pos.size else 1.0
     rigid_tol = 1e-6 * scale
     keep = [k for k in np.where(finite)[0]
-            if abs(lam[k]) > rigid_tol and lam[k].real < rigid_tol]
+            if abs(lam[k]) > rigid_tol and lam[k].real <= 1e-12 * scale]
     keep.sort(key=lambda k: abs(lam[k]))          # ascending |lambda| = omega
     return lam[keep], Z[:, keep]
 

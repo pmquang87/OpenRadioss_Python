@@ -1098,11 +1098,13 @@ def _solve_increment(model, controls, log, dof, loads, solver,
             fint_t, mint_t, R_t = _residual(u + alpha * du,
                                             ur + alpha * dur)
             rn_t = float(np.linalg.norm(R_t))
-            if best is None or rn_t < best[0]:
+            if np.isfinite(rn_t) and (best is None or rn_t < best[0]):
                 best = (rn_t, alpha, fint_t, mint_t, R_t)
             if rn_t <= rnorm or ls == 3:
                 break
             alpha *= 0.5
+        if best is None:
+            best = (rn_t, alpha, fint_t, mint_t, R_t)
         rnorm, alpha, fint, mint, R = best
         u = u + alpha * du
         ur = ur + alpha * dur
@@ -1264,6 +1266,9 @@ def _run_arclength(model, controls, log, dof, loads, solver, committed,
                     f"ARC-LENGTH FAILED AFTER 8 RADIUS CUTS AT LOAD FACTOR "
                     f"{lam:.4E} (||R|| = "
                     f"{inc.residuals[-1] if inc.residuals else 0.0:.4E})")
+                for gname, group in model.element_groups():
+                    if gname in committed:
+                        _restore(group, committed[gname])
                 return
             dl *= 0.5
             continue
@@ -1464,7 +1469,11 @@ def _solve_increment_arc(model, ip, dof, solver, committed, x_ref, lam, dl,
         def _fwd(r):
             return float(Du @ (t + r * du_t)) \
                 + wlam * dlam_tot * (dlam_tot + r)
-        pick = r1 if _fwd(r1) >= _fwd(r2) else r2
+        f1, f2 = _fwd(r1), _fwd(r2)
+        if f1 <= 0.0 and f2 <= 0.0:
+            inc.converged = False
+            return inc, (Du, dlam_tot), u, ur
+        pick = r1 if f1 >= f2 else r2
         Du = t + pick * du_t
         dlam_tot += pick
         lam_t += pick
