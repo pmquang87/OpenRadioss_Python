@@ -813,9 +813,9 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         #   law that misbooks its own work now surfaces in EN instead of
         #   ERR; EN is printed in the listing and T01 so it cannot hide.
         e_booked = _element_energy_sum(model)
-        w_leave = -dt * (
-            float(np.einsum("nb,nb->", fint, model.v))
-            + float(np.einsum("nb,nb->", mint, model.vr)))
+        w_leave = -0.5 * dt12 * (
+            float(np.einsum("nb,nb->", fint, v_old + model.v))
+            + float(np.einsum("nb,nb->", mint, vr_old + model.vr)))
         state.e_num += w_leave - (e_booked - state.e_booked_prev)
         state.e_booked_prev = e_booked
 

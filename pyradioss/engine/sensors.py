@@ -187,7 +187,7 @@ class Sensors:
                     changed = True
                     self.status[sid] = new_active
                     if new_active:
-                        self.fire_time[sid] = t
+                        self.fire_time[sid] = self.crit_time[sid] + (tdelay or 0.0)
                         log.info(f" -- /SENSOR/{sid} ACTIVATED AT TIME "
                                  f"{t:12.5E} (LOGICAL {kind})")
                     else:

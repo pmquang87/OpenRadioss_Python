@@ -110,7 +110,7 @@ unchanged.
 
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
@@ -182,7 +182,8 @@ class NodalTimeStep:
 
     # ------------------------------------------------------------------
     def add_rigid_body(self, nodes: np.ndarray, master: int, mass: float,
-                       inertia: np.ndarray, x0: np.ndarray) -> None:
+                       inertia: np.ndarray, x0: np.ndarray,
+                       rb: Optional[Any] = None) -> None:
         """Register a rigid body so its member stiffness is TRANSPORTED to
         the master node and gives the body its own nodal time step — the
         thing that replaces the member nodes dropped by ``set_prescribed``.
@@ -224,7 +225,7 @@ class NodalTimeStep:
         nodes = np.asarray(nodes)
         dd = ((x0[nodes] - x0[master]) ** 2).sum(axis=1)
         in_min = float(np.linalg.eigvalsh(inertia)[0])
-        self._rbodies.append((nodes, dd, float(mass), in_min))
+        self._rbodies.append([nodes, dd, float(mass), in_min, int(master), rb])
 
     # ------------------------------------------------------------------
     def _rigid_body_dt(self) -> float:
@@ -237,7 +238,8 @@ class NodalTimeStep:
         completion).  Read from the accumulators BEFORE ``apply`` resets
         them."""
         dt = EP30
-        for nodes, dd, mass, in_min in self._rbodies:
+        for entry in self._rbodies:
+            nodes, dd, mass, in_min = entry[0], entry[1], entry[2], entry[3]
             st = self.stifn[nodes]
             k_tra = float(st.sum())
             if k_tra > 0.0 and mass > 0.0:
@@ -296,9 +298,68 @@ class NodalTimeStep:
 
         The stiffness accumulators are consumed and reset here."""
         model = self.model
+
+        # Accumulate rigid body slave node stiffness into master node (rgbodfp.F)
+        for entry in self._rbodies:
+            nodes, dd, mass_val, in_min = entry[0], entry[1], entry[2], entry[3]
+            master = entry[4] if len(entry) > 4 else int(nodes[0])
+            slave_mask = nodes != master
+            if np.any(slave_mask):
+                slaves = nodes[slave_mask]
+                dd_sl = dd[slave_mask]
+                self.stifn[master] += float(self.stifn[slaves].sum())
+                if self._rot:
+                    self.stifr[master] += float((self.stifr[slaves] + dd_sl * self.stifn[slaves]).sum())
+                self.stifn[slaves] = 0.0
+                if self._rot:
+                    self.stifr[slaves] = 0.0
+
+        if self.cst and self.dt_min > 0.0 and self.dt_sca > 0.0:
+            for entry in self._rbodies:
+                nodes, dd, mass_rb, in_min = entry[0], entry[1], entry[2], entry[3]
+                master = entry[4] if len(entry) > 4 else int(nodes[0])
+                rb = entry[5] if len(entry) > 5 else None
+
+                # Translational mass scaling for rigid body
+                k_tra = self.stifn[master]
+                if k_tra > 0.0:
+                    m_req = k_tra * (self.dt_min / self.dt_sca) ** 2 / 2.0
+                    dm = m_req - mass_rb
+                    if dm > 0.0:
+                        dm = float(dm)
+                        model.mass[master] += dm
+                        mass_eff[master] += dm
+                        inv_mass[master] = 1.0 / mass_eff[master]
+                        self.mass_added += dm
+                        self.e_madd += float(0.5 * dm * (v[master] ** 2).sum())
+                        self.mom_added += dm * v[master]
+                        entry[2] += dm
+                        if rb is not None:
+                            rb.M += dm
+
+                # Rotational inertia scaling for rigid body
+                if self._rot and in_min > 0.0 and self.stifr[master] > 0.0:
+                    k_rot = self.stifr[master]
+                    i_req = k_rot * (self.dt_min / self.dt_sca) ** 2 / 2.0
+                    di = i_req - in_min
+                    if di > 0.0:
+                        di = float(di)
+                        if inertia is not None:
+                            inertia[master] += di
+                            if inv_inertia is not None:
+                                inv_inertia[master] = 1.0 / inertia[master]
+                        self.iner_added += di
+                        entry[3] += di
+                        if rb is not None:
+                            rb.J0 += np.eye(3) * di
+
+        rb_masters = [entry[4] for entry in self._rbodies if len(entry) > 4]
         loaded = (self.stifn > 0.0) & self.free & (model.mass > 0.0)
         if ams_nodes is not None:
             loaded &= ~ams_nodes
+        if rb_masters:
+            loaded[rb_masters] = False
+
         # rotational claims: dtnoda.F's IRODDL/IN(N)>0 gating.  stifr > 0
         # implies the node took a shell/beam claim, which also fed stifn,
         # so rot is a subset of loaded (contact springs feed only stifn).
@@ -307,46 +368,33 @@ class NodalTimeStep:
             rot = (self.stifr > 0.0) & self.free & (inertia > 0.0)
             if ams_nodes is not None:
                 rot &= ~ams_nodes
+            if rb_masters:
+                rot[rb_masters] = False
             if not np.any(rot):
                 rot = None
-        if not np.any(loaded):
-            # no FREE node claims a step, but a rigid body's transported
-            # master dt still can (the RD-E-1000 case: every stiff shell is
-            # welded into the body) — never silently drop it
-            dt_rb = self._rigid_body_dt()
-            self.stifn[:] = 0.0
-            if self._rot:
-                self.stifr[:] = 0.0
-            return dt_rb
 
         if self.cst and self.dt_min > 0.0 and self.dt_sca > 0.0:
-            # mass needed so that dt_sca * sqrt(2 M / K) >= dt_min
-            m_req = self.stifn[loaded] * (self.dt_min / self.dt_sca) ** 2 \
-                / 2.0
-            dm = m_req - mass_eff[loaded]
-            add = dm > 0.0
-            if np.any(add):
-                idx = np.where(loaded)[0][add]
-                dm = dm[add]
-                # physical mass: the KE/momentum ledgers must see the new
-                # inertia (that is the honest part of mass scaling)
-                model.mass[idx] += dm
-                mass_eff[idx] += dm
-                inv_mass[idx] = 1.0 / mass_eff[idx]
-                self.mass_added += float(dm.sum())
-                # the addition creates kinetic energy and momentum at the
-                # node's current velocity — booked and reported
-                self.e_madd += float(
-                    0.5 * (dm[:, None] * v[idx] ** 2).sum())
-                self.mom_added += (dm[:, None] * v[idx]).sum(axis=0)
-                frac = self.mass_added / max(self.mass0, EM20)
-                if frac >= self._reported + 0.01:  # 1%-step announcements
-                    self.log.info(
-                        f" -- /DT/NODA/CST: ADDED MASS {self.mass_added:.5E}"
-                        f" ({100.0 * frac:.2f}% OF THE INITIAL MASS)"
-                        f" AT TIME {t:.5E}")
-                    self._reported = frac
-            if rot is not None:
+            if np.any(loaded):
+                # mass needed so that dt_sca * sqrt(2 M / K) >= dt_min
+                m_req = self.stifn[loaded] * (self.dt_min / self.dt_sca) ** 2 \
+                    / 2.0
+                dm = m_req - mass_eff[loaded]
+                add = dm > 0.0
+                if np.any(add):
+                    idx = np.where(loaded)[0][add]
+                    dm = dm[add]
+                    # physical mass: the KE/momentum ledgers must see the new
+                    # inertia (that is the honest part of mass scaling)
+                    model.mass[idx] += dm
+                    mass_eff[idx] += dm
+                    inv_mass[idx] = 1.0 / mass_eff[idx]
+                    self.mass_added += float(dm.sum())
+                    # the addition creates kinetic energy and momentum at the
+                    # node's current velocity — booked and reported
+                    self.e_madd += float(
+                        0.5 * (dm[:, None] * v[idx] ** 2).sum())
+                    self.mom_added += (dm[:, None] * v[idx]).sum(axis=0)
+            if rot is not None and np.any(rot):
                 # rotational CST: inertia needed so that the rotational
                 # nodal dt holds the target too (dtnoda.F 482-516,
                 # IN(N) = MAX(INER, IN(N)) and the DINERT counter — only
@@ -363,18 +411,31 @@ class NodalTimeStep:
                     if inv_inertia is not None:
                         inv_inertia[idx] = 1.0 / inertia[idx]
                     self.iner_added += float(di.sum())
+            frac = self.mass_added / max(self.mass0, EM20)
+            if frac >= self._reported + 0.01:  # 1%-step announcements
+                self.log.info(
+                    f" -- /DT/NODA/CST: ADDED MASS {self.mass_added:.5E}"
+                    f" ({100.0 * frac:.2f}% OF THE INITIAL MASS)"
+                    f" AT TIME {t:.5E}")
+                self._reported = frac
 
-        dt_i = np.sqrt(2.0 * mass_eff[loaded] / self.stifn[loaded])
-        dt = float(dt_i.min())
-        if rot is not None:
+        dt_candidates = []
+        if np.any(loaded):
+            dt_i = np.sqrt(2.0 * mass_eff[loaded] / self.stifn[loaded])
+            dt_candidates.append(float(dt_i.min()))
+        if rot is not None and np.any(rot):
             # the rotational nodal dt joins the same minimum (dtnoda.F
             # line 469: DTN = DTFAC*sqrt(2 IN/STIFR); the shared DTFAC —
             # the port's dt_scale — is applied by the caller)
             dt_r = np.sqrt(2.0 * inertia[rot] / self.stifr[rot])
-            dt = min(dt, float(dt_r.min()))
+            dt_candidates.append(float(dt_r.min()))
         # the rigid bodies' transported master dts join the free-node min
         # (rgbodfp.F/dtnoda.F — see add_rigid_body); a no-op with no /RBODY
-        dt = min(dt, self._rigid_body_dt())
+        dt_rb = self._rigid_body_dt()
+        if dt_rb < EP30:
+            dt_candidates.append(dt_rb)
+        dt = min(dt_candidates) if dt_candidates else EP30
+
         self.stifn[:] = 0.0
         if self._rot:
             self.stifr[:] = 0.0

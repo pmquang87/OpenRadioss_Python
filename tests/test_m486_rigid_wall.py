@@ -272,13 +272,14 @@ class TestRigidWallApplyKinematics:
         # Tangential velocity components (vx, vy) must be EXACTLY preserved
         assert model.v[0, 0] == pytest.approx(3.0, rel=1e-12)
         assert model.v[0, 1] == pytest.approx(4.0, rel=1e-12)
-        # Fixed wall books negative work U into dw (reducing external work):
+        # Fixed wall books impact dissipation -U into de (contact energy, econt):
         # U = m [|v_new|^2/2 + |v_old|^2/2 - v_trial . v_old]
         # v_trial = v_old = [3, 4, -1] -> |v_old|^2 = 26
         # v_new = [3, 4, -0.4] -> |v_new|^2 = 25 + 0.16 = 25.16
         # U = 2.5 * [25.16/2 + 26/2 - 26] = 2.5 * [12.58 - 13.0] = 2.5 * (-0.42) = -1.05
-        assert de == 0.0
-        assert dw == pytest.approx(-1.05, rel=1e-12)
+        # de = -U = 1.05, dw = 0.0
+        assert de == pytest.approx(1.05, rel=1e-12)
+        assert dw == 0.0
 
     def test_resting_node_no_energy_leakage(self):
         """A resting node (v_old = 0) pushed against wall by external acceleration."""
@@ -327,9 +328,9 @@ class TestRigidWallApplyKinematics:
         assert model.v[0, 1] == pytest.approx(0.0, abs=1e-14)
         # Normal velocity lands on plane: -0.01 / 0.02 = -0.5
         assert model.v[0, 2] == pytest.approx(-0.5, rel=1e-12)
-        # Fixed wall books negative work into dw
-        assert de == 0.0
-        assert dw < 0.0
+        # Fixed wall books impact dissipation into de (contact energy)
+        assert de > 0.0
+        assert dw == 0.0
 
     def test_apply_coulomb_friction_stick_regime(self):
         """slide=2 with high friction: tangential velocity is completely stopped."""
@@ -615,10 +616,9 @@ class TestDrivenAndFreeWalls:
         # Both velocities should be corrected
         assert model.v[0, 2] == pytest.approx(-0.01 / 0.02, rel=1e-12)
         # For rw2: s = (1.0 - 0.99) = 0.01. vn = v . [-1, 0, 0] = -2.0.
-        # Land on wall: vn_new = -s/dt = -0.5 -> vx_new = 0.5
         assert model.v[0, 0] == pytest.approx(0.5, rel=1e-12)
-        assert de == 0.0
-        assert dw < 0.0
+        assert de > 0.0
+        assert dw == 0.0
 
 
 # ==============================================================================
