@@ -1,4 +1,5 @@
 import numpy as np
+from math import sqrt
 try:
     from numba import njit
 except ImportError:
@@ -8,6 +9,17 @@ except ImportError:
         def dec(fn):
             return fn
         return dec
+
+EM20 = 1e-20
+EP30 = 1e30
+_CVIS = 1.0
+_FBEND_V = 3.464
+_C7 = 4.0 / 3.0
+_COEF = 0.85
+_COEFH = 0.999
+_STIER = 16.0 / 3.0
+_UNDOUZSR = float(np.sqrt(1.0 / 12.0))
+_TOL_PLAS = 1.0e-18
 
 @njit(cache=True)
 def qeph_pre(xe, ve, vre, dt, npt1, alive):
@@ -524,9 +536,19 @@ def qeph_pre(xe, ve, vre, dt, npt1, alive):
     return vdef, vhg, plat, vqn, di, db, E, area, a_i, z1, corx, cory, x13, x24, y13, y24, mx13, mx23, mx34, my13, my23, my34, l13, l24, ll, lm
 
 @njit(cache=True)
-def qeph_post(thick, Nres, Mres, qres, st_amu, st_cspd, st_yld, st_fmat, vhg, dt, alive, plat, vqn, di, db, E, area, a_i, z1, corx, cory, x13, x24, y13, y24, mx13, mx23, mx34, my13, my23, my34, l13, l24, ll, lm):
+def qeph_post(thick, Nres, Mres, qres, st_amu, st_cspd, st_yld, st_fmat, vhg, dt, alive, plat, vqn, di, db, E, area, a_i, z1, corx, cory, x13, x24, y13, y24, mx13, mx23, mx34, my13, my23, my34, l13, l24, ll, lm, a11, a12, npt1, gs, vg):
     n = len(thick)
-    n = len(x13)
+    has_yield = st_yld > 0.0
+    sigy2_arr = np.maximum(st_yld * st_yld, _TOL_PLAS)
+    amu = st_amu
+    rho0 = np.ones(n)
+    gsr = np.ones(n)
+    shfsr = np.ones(n)
+    a11sr = np.ones(n)
+    a12sr = np.ones(n)
+    gmod = np.ones(n)
+    ehour = np.zeros(n)
+    eint = np.zeros(n)
     VF = np.zeros((n, 3, 4))
     VM = np.zeros((n, 2, 4))
     for e in range(n):
