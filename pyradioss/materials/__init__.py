@@ -3890,7 +3890,7 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
                 pass
         return sig, epsp_out, c
     if getattr(mat, "law", None) in _LAW190_KEYS or getattr(mat, "law_name", None) in _LAW190_KEYS:
-        res = law190_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        res = law190_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra, return_tuple=True)
         if isinstance(res, tuple):
             if len(res) == 3:
                 sign, epsp_out, c = res
@@ -3901,6 +3901,8 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
                 sign, epsp_out, c = res[0], epsp, None
         else:
             sign, epsp_out, c = res, epsp, None
+        if c is None:
+            c = law190_sound_speed(mat, extra=extra)
         if hasattr(sig, "__setitem__"):
             try:
                 sig[:] = sign
@@ -4436,6 +4438,10 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         raise NotImplementedError("material LAW190 (FOAM_DUBOIS) is formulated for 3D solid elements only")
     if getattr(mat, "law", None) in _LAW119_KEYS or getattr(mat, "law_name", None) in _LAW119_KEYS:
         return law119_seatbelt.shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+    if getattr(mat, "law", None) in _LAW120_KEYS or getattr(mat, "law_name", None) in _LAW120_KEYS:
+        return law120_shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+    if getattr(mat, "law", None) in _LAW121_KEYS or getattr(mat, "law_name", None) in _LAW121_KEYS:
+        return law121_shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
     if getattr(mat, "law", None) in _LAW114_KEYS or getattr(mat, "law_name", None) in _LAW114_KEYS:
         raise NotImplementedError("LAW114 (/MAT/SPR_SEATBELT) is for spring elements only.")
     raise NotImplementedError(f"material LAW{mat.law} not ported for shells")
@@ -4666,6 +4672,16 @@ def solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
         return law90_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     if getattr(mat, "law", None) in _LAW190_KEYS or getattr(mat, "law_name", None) in _LAW190_KEYS:
         return law190_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
+    if getattr(mat, "law", None) in _LAW120_KEYS or getattr(mat, "law_name", None) in _LAW120_KEYS:
+        c = law120_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
+        if c.ndim == 2 and n > 1:
+            return np.broadcast_to(c, (n, 6, 6)).copy()
+        return c
+    if getattr(mat, "law", None) in _LAW121_KEYS or getattr(mat, "law_name", None) in _LAW121_KEYS:
+        c = law121_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
+        if c.ndim == 2 and n > 1:
+            return np.broadcast_to(c, (n, 6, 6)).copy()
+        return c
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
         f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW34, LAW35, LAW36, LAW38, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
@@ -4677,6 +4693,12 @@ consistent_solid_tangent = solid_tangent
 
 def resolve_curves(mat, model, log=None):
     """Wire curve resolution hook for /FUNCT references so model.curves can be accessed by the kernel."""
+    if getattr(mat, "law", None) in _LAW120_KEYS or getattr(mat, "law_name", None) in _LAW120_KEYS:
+        return law120_resolve(mat, model, log)
+
+    if getattr(mat, "law", None) in _LAW121_KEYS or getattr(mat, "law_name", None) in _LAW121_KEYS:
+        return law121_resolve(mat, model, log)
+
     if getattr(mat, "law", None) in _LAW190_KEYS or getattr(mat, "law_name", None) in _LAW190_KEYS:
         if hasattr(law190_dubois, "resolve"):
             return law190_dubois.resolve(mat, model, log)
@@ -4876,6 +4898,8 @@ def shell_membrane_tangent(mat):
             [nu * c, c, 0.0],
             [0.0, 0.0, g],
         ])
+    if getattr(mat, "law", None) in _LAW124_KEYS or getattr(mat, "law_name", None) in _LAW124_KEYS:
+        raise NotImplementedError("LAW124 (CDPM2) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
         raise NotImplementedError("LAW126 (Johnson-Holmquist Concrete / HJC) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in _LAW169_KEYS or getattr(mat, "law_name", None) in _LAW169_KEYS:
@@ -4892,6 +4916,18 @@ def shell_membrane_tangent(mat):
         return law117_shell_membrane_tangent(mat)
     if getattr(mat, "law", None) in _LAW123_KEYS or getattr(mat, "law_name", None) in _LAW123_KEYS or getattr(mat, "law", None) in _LAW132_KEYS or getattr(mat, "law_name", None) in _LAW132_KEYS:
         return law123_shell_tangent(mat)
+    if getattr(mat, "law", None) in _LAW120_KEYS or getattr(mat, "law_name", None) in _LAW120_KEYS:
+        return law120_shell_membrane_tangent(mat)
+    if getattr(mat, "law", None) in _LAW121_KEYS or getattr(mat, "law_name", None) in _LAW121_KEYS:
+        e = float(getattr(mat, "young", 0.0) or getattr(mat, "E", 0.0) or getattr(mat, "e", 0.0) or (mat.params.get("young", 0.0) if hasattr(mat, "params") else 0.0) or (mat.params.get("E", 0.0) if hasattr(mat, "params") else 0.0) or 1.0)
+        nu = float(getattr(mat, "nu", 0.0) or (mat.params.get("nu", 0.0) if hasattr(mat, "params") else 0.0) or 0.3)
+        c = e / max(1.0 - nu * nu, 1e-15)
+        g = e / max(2.0 * (1.0 + nu), 1e-15)
+        return np.array([
+            [c, nu * c, 0.0],
+            [nu * c, c, 0.0],
+            [0.0, 0.0, g],
+        ])
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic, "
         f"LAW3 plas_bost, LAW19 fabric, LAW34 Boltzmann, LAW32 Hill and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")
@@ -5045,6 +5081,8 @@ def shell_layer_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
         return law109_consistent_shell_tangent(mat, stress=sig, extra=extra)
     if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
         return law110_consistent_shell_tangent(mat, stress=sig, extra=extra)
+    if getattr(mat, "law", None) in _LAW124_KEYS or getattr(mat, "law_name", None) in _LAW124_KEYS:
+        raise NotImplementedError("LAW124 (CDPM2) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
         raise NotImplementedError("LAW126 (Johnson-Holmquist Concrete / HJC) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in _LAW169_KEYS or getattr(mat, "law_name", None) in _LAW169_KEYS:
@@ -5059,6 +5097,16 @@ def shell_layer_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
         raise NotImplementedError("LAW90 (tabulated hysteretic foam) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in _LAW190_KEYS or getattr(mat, "law_name", None) in _LAW190_KEYS:
         raise NotImplementedError("LAW190 (FOAM_DUBOIS) is implemented for 3D solid elements only.")
+    if getattr(mat, "law", None) in _LAW120_KEYS or getattr(mat, "law_name", None) in _LAW120_KEYS:
+        c = law120_consistent_shell_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, epsp=epsp, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
+        if c.ndim == 2 and n > 1:
+            return np.broadcast_to(c, (n, 3, 3)).copy()
+        return c
+    if getattr(mat, "law", None) in _LAW121_KEYS or getattr(mat, "law_name", None) in _LAW121_KEYS:
+        c = law121_consistent_shell_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, epsp=epsp, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
+        if c.ndim == 2 and n > 1:
+            return np.broadcast_to(c, (n, 3, 3)).copy()
+        return c
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 "
         f"elastic, LAW2, LAW3, LAW36 and LAW44 elastoplastic, LAW27 brittle cracking, "

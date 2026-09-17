@@ -825,18 +825,29 @@ consistent_solid_tangent = solid_tangent
 
 def resolve(mat: Any, model: Any, log: Any = None) -> None:
     """Resolve /FUNCT curve references for /MAT/LAW120 from model."""
-    if hasattr(mat, "tab_id") and mat.tab_id > 0:
-        c = model.get_function(mat.tab_id)
+    get_fn = getattr(model, "get_function", None)
+    if not callable(get_fn):
+        fn_dict = getattr(model, "functions", getattr(model, "curves", model if isinstance(model, dict) else {}))
+        get_fn = lambda fid: fn_dict.get(fid)
+
+    tab_id = getattr(mat, "tab_id", 0) or (mat.params.get("tab_id", 0) if hasattr(mat, "params") else 0)
+    if tab_id > 0:
+        c = get_fn(tab_id)
         if c is not None:
             mat.curve_shear = c
-    if hasattr(mat, "fct_1") and mat.fct_1 > 0:
-        c = model.get_function(mat.fct_1)
+            if hasattr(mat, "params"): mat.params["curve_shear"] = c
+    fct_1 = getattr(mat, "fct_1", 0) or (mat.params.get("fct_1", 0) if hasattr(mat, "params") else 0)
+    if fct_1 > 0:
+        c = get_fn(fct_1)
         if c is not None:
             mat.curve_1 = c
-    if hasattr(mat, "fct_2") and mat.fct_2 > 0:
-        c = model.get_function(mat.fct_2)
+            if hasattr(mat, "params"): mat.params["curve_1"] = c
+    fct_2 = getattr(mat, "fct_2", 0) or (mat.params.get("fct_2", 0) if hasattr(mat, "params") else 0)
+    if fct_2 > 0:
+        c = get_fn(fct_2)
         if c is not None:
             mat.curve_2 = c
+            if hasattr(mat, "params"): mat.params["curve_2"] = c
 
 
 def extra_shapes(mat: Any, nip: Optional[int] = None) -> Dict[str, Tuple[int, ...]]:

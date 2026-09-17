@@ -59,6 +59,7 @@ _RAD53 = 53.0 * math.pi / 180.0
 @dataclass
 class Law123Params:
     """Material parameters for /MAT/LAW123 (Daimler-Pinho)."""
+    law: int = 123
     rho0: float = 0.0
     ea: float = 0.0
     eb: float = 0.0
@@ -206,6 +207,7 @@ class Law123Params:
 @dataclass
 class Law132Params:
     """Material parameters for /MAT/LAW132 (Daimler-Camanho)."""
+    law: int = 132
     rho0: float = 0.0
     ea: float = 0.0
     eb: float = 0.0
@@ -683,12 +685,18 @@ def _update_point_law123(
     if off <= 0.0 or offl <= 0.0:
         return np.zeros_like(sig), epsp, uvar, dmg, 0.0, 0.0, p.sound_spd_solid if is_solid else p.sound_spd_shell
 
+    if len(uvar) < 22:
+        uvar = np.pad(uvar, (0, 22 - len(uvar)))
+    if len(dmg) < 8:
+        dmg = np.pad(dmg, (0, 8 - len(dmg)))
+
     l_car = max(char_len, _EM10) if char_len > 0.0 else (uvar[15] if uvar[15] > 0.0 else 1.0)
     uvar[15] = l_car
 
     # 1. Total strain integration & effective elastic stress (undamaged)
     # Total strain stored in uvar[16:22]
-    eps_tot = uvar[16:22] + deps[:6] if len(deps) >= 6 else np.pad(deps, (0, 6 - len(deps)))
+    d_full = deps[:6] if len(deps) >= 6 else np.pad(deps, (0, 6 - len(deps)))
+    eps_tot = uvar[16:22] + d_full
     uvar[16:22] = eps_tot
 
     if is_solid:
@@ -710,7 +718,8 @@ def _update_point_law123(
 
     # 2. Check effective strain failure limit (EFS)
     eps_eq = math.sqrt(2.0 / 3.0 * float(np.sum(eps_tot**2)))
-    if eps_eq >= p.efs:
+    max_eps = float(np.max(np.abs(eps_tot)))
+    if eps_eq >= p.efs or max_eps >= p.efs:
         dmg[0] = 1.0
         off = 0.0
         offl = 0.0
@@ -961,11 +970,17 @@ def _update_point_law132(
     if off <= 0.0 or offl <= 0.0:
         return np.zeros_like(sig), epsp, uvar, dmg, 0.0, 0.0, p.sound_spd_solid if is_solid else p.sound_spd_shell
 
+    if len(uvar) < 22:
+        uvar = np.pad(uvar, (0, 22 - len(uvar)))
+    if len(dmg) < 8:
+        dmg = np.pad(dmg, (0, 8 - len(dmg)))
+
     l_char = max(char_len, _EM10) if char_len > 0.0 else (uvar[4] if uvar[4] > 0.0 else 1.0)
     uvar[4] = l_char
 
     # Total strain
-    eps_tot = uvar[16:22] + deps[:6] if len(deps) >= 6 else np.pad(deps, (0, 6 - len(deps)))
+    d_full = deps[:6] if len(deps) >= 6 else np.pad(deps, (0, 6 - len(deps)))
+    eps_tot = uvar[16:22] + d_full
     uvar[16:22] = eps_tot
 
     # Check failure strain limits
@@ -1172,26 +1187,29 @@ def solid_step(
     dt: float = 0.0,
     extra: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
-) -> Tuple[np.ndarray, float, float]:
+) -> Tuple[np.ndarray, float, np.ndarray, np.ndarray, float, float, float]:
     """Solid single-point step for LAW123 or LAW132."""
     ex = extra or {}
-    uvar = ex.get("uvar")
+    uvar = ex.get("uvar", ex.get("uv123"))
     if uvar is None or len(uvar) < 22:
         uvar = np.zeros(22, dtype=float)
     else:
         uvar = np.asarray(uvar, dtype=float).copy()
 
-    dmg = ex.get("dmg")
+    dmg = ex.get("dmg", ex.get("dmg123"))
     if dmg is None or len(dmg) < 8:
         dmg = np.zeros(8, dtype=float)
     else:
         dmg = np.asarray(dmg, dtype=float).copy()
 
-    off = float(ex.get("off", 1.0))
-    offl = float(ex.get("offl", 1.0))
+    off = float(ex.get("off", ex.get("off123", 1.0)))
+    offl = float(ex.get("offl", ex.get("offl123", 1.0)))
     char_len = float(ex.get("char_len", ex.get("l_car", 1.0)))
 
-    law_num = getattr(mat, "law", 123)
+    if isinstance(mat, Law132Params) or getattr(mat, "law", 123) in (132, "132", "LAW132", "DAIMLER_CAMANHO", "DAIMLER-CAMANHO", "MAT_LAW132", "MAT_DAIMLER_CAMANHO"):
+        law_num = 132
+    else:
+        law_num = 123
     if law_num == 132:
         p132 = _get_params_132(mat)
         s_out, ep_out, uv_out, d_out, o_out, ol_out, c_out = _update_point_law132(
@@ -1205,11 +1223,15 @@ def solid_step(
 
     if extra is not None:
         extra["uvar"] = uv_out
+        extra["uv123"] = uv_out
         extra["dmg"] = d_out
+        extra["dmg123"] = d_out
         extra["off"] = o_out
+        extra["off123"] = o_out
         extra["offl"] = ol_out
+        extra["offl123"] = ol_out
 
-    return s_out, ep_out, c_out
+    return s_out, ep_out, uv_out, d_out, o_out, ol_out, c_out
 
 
 def shell_step(
@@ -1220,26 +1242,29 @@ def shell_step(
     dt: float = 0.0,
     extra: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
-) -> Tuple[np.ndarray, float, float]:
+) -> Tuple[np.ndarray, float, np.ndarray, np.ndarray, float, float, float]:
     """Shell single-point plane-stress step for LAW123 or LAW132."""
     ex = extra or {}
-    uvar = ex.get("uvar")
+    uvar = ex.get("uvar", ex.get("uv123"))
     if uvar is None or len(uvar) < 22:
         uvar = np.zeros(22, dtype=float)
     else:
         uvar = np.asarray(uvar, dtype=float).copy()
 
-    dmg = ex.get("dmg")
+    dmg = ex.get("dmg", ex.get("dmg123"))
     if dmg is None or len(dmg) < 8:
         dmg = np.zeros(8, dtype=float)
     else:
         dmg = np.asarray(dmg, dtype=float).copy()
 
-    off = float(ex.get("off", 1.0))
-    offl = float(ex.get("offl", 1.0))
+    off = float(ex.get("off", ex.get("off123", 1.0)))
+    offl = float(ex.get("offl", ex.get("offl123", 1.0)))
     char_len = float(ex.get("char_len", ex.get("l_car", 1.0)))
 
-    law_num = getattr(mat, "law", 123)
+    if isinstance(mat, Law132Params) or getattr(mat, "law", 123) in (132, "132", "LAW132", "DAIMLER_CAMANHO", "DAIMLER-CAMANHO", "MAT_LAW132", "MAT_DAIMLER_CAMANHO"):
+        law_num = 132
+    else:
+        law_num = 123
     if law_num == 132:
         p132 = _get_params_132(mat)
         s_out, ep_out, uv_out, d_out, o_out, ol_out, c_out = _update_point_law132(
@@ -1253,11 +1278,15 @@ def shell_step(
 
     if extra is not None:
         extra["uvar"] = uv_out
+        extra["uv123"] = uv_out
         extra["dmg"] = d_out
+        extra["dmg123"] = d_out
         extra["off"] = o_out
+        extra["off123"] = o_out
         extra["offl"] = ol_out
+        extra["offl123"] = ol_out
 
-    return s_out, ep_out, c_out
+    return s_out, ep_out, uv_out, d_out, o_out, ol_out, c_out
 
 
 def solid_update(
@@ -1286,25 +1315,37 @@ def solid_update(
         ep = np.asarray(epsp, dtype=float).copy()
 
     ex = extra or {}
-    uvar_all = ex.get("uvar")
-    if uvar_all is None or len(uvar_all) != n:
+    uvar_all = ex.get("uvar", ex.get("uv123"))
+    if uvar_all is None:
         uvar_all = np.zeros((n, 22), dtype=float)
     else:
         uvar_all = np.asarray(uvar_all, dtype=float).copy()
+        if uvar_all.ndim == 1 and n == 1 and uvar_all.size >= 1:
+            uvar_all = uvar_all.reshape(1, -1)
+        if uvar_all.ndim != 2 or uvar_all.shape[0] != n:
+            uvar_all = np.zeros((n, 22), dtype=float)
+        elif uvar_all.shape[1] < 22:
+            uvar_all = np.pad(uvar_all, ((0, 0), (0, 22 - uvar_all.shape[1])))
 
-    dmg_all = ex.get("dmg")
-    if dmg_all is None or len(dmg_all) != n:
+    dmg_all = ex.get("dmg", ex.get("dmg123"))
+    if dmg_all is None:
         dmg_all = np.zeros((n, 8), dtype=float)
     else:
         dmg_all = np.asarray(dmg_all, dtype=float).copy()
+        if dmg_all.ndim == 1 and n == 1 and dmg_all.size >= 1:
+            dmg_all = dmg_all.reshape(1, -1)
+        if dmg_all.ndim != 2 or dmg_all.shape[0] != n:
+            dmg_all = np.zeros((n, 8), dtype=float)
+        elif dmg_all.shape[1] < 8:
+            dmg_all = np.pad(dmg_all, ((0, 0), (0, 8 - dmg_all.shape[1])))
 
-    off_all = ex.get("off")
+    off_all = ex.get("off", ex.get("off123"))
     if off_all is None or len(off_all) != n:
         off_all = np.ones(n, dtype=float)
     else:
         off_all = np.asarray(off_all, dtype=float).copy()
 
-    offl_all = ex.get("offl")
+    offl_all = ex.get("offl", ex.get("offl123"))
     if offl_all is None or len(offl_all) != n:
         offl_all = np.ones(n, dtype=float)
     else:
@@ -1318,7 +1359,10 @@ def solid_update(
 
     s_out = np.zeros_like(s)
     c_arr = np.zeros(n, dtype=float)
-    law_num = getattr(mat, "law", 123)
+    if isinstance(mat, Law132Params) or getattr(mat, "law", 123) in (132, "132", "LAW132", "DAIMLER_CAMANHO", "DAIMLER-CAMANHO", "MAT_LAW132", "MAT_DAIMLER_CAMANHO"):
+        law_num = 132
+    else:
+        law_num = 123
 
     for i in range(n):
         if law_num == 132:
@@ -1335,9 +1379,24 @@ def solid_update(
 
     if extra is not None:
         extra["uvar"] = uvar_all
+        extra["uv123"] = uvar_all
         extra["dmg"] = dmg_all
+        extra["dmg123"] = dmg_all
         extra["off"] = off_all
+        extra["off123"] = off_all
         extra["offl"] = offl_all
+        extra["offl123"] = offl_all
+
+    if hasattr(sig, "__setitem__"):
+        try:
+            sig[:] = s_out[0] if is_1d else s_out
+        except Exception:
+            pass
+    if epsp is not None and hasattr(epsp, "__setitem__"):
+        try:
+            epsp[:] = ep[0] if is_1d else ep
+        except Exception:
+            pass
 
     if is_1d:
         return s_out[0], ep[0], float(c_arr[0])
@@ -1351,8 +1410,9 @@ def shell_update(
     epsp: Optional[np.ndarray] = None,
     dt: float = 0.0,
     extra: Optional[Dict[str, Any]] = None,
+    return_tuple: bool = False,
     **kwargs: Any,
-) -> Tuple[np.ndarray, Optional[np.ndarray], Union[float, np.ndarray]]:
+) -> Union[Tuple[np.ndarray, Optional[np.ndarray]], Tuple[np.ndarray, Optional[np.ndarray], Union[float, np.ndarray]]]:
     """Shell vectorized constitutive update for LAW123 and LAW132."""
     sig_arr = np.asarray(sig, dtype=float)
     deps_arr = np.asarray(deps, dtype=float)
@@ -1370,25 +1430,37 @@ def shell_update(
         ep = np.asarray(epsp, dtype=float).copy()
 
     ex = extra or {}
-    uvar_all = ex.get("uvar")
-    if uvar_all is None or len(uvar_all) != n:
+    uvar_all = ex.get("uvar", ex.get("uv123"))
+    if uvar_all is None:
         uvar_all = np.zeros((n, 22), dtype=float)
     else:
         uvar_all = np.asarray(uvar_all, dtype=float).copy()
+        if uvar_all.ndim == 1 and n == 1 and uvar_all.size >= 1:
+            uvar_all = uvar_all.reshape(1, -1)
+        if uvar_all.ndim != 2 or uvar_all.shape[0] != n:
+            uvar_all = np.zeros((n, 22), dtype=float)
+        elif uvar_all.shape[1] < 22:
+            uvar_all = np.pad(uvar_all, ((0, 0), (0, 22 - uvar_all.shape[1])))
 
-    dmg_all = ex.get("dmg")
-    if dmg_all is None or len(dmg_all) != n:
+    dmg_all = ex.get("dmg", ex.get("dmg123"))
+    if dmg_all is None:
         dmg_all = np.zeros((n, 8), dtype=float)
     else:
         dmg_all = np.asarray(dmg_all, dtype=float).copy()
+        if dmg_all.ndim == 1 and n == 1 and dmg_all.size >= 1:
+            dmg_all = dmg_all.reshape(1, -1)
+        if dmg_all.ndim != 2 or dmg_all.shape[0] != n:
+            dmg_all = np.zeros((n, 8), dtype=float)
+        elif dmg_all.shape[1] < 8:
+            dmg_all = np.pad(dmg_all, ((0, 0), (0, 8 - dmg_all.shape[1])))
 
-    off_all = ex.get("off")
+    off_all = ex.get("off", ex.get("off123"))
     if off_all is None or len(off_all) != n:
         off_all = np.ones(n, dtype=float)
     else:
         off_all = np.asarray(off_all, dtype=float).copy()
 
-    offl_all = ex.get("offl")
+    offl_all = ex.get("offl", ex.get("offl123"))
     if offl_all is None or len(offl_all) != n:
         offl_all = np.ones(n, dtype=float)
     else:
@@ -1402,7 +1474,10 @@ def shell_update(
 
     s_out = np.zeros_like(s)
     c_arr = np.zeros(n, dtype=float)
-    law_num = getattr(mat, "law", 123)
+    if isinstance(mat, Law132Params) or getattr(mat, "law", 123) in (132, "132", "LAW132", "DAIMLER_CAMANHO", "DAIMLER-CAMANHO", "MAT_LAW132", "MAT_DAIMLER_CAMANHO"):
+        law_num = 132
+    else:
+        law_num = 123
 
     for i in range(n):
         if law_num == 132:
@@ -1419,27 +1494,59 @@ def shell_update(
 
     if extra is not None:
         extra["uvar"] = uvar_all
+        extra["uv123"] = uvar_all
         extra["dmg"] = dmg_all
+        extra["dmg123"] = dmg_all
         extra["off"] = off_all
+        extra["off123"] = off_all
         extra["offl"] = offl_all
+        extra["offl123"] = offl_all
+
+    if hasattr(sig, "__setitem__"):
+        try:
+            sig[:] = s_out[0] if is_1d else s_out
+        except Exception:
+            pass
+    if epsp is not None and hasattr(epsp, "__setitem__"):
+        try:
+            epsp[:] = ep[0] if is_1d else ep
+        except Exception:
+            pass
 
     if is_1d:
-        return s_out[0], ep[0], float(c_arr[0])
-    return s_out, ep, c_arr
+        if return_tuple:
+            return s_out[0], ep[0], float(c_arr[0])
+        return s_out[0], ep[0]
+    if return_tuple:
+        return s_out, ep, c_arr
+    return s_out, ep
 
 
 # ============================================================================
 # Sound Speed & Algorithmic Tangent Stiffness
 # ============================================================================
 
-def sound_speed(mat: Any) -> float:
+def sound_speed(
+    mat: Any,
+    rho: Optional[Union[float, np.ndarray]] = None,
+    extra: Optional[Dict[str, Any]] = None,
+    is_shell: bool = False,
+    **kwargs: Any,
+) -> float:
     """Acoustic sound speed calculation for LAW123 and LAW132."""
     law_num = getattr(mat, "law", 123)
-    if law_num == 132:
-        p132 = _get_params_132(mat)
-        return p132.sound_spd_solid
-    p123 = _get_params_123(mat)
-    return p123.sound_spd_solid
+    p = _get_params_132(mat) if law_num == 132 else _get_params_123(mat)
+    if rho is not None and np.isscalar(rho) and float(rho) > 0.0:
+        rho_eff = float(rho)
+        if is_shell:
+            det_c = max(1.0 - p.nu12 * p.nu21, _EM20)
+            return math.sqrt(max(p.ea, p.eb) / (rho_eff * det_c))
+        else:
+            d11 = p.d_solid[0, 0]
+            d22 = p.d_solid[1, 1]
+            d33 = p.d_solid[2, 2]
+            return math.sqrt(max(d11, d22, d33) / rho_eff)
+    return p.sound_spd_shell if is_shell else p.sound_spd_solid
 
 
 def solid_tangent(
@@ -1467,14 +1574,16 @@ def solid_tangent(
 
     h = 1.0e-7
     ex0 = {k: (v.copy() if hasattr(v, "copy") else v) for k, v in (extra or {}).items()}
-    s_base, _, _ = solid_step(mat, sig0, deps0, dt=dt, extra=ex0)
+    res_base = solid_step(mat, sig0, deps0, dt=dt, extra=ex0)
+    s_base = res_base[0]
 
     c_algo = np.zeros((6, 6), dtype=float)
     for j in range(6):
         d_p = deps0.copy()
         d_p[j] += h
         ex_p = {k: (v.copy() if hasattr(v, "copy") else v) for k, v in (extra or {}).items()}
-        s_p, _, _ = solid_step(mat, sig0, d_p, dt=dt, extra=ex_p)
+        res_p = solid_step(mat, sig0, d_p, dt=dt, extra=ex_p)
+        s_p = res_p[0]
         c_algo[:, j] = (s_p - s_base) / h
 
     return c_algo
@@ -1516,14 +1625,16 @@ def shell_tangent(
 
     h = 1.0e-7
     ex0 = {k: (v.copy() if hasattr(v, "copy") else v) for k, v in (extra or {}).items()}
-    s_base, _, _ = shell_step(mat, sig0, deps0, dt=dt, extra=ex0)
+    res_base = shell_step(mat, sig0, deps0, dt=dt, extra=ex0)
+    s_base = res_base[0]
 
     c_algo = np.zeros((3, 3), dtype=float)
     for j in range(3):
         d_p = deps0.copy()
         d_p[j] += h
         ex_p = {k: (v.copy() if hasattr(v, "copy") else v) for k, v in (extra or {}).items()}
-        s_p, _, _ = shell_step(mat, sig0, d_p, dt=dt, extra=ex_p)
+        res_p = shell_step(mat, sig0, d_p, dt=dt, extra=ex_p)
+        s_p = res_p[0]
         c_algo[:, j] = (s_p - s_base) / h
 
     return c_algo
@@ -1549,6 +1660,11 @@ def extra_shapes(mat: Any = None, nip: Optional[int] = None) -> Dict[str, Tuple[
             "off": (nip,),
             "offl": (nip,),
             "epst": (nip, 6),
+            "uv123": (nip, 22),
+            "dmg123": (nip, 8),
+            "off123": (nip,),
+            "offl123": (nip,),
+            "eps123": (nip, 6),
         }
     return {
         "uvar": (22,),
@@ -1556,6 +1672,11 @@ def extra_shapes(mat: Any = None, nip: Optional[int] = None) -> Dict[str, Tuple[
         "off": (),
         "offl": (),
         "epst": (6,),
+        "uv123": (22,),
+        "dmg123": (8,),
+        "off123": (),
+        "offl123": (),
+        "eps123": (6,),
     }
 
 
