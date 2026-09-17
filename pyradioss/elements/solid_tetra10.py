@@ -434,15 +434,18 @@ def forces(group, x, v, vr, dt, fint, mint):
         qb[sl] = getattr(prop, "params", {}).get("qb", 0.05) if hasattr(prop, "params") else getattr(prop, "qb", 0.05)
 
     # ---- post block: viscosity, forces, energies, dt -------------------
+    dtfac = st.get("dtfac", 0.25)
+    if np.ndim(dtfac) == 0:
+        dtfac = np.full(n, float(dtfac))
     jit = accel_get("tetra10_post")
     if jit is not None:
         fe, dt_crit, w_visc, qvw_new, deint0 = jit(
             xe, dndx, vol, vol_tot, lc, rho, trD, deps, sig, sig_old,
-            qa, qb, c, alive, st["qvw_pend"], dt, st["dtfac"])
+            qa, qb, c, alive, st["qvw_pend"], dt, dtfac)
     else:
         fe, dt_crit, w_visc, qvw_new, deint0 = _post(
             xe, dndx, vol, vol_tot, lc, rho, trD, deps, sig, sig_old,
-            qa, qb, c, alive, st["qvw_pend"], dt, st["dtfac"])
+            qa, qb, c, alive, st["qvw_pend"], dt, dtfac)
 
     alive = st["off"] > 0.0
     fe[~alive] = 0.0

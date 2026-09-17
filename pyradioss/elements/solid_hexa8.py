@@ -884,15 +884,18 @@ def forces(group, x, v, vr, dt, fint, mint):
 
     # ---- post block: viscosity, forces, hourglass, energies, dt -----------
     # (dispatched to the numba mirror when that backend is active)
+    dtfac = st.get("dtfac", 0.9)
+    if np.ndim(dtfac) == 0:
+        dtfac = np.full(group.n, float(dtfac))
     jit = accel_get("hexa_post")
     if jit is not None:
         fe, dt_crit, w_visc, qvw_new, deint0, dehour = jit(
             xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
-            qa, qb, c, hcoef, alive, st["qvw_pend"], dt, st["dtfac"])
+            qa, qb, c, hcoef, alive, st["qvw_pend"], dt, dtfac)
     else:
         fe, dt_crit, w_visc, qvw_new, deint0, dehour = _post(
             xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
-            qa, qb, c, hcoef, alive, st["qvw_pend"], dt, st["dtfac"])
+            qa, qb, c, hcoef, alive, st["qvw_pend"], dt, dtfac)
 
     if "eos_mask" in st:
         # /EOS elements (M6): their energy equation already integrated
