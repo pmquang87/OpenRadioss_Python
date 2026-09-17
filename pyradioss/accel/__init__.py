@@ -187,7 +187,7 @@ def select_backend(name=None, log=None) -> str:
     elif name == "numba":
         try:
             _state.update(name="numba", mod=_load_numba_module(), forced=True)
-        except ImportError:
+        except (ImportError, RuntimeError, TypeError, NameError):
             msg = ("numba backend requested but numba is not installed — "
                    "falling back to NumPy (pip install numba)")
             warnings.warn(msg, stacklevel=2)
@@ -280,7 +280,7 @@ def auto_select_backend(model, log=None, *, explicit=True) -> str:
         _state.update(name="numba", mod=_load_numba_module())
         _log_backend("numba", f"auto: {nelem} elements >= {thr}", log)
         return "numba"
-    except ImportError:
+    except (ImportError, RuntimeError, TypeError, NameError):
         _state.update(name="numpy", mod=None)
         _log_backend("numpy", "auto: numba not installed "
                      "(pip install numba to enable)", log)

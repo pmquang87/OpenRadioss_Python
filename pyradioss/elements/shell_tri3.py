@@ -143,7 +143,7 @@ def _char_length(xl: np.ndarray, area: np.ndarray) -> np.ndarray:
         j = (i + 1) % 3
         d = xl[:, j, :] - xl[:, i, :]
         lmax = np.maximum(lmax, np.einsum("nb,nb->n", d, d))
-    return 2.0 * area / np.maximum(np.sqrt(lmax), EM20)
+    return 2.0 * np.maximum(area, 0.0) / np.maximum(np.sqrt(lmax), EM20)
 
 
 # ----------------------------------------------------------------------------
@@ -657,9 +657,9 @@ def forces(group, x, v, vr, dt, fint, mint):
     if mint is not None:
         scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
-    # ---- critical time step --------------------------------------------------
-    # deleted elements no longer constrain the global step
-    return np.where(alive & (c > 0.0), st["dtfac"] * lc / np.maximum(c, EM20), EP30)
+    dt_crit = np.where(alive & (c > 0.0), st["dtfac"] * lc / np.maximum(c, EM20), EP30)
+    dt_crit = np.where(area <= EM20, EP30, dt_crit)
+    return dt_crit
 
 
 # ----------------------------------------------------------------------------

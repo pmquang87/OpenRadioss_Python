@@ -399,11 +399,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         if c_new is not None:
             c_new = c_new.reshape(-1, 4).max(axis=1)
             c[sl] = c_new
-            c_from_law[sl] = True
         else:
             K_sl = getattr(mat, "K", 0.0)
             G_sl = getattr(mat, "G", 0.0)
-            c[sl] = np.sqrt((K_sl + 4.0 * G_sl / 3.0) / np.maximum(rho[sl], EM20))
+            c[sl] = np.sqrt(np.maximum(K_sl + 4.0 * G_sl / 3.0, 0.0) / np.maximum(rho[sl], EM20))
             c_from_law[sl] = True
 
     # ---- failure evaluation -------------------------------------------

@@ -259,7 +259,7 @@ def _char_length(xl: np.ndarray, area: np.ndarray) -> np.ndarray:
     """lc = A / longest side (cdlen3.F flavour) — all 4 sides at once."""
     d = xl[:, _NEXT, :2] - xl[:, :, :2]              # (n, 4, 2) side vectors
     lmax = (d[:, :, 0] ** 2 + d[:, :, 1] ** 2).max(axis=1)
-    return area / np.maximum(np.sqrt(lmax), EM20)
+    return np.maximum(area, 0.0) / np.maximum(np.sqrt(lmax), EM20)
 
 
 
@@ -989,6 +989,7 @@ def forces(group, x, v, vr, dt, fint, mint):
                 c[sl] = 0.0
         alive = st["off"] > 0.0
         dt_e = np.where(alive, st["dtfac"] * lc / np.maximum(c, EM20), EP30)
+        dt_e = np.where(area <= EM20, EP30, dt_e)
         return np.where(is_void, EP30, dt_e)
 
     # ---- pre block: frame, geometry, rates (numba mirror when active) -----
@@ -1292,11 +1293,14 @@ def forces(group, x, v, vr, dt, fint, mint):
         E_mat = getattr(mat, "E", 0.0)
         nu = getattr(mat, "nu", 0.0)
         shfpr3 = SHEAR_FACTOR / (3.0 * (1.0 + nu))
-        k_m[sl] = p["hm"] * E_mat * t_sl / 8.0
-        k_w[sl] = p["hf"] * E_mat * shfpr3 * t_sl ** 3 / (8.0 * b12[sl])
-        hqm[sl] = _HQ * rho * p["hm"] * t_sl * np.sqrt(area[sl])
-        hqb[sl] = _HQ * rho * p["hf"] * np.sqrt(shfpr3) * t_sl ** 2
-        hqr[sl] = _HQ * _ZEP072169 * rho * p["hr"] * t_sl ** 2 * area[sl]
+        hm = p.get("hm", 0.01)
+        hf = p.get("hf", 0.01)
+        hr = p.get("hr", 0.01)
+        k_m[sl] = hm * E_mat * t_sl / 8.0
+        k_w[sl] = hf * E_mat * shfpr3 * t_sl ** 3 / (8.0 * b12[sl])
+        hqm[sl] = _HQ * rho * hm * t_sl * np.sqrt(np.maximum(area[sl], 0.0))
+        hqb[sl] = _HQ * rho * hf * np.sqrt(shfpr3) * t_sl ** 2
+        hqr[sl] = _HQ * _ZEP072169 * rho * hr * t_sl ** 2 * area[sl]
     if st.get("_impl_static_hg"):
         # IMPLICIT residual (statics/dynamics): the quadratic viscous
         # hourglass damper qd*HQ*|qd| is a RATE device. The implicit driver
@@ -1340,7 +1344,9 @@ def forces(group, x, v, vr, dt, fint, mint):
     for sl, mat, prop in st.get("slices", []):
         if getattr(mat, "law", 1) == 0:
             is_void[sl] = True
-    return np.where(alive & (~is_void), st["dtfac"] * lc / np.maximum(c, EM20), EP30)
+    dt_crit = np.where(alive & (~is_void), st["dtfac"] * lc / np.maximum(c, EM20), EP30)
+    dt_crit = np.where(area <= EM20, EP30, dt_crit)
+    return dt_crit
 
 
 # ----------------------------------------------------------------------------
