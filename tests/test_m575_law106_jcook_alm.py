@@ -267,3 +267,19 @@ def test_sound_speeds():
     assert np.isclose(c_solid, expected_solid, rtol=1e-6)
     assert np.isclose(c_shell, expected_shell, rtol=1e-6)
     assert c_solid > c_shell
+
+
+def test_law106_nmax_default_logic():
+    """BUG-MAT-01: verify nmax default logic (6 when vp=1, 3 when vp!=1)."""
+    # Case 1: vp = 1, nmax omitted -> nmax should default to 6
+    p_vp1 = build_law106(vp=1, nmax=0, e=210000.0, nu=0.3, rho=7.8e-6)
+    assert p_vp1.nmax == 6
+
+    # Case 2: vp = 2, nmax omitted -> nmax should default to 3
+    p_vp2 = build_law106(vp=2, nmax=0, e=210000.0, nu=0.3, rho=7.8e-6)
+    assert p_vp2.nmax == 3
+
+    # Case 3: explicit nmax provided -> preserved
+    p_explicit = build_law106(vp=1, nmax=12, e=210000.0, nu=0.3, rho=7.8e-6)
+    assert p_explicit.nmax == 12
+

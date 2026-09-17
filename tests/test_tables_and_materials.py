@@ -99,3 +99,22 @@ def test_law2_strain_rate_hardening():
     vm2 = 0.5 * ((sig[0, 0] - sig[0, 1]) ** 2 + (sig[0, 1] - sig[0, 2]) ** 2
                  + (sig[0, 2] - sig[0, 0]) ** 2)
     assert np.sqrt(vm2) > sy_static * 1.02
+
+
+def test_law2_dt_zero_guard():
+    """BUG-MAT-10: LAW02 dt zero / tiny dt guard avoids ZeroDivisionError."""
+    mat = _steel()
+    mat.params.update(c=0.02, eps_dot_0=1e-3)
+    sig = np.zeros((1, 6))
+    epsp = np.zeros(1)
+    deps = np.zeros((1, 6))
+    deps[0] = [1e-4, -5e-5, -5e-5, 0, 0, 0]
+
+    # Test dt = 0.0: should zero rate and not divide by zero
+    law02_johnson_cook.solid_update(mat, sig, deps, epsp, 0.0)
+    assert np.all(np.isfinite(sig))
+
+    # Test tiny dt = 1e-25: dt_safe = max(dt, 1e-20) guards against division by zero
+    law02_johnson_cook.solid_update(mat, sig, deps, epsp, 1e-25)
+    assert np.all(np.isfinite(sig))
+

@@ -265,3 +265,19 @@ def test_sound_speed_and_tangent():
     c11 = params.bulk + (4.0 / 3.0) * params.g
     assert math.isclose(d_e[0, 0], c11, rel_tol=1.0e-9)
     assert math.isclose(d_e[3, 3], params.g, rel_tol=1.0e-9)
+
+
+def test_strain_rate_quasi_static_floor():
+    """BUG-MAT-02: verify strain rate floor (1e-6) for quasi-static loading (eps_dot=0)."""
+    a0 = 250.0
+    m3 = 0.08  # positive strain rate sensitivity
+    eps = 0.1
+    # At quasi-static rate eps_dot = 0.0, rate is floored at 1e-6 instead of resulting in 0 flow stress
+    sig_quasi = compute_hensel_spittel_flow_stress(
+        a0, 0.0, 0.1, m3, 0.0, 0.0, 0.0, eps, eps_dot=0.0, temp=293.15
+    )
+    assert sig_quasi > 0.0
+    expected_rate_factor = (1e-6) ** m3
+    expected_sig = a0 * (eps ** 0.1) * expected_rate_factor
+    assert math.isclose(sig_quasi, expected_sig, rel_tol=1.0e-6)
+
