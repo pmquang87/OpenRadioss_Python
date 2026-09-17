@@ -166,11 +166,17 @@ def test_bric20_characteristic_length_and_courant_step():
     lc = solid_bric20._char_length(group.state["vol0"])
     assert lc[0] == pytest.approx(1.0, rel=1e-12)
 
-    # Sound speed = sqrt(E / rho0) = 100 m/s
-    c_sound = np.sqrt(1.0e7 / 1000.0)
-    # dt_crit = dtfac * lc / c_sound = 0.5 * 1.0 / 100.0 = 0.005 s
+    # 3D dilatational sound speed = sqrt((K + 4G/3) / rho0) per h8for.F
+    # For E = 1e7, nu = 0.25: K = 1e7/(3*0.5) = 2e7/3, G = 1e7/(2*1.25) = 4e6
+    # K + 4G/3 = 1.2 * E = 1.2e7 Pa
+    # c_sound = sqrt(1.2e7 / 1000.0) = sqrt(12000) ~= 109.5445 m/s
+    # dt_crit = dtfac * lc / c_sound = 0.5 * 1.0 / 109.5445 ~= 0.00456435 s
+    K = 1.0e7 / (3.0 * (1.0 - 2.0 * 0.25))
+    G = 1.0e7 / (2.0 * (1.0 + 0.25))
+    c_sound = np.sqrt((K + 4.0 * G / 3.0) / 1000.0)
+    dt_expected = 0.5 * lc[0] / c_sound
     dt_crit = solid_bric20.forces(group, model.x0, model.v, model.vr, 0.0, None, None)
-    assert dt_crit[0] == pytest.approx(0.005, rel=1e-6)
+    assert dt_crit[0] == pytest.approx(dt_expected, rel=1e-6)
 
 
 # ----------------------------------------------------------------------------
