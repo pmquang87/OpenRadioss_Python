@@ -1108,6 +1108,8 @@ def consistent_solid_tangent(
     epsp_incr: Optional[np.ndarray] = None,
     extra: Optional[Dict[str, Any]] = None,
     dt: Optional[float] = None,
+    deps: Optional[np.ndarray] = None,
+    **kwargs: Any,
 ) -> np.ndarray:
     """Return the (n, 6, 6) or (6, 6) consistent tangent for LAW71 solids.
 
@@ -1125,9 +1127,11 @@ def consistent_solid_tangent(
     epsp, epsp_incr : optional
         Plastic strain / phase fraction views.
     extra : dict, optional
-        Extra state containing uv71.
+        Extra state containing uv71 or uvar.
     dt : float, optional
         Time step.
+    deps : ndarray, optional
+        Strain increment.
 
     Returns
     -------
@@ -1149,12 +1153,14 @@ def consistent_solid_tangent(
     n = sig.shape[0] if (sig is not None and sig.ndim > 1) else 1
 
     fm = np.zeros(n, dtype=float)
-    if extra is not None and isinstance(extra, dict) and "uv71" in extra and extra["uv71"] is not None:
-        u = np.asarray(extra["uv71"])
-        if u.ndim == 2:
-            fm[:min(n, u.shape[0])] = u[:min(n, u.shape[0]), 0]
-        elif u.ndim == 1 and u.size > 0:
-            fm[:] = u[0]
+    if extra is not None and isinstance(extra, dict):
+        u = extra.get("uv71") if "uv71" in extra else extra.get("uvar")
+        if u is not None:
+            u_arr = np.asarray(u)
+            if u_arr.ndim == 2:
+                fm[:min(n, u_arr.shape[0])] = u_arr[:min(n, u_arr.shape[0]), 0]
+            elif u_arr.ndim == 1 and u_arr.size > 0:
+                fm[:] = u_arr[0]
     elif epsp is not None:
         e_arr = np.asarray(epsp)
         if e_arr.ndim >= 1 and len(e_arr) == n:
@@ -1225,13 +1231,17 @@ def consistent_shell_tangent(
     epsp_incr: Optional[np.ndarray] = None,
     extra: Optional[Dict[str, Any]] = None,
     dt: Optional[float] = None,
+    deps: Optional[np.ndarray] = None,
+    **kwargs: Any,
 ) -> np.ndarray:
     """(n, 3, 3) or (3, 3) plane-stress consistent tangent for LAW71 shells."""
     fm_val = 0.0
-    if extra is not None and isinstance(extra, dict) and "uv71" in extra and extra["uv71"] is not None:
-        u = np.asarray(extra["uv71"])
-        if u.ndim >= 1 and u.size > 0:
-            fm_val = float(u.reshape(-1)[0])
+    if extra is not None and isinstance(extra, dict):
+        u = extra.get("uv71") if "uv71" in extra else extra.get("uvar")
+        if u is not None:
+            u_arr = np.asarray(u)
+            if u_arr.ndim >= 1 and u_arr.size > 0:
+                fm_val = float(u_arr.reshape(-1)[0])
     elif epsp is not None:
         try:
             fm_val = float(np.asarray(epsp).reshape(-1)[0])
