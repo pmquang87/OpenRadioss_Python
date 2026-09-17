@@ -101,7 +101,7 @@ from .entities import (
     FailFabric, FailHoffman, FailMaxStrain, FailTsaiHill, FailTsaiWu, PropType6, LoadCload, LoadPload,
     MatLaw114, MatLaw117, MatLaw119, MatLaw120, MatLaw121, PropType26, PropType27,
     MatLaw50, MatLaw57, MatLaw87, MatLaw95, MatLaw163, MatLaw169,
-    MatLaw49, MatLaw76, PropType11, PropSandwLayer, PropType16, PropFabricLayer, PropType17, PropType44,
+    MatLaw49, MatLaw76, PropType11, PropSandwLayer, PropType16, PropFabricLayer, PropType17, PropType19, PropType44,
     MatLaw60, MatLaw63, MatLaw48, MatLaw26, PropType12, PropType15, PropStrandLayer, PropType28,
     MatLaw6, MatLaw11, MatLaw77, MatLaw77Curve, MatLaw151, MatMultiFluidFraction, MatLaw187, MatLaw187Rate, PropType33, PropType46, PropType35,
     MatLaw3, MatLaw4, MatLaw5, MatLaw10, MatLaw14, MatLaw21, MatLaw32, MatLaw37, PropType45, PropType36,
@@ -1148,6 +1148,7 @@ class Model:
         self.prop_type11s: Dict[int, PropType11] = {}               # /PROP/TYPE11, /PROP/SH_SANDW (M184)
         self.prop_type16s: Dict[int, PropType16] = {}               # /PROP/TYPE16, /PROP/SH_FABR (M184)
         self.prop_type17s: Dict[int, PropType17] = {}               # /PROP/TYPE17, /PROP/STACK (M184)
+        self.prop_type19s: Dict[int, PropType19] = {}               # /PROP/TYPE19, /PROP/SPR_TORS
         self.prop_type44s: Dict[int, PropType44] = {}               # /PROP/TYPE44, /PROP/SPR_CRUS (M184)
         self.mat_law60s: Dict[int, MatLaw60] = {}                   # /MAT/LAW60, /MAT/PLAS_T3 (M185)
         self.mat_law26s: Dict[int, MatLaw26] = {}                   # /MAT/LAW26, /MAT/SESAM (M185)
@@ -1509,6 +1510,7 @@ class Model:
         self.heat_rad_cavs: Dict[int, Any] = {}                      # /HEAT/RAD_CAV (M205)
         self.props_type19: Dict[int, Any] = {}                       # /PROP/TYPE19, /PROP/SPR_TORS (M205)
         self.props_spr_tors = self.props_type19
+        self.prop_type19s = self.props_type19
         self.props_type20: Dict[int, Any] = {}                       # /PROP/TYPE20, /PROP/SPR_BEND (M205)
         self.props_spr_bend = self.props_type20
         self.pblasts = self.pblast_loads

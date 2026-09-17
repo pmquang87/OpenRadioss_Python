@@ -36339,95 +36339,185 @@ def read_mat_law76(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     iform, iflag, gflag = 0, 0, 0
 
     if block.fixed:
-        f1 = valid_cards[0].cut("MAT_LAW76_1")
-        rho = _fval(f1[0]) if len(f1) > 0 else 0.0
-        refer_rho = _fval(f1[1]) if len(f1) > 1 else 0.0
+        if len(valid_cards) >= 8:
+            f1 = valid_cards[0].cut("MAT_LAW76_1")
+            rho = _fval(f1[0]) if len(f1) > 0 else 0.0
+            refer_rho = _fval(f1[1]) if len(f1) > 1 else 0.0
 
-        if len(valid_cards) > 1:
             f2 = valid_cards[1].cut("MAT_LAW76_2")
             e = _fval(f2[0]) if len(f2) > 0 else 0.0
             nu = _fval(f2[1]) if len(f2) > 1 else 0.0
 
-        if len(valid_cards) > 2:
-            f3 = valid_cards[2].cut("MAT_LAW76_3")
+            f3 = valid_cards[2].cut([10, 10, 10, 10])
             fun_d1 = _ival(f3[0]) if len(f3) > 0 else 0
             fun_d2 = _ival(f3[1]) if len(f3) > 1 else 0
             fun_d3 = _ival(f3[2]) if len(f3) > 2 else 0
             fun_d4 = _ival(f3[3]) if len(f3) > 3 else 0
-            fscale11 = _fval(f3[4], 1.0) if len(f3) > 4 and f3[4].strip() else 1.0
-            fscale22 = _fval(f3[5], 1.0) if len(f3) > 5 and f3[5].strip() else 1.0
-            fscale33 = _fval(f3[6], 1.0) if len(f3) > 6 and f3[6].strip() else 1.0
 
-        if len(valid_cards) > 3:
-            f4 = valid_cards[3].cut("MAT_LAW76_4")
-            fscale12 = _fval(f4[0], 1.0) if len(f4) > 0 and f4[0].strip() else 1.0
-            facx = _fval(f4[1], 1.0) if len(f4) > 1 and f4[1].strip() else 1.0
-            mat_nut = _fval(f4[2]) if len(f4) > 2 else 0.0
-            fun_b5 = _ival(f4[3]) if len(f4) > 3 else 0
-            mat_pscale = _fval(f4[4], 1.0) if len(f4) > 4 and f4[4].strip() else 1.0
-            israte = _ival(f4[5]) if len(f4) > 5 else 0
-            asrate = _fval(f4[6]) if len(f4) > 6 else 0.0
+            f4 = valid_cards[3].cut([20, 20, 20, 20, 20])
+            fscale11 = _fval(f4[0], 1.0) if len(f4) > 0 and f4[0].strip() else 1.0
+            fscale22 = _fval(f4[1], 1.0) if len(f4) > 1 and f4[1].strip() else 1.0
+            fscale33 = _fval(f4[2], 1.0) if len(f4) > 2 and f4[2].strip() else 1.0
+            fscale12 = _fval(f4[3], 1.0) if len(f4) > 3 and f4[3].strip() else 1.0
+            facx = _fval(f4[4], 1.0) if len(f4) > 4 and f4[4].strip() else 1.0
 
-        if len(valid_cards) > 4:
-            f5 = valid_cards[4].cut("MAT_LAW76_5")
-            epsilon_f = _fval(f5[0]) if len(f5) > 0 else 0.0
-            epsilon_0 = _fval(f5[1]) if len(f5) > 1 else 0.0
-            dc = _fval(f5[2]) if len(f5) > 2 else 0.0
-            fun_a1 = _ival(f5[3]) if len(f5) > 3 else 0
-            fun_a2 = _ival(f5[4]) if len(f5) > 4 else 0
-            fun_a3 = _ival(f5[5]) if len(f5) > 5 else 0
-            scale = _fval(f5[6], 1.0) if len(f5) > 6 and f5[6].strip() else 1.0
+            f5 = valid_cards[4].cut([20, 10, 20, 10, 20])
+            mat_nut = _fval(f5[0]) if len(f5) > 0 else 0.0
+            fun_b5 = _ival(f5[1]) if len(f5) > 1 else 0
+            mat_pscale = _fval(f5[2], 1.0) if len(f5) > 2 and f5[2].strip() else 1.0
+            israte = _ival(f5[3]) if len(f5) > 3 else 0
+            asrate = _fval(f5[4]) if len(f5) > 4 else 0.0
 
-        if len(valid_cards) > 5:
-            f6 = valid_cards[5].cut("MAT_LAW76_6")
-            iform = _ival(f6[0]) if len(f6) > 0 else 0
-            iflag = _ival(f6[1]) if len(f6) > 1 else 0
-            gflag = _ival(f6[2]) if len(f6) > 2 else 0
+            f6 = valid_cards[5].cut([20, 20, 20])
+            epsilon_f = _fval(f6[0]) if len(f6) > 0 else 0.0
+            epsilon_0 = _fval(f6[1]) if len(f6) > 1 else 0.0
+            dc = _fval(f6[2]) if len(f6) > 2 else 0.0
+
+            f7 = valid_cards[6].cut([10, 10, 10, 20])
+            fun_a1 = _ival(f7[0]) if len(f7) > 0 else 0
+            fun_a2 = _ival(f7[1]) if len(f7) > 1 else 0
+            fun_a3 = _ival(f7[2]) if len(f7) > 2 else 0
+            scale = _fval(f7[3], 1.0) if len(f7) > 3 and f7[3].strip() else 1.0
+
+            f8 = valid_cards[7].cut([10, 10, 10])
+            iform = _ival(f8[0]) if len(f8) > 0 else 0
+            iflag = _ival(f8[1]) if len(f8) > 1 else 0
+            gflag = _ival(f8[2]) if len(f8) > 2 else 0
+        else:
+            f1 = valid_cards[0].cut("MAT_LAW76_1")
+            rho = _fval(f1[0]) if len(f1) > 0 else 0.0
+            refer_rho = _fval(f1[1]) if len(f1) > 1 else 0.0
+
+            if len(valid_cards) > 1:
+                f2 = valid_cards[1].cut("MAT_LAW76_2")
+                e = _fval(f2[0]) if len(f2) > 0 else 0.0
+                nu = _fval(f2[1]) if len(f2) > 1 else 0.0
+
+            if len(valid_cards) > 2:
+                f3 = valid_cards[2].cut("MAT_LAW76_3")
+                fun_d1 = _ival(f3[0]) if len(f3) > 0 else 0
+                fun_d2 = _ival(f3[1]) if len(f3) > 1 else 0
+                fun_d3 = _ival(f3[2]) if len(f3) > 2 else 0
+                fun_d4 = _ival(f3[3]) if len(f3) > 3 else 0
+                fscale11 = _fval(f3[4], 1.0) if len(f3) > 4 and f3[4].strip() else 1.0
+                fscale22 = _fval(f3[5], 1.0) if len(f3) > 5 and f3[5].strip() else 1.0
+                fscale33 = _fval(f3[6], 1.0) if len(f3) > 6 and f3[6].strip() else 1.0
+
+            if len(valid_cards) > 3:
+                f4 = valid_cards[3].cut("MAT_LAW76_4")
+                fscale12 = _fval(f4[0], 1.0) if len(f4) > 0 and f4[0].strip() else 1.0
+                facx = _fval(f4[1], 1.0) if len(f4) > 1 and f4[1].strip() else 1.0
+                mat_nut = _fval(f4[2]) if len(f4) > 2 else 0.0
+                fun_b5 = _ival(f4[3]) if len(f4) > 3 else 0
+                mat_pscale = _fval(f4[4], 1.0) if len(f4) > 4 and f4[4].strip() else 1.0
+                israte = _ival(f4[5]) if len(f4) > 5 else 0
+                asrate = _fval(f4[6]) if len(f4) > 6 else 0.0
+
+            if len(valid_cards) > 4:
+                f5 = valid_cards[4].cut("MAT_LAW76_5")
+                epsilon_f = _fval(f5[0]) if len(f5) > 0 else 0.0
+                epsilon_0 = _fval(f5[1]) if len(f5) > 1 else 0.0
+                dc = _fval(f5[2]) if len(f5) > 2 else 0.0
+                fun_a1 = _ival(f5[3]) if len(f5) > 3 else 0
+                fun_a2 = _ival(f5[4]) if len(f5) > 4 else 0
+                fun_a3 = _ival(f5[5]) if len(f5) > 5 else 0
+                scale = _fval(f5[6], 1.0) if len(f5) > 6 and f5[6].strip() else 1.0
+
+            if len(valid_cards) > 5:
+                f6 = valid_cards[5].cut("MAT_LAW76_6")
+                iform = _ival(f6[0]) if len(f6) > 0 else 0
+                iflag = _ival(f6[1]) if len(f6) > 1 else 0
+                gflag = _ival(f6[2]) if len(f6) > 2 else 0
     else:
-        toks1 = valid_cards[0].tokens()
-        rho = float(toks1[0]) if len(toks1) > 0 else 0.0
-        refer_rho = float(toks1[1]) if len(toks1) > 1 else 0.0
+        if len(valid_cards) >= 8:
+            toks1 = valid_cards[0].tokens()
+            rho = float(toks1[0]) if len(toks1) > 0 else 0.0
+            refer_rho = float(toks1[1]) if len(toks1) > 1 else 0.0
 
-        if len(valid_cards) > 1:
             toks2 = valid_cards[1].tokens()
             e = float(toks2[0]) if len(toks2) > 0 else 0.0
             nu = float(toks2[1]) if len(toks2) > 1 else 0.0
 
-        if len(valid_cards) > 2:
             toks3 = valid_cards[2].tokens()
             fun_d1 = int(float(toks3[0])) if len(toks3) > 0 else 0
             fun_d2 = int(float(toks3[1])) if len(toks3) > 1 else 0
             fun_d3 = int(float(toks3[2])) if len(toks3) > 2 else 0
             fun_d4 = int(float(toks3[3])) if len(toks3) > 3 else 0
-            fscale11 = float(toks3[4]) if len(toks3) > 4 else 1.0
-            fscale22 = float(toks3[5]) if len(toks3) > 5 else 1.0
-            fscale33 = float(toks3[6]) if len(toks3) > 6 else 1.0
 
-        if len(valid_cards) > 3:
             toks4 = valid_cards[3].tokens()
-            fscale12 = float(toks4[0]) if len(toks4) > 0 else 1.0
-            facx = float(toks4[1]) if len(toks4) > 1 else 1.0
-            mat_nut = float(toks4[2]) if len(toks4) > 2 else 0.0
-            fun_b5 = int(float(toks4[3])) if len(toks4) > 3 else 0
-            mat_pscale = float(toks4[4]) if len(toks4) > 4 else 1.0
-            israte = int(float(toks4[5])) if len(toks4) > 5 else 0
-            asrate = float(toks4[6]) if len(toks4) > 6 else 0.0
+            fscale11 = float(toks4[0]) if len(toks4) > 0 else 1.0
+            fscale22 = float(toks4[1]) if len(toks4) > 1 else 1.0
+            fscale33 = float(toks4[2]) if len(toks4) > 2 else 1.0
+            fscale12 = float(toks4[3]) if len(toks4) > 3 else 1.0
+            facx = float(toks4[4]) if len(toks4) > 4 else 1.0
 
-        if len(valid_cards) > 4:
             toks5 = valid_cards[4].tokens()
-            epsilon_f = float(toks5[0]) if len(toks5) > 0 else 0.0
-            epsilon_0 = float(toks5[1]) if len(toks5) > 1 else 0.0
-            dc = float(toks5[2]) if len(toks5) > 2 else 0.0
-            fun_a1 = int(float(toks5[3])) if len(toks5) > 3 else 0
-            fun_a2 = int(float(toks5[4])) if len(toks5) > 4 else 0
-            fun_a3 = int(float(toks5[5])) if len(toks5) > 5 else 0
-            scale = float(toks5[6]) if len(toks5) > 6 else 1.0
+            mat_nut = float(toks5[0]) if len(toks5) > 0 else 0.0
+            fun_b5 = int(float(toks5[1])) if len(toks5) > 1 else 0
+            mat_pscale = float(toks5[2]) if len(toks5) > 2 else 1.0
+            israte = int(float(toks5[3])) if len(toks5) > 3 else 0
+            asrate = float(toks5[4]) if len(toks5) > 4 else 0.0
 
-        if len(valid_cards) > 5:
             toks6 = valid_cards[5].tokens()
-            iform = int(float(toks6[0])) if len(toks6) > 0 else 0
-            iflag = int(float(toks6[1])) if len(toks6) > 1 else 0
-            gflag = int(float(toks6[2])) if len(toks6) > 2 else 0
+            epsilon_f = float(toks6[0]) if len(toks6) > 0 else 0.0
+            epsilon_0 = float(toks6[1]) if len(toks6) > 1 else 0.0
+            dc = float(toks6[2]) if len(toks6) > 2 else 0.0
+
+            toks7 = valid_cards[6].tokens()
+            fun_a1 = int(float(toks7[0])) if len(toks7) > 0 else 0
+            fun_a2 = int(float(toks7[1])) if len(toks7) > 1 else 0
+            fun_a3 = int(float(toks7[2])) if len(toks7) > 2 else 0
+            scale = float(toks7[3]) if len(toks7) > 3 else 1.0
+
+            toks8 = valid_cards[7].tokens()
+            iform = int(float(toks8[0])) if len(toks8) > 0 else 0
+            iflag = int(float(toks8[1])) if len(toks8) > 1 else 0
+            gflag = int(float(toks8[2])) if len(toks8) > 2 else 0
+        else:
+            toks1 = valid_cards[0].tokens()
+            rho = float(toks1[0]) if len(toks1) > 0 else 0.0
+            refer_rho = float(toks1[1]) if len(toks1) > 1 else 0.0
+
+            if len(valid_cards) > 1:
+                toks2 = valid_cards[1].tokens()
+                e = float(toks2[0]) if len(toks2) > 0 else 0.0
+                nu = float(toks2[1]) if len(toks2) > 1 else 0.0
+
+            if len(valid_cards) > 2:
+                toks3 = valid_cards[2].tokens()
+                fun_d1 = int(float(toks3[0])) if len(toks3) > 0 else 0
+                fun_d2 = int(float(toks3[1])) if len(toks3) > 1 else 0
+                fun_d3 = int(float(toks3[2])) if len(toks3) > 2 else 0
+                fun_d4 = int(float(toks3[3])) if len(toks3) > 3 else 0
+                fscale11 = float(toks3[4]) if len(toks3) > 4 else 1.0
+                fscale22 = float(toks3[5]) if len(toks3) > 5 else 1.0
+                fscale33 = float(toks3[6]) if len(toks3) > 6 else 1.0
+
+            if len(valid_cards) > 3:
+                toks4 = valid_cards[3].tokens()
+                fscale12 = float(toks4[0]) if len(toks4) > 0 else 1.0
+                facx = float(toks4[1]) if len(toks4) > 1 else 1.0
+                mat_nut = float(toks4[2]) if len(toks4) > 2 else 0.0
+                fun_b5 = int(float(toks4[3])) if len(toks4) > 3 else 0
+                mat_pscale = float(toks4[4]) if len(toks4) > 4 else 1.0
+                israte = int(float(toks4[5])) if len(toks4) > 5 else 0
+                asrate = float(toks4[6]) if len(toks4) > 6 else 0.0
+
+            if len(valid_cards) > 4:
+                toks5 = valid_cards[4].tokens()
+                epsilon_f = float(toks5[0]) if len(toks5) > 0 else 0.0
+                epsilon_0 = float(toks5[1]) if len(toks5) > 1 else 0.0
+                dc = float(toks5[2]) if len(toks5) > 2 else 0.0
+                fun_a1 = int(float(toks5[3])) if len(toks5) > 3 else 0
+                fun_a2 = int(float(toks5[4])) if len(toks5) > 4 else 0
+                fun_a3 = int(float(toks5[5])) if len(toks5) > 5 else 0
+                scale = float(toks5[6]) if len(toks5) > 6 else 1.0
+
+            if len(valid_cards) > 5:
+                toks6 = valid_cards[5].tokens()
+                iform = int(float(toks6[0])) if len(toks6) > 0 else 0
+                iflag = int(float(toks6[1])) if len(toks6) > 1 else 0
+                gflag = int(float(toks6[2])) if len(toks6) > 2 else 0
 
     m76 = MatLaw76(
         id=mat_id, rho=rho, refer_rho=refer_rho, e=e, nu=nu,
@@ -36834,39 +36924,7 @@ def read_prop_type17(block: KeywordBlock, model: Model, log: MessageLog) -> None
     )
 
 
-def read_prop_type19(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/PROP/TYPE19/id`` or ``/PROP/SPR_TORS/id``: Torsion spring property."""
-    from ..model.entities import PropType19, Property
-    prop_id = block.user_id or 0
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
-    if not valid_cards:
-        log.error(f"/PROP/TYPE19/{prop_id}: missing data card", block.source)
-        return
 
-    mass, inertia, k_theta, c_theta = 0.0, 0.0, 0.0, 0.0
-    toks = valid_cards[0].tokens()
-    if len(toks) > 0:
-        mass = _safe_float(toks[0])
-    if len(toks) > 1:
-        inertia = _safe_float(toks[1])
-    if len(toks) > 2:
-        k_theta = _safe_float(toks[2])
-    if len(toks) > 3:
-        c_theta = _safe_float(toks[3])
-
-    p19 = PropType19(
-        id=prop_id, mass=mass, inertia=inertia, k_theta=k_theta, c_theta=c_theta,
-        title=title,
-    )
-    model.prop_type19s[prop_id] = p19
-    model.properties[prop_id] = Property(
-        id=prop_id, type=19, title=title,
-        params={
-            "mass": mass, "inertia": inertia, "k_theta": k_theta, "c_theta": c_theta,
-            "k": k_theta, "c": c_theta,
-        }
-    )
 
 
 def read_prop_type44(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -42219,6 +42277,7 @@ def read_prop_type19(block: KeywordBlock, model: Model, log: MessageLog) -> None
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
     mass, k, c, fcut = 0.0, 0.0, 0.0, 0.0
+    inertia = 0.0
     if valid_cards:
         if block.fixed:
             f = valid_cards[0].cut("PROP_TYPE19_1")
@@ -42227,15 +42286,22 @@ def read_prop_type19(block: KeywordBlock, model: Model, log: MessageLog) -> None
             c = _fval(f[2], 0.0) if len(f) > 2 else 0.0
         else:
             t = valid_cards[0].tokens()
-            mass = float(t[0]) if len(t) > 0 else 0.0
-            k = float(t[1]) if len(t) > 1 else 0.0
-            c = float(t[2]) if len(t) > 2 else 0.0
-    prop = PropSpringTors(id=prop_id, title=title, mass=mass, stiffness_k=k, damping_c=c, fcut=fcut)
+            if len(t) >= 4:
+                mass = float(t[0])
+                inertia = float(t[1])
+                k = float(t[2])
+                c = float(t[3])
+            else:
+                mass = float(t[0]) if len(t) > 0 else 0.0
+                k = float(t[1]) if len(t) > 1 else 0.0
+                c = float(t[2]) if len(t) > 2 else 0.0
+    prop = PropSpringTors(id=prop_id, title=title, mass=mass, stiffness_k=k, damping_c=c, fcut=fcut, inertia=inertia)
     model.props_type19[prop_id] = prop
+    model.prop_type19s[prop_id] = prop
     model.properties[prop_id] = Property(
         id=prop_id, type=19, title=title,
-        params={"mass": mass, "stiffness_k": k, "damping_c": c, "fcut": fcut,
-                "k_tors": k, "c_tors": c, "k": k, "c": c}
+        params={"mass": mass, "inertia": inertia, "stiffness_k": k, "damping_c": c, "fcut": fcut,
+                "k_tors": k, "c_tors": c, "k_theta": k, "c_theta": c, "k": k, "c": c}
     )
 
 

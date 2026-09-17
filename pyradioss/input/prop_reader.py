@@ -51,6 +51,7 @@ PROP_TYPE_NUMBERS: Dict[str, int] = {
     "STACK": 17, "INT_BEAM": 18, "TSHELL": 20, "TSH_ORTH": 21, "TSH_COMP": 22,
     "SPR_MAT": 23, "HEXA20": 23, "BRIC20": 23, "TYPE23": 23, "SPR_AXI": 25, "SPR_TAB": 26, "SPR_BDAMP": 27, "NSTRAND": 28,
     "SPR_PRE": 32, "KJOINT": 33, "SPH": 34, "STITCH": 35, "PREDIT": 36,
+    "SPR_TORS": 19, "TYPE19": 19, "TORSION": 19,
     "CONNECT": 43, "SPR_CRUS": 44, "KJOINT2": 45, "SPR_MUSCLE": 46,
     "PLY_STACK": 51, "TYPE51": 51, "PCOMPP": 52, "FLUID": 6,
 }
@@ -92,7 +93,7 @@ def prop_type_ok(req_prop: int, prop: Property) -> bool:
         return True
     if req_prop == 1 and pt in (9, 16):
         return True
-    if req_prop == 4 and pt in (8, 12, 13, 23, 25, 26, 27, 32, 35, 36, 44, 45, 46):
+    if req_prop == 4 and pt in (8, 12, 13, 19, 23, 25, 26, 27, 32, 35, 36, 44, 45, 46):
         return True
     if req_prop == 14 and pt in (20, 21, 22, 23, 43):
         return True
@@ -722,7 +723,11 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
         return parse_stitch(block, log)
     if typename in ("PREDIT", "TYPE36"):
         return parse_predit(block, log)
-    if typename in ("SPR_MUSCLE", "TYPE46"):
+    if typename in ("SPR_TORS", "TYPE19", "TORSION"):
+        return parse_spr_tors(block, log)
+    if typename in ("SPR_CRUS", "TYPE44", "CRUSH_SPRING", "SPRING_CRUSH"):
+        return parse_spr_crus(block, log)
+    if typename in ("SPR_MUSCLE", "TYPE46", "MUSCLE"):
         return parse_spr_muscle(block, log)
     # ---- everything else: parse-only + inactive ----------------------------
     title, _cards, _fixed = _data_cards(block)
@@ -868,6 +873,70 @@ def parse_predit(block: KeywordBlock, log: MessageLog) -> Property:
         params.update({"itype_sub": itype_sub, "p1": p1, "p2": p2, "p3": p3, "p4": p4, "p5": p5})
 
     return Property(id=block.user_id, type=36, title=title, params=params)
+
+
+def parse_spr_tors(block: KeywordBlock, log: MessageLog) -> Property:
+    """/PROP/TYPE19 or /PROP/SPR_TORS: Torsion spring property."""
+    title, cards, fixed = _data_cards(block)
+    params = _universal_geo_params()
+    mass = 0.0
+    inertia = 0.0
+    k_theta = 0.0
+    c_theta = 0.0
+    if cards and not cards[0].is_blank:
+        toks = cards[0].tokens()
+        if len(toks) > 0:
+            mass = _fv(toks[0])
+        if len(toks) > 1:
+            inertia = _fv(toks[1])
+        if len(toks) > 2:
+            k_theta = _fv(toks[2])
+        if len(toks) > 3:
+            c_theta = _fv(toks[3])
+    params.update({
+        "mass": mass, "inertia": inertia, "k_theta": k_theta, "c_theta": c_theta,
+        "k": k_theta, "c": c_theta,
+    })
+    return Property(id=block.user_id, type=19, title=title, params=params)
+
+
+def parse_spr_crus(block: KeywordBlock, log: MessageLog) -> Property:
+    """/PROP/TYPE44 or /PROP/SPR_CRUS: Crushing frame spring property."""
+    title, cards, fixed = _data_cards(block)
+    params = _universal_geo_params()
+    mass = 0.0
+    inertia = 0.0
+    stiff1 = 0.0
+    k11 = 0.0
+    f_yield = 0.0
+    k_unload = 0.0
+    delta_crush = 0.0
+    c = 0.0
+    fun_a1 = 0
+    fun_b1 = 0
+    fun_a2 = 0
+    if len(cards) > 0 and not cards[0].is_blank:
+        t0 = cards[0].tokens()
+        mass = _fv(t0[0]) if len(t0) > 0 else 0.0
+        inertia = _fv(t0[1]) if len(t0) > 1 else 0.0
+        stiff1 = _fv(t0[2]) if len(t0) > 2 else 0.0
+    if len(cards) > 1 and not cards[1].is_blank:
+        t1 = cards[1].tokens()
+        k11 = _fv(t1[0]) if len(t1) > 0 else 0.0
+        k_unload = k11
+    if len(cards) > 3 and not cards[3].is_blank:
+        t3 = cards[3].tokens()
+        fun_a1 = _iv(t3[0]) if len(t3) > 0 else 0
+        fun_b1 = _iv(t3[1]) if len(t3) > 1 else 0
+        fun_a2 = _iv(t3[2]) if len(t3) > 2 else 0
+    params.update({
+        "mass": mass, "inertia": inertia, "stiff1": stiff1, "k11": k11,
+        "k_unload": k_unload if k_unload > 0 else stiff1,
+        "k": k11 if k11 > 0 else stiff1,
+        "f_yield": f_yield, "delta_crush": delta_crush, "c": c,
+        "fun_a1": fun_a1, "fun_b1": fun_b1, "fun_a2": fun_a2,
+    })
+    return Property(id=block.user_id, type=44, title=title, params=params)
 
 
 def parse_spr_muscle(block: KeywordBlock, log: MessageLog) -> Property:

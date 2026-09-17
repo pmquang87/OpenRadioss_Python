@@ -19458,6 +19458,7 @@ class PropSpringTors:
     stiffness_k: float = 0.0
     damping_c: float = 0.0
     fcut: float = 0.0
+    inertia: float = 0.0
 
     @property
     def k(self) -> float:
@@ -19465,6 +19466,14 @@ class PropSpringTors:
 
     @property
     def c(self) -> float:
+        return self.damping_c
+
+    @property
+    def k_theta(self) -> float:
+        return self.stiffness_k
+
+    @property
+    def c_theta(self) -> float:
         return self.damping_c
 
 

@@ -29,7 +29,7 @@ where internal forces enter negated).
 
 from . import (beam_type3, shell_bt4, shell_dkt18, shell_qbat, shell_qeph,  # noqa: F401
                shell_thick16, shell_tri3, solid_bric20, solid_heph, solid_hexa8, solid_quad,
-               solid_tetra10, solid_tetra4, solid_tshell8, spring, truss)
+               solid_tetra10, solid_tetra4, solid_tshell8, spring, spring_advanced, truss)
 
 KERNELS = {
     "bricks": solid_hexa8,
@@ -47,6 +47,8 @@ KERNELS = {
     "shel16s": shell_thick16,
     "trusses": truss,
     "springs": spring,
+    "spring_advanced": spring_advanced,
+    "springs_advanced": spring_advanced,
     "beams": beam_type3,
 }
 
