@@ -58,7 +58,7 @@ node spends being arrested and vanishes with dt).
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 
@@ -136,3 +136,121 @@ class Dampers:
                             * (inertia[ir, None] * vr[ir] ** 2).sum())
                 vr[ir] *= fac
         return de
+
+
+class DynamicRelaxation:
+    """Dynamic Relaxation solver controls (/DYREL, /KEREL).
+
+    Fortran origin: ``engine/source/general_controls/damping/static.F`` (subroutine
+    ``STATIC`` called from ``resol.F:7321``).
+
+    Supports:
+    1. /DYREL (ISTAT=1): Viscous relaxation damping on velocities matching static.F:
+           omega = betate * dt
+           omega2 = max(0.0, (1.0 - 2.0 * omega) ** 2)
+           v *= (1.0 - 2.0 * omega)
+       Dissipated energy is booked exactly into DE (damping dissipation).
+    2. /KEREL (ISTAT=2): Kinetic energy peak zeroing. Monitors the system kinetic
+       energy on the relaxation node group; when a peak is detected (ke < ke_prev),
+       all velocities on the group are reset to zero, freezing the structure at
+       the static equilibrium point.
+    """
+
+    def __init__(self, model: Model, controls, log=None):
+        self.model = model
+        self.controls = controls
+        self.log = log
+
+        self.dyrel_active = bool(getattr(controls, "dyrel_active", False))
+        self.dyrel_beta = float(getattr(controls, "dyrel_beta", 1.0))
+        self.dyrel_period = float(getattr(controls, "dyrel_period", 0.0))
+        self.dyrel_istatg = int(getattr(controls, "dyrel_istatg", 0))
+
+        if self.dyrel_period > 0.0:
+            self.betate = self.dyrel_beta / self.dyrel_period
+        else:
+            self.betate = self.dyrel_beta
+
+        self.kerel_active = bool(getattr(controls, "kerel_active", False))
+        self.kerel_tstart = float(getattr(controls, "kerel_tstart", 0.0))
+        self.kerel_tstop = float(getattr(controls, "kerel_tstop", 0.0))
+        if self.kerel_tstop <= 0.0:
+            self.kerel_tstop = float(getattr(controls, "t_end", 0.0) or 1e30)
+        self.kerel_istatg = int(getattr(controls, "kerel_istatg", 0))
+
+        self.ke_prev = 0.0
+
+        self.dyrel_idx = self._resolve_nodes(self.dyrel_istatg)
+        self.kerel_idx = self._resolve_nodes(self.kerel_istatg)
+
+        if log is not None:
+            if self.dyrel_active:
+                log.info(f"     /DYREL: BETA = {self.dyrel_beta:g}, "
+                         f"PERIOD = {self.dyrel_period:g} (BETATE = {self.betate:12.5E}) "
+                         f"ON {len(self.dyrel_idx)} NODE(S)")
+            if self.kerel_active:
+                log.info(f"     /KEREL: ACTIVE {self.kerel_tstart:g} TO {self.kerel_tstop:g} "
+                         f"ON {len(self.kerel_idx)} NODE(S)")
+
+    def _resolve_nodes(self, istatg: int) -> np.ndarray:
+        if istatg != 0 and hasattr(self.model, "node_groups"):
+            target_id = abs(istatg)
+            g = self.model.node_groups.get(target_id) or self.model.node_groups.get(istatg)
+            if g is not None and getattr(g, "node_idx", None) is not None and len(g.node_idx) > 0:
+                idx = g.node_idx[self.model.mass[g.node_idx] < 1e29]
+                return idx
+        if hasattr(self.model, "mass") and self.model.mass is not None:
+            return np.where(self.model.mass < 1e29)[0]
+        n = getattr(self.model, "numnod", 0)
+        return np.arange(n, dtype=np.int64)
+
+    @property
+    def active(self) -> bool:
+        return bool(self.dyrel_active or self.kerel_active)
+
+    def __len__(self) -> int:
+        return 1 if self.active else 0
+
+    def apply(self, t: float, dt: float, v: np.ndarray, vr: Optional[np.ndarray],
+              mass: np.ndarray, inertia: Optional[np.ndarray]) -> float:
+        """Apply dynamic relaxation (DYREL and/or KEREL) and return dissipated energy."""
+        de = 0.0
+        if dt <= 0.0 or not self.active:
+            return de
+
+        # 1. /DYREL viscous relaxation damping
+        if self.dyrel_active and len(self.dyrel_idx) > 0:
+            idx = self.dyrel_idx
+            omega = self.betate * dt
+            fac = max(0.0, 1.0 - 2.0 * omega)
+            omega2 = fac * fac
+            de += float(0.5 * (1.0 - omega2) * np.sum(mass[idx, None] * (v[idx] ** 2)))
+            v[idx] *= fac
+            if vr is not None and inertia is not None:
+                has_in = inertia[idx] > 0.0
+                if np.any(has_in):
+                    ir = idx[has_in]
+                    de += float(0.5 * (1.0 - omega2) * np.sum(inertia[ir, None] * (vr[ir] ** 2)))
+                    vr[ir] *= fac
+
+        # 2. /KEREL kinetic energy peak zeroing
+        if self.kerel_active and (self.kerel_tstart <= t <= self.kerel_tstop) and len(self.kerel_idx) > 0:
+            idx = self.kerel_idx
+            ke = float(0.5 * np.sum(mass[idx, None] * (v[idx] ** 2)))
+            has_in = inertia is not None and vr is not None and (inertia[idx] > 0.0)
+            if vr is not None and inertia is not None and np.any(has_in):
+                ir = idx[has_in]
+                ke += float(0.5 * np.sum(inertia[ir, None] * (vr[ir] ** 2)))
+
+            if ke < self.ke_prev and self.ke_prev > 0.0:
+                # Kinetic energy peak detected!
+                v[idx] = 0.0
+                if vr is not None and inertia is not None and np.any(has_in):
+                    vr[ir] = 0.0
+                de += self.ke_prev
+                self.ke_prev = 0.0
+            else:
+                self.ke_prev = ke
+
+        return de
+

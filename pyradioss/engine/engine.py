@@ -62,7 +62,7 @@ from ..model.model import EngineControls, Model
 from ..output import TimeHistory, write_anim_state
 from ..starter.restart import read_restart, write_restart
 from .airbag import update_airbag_thermodynamics, update_airbag_volume, apply_airbag_forces
-from .damping import Dampers
+from .damping import Dampers, DynamicRelaxation
 from .kinematics import LoadsAndConstraints
 from .lagmul import LagmulSolver
 from .mass_scaling import NodalTimeStep
@@ -112,6 +112,30 @@ def _deleted_count(model: Model) -> int:
         if off is not None:
             ndel += int((off == 0.0).sum())
     return ndel
+
+
+def _matches_elem_dt_control(name: str, key: str) -> bool:
+    """Check if element group name matches /DT/<elem> keyword specification (M580)."""
+    k = key.upper()
+    if k in ("ELEM", "ALL"):
+        return True
+    if k in ("BRICK", "BRIC", "SOLID") and ("bric" in name or "hexa" in name or "heph" in name):
+        return True
+    if k in ("SHELL", "SHEL") and ("shel" in name or "sh3n" in name or "coque" in name):
+        return True
+    if k in ("SH3N", "TRI", "TRIA") and "sh3n" in name:
+        return True
+    if k in ("TETRA", "TETRA10", "TETRA4") and "tetra" in name:
+        return True
+    if k in ("QUAD",) and "quad" in name:
+        return True
+    if k in ("BEAM",) and "beam" in name:
+        return True
+    if k in ("TRUSS",) and "truss" in name:
+        return True
+    if k in ("SPRING",) and "spring" in name:
+        return True
+    return False
 
 
 def _element_energy_sum(model: Model) -> float:
@@ -335,6 +359,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     # motion a constraint prescribes carry no stability constraint of
     # their own (see engine/mass_scaling.py).
     dampers = Dampers(model, log)          # /DAMP   (M6)
+    dyn_relax = DynamicRelaxation(model, controls, log)  # /DYREL /KEREL
     sensors = Sensors(model, log)          # /SENSOR (M6)
     model.sensors_state = sensors
     for mat in model.materials.values():
@@ -416,6 +441,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             setattr(state, key, saved[key])
         state.dt_prev = saved.get("dt_prev", None)
         _energies.e0 = saved["e0"]
+        if saved.get("dyn_relax"):
+            dyn_relax.ke_prev = saved["dyn_relax"].get("ke_prev", 0.0)
         dt = saved["dt"]
         next_th = saved["next_th"]
         next_anim = saved["next_anim"]
@@ -515,6 +542,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                 "iner_added": noda.iner_added,
                 "mom_added": noda.mom_added.copy(), "mass0": noda.mass0,
                 "reported": noda._reported},
+            "dyn_relax": {"ke_prev": dyn_relax.ke_prev},
         }
 
     rst_path = os.path.join(out_dir, f"{run_name}_{run_num:04d}.rst")
@@ -590,6 +618,19 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         for name, group in model.element_groups():
             dt_e = KERNELS[name].forces(group, model.x, model.v, model.vr,
                                         dt, fint, mint)
+            # ---- M580: /DT/<elem>/DEL element time-step erosion (dtchk.F) --
+            if getattr(controls, "dt_controls", None):
+                for ctrl_key, ctrl in controls.dt_controls.items():
+                    if _matches_elem_dt_control(name, ctrl_key) and ctrl.get("action") == "DEL":
+                        dt_min = ctrl.get("dt_min", 0.0)
+                        if dt_min > 0.0 and hasattr(group, "state") and "off" in group.state:
+                            off = group.state["off"]
+                            del_mask = (off > 0.0) & (dt_e < dt_min)
+                            if np.any(del_mask):
+                                off[del_mask] = 0.0
+                                dt_e = dt_e.copy()
+                                dt_e[del_mask] = EP30
+                                state.ndel = getattr(state, "ndel", 0) + int(np.sum(del_mask))
             claims.append(dt_e)
             dt_next = min(dt_next, float(dt_e.min()))
 
@@ -718,6 +759,11 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             if getattr(model, "vr", None) is not None and vr_star is not None:
                 resid += float(np.einsum("nb,nb->", mint[di], 0.5 * (model.vr[di] - vr_star[di]))) * dt
             state.e_num += resid
+
+        # ---- 4c. dynamic relaxation (/DYREL /KEREL) -----------------------
+        if len(dyn_relax):
+            state.e_damp += dyn_relax.apply(state.t, dt12, model.v, model.vr,
+                                            model.mass, model.inertia)
 
         # ---- 5. kinematic conditions overwrite velocities -----------------
         # 5a. rigid bodies (/RBODY, /RBE2 — rbyfor/rbycor): gather the
