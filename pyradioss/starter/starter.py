@@ -66,6 +66,7 @@ def _listing_summary(model: Model, log: MessageLog) -> None:
     log.info(f"     NUMBER OF NODES . . . . . . . . . : {model.numnod}")
     counts = {
         "bricks": "BRICK", "bricks_heph": "BRICK", "tshells": "TSHELL", "bric20s": "BRIC20",
+        "penta6s": "PENTA6",
         "tetras": "TETRA4", "tetra10s": "TETRA10",
         "shells": "SHELL", "shells_qbat": "SHELL", "shells_qeph": "SHELL", "shel16s": "SHEL16",
         "quads": "QUAD", "sh3n": "SH3N", "sh3n_dkt18": "SH3N",

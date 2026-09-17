@@ -82,7 +82,7 @@ from .entities import (
     MaterialLaw117, MaterialLaw90, MaterialLaw33, MatHeatModifier, MatNonlocalModifier,
     MaterialLaw66, MatLaw66, MatPlasTabCosser, MatPlasCosser, MaterialLaw35, MaterialLaw62, MaterialLaw28, MaterialLaw44,
     MaterialLaw88, MaterialLaw92, MaterialLaw94, MaterialLaw95, MatBergstromBoyce, MaterialLaw46, MaterialLaw69,
-    MaterialLaw124, MaterialLaw126, MaterialLaw125, MaterialLaw127, MaterialLaw130,
+    MaterialLaw124, MaterialLaw126, MaterialLaw169, MaterialLaw125, MaterialLaw127, MaterialLaw130,
     MaterialLaw128, MaterialLaw129, MaterialLaw123, MaterialLaw132, MaterialLaw134,
     MaterialLaw104, MaterialLaw105, MatLaw105, MatPowderBurn, MaterialPowderBurn, MaterialLaw106,
     MaterialLaw107, MatLaw107, MatPaperLight, MatPlasPaperLight, MatPfeiffer,
@@ -722,11 +722,12 @@ class Model:
         self.beams: Optional[ElementGroup] = None     # /BEAM   (IXP)
         self.shel16s: Optional[ElementGroup] = None   # /SHEL16 (IXS16)
         self.bric20s: Optional[ElementGroup] = None   # /BRIC20 / /HEXA20 (M122)
+        self.penta6s: Optional[ElementGroup] = None   # /PENTA6 6-node wedge (M590)
         self.tshells: Optional[ElementGroup] = None   # /TSHELL / /PROP/TYPE20 (solid shell)
         # raw (id, part_id, node ids...) tuples collected during parsing,
         # converted to ElementGroups in Starter finalization:
         self.raw_elems: Dict[str, list] = {
-            "BRICK": [], "TSHELL": [], "QUAD": [], "TETRA4": [], "TETRA10": [], "SHELL": [], "SH3N": [],
+            "BRICK": [], "PENTA6": [], "TSHELL": [], "QUAD": [], "TETRA4": [], "TETRA10": [], "SHELL": [], "SH3N": [],
             "TRUSS": [], "SPRING": [], "BEAM": [], "SHEL16": [], "BRIC20": [], "HEXA20": [], "SPH": []}
 
         # ------------------------------------------------------------------
@@ -1100,6 +1101,8 @@ class Model:
         self.mat_law116s: Dict[int, MaterialLaw116] = {}           # /MAT/LAW116, /MAT/COH_HYST (M177)
         self.mat_law122s: Dict[int, MaterialLaw122] = {}           # /MAT/LAW122, /MAT/MODIFIED_LADEVEZE (M177)
         self.mat_law158s: Dict[int, MaterialLaw158] = {}           # /MAT/LAW158, /MAT/FABR_NL (M177)
+        self.mat_law169s: Dict[int, MaterialLaw169] = {}           # /MAT/LAW169, /MAT/ARUP_ADHESIVE (M591)
+        self.mat_arup_adhesives = self.mat_law169s
         self.bcs_cyclics: Dict[int, BcsCyclic] = {}                 # /BCS/CYCLIC (M178)
         self.pcyl_loads: Dict[int, PcylLoad] = {}                   # /LOAD/PCYL (M178)
         self.damp_vrels: Dict[int, DampVrel] = {}                   # /DAMP/VREL (M179)
@@ -3792,7 +3795,7 @@ class Model:
     # ----------------------------------------------------------------------
     def element_groups(self):
         """Iterate (name, group) over the non-empty element groups."""
-        for name in ("bricks", "bricks_heph", "tshells", "bric20s", "quads", "tetras", "tetra10s", "shel16s", "shells", "shells_qbat",
+        for name in ("bricks", "bricks_heph", "tshells", "bric20s", "penta6s", "quads", "tetras", "tetra10s", "shel16s", "shells", "shells_qbat",
                      "shells_qeph", "sh3n", "sh3n_dkt18", "trusses", "springs", "beams"):
             g = getattr(self, name)
             if g is not None and g.n:

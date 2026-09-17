@@ -122,7 +122,9 @@ def _matches_elem_dt_control(name: str, key: str) -> bool:
     k = key.upper()
     if k in ("ELEM", "ALL"):
         return True
-    if k in ("BRICK", "BRIC", "SOLID") and ("bric" in name or "hexa" in name or "heph" in name):
+    if k in ("BRICK", "BRIC", "SOLID") and ("bric" in name or "hexa" in name or "heph" in name or "penta" in name or "tshell" in name):
+        return True
+    if k in ("PENTA", "PENTA6", "WEDGE") and "penta" in name:
         return True
     if k in ("SHELL", "SHEL") and ("shel" in name or "sh3n" in name or "coque" in name):
         return True
@@ -320,7 +322,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             k_upper = kind.upper()
             for gname, group in model.element_groups():
                 match = (k_upper in ("ELEM", "ALL") or
-                         (k_upper in ("BRICK", "BRIC") and "bric" in gname) or
+                         (k_upper in ("BRICK", "BRIC", "SOLID") and ("bric" in gname or "hexa" in gname or "heph" in gname or "penta" in gname or "tshell" in gname)) or
+                         (k_upper in ("PENTA", "PENTA6", "WEDGE") and "penta" in gname) or
                          (k_upper in ("SHELL", "SHEL") and ("shel" in gname or "sh3n" in gname)) or
                          (k_upper in ("SH3N", "TRI", "TRIA") and "sh3n" in gname) or
                          (k_upper in ("TETRA", "TETRA10") and "tetra" in gname) or

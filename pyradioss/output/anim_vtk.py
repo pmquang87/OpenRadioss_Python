@@ -54,6 +54,7 @@ _VTK_CELL = {
     "bricks": (12, 8),
     "bricks_heph": (12, 8),
     "bric20s": (25, 20),
+    "penta6s": (13, 6),
     "shel16s": (12, 8),
     "tshells": (12, 8),
     "tetras": (10, 4),
@@ -72,7 +73,7 @@ _VTK_CELL = {
 # VTK node permutation for 20-node quadratic hexahedrons (VTK_QUADRATIC_HEXAHEDRON).
 _BRIC20_TO_VTK = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 12, 13, 14, 15]
 
-_SOLID_FAMILIES = ("bricks", "bricks_heph", "tshells", "tetras", "tetra10s", "bric20s", "shel16s", "quads")
+_SOLID_FAMILIES = ("bricks", "bricks_heph", "tshells", "tetras", "tetra10s", "bric20s", "shel16s", "quads", "penta6s")
 _SHELL_FAMILIES = ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18")
 
 # anim_to_vtk's symmetric-3x3 fill of the solid Voigt 6 [xx,yy,zz,xy,yz,
@@ -169,7 +170,7 @@ def _write_block(fh, arr, fmt: str) -> None:
 
 def _von_mises(group_name: str, group) -> np.ndarray:
     st = group.state
-    if group_name in ("bricks", "bricks_heph", "tshells", "tetras", "tetra10s", "bric20s", "shel16s", "quads"):
+    if group_name in _SOLID_FAMILIES:
         s = st["sig"]
         if s.ndim == 3:
             s = s.mean(axis=1)

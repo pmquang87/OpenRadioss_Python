@@ -277,6 +277,10 @@ class StarterDeck:
         ids, all %10d (proven M35)."""
         self._elems("BRICK", part_id, rows)
 
+    def penta6(self, part_id, rows):
+        """``/PENTA6/part_ID`` — elem_ID + 6 node ids, %10d (M590)."""
+        self._elems("PENTA6", part_id, rows)
+
     def tetra4(self, part_id, rows):
         """``/TETRA4/part_ID`` — elem_ID + 4 node ids, %10d."""
         self._elems("TETRA4", part_id, rows)

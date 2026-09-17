@@ -148,7 +148,7 @@ class DofMap:
         # Collect element connectivity across groups
         elem_groups = list(model.element_groups()) if hasattr(model, "element_groups") else []
         if not elem_groups:
-            for elname in ("bricks", "bricks_heph", "tshells", "bric20s", "quads", "tetras", "tetra10s", "shel16s",
+            for elname in ("bricks", "bricks_heph", "tshells", "bric20s", "penta6s", "quads", "tetras", "tetra10s", "shel16s",
                            "shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18", "trusses", "springs", "beams"):
                 g = getattr(model, elname, None)
                 if g is not None and getattr(g, "n", 0) > 0:

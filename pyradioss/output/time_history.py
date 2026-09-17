@@ -204,8 +204,8 @@ class TimeHistory:
                     elif var_upper in ("E", "IE", "ENERGY"):
                         return float(st["eint"][r]) if "eint" in st else 0.0
 
-        elif kind in ("SHEL", "SHELL", "BRIC", "BRICK", "SH3N", "TETR", "TETRA", "QUAD", "BEAM", "TRUS", "TRUSS", "SOLID", "TSHELL"):
-            for attr in ("shells", "shells_qbat", "shells_qeph", "bricks", "bricks_heph", "tshells", "tetras", "sh3n", "sh3n_dkt18", "bric20s", "shel16s", "tetra10s", "quads", "beams", "trusses"):
+        elif kind in ("SHEL", "SHELL", "BRIC", "BRICK", "SH3N", "TETR", "TETRA", "QUAD", "BEAM", "TRUS", "TRUSS", "SOLID", "TSHELL", "PENTA", "PENTA6", "WEDGE"):
+            for attr in ("shells", "shells_qbat", "shells_qeph", "bricks", "bricks_heph", "tshells", "tetras", "sh3n", "sh3n_dkt18", "bric20s", "penta6s", "shel16s", "tetra10s", "quads", "beams", "trusses"):
                 g = getattr(model, attr, None)
                 if g is not None and oid in g.ids:
                     row = np.where(g.ids == oid)[0]

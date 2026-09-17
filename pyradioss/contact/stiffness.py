@@ -89,7 +89,7 @@ def _segment_areas(x0: np.ndarray, segments: np.ndarray) -> np.ndarray:
 
 
 _SHELL_GROUPS = ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18")
-_SOLID_GROUPS = ("bricks", "bricks_heph", "tshells", "tetras", "tetra10s", "bric20s", "shel16s", "quads")
+_SOLID_GROUPS = ("bricks", "bricks_heph", "tshells", "tetras", "tetra10s", "bric20s", "shel16s", "quads", "penta6s")
 
 
 # ----------------------------------------------------------------------------

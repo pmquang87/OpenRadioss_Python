@@ -466,6 +466,14 @@ def read_quad(block, model, log):
     """``/QUAD``: 4-node 2D solid element."""
     return _read_elems(block, model, log, "QUAD", 4)
 
+
+def read_penta6(block, model, log):
+    """``/PENTA6/part_ID``, ``/PENTA/part_ID``, or ``/WEDGE/part_ID`` (M590):
+    6-node wedge/prism solid element (elem_ID + 6 node IDs).
+    """
+    _read_elems(block, model, log, "PENTA6", 6)
+
+
 def read_brick(block, model, log):
     """``/BRICK/part_ID``: 8-node solids (elem_ID + 8 node IDs).
     Degenerated bricks with 4 distinct nodes (the classic tetra-in-brick
@@ -1345,7 +1353,14 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if (lawname in ("DRUCKER_PRAGER", "BRITTLE", "MAT_DRUCKER_PRAGER", "MAT_BRITTLE", "LAW51_DRUCKER_PRAGER", "LAW51_BRITTLE")
             or subaction in ("DRUCKER_PRAGER", "BRITTLE")):
         read_mat_law51(block, model, log)
+    # M591: LAW126 (Johnson-Holmquist Concrete / HJC) and LAW169 (Arup Structural Adhesive)
+    if lawname in ("LAW126", "JOHNSON_HOLMQUIST_CONCRETE", "MAT_LAW126", "MAT_JOHNSON_HOLMQUIST_CONCRETE", "LAW126_JOHNSON_HOLMQUIST_CONCRETE", "HJC", "MAT_HJC"):
+        read_mat_law126(block, model, log)
         return
+    if lawname in ("LAW169", "ARUP_ADHESIVE", "ARUP", "ADHESIVE", "MAT_LAW169", "MAT_ARUP_ADHESIVE", "LAW169_ARUP_ADHESIVE"):
+        read_mat_law169(block, model, log)
+        return
+
     law_aliases = {"LAW1": 1, "ELAST": 1, "LAW2": 2, "PLAS_JOHNS": 2,
                    "LAW27": 27, "PLAS_BRIT": 27,
                    "LAW36": 36, "PLAS_TAB": 36,
@@ -32834,6 +32849,88 @@ def read_mat_law158(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         params=mat158.params, density=rho0, unit_id=block.unit_id,
     )
     model.materials[mat_id] = mat158
+
+
+def read_mat_law169(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW169/id`` or ``/MAT/ARUP_ADHESIVE/id`` (M591): Arup structural adhesive cohesive model."""
+    from ..model.entities import MaterialLaw169, Material
+    from .mat_reader import GenericMaterialRecord
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank]
+    if not valid_cards:
+        log.error(f"/MAT/LAW169/{mat_id}: missing data cards", block.source)
+        return
+
+    rho0 = 0.0
+    young, nu = 0.0, 0.0
+    sht_sl, tenmax, gcten = 0.0, 1e20, 1e20
+    shrmax, gcshr = 1e20, 1e20
+    pwrt, pwrs = 2, 2
+    shrp = 0.0
+
+    if block.fixed:
+        if len(valid_cards) > 0:
+            f1 = cut(valid_cards[0].raw, "MAT_LAW169_1")
+            rho0 = _f(f1[0]) if len(f1) > 0 else 0.0
+        if len(valid_cards) > 1:
+            f2 = cut(valid_cards[1].raw, "MAT_LAW169_2")
+            young = _f(f2[0]) if len(f2) > 0 else 0.0
+            nu = _f(f2[1]) if len(f2) > 1 else 0.0
+            sht_sl = _f(f2[2]) if len(f2) > 2 else 0.0
+            tenmax = _f(f2[3]) if len(f2) > 3 and f2[3].strip() else 1e20
+            gcten = _f(f2[4]) if len(f2) > 4 and f2[4].strip() else 1e20
+        if len(valid_cards) > 2:
+            f3 = cut(valid_cards[2].raw, "MAT_LAW169_3")
+            shrmax = _f(f3[0]) if len(f3) > 0 and f3[0].strip() else 1e20
+            gcshr = _f(f3[1]) if len(f3) > 1 and f3[1].strip() else 1e20
+            pwrt = _i(f3[2]) if len(f3) > 2 and f3[2].strip() else 2
+            pwrs = _i(f3[3]) if len(f3) > 3 and f3[3].strip() else 2
+            shrp = _f(f3[4]) if len(f3) > 4 else 0.0
+    else:
+        if len(valid_cards) > 0:
+            t1 = valid_cards[0].tokens()
+            rho0 = float(t1[0]) if len(t1) > 0 else 0.0
+        if len(valid_cards) > 1:
+            t2 = valid_cards[1].tokens()
+            young = float(t2[0]) if len(t2) > 0 else 0.0
+            nu = float(t2[1]) if len(t2) > 1 else 0.0
+            sht_sl = float(t2[2]) if len(t2) > 2 else 0.0
+            tenmax = float(t2[3]) if len(t2) > 3 else 1e20
+            gcten = float(t2[4]) if len(t2) > 4 else 1e20
+        if len(valid_cards) > 2:
+            t3 = valid_cards[2].tokens()
+            shrmax = float(t3[0]) if len(t3) > 0 else 1e20
+            gcshr = float(t3[1]) if len(t3) > 1 else 1e20
+            pwrt = int(float(t3[2])) if len(t3) > 2 else 2
+            pwrs = int(float(t3[3])) if len(t3) > 3 else 2
+            shrp = float(t3[4]) if len(t3) > 4 else 0.0
+
+    m169 = MaterialLaw169(
+        id=mat_id, title=title, rho0=rho0,
+        young=young, nu=nu, sht_sl=sht_sl, tenmax=tenmax, gcten=gcten,
+        shrmax=shrmax, gcshr=gcshr, pwrt=pwrt, pwrs=pwrs, shrp=shrp,
+    )
+    model.mat_law169s[mat_id] = m169
+    mat169 = Material(
+        id=mat_id, law=169, rho0=rho0, title=title,
+        params={
+            "E": young, "nu": nu, "Rho": rho0, "MAT_RHO": rho0,
+            "SHT_SL": sht_sl, "MAT169_SHT_SL": sht_sl,
+            "TENMAX": tenmax, "MAT169_TENMAX": tenmax,
+            "GCTEN": gcten, "MAT169_GCTEN": gcten,
+            "SHRMAX": shrmax, "MAT169_SHRMAX": shrmax,
+            "GCSHR": gcshr, "MAT169_GCSHR": gcshr,
+            "PWRT": pwrt, "MAT169_PWRT": pwrt,
+            "PWRS": pwrs, "MAT169_PWRS": pwrs,
+            "SHRP": shrp, "MAT169_SHRP": shrp,
+        }
+    )
+    mat169.record = GenericMaterialRecord(
+        law_name="LAW169", law_number=169, id=mat_id, title=title,
+        params=mat169.params, density=rho0, unit_id=block.unit_id,
+    )
+    model.materials[mat_id] = mat169
 
 
 def read_mat_law113(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -86919,6 +87016,9 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SHEL": read_shell,
     "BRICK": read_brick,
     "BRIC": read_brick,
+    "PENTA6": read_penta6,
+    "PENTA": read_penta6,
+    "WEDGE": read_penta6,
     "TSHELL": read_tshell,
     "TETRA4": read_tetra4,
     "TRUSS": read_truss,
@@ -95523,6 +95623,17 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PLAS_VEGTER": read_mat_law110,
     "MLAW110": read_mat_law110,
     "LAW110_VEGTER": read_mat_law110,
+    # M591: LAW126 (Johnson-Holmquist Concrete) and LAW169 (Arup Structural Adhesive)
+    "MAT_LAW126": read_mat_law126,
+    "MAT_JOHNSON_HOLMQUIST_CONCRETE": read_mat_law126,
+    "LAW126": read_mat_law126,
+    "JOHNSON_HOLMQUIST_CONCRETE": read_mat_law126,
+    "MAT_HJC": read_mat_law126,
+    "HJC": read_mat_law126,
+    "MAT_LAW169": read_mat_law169,
+    "MAT_ARUP_ADHESIVE": read_mat_law169,
+    "LAW169": read_mat_law169,
+    "ARUP_ADHESIVE": read_mat_law169,
 }
 
 
@@ -95577,6 +95688,28 @@ MATERIAL_DISPATCH: Dict[str, Any] = {
     "PLAS_VEGTER": read_mat_law110,
     "MLAW110": read_mat_law110,
     "LAW110_VEGTER": read_mat_law110,
+    # M591: LAW126 and LAW169
+    "/MAT/LAW126": read_mat_law126,
+    "/MAT/JOHNSON_HOLMQUIST_CONCRETE": read_mat_law126,
+    "/MAT/HJC": read_mat_law126,
+    "LAW126": read_mat_law126,
+    "JOHNSON_HOLMQUIST_CONCRETE": read_mat_law126,
+    "HJC": read_mat_law126,
+    "MAT_LAW126": read_mat_law126,
+    "MAT_JOHNSON_HOLMQUIST_CONCRETE": read_mat_law126,
+    "MAT_HJC": read_mat_law126,
+    "LAW126_JOHNSON_HOLMQUIST_CONCRETE": read_mat_law126,
+    "/MAT/LAW169": read_mat_law169,
+    "/MAT/ARUP_ADHESIVE": read_mat_law169,
+    "/MAT/ARUP": read_mat_law169,
+    "/MAT/ADHESIVE": read_mat_law169,
+    "LAW169": read_mat_law169,
+    "ARUP_ADHESIVE": read_mat_law169,
+    "ARUP": read_mat_law169,
+    "ADHESIVE": read_mat_law169,
+    "MAT_LAW169": read_mat_law169,
+    "MAT_ARUP_ADHESIVE": read_mat_law169,
+    "LAW169_ARUP_ADHESIVE": read_mat_law169,
 }
 
 

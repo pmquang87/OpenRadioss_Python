@@ -90,9 +90,35 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                law107_paper_light,
                law109_tab_plas,
                law110_vegter,
+               law126_hjc,
+               law169_arup,
                law163_crush_foam,
                law76_samp,
                mat_gas, mat_void)
+from .law126_hjc import (
+    Law126Params,
+    build_law126,
+    solid_step as law126_solid_step,
+    solid_update as law126_solid_update,
+    sound_speed as law126_sound_speed,
+    solid_tangent as law126_solid_tangent,
+    consistent_solid_tangent as law126_consistent_solid_tangent,
+    extra_shapes as law126_extra_shapes,
+)
+from .law169_arup import (
+    Law169Params,
+    build_law169,
+    solid_step as law169_solid_step,
+    shell_step as law169_shell_step,
+    solid_update as law169_solid_update,
+    shell_update as law169_shell_update,
+    sound_speed as law169_sound_speed,
+    solid_tangent as law169_solid_tangent,
+    shell_tangent as law169_shell_tangent,
+    consistent_solid_tangent as law169_consistent_solid_tangent,
+    consistent_shell_tangent as law169_consistent_shell_tangent,
+    extra_shapes as law169_extra_shapes,
+)
 from .law76_samp import (
     Law76Params,
     build_law76,
@@ -1646,6 +1672,16 @@ _LAW110_KEYS = (
     "MAT_PLAS_VEGTER", "MAT_110",
 )
 
+_LAW126_KEYS = (
+    126, "126", "LAW126", "JOHNSON_HOLMQUIST_CONCRETE", "MAT_LAW126",
+    "MAT_JOHNSON_HOLMQUIST_CONCRETE", "LAW126_JOHNSON_HOLMQUIST_CONCRETE", "HJC", "MAT_HJC",
+)
+
+_LAW169_KEYS = (
+    169, "169", "LAW169", "ARUP_ADHESIVE", "MAT_LAW169", "MAT_ARUP_ADHESIVE",
+    "LAW169_ARUP_ADHESIVE", "ARUP", "ADHESIVE",
+)
+
 
 
 
@@ -1960,9 +1996,32 @@ LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
     "MAT_VEGTER": {"plane_stress": True, "solid": False, "shell": True},
     "MAT_PLAS_VEGTER": {"plane_stress": True, "solid": False, "shell": True},
     "MAT_110": {"plane_stress": True, "solid": False, "shell": True},
+    # M591: LAW126 (Johnson-Holmquist Concrete / HJC) and LAW169 (Arup Structural Adhesive)
+    126: {"plane_stress": False, "solid": True, "shell": False},
+    "126": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW126": {"plane_stress": False, "solid": True, "shell": False},
+    "JOHNSON_HOLMQUIST_CONCRETE": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_LAW126": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_JOHNSON_HOLMQUIST_CONCRETE": {"plane_stress": False, "solid": True, "shell": False},
+    "HJC": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_HJC": {"plane_stress": False, "solid": True, "shell": False},
+    169: {"plane_stress": True, "solid": True, "shell": True},
+    "169": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW169": {"plane_stress": True, "solid": True, "shell": True},
+    "ARUP_ADHESIVE": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_LAW169": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_ARUP_ADHESIVE": {"plane_stress": True, "solid": True, "shell": True},
+    "ARUP": {"plane_stress": True, "solid": True, "shell": True},
+    "ADHESIVE": {"plane_stress": True, "solid": True, "shell": True},
 }
 
 MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
+    126: law126_solid_update, "126": law126_solid_update, "LAW126": law126_solid_update,
+    "JOHNSON_HOLMQUIST_CONCRETE": law126_solid_update, "MAT_LAW126": law126_solid_update,
+    "MAT_JOHNSON_HOLMQUIST_CONCRETE": law126_solid_update, "HJC": law126_solid_update, "MAT_HJC": law126_solid_update,
+    169: law169_solid_update, "169": law169_solid_update, "LAW169": law169_solid_update,
+    "ARUP_ADHESIVE": law169_solid_update, "MAT_LAW169": law169_solid_update,
+    "MAT_ARUP_ADHESIVE": law169_solid_update, "ARUP": law169_solid_update, "ADHESIVE": law169_solid_update,
     48: solid_update_law48, "48": solid_update_law48, "LAW48": solid_update_law48,
     "ZHAO": solid_update_law48, "MAT_LAW48": solid_update_law48, "MAT_ZHAO": solid_update_law48,
     "PLAS_ZHAO": solid_update_law48, "LAW48_ZHAO": solid_update_law48,
@@ -2086,6 +2145,9 @@ MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
 }
 
 MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
+    169: law169_shell_update, "169": law169_shell_update, "LAW169": law169_shell_update,
+    "ARUP_ADHESIVE": law169_shell_update, "MAT_LAW169": law169_shell_update,
+    "MAT_ARUP_ADHESIVE": law169_shell_update, "ARUP": law169_shell_update, "ADHESIVE": law169_shell_update,
     48: shell_update_law48, "48": shell_update_law48, "LAW48": shell_update_law48,
     "ZHAO": shell_update_law48, "MAT_LAW48": shell_update_law48, "MAT_ZHAO": shell_update_law48,
     "PLAS_ZHAO": shell_update_law48, "LAW48_ZHAO": shell_update_law48,
@@ -2306,6 +2368,10 @@ def register_materials():
     _register_law107()
     _register_law109()
     _register_law110()
+    if hasattr(law126_hjc, "_register"):
+        law126_hjc._register()
+    if hasattr(law169_arup, "_register"):
+        law169_arup._register()
 
 
 def extra_shapes(mat, nip=None):
@@ -2505,6 +2571,10 @@ def extra_shapes(mat, nip=None):
         shapes.update(law109_extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
         shapes.update(law110_extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
+        shapes.update(law126_extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW169_KEYS or getattr(mat, "law_name", None) in _LAW169_KEYS:
+        shapes.update(law169_extra_shapes(mat, nip=nip))
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
         shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
     return shapes
@@ -2573,6 +2643,10 @@ def needs_env(mat) -> bool:
     if getattr(mat, "law", None) in _LAW71_KEYS or getattr(mat, "law_name", None) in _LAW71_KEYS:
         return True
     if getattr(mat, "law", None) in _LAW76_KEYS or getattr(mat, "law_name", None) in _LAW76_KEYS:
+        return True
+    if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
+        return True
+    if getattr(mat, "law", None) in _LAW169_KEYS or getattr(mat, "law_name", None) in _LAW169_KEYS:
         return True
     return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 21, "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", 49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", 52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", 58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", 60, "60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", 62, 66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB", 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", 70, 73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL", 74, "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "LAW74_HILL_3D", 79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", 81, 82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", 87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000", "LAW87_BARLAT2000", 163, "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM")
             or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", "LAW22", "DAMA", "PLAS_DAMA", "MAT_LAW22", "MAT_DAMA", "MAT_PLAS_DAMA", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB", "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", "LAW60", "PLAS_T3", "FABRIC", "MAT_LAW60", "MAT_PLAS_T3", "MAT_FABRIC", "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC", "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL", "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "LAW74_HILL_3D", "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000", "LAW87_BARLAT2000", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN", "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM"))
@@ -3306,6 +3380,52 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
         return sig, epsp_out, c
     if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
         raise NotImplementedError("material LAW110 (VEGTER) is only supported for shells")
+    if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
+        res = law126_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        if isinstance(res, tuple):
+            if len(res) == 3:
+                sign, epsp_out, c = res
+            elif len(res) == 2:
+                sign, epsp_out = res
+                c = law126_sound_speed(mat, rho=extra.get("rho") if extra else None)
+            else:
+                sign, epsp_out, c = res[0], epsp, None
+        else:
+            sign, epsp_out, c = res, epsp, None
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = sign
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
+    if getattr(mat, "law", None) in _LAW169_KEYS or getattr(mat, "law_name", None) in _LAW169_KEYS:
+        res = law169_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        if isinstance(res, tuple):
+            if len(res) == 3:
+                sign, epsp_out, c = res
+            elif len(res) == 2:
+                sign, epsp_out = res
+                c = law169_sound_speed(mat, rho=extra.get("rho") if extra else None)
+            else:
+                sign, epsp_out, c = res[0], epsp, None
+        else:
+            sign, epsp_out, c = res, epsp, None
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = sign
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
     raise NotImplementedError(f"material LAW{mat.law} not ported for solids")
 
 
@@ -3313,6 +3433,10 @@ def sound_speed(mat, rho=None, extra=None, is_shell: bool = False):
     """Dispatch sound speed calculation to material law."""
     law = getattr(mat, "law", None)
     law_name = getattr(mat, "law_name", None)
+    if law in _LAW126_KEYS or law_name in _LAW126_KEYS:
+        return law126_sound_speed(mat, rho=rho)
+    if law in _LAW169_KEYS or law_name in _LAW169_KEYS:
+        return law169_sound_speed(mat, rho=rho)
     if law in _LAW110_KEYS or law_name in _LAW110_KEYS:
         return law110_sound_speed(mat, rho=rho, is_shell=is_shell)
     if law in _LAW109_KEYS or law_name in _LAW109_KEYS:
@@ -3697,6 +3821,27 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
             except Exception:
                 pass
         return s_out, ep_out
+    if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
+        raise NotImplementedError("material LAW126 (HJC) is only supported for solids")
+    if getattr(mat, "law", None) in _LAW169_KEYS or getattr(mat, "law_name", None) in _LAW169_KEYS:
+        res = law169_shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        if isinstance(res, tuple):
+            s_out = res[0]
+            ep_out = res[1] if len(res) > 1 else epsp
+        else:
+            s_out = res
+            ep_out = epsp
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = s_out
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = ep_out
+            except Exception:
+                pass
+        return s_out, ep_out
     raise NotImplementedError(f"material LAW{mat.law} not ported for shells")
 
 
@@ -3911,6 +4056,10 @@ def solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
         return law109_solid_tangent(mat, sig=sig, extra=extra)
     if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
         raise NotImplementedError("material LAW110 (VEGTER) is only supported for shells")
+    if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
+        return law126_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
+    if getattr(mat, "law", None) in _LAW169_KEYS or getattr(mat, "law_name", None) in _LAW169_KEYS:
+        return law169_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
         f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW34, LAW35, LAW36, LAW38, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
@@ -4113,6 +4262,18 @@ def shell_membrane_tangent(mat):
             [nu * c, c, 0.0],
             [0.0, 0.0, g],
         ])
+    if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
+        raise NotImplementedError("LAW126 (Johnson-Holmquist Concrete / HJC) is implemented for 3D solid elements only.")
+    if getattr(mat, "law", None) in _LAW169_KEYS or getattr(mat, "law_name", None) in _LAW169_KEYS:
+        e = float(getattr(mat, "young", 0.0) or getattr(mat, "E", 0.0) or getattr(mat, "e", 0.0) or (mat.params.get("young", 0.0) if hasattr(mat, "params") else 0.0) or (mat.params.get("e", 0.0) if hasattr(mat, "params") else 0.0) or 1.0)
+        nu = float(getattr(mat, "nu", 0.0) or (mat.params.get("nu", 0.0) if hasattr(mat, "params") else 0.0) or 0.3)
+        c = e / max(1.0 - nu * nu, 1e-15)
+        g = e / max(2.0 * (1.0 + nu), 1e-15)
+        return np.array([
+            [c, nu * c, 0.0],
+            [nu * c, c, 0.0],
+            [0.0, 0.0, g],
+        ])
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic, "
         f"LAW3 plas_bost, LAW19 fabric, LAW34 Boltzmann, LAW32 Hill and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")
@@ -4266,6 +4427,10 @@ def shell_layer_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
         return law109_consistent_shell_tangent(mat, stress=sig, extra=extra)
     if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
         return law110_consistent_shell_tangent(mat, stress=sig, extra=extra)
+    if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
+        raise NotImplementedError("LAW126 (Johnson-Holmquist Concrete / HJC) is implemented for 3D solid elements only.")
+    if getattr(mat, "law", None) in _LAW169_KEYS or getattr(mat, "law_name", None) in _LAW169_KEYS:
+        return law169_consistent_shell_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 "
         f"elastic, LAW2, LAW3, LAW36 and LAW44 elastoplastic, LAW27 brittle cracking, "

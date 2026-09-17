@@ -7138,6 +7138,39 @@ class MaterialLaw126:
 
 
 @dataclass
+class MaterialLaw169:
+    """/MAT/LAW169 or /MAT/ARUP_ADHESIVE (M591): Arup structural adhesive cohesive model.
+
+    Fortran origin: ``starter/source/materials/mat/mat169/hm_read_mat169.F90``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    young: float = 0.0
+    nu: float = 0.0
+    sht_sl: float = 0.0
+    tenmax: float = 1e20
+    gcten: float = 1e20
+    shrmax: float = 1e20
+    gcshr: float = 1e20
+    pwrt: int = 2
+    pwrs: int = 2
+    shrp: float = 0.0
+
+    @property
+    def e(self) -> float:
+        return self.young
+
+    @e.setter
+    def e(self, val: float) -> None:
+        self.young = val
+
+
+MatLaw169 = MaterialLaw169
+MatArupAdhesive = MaterialLaw169
+
+
+@dataclass
 class MaterialLaw125:
     """/MAT/LAW125 or /MAT/LAMINATED_COMPOSITE (M174): Multi-layered laminated composite model.
 

@@ -23,6 +23,7 @@ from ..model.model import ElementGroup, Model
 # element type name -> (attr on Model, nodes per element, required prop type)
 _ETYPES = {
     "BRICK": ("bricks", 8, 14),
+    "PENTA6": ("penta6s", 6, 14),
     "QUAD": ("quads", 4, 14),
     "TETRA4": ("tetras", 4, 14),
     "TETRA10": ("tetra10s", 10, 14),
@@ -662,7 +663,7 @@ def _nodes_of_parts(model: Model, part_ids: List[int]) -> np.ndarray:
 _EGROUP_FAMILIES = {
     "SHEL": ("shells", "shells_qbat", "shells_qeph", "shel16s"),
     "SH3N": ("sh3n", "sh3n_dkt18"),
-    "BRIC": ("bricks", "bricks_heph", "tshells", "tetras", "tetra10s", "bric20s"),
+    "BRIC": ("bricks", "bricks_heph", "tshells", "tetras", "tetra10s", "bric20s", "penta6s"),
     "TSHELL": ("tshells",),
     "QUAD": ("quads",),
     "TRUS": ("trusses",),
@@ -1061,6 +1062,39 @@ def _free_faces_of_tetras(model: Model, part_ids: List[int], modifier: str = "EX
     return np.vstack(all_faces), np.concatenate(all_owners), np.concatenate(all_attrs)
 
 
+def _free_faces_of_wedges(model: Model, part_ids: List[int], modifier: str = "EXT"):
+    """Outer (free) faces of /PENTA6 wedge parts (or all faces if modifier='ALL'),
+    as 4-node segments (triangles degenerate with 3rd node repeated).
+    Returns (faces (n,4), parent element rows (n,), element group names (n,))."""
+    from ..elements.solid_penta6 import _FACES
+    all_faces: List[np.ndarray] = []
+    all_owners: List[np.ndarray] = []
+    all_attrs: List[np.ndarray] = []
+
+    attr = "penta6s"
+    g = getattr(model, attr, None)
+    if g is not None:
+        mask = np.isin(g.state["part_ids"], part_ids)
+        if np.any(mask):
+            erow = np.where(mask)[0]
+            conn = g.conn[mask, :6]
+            faces = conn[:, _FACES.reshape(-1)].reshape(-1, 4)
+            owner = np.repeat(erow, 5)
+            key = np.sort(faces, axis=1)
+            _, inverse, counts = np.unique(key, axis=0, return_inverse=True, return_counts=True)
+            free = (counts[inverse] == 1) if modifier != "ALL" else np.ones(len(faces), dtype=bool)
+            if np.any(free):
+                all_faces.append(faces[free])
+                all_owners.append(owner[free])
+                all_attrs.append(np.full(int(np.sum(free)), attr, dtype="<U16"))
+
+    if not all_faces:
+        return (np.zeros((0, 4), dtype=np.int64),
+                np.zeros(0, dtype=np.int64),
+                np.zeros(0, dtype="<U16"))
+    return np.vstack(all_faces), np.concatenate(all_owners), np.concatenate(all_attrs)
+
+
 def resolve_surfaces(model: Model, log: MessageLog) -> None:
     """/SURF content -> (nseg, 4) node-index arrays + per-segment
     provenance (parent element group/row, see Surface docstring).
@@ -1134,6 +1168,11 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
                 for attr in np.unique(ta):
                     sel = (ta == attr)
                     _add(ft[sel], attr, to[sel])
+            fw, wo, wa = _free_faces_of_wedges(model, pids, mod)
+            if len(fw):
+                for attr in np.unique(wa):
+                    sel = (wa == attr)
+                    _add(fw[sel], attr, wo[sel])
 
         # /SURF/GRSHEL | /SURF/GRSH3N | /SURF/GRBRIC
         for family, gid in s.egroup_refs:
@@ -1158,6 +1197,15 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
                     if np.any(free):
                         ff = faces[free]
                         _add(np.column_stack([ff, ff[:, 2]]), attr, owner[free])
+                elif attr == "penta6s":
+                    from ..elements.solid_penta6 import _FACES
+                    faces = conn[:, :6][:, _FACES.reshape(-1)].reshape(-1, 4)
+                    owner = np.repeat(rows, 5)
+                    key = np.sort(faces, axis=1)
+                    _, inv, cnt = np.unique(key, axis=0, return_inverse=True, return_counts=True)
+                    free = (cnt[inv] == 1) if mod != "ALL" else np.ones(len(faces), dtype=bool)
+                    if np.any(free):
+                        _add(faces[free], attr, owner[free])
                 elif attr in ("bricks", "bricks_heph", "tshells", "bric20s", "shel16s"):
                     from ..elements.solid_hexa8 import _FACES
                     faces = conn[:, :8][:, _FACES.reshape(-1)].reshape(-1, 4)
