@@ -200,11 +200,52 @@ def segment_mesh_gap(model: Model, segments: np.ndarray, percent_mesh_size: floa
 def node_mesh_gap(model: Model, segments: np.ndarray, nodes: np.ndarray, percent_mesh_size: float = 0.4):
     g_m_l = segment_mesh_gap(model, segments, percent_mesh_size)
     node_gap = np.full(model.numnod, np.inf)
-    for k in range(4):
-        valid_k = (segments[:, k] >= 0) & (segments[:, k] < model.numnod)
-        if np.any(valid_k):
-            np.minimum.at(node_gap, segments[valid_k, k], g_m_l[valid_k])
-    return node_gap[nodes]
+    if len(segments) > 0 and len(g_m_l) == len(segments):
+        for k in range(4):
+            valid_k = (segments[:, k] >= 0) & (segments[:, k] < model.numnod)
+            if np.any(valid_k):
+                np.minimum.at(node_gap, segments[valid_k, k], g_m_l[valid_k])
+
+    inf_mask = np.isinf(node_gap[nodes])
+    if np.any(inf_mask):
+        for gname, group in model.element_groups():
+            if not hasattr(group, "conn") or group.conn is None or len(group.conn) == 0:
+                continue
+            conn = group.conn
+            if gname in _SHELL_GROUPS:
+                valid_conn = conn.copy()
+                if valid_conn.shape[1] >= 4:
+                    tri = (valid_conn[:, 2] == valid_conn[:, 3]) | (valid_conn[:, 3] < 0)
+                    valid_conn[tri, 3] = valid_conn[tri, 2]
+                xs = model.x0[valid_conn]
+                d1 = np.linalg.norm(xs[:, 1] - xs[:, 0], axis=1)
+                d2 = np.linalg.norm(xs[:, 2] - xs[:, 1], axis=1)
+                if valid_conn.shape[1] >= 4:
+                    tri = (valid_conn[:, 2] == valid_conn[:, 3]) | (valid_conn[:, 3] < 0)
+                    d3 = np.where(tri, np.inf, np.linalg.norm(xs[:, 3] - xs[:, 2], axis=1))
+                    d4 = np.where(tri, np.linalg.norm(xs[:, 0] - xs[:, 2], axis=1), np.linalg.norm(xs[:, 0] - xs[:, 3], axis=1))
+                    lmin = percent_mesh_size * np.min(np.column_stack((d1, d2, d3, d4)), axis=1)
+                else:
+                    d3 = np.linalg.norm(xs[:, 0] - xs[:, 2], axis=1)
+                    lmin = percent_mesh_size * np.min(np.column_stack((d1, d2, d3)), axis=1)
+            elif gname in _SOLID_GROUPS:
+                vol0 = np.maximum(np.nan_to_num(group.state.get("vol0", 0.0), nan=0.0), 0.0)
+                lmin = percent_mesh_size * (vol0 ** (1.0 / 3.0))
+            else:
+                continue
+            for k in range(conn.shape[1]):
+                col = conn[:, k]
+                valid = (col >= 0) & (col < model.numnod) & (lmin > 0.0)
+                if np.any(valid):
+                    np.minimum.at(node_gap, col[valid], lmin[valid])
+
+    res = node_gap[nodes].copy()
+    still_inf = np.isinf(res)
+    if np.any(still_inf):
+        valid_g = g_m_l[np.isfinite(g_m_l) & (g_m_l > 0.0)]
+        m_fallback = float(valid_g.mean()) if len(valid_g) > 0 else 0.0
+        res[still_inf] = m_fallback
+    return res
 
 
 # ----------------------------------------------------------------------------

@@ -329,7 +329,7 @@ class ContactType10:
                 mask = tracking.tracked_node_mask(self.model, self.ref_total)
                 if len(mask) > 0 and len(self.nodes) > 0:
                     valid_n = (self.nodes >= 0) & (self.nodes < len(mask))
-                    self.nodes_tracked = self.nodes[valid_n & mask[self.nodes[valid_n]]]
+                    self.nodes_tracked = self.nodes[valid_n][mask[self.nodes[valid_n]]]
                 else:
                     self.nodes_tracked = self.nodes
             self._broad_phase(x, v, dt)
@@ -481,6 +481,9 @@ class ContactType10:
             fn_new[rebound_tens] = 0.0
             ft1_new[rebound_tens] = 0.0
             ft2_new[rebound_tens] = 0.0
+            vn[rebound_tens] = 0.0
+            vt1[rebound_tens] = 0.0
+            vt2[rebound_tens] = 0.0
             keep[rebound_tens & (pen <= 0.0)] = False
 
         # Viscous Damping (i10for3.F lines 360-368)

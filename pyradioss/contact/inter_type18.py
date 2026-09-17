@@ -187,9 +187,9 @@ def _t18_forces(x, v, mass, sec_nodes, main_nodes, stfval, gap, stiff_dc, cand_p
             H[idx3, 3] = wa3[m3] + 0.25 * wc3[m3]
             pt[idx3] = pt3[m3]
 
-        e12 = xq2 - xq1
-        e14 = xq4 - xq1
-        nf = cross3(e12, e14)
+        d13 = xq3 - xq1
+        d24 = xq4 - xq2
+        nf = cross3(d13, d24)
         nf_norm = norm3(nf)
         n_face[q_idx] = np.where(
             nf_norm[:, None] > EM20,

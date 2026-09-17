@@ -309,6 +309,7 @@ class ContactType2:
         for k in range(4):
             np.add.at(mass_eff, seg[:, k], -w[:, k] * m_s)
         touched = np.unique(seg)
+        touched = touched[touched >= 0]
         inv_mass_eff[touched] = np.where(mass_eff[touched] > 0.0, 1.0 / np.maximum(mass_eff[touched], 1e-30), 0.0)
         self.active[dead] = False
 
@@ -819,11 +820,16 @@ class LagmulType2:
                     eq_ids.append(eq_z)
                 else:
                     # Degenerate inertia fallback to isoparametric
+                    w = self.active_weights[i]
+                    if nir == 3:
+                        seg_w = [float(w[0]), float(w[1]), float(w[2] + w[3])]
+                    else:
+                        seg_w = [float(w[k]) for k in range(4)]
                     for dof in range(3):
                         eq_id = n_rows
                         n_rows += 1
                         for k in range(nir):
-                            data.append(fact)
+                            data.append(seg_w[k])
                             nodes.append(int(seg[k]))
                             dofs.append(dof)
                             eq_ids.append(eq_id)
