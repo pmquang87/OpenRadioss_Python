@@ -4122,7 +4122,7 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "p_min": p_min, "ifail_so": ifail_so, "fail_id": fail_id
         }
         fm = FailureModel(type="SPALLING", ifail_sh=1, params=params)
-    elif kind == "WIERZBICKI":
+    elif kind in ("WIERZBICKI", "MMC"):
         # Card 1: C1, C2, C3, C4, m
         # Card 2: n, Ifail_sh, Ifail_so, Imoy
         if block.fixed:
@@ -4192,6 +4192,31 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         )
         params = {"alpha": alpha, "beta": beta, "plim": plim, "df": df, "ifail_so": ifail_so}
         fm = FailureModel(type="WILKINS", ifail_sh=ifail_sh if ifail_sh else 1, params=params)
+    elif kind in ("TBUTCHER", "TULER_BUTCHER", "TULER-BUTCHER"):
+        # Card 1: Lambda, K, Sigma_r, Ifail_sh, Ifail_so, Iduct, Ixfem
+        # (%20lg%20lg%20lg%10d%10d%10d%10d)
+        if block.fixed:
+            c1 = cards[0].cut("FAIL_TBUTCHER_1")
+            lam = _fval(c1[0], 1.0) if len(c1) > 0 and c1[0].strip() else 1.0
+            k_val = _fval(c1[1], 1.0e30) if len(c1) > 1 and c1[1].strip() else 1.0e30
+            sigr = _fval(c1[2], 0.0) if len(c1) > 2 and c1[2].strip() else 0.0
+            ifail_sh = _ival(c1[3], 1) if len(c1) > 3 and c1[3].strip() else 1
+            ifail_so = _ival(c1[4], 1) if len(c1) > 4 and c1[4].strip() else 1
+        else:
+            toks = cards[0].tokens()
+            lam = float(toks[0]) if len(toks) > 0 else 1.0
+            k_val = float(toks[1]) if len(toks) > 1 else 1.0e30
+            sigr = float(toks[2]) if len(toks) > 2 else 0.0
+            ifail_sh = int(float(toks[3])) if len(toks) > 3 else 1
+            ifail_so = int(float(toks[4])) if len(toks) > 4 else 1
+        from ..model.entities import FailTbutcher
+        model.fail_tbutchers[mat_id] = FailTbutcher(
+            id=mat_id, mat_id=mat_id, lam=lam, k=k_val, sigr=sigr,
+            ifail_sh=ifail_sh, ifail_so=ifail_so
+        )
+        params = {"lambda": lam, "k": k_val, "sigma_r": sigr, "ifail_so": ifail_so}
+        fm = FailureModel(type="TBUTCHER", ifail_sh=ifail_sh if ifail_sh else 1, params=params)
+
     elif kind == "ORTHENERG":
         # Card 0: PTHICKFAIL, blank, NMOD, FAILIP (%20lg%60s%10d%10d)
         # Cards 1..6: SIGMA_T, G_T, ISHAP_T, SIGMA_C, G_C, ISHAP_C

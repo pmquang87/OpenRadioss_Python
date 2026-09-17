@@ -35,6 +35,20 @@ from .initialization import (build_element_groups,
 from .restart import write_restart
 
 
+def build_model(blocks_or_path, log: Optional[MessageLog] = None) -> Model:
+    """Convenience helper to read/parse deck blocks and resolve materials into a Model."""
+    if isinstance(blocks_or_path, (str, list, tuple)) or hasattr(blocks_or_path, "__fspath__"):
+        blocks = read_deck(blocks_or_path)
+    else:
+        blocks = blocks_or_path
+    model = Model()
+    if log is None:
+        log = MessageLog()
+    parse_starter_deck(blocks, model, log)
+    resolve_materials(model, log)
+    return model
+
+
 def run_name_from_input(path: str) -> str:
     """'MYRUN_0000.rad' -> 'MYRUN' (the Radioss run-name convention)."""
     base = os.path.basename(path)

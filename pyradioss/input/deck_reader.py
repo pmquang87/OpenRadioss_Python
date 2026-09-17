@@ -242,13 +242,25 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
 
     blocks: List[KeywordBlock] = []
     current: Optional[KeywordBlock] = None
-    base_dir = os.path.dirname(os.path.abspath(path))
+    if isinstance(path, (list, tuple)):
+        if path and isinstance(path[0], KeywordBlock):
+            return list(path)
+        import io
+        base_dir = "."
+        path_name = "<memory>"
+        fh_ctx = io.StringIO("\n".join(path))
 
-    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+    else:
+        base_dir = os.path.dirname(os.path.abspath(path))
+        path_name = str(path)
+        fh_ctx = open(path, "r", encoding="utf-8", errors="replace")
+
+    with fh_ctx as fh:
         for lineno, line in enumerate(fh, start=1):
-            line = line.rstrip("\n")
+            line = line.rstrip("\r\n")
             stripped = line.strip()
-            here = f"{os.path.basename(path)}:{lineno}"
+            here = f"{os.path.basename(path_name)}:{lineno}"
+
 
             if not stripped:
                 # blank line: not a card for the token parsers, but the

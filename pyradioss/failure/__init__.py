@@ -39,34 +39,74 @@ array (in-place) and tstar the homologous temperature of the points
 D5 term reads it). All vectorized over the element slice.
 """
 
-from . import biquad, fld, johnson, snconnect, tab1  # noqa: F401
+from . import (  # noqa: F401
+    biquad,
+    chang,
+    fld,
+    hashin,
+    johnson,
+    mmc,
+    snconnect,
+    tab1,
+    tbutcher,
+    tvergaard,
+    wilkins,
+)
 
 
 def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     """Advance the damage of a solid slice; returns the broken mask."""
-    if fail.type == "JOHNSON":
+    ftype = fail.type.upper()
+    if ftype == "JOHNSON":
         return johnson.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
-    if fail.type == "BIQUAD":
+    if ftype == "BIQUAD":
         return biquad.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
-    if fail.type == "TAB1":
+    if ftype == "TAB1":
         return tab1.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
-    if fail.type == "SNCONNECT":
+    if ftype == "SNCONNECT":
         return snconnect.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
-    if fail.type == "FLD":
+    if ftype == "FLD":
         return fld.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype == "WILKINS":
+        return wilkins.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("CHANG", "CHANGCHANG"):
+        return chang.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype == "HASHIN":
+        return hashin.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("MMC", "WIERZBICKI"):
+        return mmc.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("TBUTCHER", "TULER-BUTCHER", "TULER_BUTCHER"):
+        return tbutcher.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("TVERGAARD", "GURSON"):
+        return tvergaard.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")
 
 
 def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     """Advance the damage of one shell layer; returns the broken mask."""
-    if fail.type == "JOHNSON":
+    ftype = fail.type.upper()
+    if ftype == "JOHNSON":
         return johnson.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
-    if fail.type == "BIQUAD":
+    if ftype == "BIQUAD":
         return biquad.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
-    if fail.type == "TAB1":
+    if ftype == "TAB1":
         return tab1.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
-    if fail.type == "SNCONNECT":
+    if ftype == "SNCONNECT":
         return snconnect.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
-    if fail.type == "FLD":
+    if ftype == "FLD":
         return fld.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype == "WILKINS":
+        return wilkins.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("CHANG", "CHANGCHANG"):
+        return chang.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype == "HASHIN":
+        return hashin.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("MMC", "WIERZBICKI"):
+        return mmc.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("TBUTCHER", "TULER-BUTCHER", "TULER_BUTCHER"):
+        return tbutcher.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("TVERGAARD", "GURSON"):
+        return tvergaard.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")
+
+

@@ -14014,6 +14014,20 @@ class FailWilkins:
 
 
 @dataclass
+class FailTbutcher:
+    """``/FAIL/TBUTCHER``: Tuler-Butcher dynamic spall fracture model."""
+    id: int = 0
+    mat_id: int = 0
+    lam: float = 1.0
+    k: float = 1.0e30
+    sigr: float = 0.0
+    ifail_sh: int = 1
+    ifail_so: int = 1
+    title: str = ""
+
+
+
+@dataclass
 class PropType14:
     """``/PROP/TYPE14`` or ``/PROP/SOLID``: Generalized 3D solid property."""
     id: int = 0

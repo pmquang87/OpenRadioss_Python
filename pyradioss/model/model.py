@@ -1222,6 +1222,8 @@ class Model:
         self.fail_wierzbickis: Dict[int, FailWierzbicki] = {}       # /FAIL/WIERZBICKI, /FAIL/MMC (M189)
         self.fail_mmcs = self.fail_wierzbickis
         self.fail_wilkinss: Dict[int, FailWilkins] = {}             # /FAIL/WILKINS (M189)
+        self.fail_tbutchers: Dict[int, FailTbutcher] = {}           # /FAIL/TBUTCHER (M581)
+        self.fail_tuler_butchers = self.fail_tbutchers
         self.fail_spallings: Dict[int, FailSpalling] = {}           # /FAIL/SPALLING, /FAIL/SPALL (M189)
         self.fail_spalls = self.fail_spallings
         self.prop_type14s: Dict[int, PropType14] = {}               # /PROP/TYPE14, /PROP/SOLID (M189)
