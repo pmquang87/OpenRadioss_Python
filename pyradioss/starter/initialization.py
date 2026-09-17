@@ -175,9 +175,9 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
         part_ids = np.array([t[1] for t in raw], dtype=np.int64)
 
         # user node ids -> indices (USR2SYS)
-        conn = np.zeros((len(raw), nnode), dtype=np.int64)
-        ok = True
-        for k, (eid, pid, nodes) in enumerate(raw):
+        valid_raw = []
+        valid_conn = []
+        for eid, pid, nodes in raw:
             try:
                 c_nodes = []
                 for j, n in enumerate(nodes):
@@ -197,13 +197,19 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
                             raise KeyError(0)
                     else:
                         c_nodes.append(model._id2idx[n_int])
-                conn[k] = c_nodes
+                valid_conn.append(c_nodes)
+                valid_raw.append((eid, pid, nodes))
             except KeyError as exc:
                 log.error(f"/{etype} {eid}: unknown node id {exc}",
                           "ELEMENT CHECK")
-                ok = False
-        if not ok:
+        if not valid_raw:
             continue
+
+        raw = valid_raw
+        model.raw_elems[etype] = raw
+        ids = np.array([t[0] for t in raw], dtype=np.int64)
+        part_ids = np.array([t[1] for t in raw], dtype=np.int64)
+        conn = np.array(valid_conn, dtype=np.int64)
 
         # part index + per-part slices with resolved (mat, prop)
         part_idx = np.zeros(len(raw), dtype=np.int64)
@@ -814,12 +820,6 @@ def _nodes_in_box(model: Model, box, log: MessageLog,
 
     if box.kind == "RECTA":
         cmin, cmax = box.corner_min, box.corner_max
-        if box.node1:
-            p1 = _pt(box.node1, None)
-            p2 = _pt(box.node2, None)
-            if p1 is None or p2 is None:
-                return np.zeros(0, dtype=np.int64)
-            cmin, cmax = np.minimum(p1, p2), np.maximum(p1, p2)
         if box.iskew:
             row = model.skews.index("SKEW", box.iskew)
             if row < 0:
@@ -829,7 +829,17 @@ def _nodes_in_box(model: Model, box, log: MessageLog,
             origin = model.skews.origins[row]
             x_test = (x - origin) @ axes.T
         else:
+            axes = origin = None
             x_test = x
+        if box.node1:
+            p1 = _pt(box.node1, None)
+            p2 = _pt(box.node2, None)
+            if p1 is None or p2 is None:
+                return np.zeros(0, dtype=np.int64)
+            if box.iskew:
+                p1 = (p1 - origin) @ axes.T
+                p2 = (p2 - origin) @ axes.T
+            cmin, cmax = np.minimum(p1, p2), np.maximum(p1, p2)
         inside = np.all((x_test >= cmin) & (x_test <= cmax), axis=1)
         return np.where(inside)[0]
     if box.kind == "SPHER":

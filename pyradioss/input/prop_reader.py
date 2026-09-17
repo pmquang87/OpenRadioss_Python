@@ -198,7 +198,7 @@ def _is_num(card: Card) -> bool:
         return False
     for t in toks:
         try:
-            float(t.replace("D", "E").replace("d", "e"))
+            parse_fortran_float(t)
         except ValueError:
             return False
     return True

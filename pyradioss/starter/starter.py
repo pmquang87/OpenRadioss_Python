@@ -136,9 +136,9 @@ def apply_transforms(model: Model, log: MessageLog) -> None:
                     idx1 = model.node_index(n1)
                     idx2 = model.node_index(n2)
                     v = model.x0[idx2] - model.x0[idx1]
-                    tx += float(v[0])
-                    ty += float(v[1])
-                    tz += float(v[2])
+                    tx = float(v[0])
+                    ty = float(v[1])
+                    tz = float(v[2])
                 except KeyError as exc:
                     log.warning(f"/TRANSFORM/TRA/{tr_id}: node {exc} for "
                                 f"node-pair vector not found")
@@ -154,12 +154,10 @@ def apply_transforms(model: Model, log: MessageLog) -> None:
                 continue
             p1 = np.array(p1, dtype=float)
             p2 = np.array(p2, dtype=float)
-            if n1 > 0 or n2 > 0:
+            if n1 > 0 and n2 > 0:
                 try:
-                    if n1 > 0:
-                        p1 = model.x0[model.node_index(n1)].copy()
-                    if n2 > 0:
-                        p2 = model.x0[model.node_index(n2)].copy()
+                    p1 = model.x0[model.node_index(n1)].copy()
+                    p2 = model.x0[model.node_index(n2)].copy()
                 except KeyError as exc:
                     log.warning(f"/TRANSFORM/ROT/{tr_id}: node {exc} not found")
                     continue
@@ -183,12 +181,10 @@ def apply_transforms(model: Model, log: MessageLog) -> None:
                 continue
             p1 = np.array(p1, dtype=float)
             p2 = np.array(p2, dtype=float)
-            if n1 > 0 or n2 > 0:
+            if n1 > 0 and n2 > 0:
                 try:
-                    if n1 > 0:
-                        p1 = model.x0[model.node_index(n1)].copy()
-                    if n2 > 0:
-                        p2 = model.x0[model.node_index(n2)].copy()
+                    p1 = model.x0[model.node_index(n1)].copy()
+                    p2 = model.x0[model.node_index(n2)].copy()
                 except KeyError as exc:
                     log.warning(f"/TRANSFORM/SYM/{tr_id}: node {exc} not found")
                     continue

@@ -68,7 +68,7 @@ from . import mat_reader
 from .card_layouts import LAYOUTS
 from .card_layouts import CARD_LAYOUTS
 from .card_layouts import split_fixed
-from .deck_reader import Card, KeywordBlock, _to_float
+from .deck_reader import Card, KeywordBlock, _to_float, parse_fortran_float
 
 
 # ----------------------------------------------------------------------------
@@ -96,7 +96,7 @@ def _ival(s: str, default: int = 0) -> int:
     try:
         return int(s_clean)
     except ValueError:
-        return int(float(s_clean.replace("D", "E").replace("d", "e")))
+        return int(parse_fortran_float(s_clean))
 
 
 def _fval(s: str, default: float = 0.0) -> float:
@@ -143,7 +143,7 @@ def _is_numeric_card(card: Card) -> bool:
         if not s:
             continue
         try:
-            float(s.replace("D", "E").replace("d", "e"))
+            parse_fortran_float(s)
         except ValueError:
             return False
     return True
@@ -13213,9 +13213,18 @@ def read_sect(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             x0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
             y0 = _fval(f[1], 0.0) if len(f) > 1 else 0.0
             z0 = _fval(f[2], 0.0) if len(f) > 2 else 0.0
-            nx = _fval(f[3], 0.0) if len(f) > 3 else 0.0
-            ny = _fval(f[4], 0.0) if len(f) > 4 else 0.0
-            nz = _fval(f[5], 1.0) if len(f) > 5 else 1.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = cards[1].cut("SECT_CUT_2")
+                nx = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                ny = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                nz = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            elif len(f) > 3:
+                nx = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+                ny = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+                nz = _fval(f[5], 1.0) if len(f) > 5 else 1.0
+            else:
+                nx = ny = 0.0
+                nz = 1.0
         else:
             t = cards[0].tokens()
             x0 = float(t[0]) if len(t) > 0 else 0.0
@@ -13341,7 +13350,13 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             if len(cards) > 1 and not cards[1].is_blank:
                 g = cards[1].cut("RWALL_BOX_2")
                 p1 = (_fval(g[0]), _fval(g[1]), _fval(g[2]))
-                p2 = (_fval(g[3]), _fval(g[4]), _fval(g[5]))
+                if len(cards) > 2 and not cards[2].is_blank:
+                    g2 = cards[2].cut("RWALL_BOX_3")
+                    p2 = (_fval(g2[0]), _fval(g2[1]), _fval(g2[2]))
+                elif len(g) > 3:
+                    p2 = (_fval(g[3]), _fval(g[4]), _fval(g[5]))
+                else:
+                    p2 = (0.0, 0.0, 0.0)
             else:
                 p1 = (0.0, 0.0, 0.0)
                 p2 = (0.0, 0.0, 0.0)
@@ -13378,8 +13393,16 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             if len(cards) > 1 and not cards[1].is_blank:
                 g = cards[1].cut("RWALL_CONE_2")
                 apex = (_fval(g[0]), _fval(g[1]), _fval(g[2]))
-                axis = (_fval(g[3]), _fval(g[4]), _fval(g[5], 1.0))
-                angle = _fval(g[6])
+                if len(cards) > 2 and not cards[2].is_blank:
+                    g2 = cards[2].cut("RWALL_CONE_3")
+                    axis = (_fval(g2[0]), _fval(g2[1]), _fval(g2[2], 1.0))
+                    angle = _fval(g2[3]) if len(g2) > 3 else 0.0
+                elif len(g) > 3:
+                    axis = (_fval(g[3]), _fval(g[4]), _fval(g[5], 1.0))
+                    angle = _fval(g[6]) if len(g) > 6 else 0.0
+                else:
+                    axis = (0.0, 0.0, 1.0)
+                    angle = 0.0
             else:
                 apex = (0.0, 0.0, 0.0)
                 axis = (0.0, 0.0, 1.0)

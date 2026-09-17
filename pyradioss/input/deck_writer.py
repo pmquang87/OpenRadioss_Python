@@ -142,7 +142,7 @@ from __future__ import annotations
 import os
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from .deck_reader import Card, KeywordBlock
+from .deck_reader import Card, KeywordBlock, parse_fortran_float
 from .starter_keywords import split_imposed_card
 
 # ============================================================================
@@ -10846,7 +10846,7 @@ def _title_cards(block: KeywordBlock) -> Tuple[str, List[Card]]:
     numeric = bool(toks)
     for t in toks:
         try:
-            float(t.replace("D", "E").replace("d", "e"))
+            parse_fortran_float(t)
         except ValueError:
             numeric = False
             break
