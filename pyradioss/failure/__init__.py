@@ -43,6 +43,9 @@ from . import (  # noqa: F401
     biquad,
     chang,
     cockcroft,
+    fail_gurson,
+    fail_ladeveze,
+    fail_rtcl,
     fld,
     hashin,
     hc_dsse,
@@ -80,7 +83,9 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
         return mmc.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     if ftype in ("TBUTCHER", "TULER-BUTCHER", "TULER_BUTCHER"):
         return tbutcher.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
-    if ftype in ("TVERGAARD", "GURSON"):
+    if ftype in ("GURSON", "GURSON_MODEL", "GURSON_DAMAGE"):
+        return fail_gurson.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("TVERGAARD", "GTN"):
         return tvergaard.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     if ftype in ("PUCK", "PUCK_COMPOSITE"):
         return puck.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
@@ -88,6 +93,10 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
         return cockcroft.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     if ftype in ("HC_DSSE", "HC-DSSE", "HCDSSE", "HC/DSSE", "HC"):
         return hc_dsse.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("LADEVEZE", "LAD_DAMA", "LADEVEZE_COMPOSITE"):
+        return fail_ladeveze.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("RTCL", "RTCL_MODEL", "RTCL_LAW"):
+        return fail_rtcl.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")
 
 
@@ -114,7 +123,9 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
         return mmc.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     if ftype in ("TBUTCHER", "TULER-BUTCHER", "TULER_BUTCHER"):
         return tbutcher.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
-    if ftype in ("TVERGAARD", "GURSON"):
+    if ftype in ("GURSON", "GURSON_MODEL", "GURSON_DAMAGE"):
+        return fail_gurson.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("TVERGAARD", "GTN"):
         return tvergaard.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     if ftype in ("PUCK", "PUCK_COMPOSITE"):
         return puck.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
@@ -122,6 +133,10 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
         return cockcroft.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     if ftype in ("HC_DSSE", "HC-DSSE", "HCDSSE", "HC/DSSE", "HC"):
         return hc_dsse.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("LADEVEZE", "LAD_DAMA", "LADEVEZE_COMPOSITE"):
+        return fail_ladeveze.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("RTCL", "RTCL_MODEL", "RTCL_LAW"):
+        return fail_rtcl.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")
 
 
