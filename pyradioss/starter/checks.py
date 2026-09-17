@@ -90,6 +90,14 @@ _LAW74_KEYS = {
 for _fam in ("bricks", "tetras", "penta6", "pyra5"):
     _ALLOWED_LAWS[_fam].update(_LAW74_KEYS)
 
+_LAW76_KEYS = {
+    76, "76", "LAW76", "SAMP", "SAMP-1", "SAMP_1",
+    "MAT_76", "MAT_LAW76", "MAT_SAMP", "MAT_SAMP-1", "MAT_SAMP_1",
+    "LAW76_SAMP", "LAW76_SAMP-1", "LAW76_SAMP_1",
+}
+for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells", "shells_qbat", "shells_qeph", "sh3n"):
+    _ALLOWED_LAWS[_fam].update(_LAW76_KEYS)
+
 _LAW87_KEYS = {
     87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000",
     "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000",
@@ -7303,6 +7311,103 @@ check_mat_vegter = check_mat_law110
 check_mat_plas_vegter = check_mat_law110
 
 
+def check_mat_law76(*args: Any, **kwargs: Any) -> None:
+    """Validate /MAT/LAW76 or /MAT/SAMP-1 parameter bounds and element compatibility (M588).
+
+    Upstream reference: ``starter/source/materials/mat/mat076/hm_read_mat76.F``.
+
+    Checks:
+      1. RHO > 0 (ANCMSG 1514).
+      2. E > 0 (ANCMSG 1514).
+      3. -1.0 < NU < 0.5 (Poisson ratio bounds).
+      4. FUNC_TENS > 0 (ANCMSG 126, tension yield curve is mandatory).
+      5. If curves are given and model.functions exists, check that they exist.
+      6. Compatible elements: 3D solids and 2D shells. Rejects 1D elements (ANCMSG 306).
+    """
+    actual_mat = None
+    actual_log = None
+    actual_model = None
+    actual_mid = None
+
+    if "model" in kwargs:
+        actual_model = kwargs["model"]
+    if "mat" in kwargs:
+        actual_mat = kwargs["mat"]
+    if "log" in kwargs:
+        actual_log = kwargs["log"]
+    if "mat_id" in kwargs:
+        actual_mid = kwargs["mat_id"]
+
+    for c in args:
+        if isinstance(c, MessageLog):
+            actual_log = c
+        elif isinstance(c, Model):
+            actual_model = c
+        elif hasattr(c, "id") and (hasattr(c, "fct_id_t") or hasattr(c, "fct_ID_T") or hasattr(c, "nu_p") or hasattr(c, "law") or hasattr(c, "params")):
+            actual_mat = c
+        elif isinstance(c, int):
+            actual_mid = c
+
+    if actual_log is None:
+        actual_log = MessageLog()
+
+    mat = actual_mat
+    mat_id = actual_mid if actual_mid is not None else (mat.id if mat is not None else 0)
+
+    if mat is not None:
+        params = getattr(mat, "params", {}) if hasattr(mat, "params") and isinstance(mat.params, dict) else (mat if isinstance(mat, dict) else {})
+        rho = float(getattr(mat, "rho", None) or getattr(mat, "rho_0", None) or getattr(mat, "rho0", None) or params.get("rho") or params.get("rho0") or params.get("rho_0") or 0.0)
+        if rho <= 0.0:
+            actual_log.error(f"/MAT/LAW76/{mat_id}: initial density RHO must be strictly positive (got {rho}) (ANCMSG 1514)", "MAT CHECK")
+
+        e = float(getattr(mat, "e", None) or getattr(mat, "E", None) or getattr(mat, "young", None) or params.get("e") or params.get("E") or params.get("young") or 0.0)
+        if e <= 0.0:
+            actual_log.error(f"/MAT/LAW76/{mat_id}: Young's modulus E must be strictly positive (got {e}) (ANCMSG 1514)", "MAT CHECK")
+
+        nu_val = getattr(mat, "nu", None)
+        if nu_val is None:
+            nu_val = params.get("nu", 0.0)
+        nu = float(nu_val)
+        if nu <= -1.0 or nu >= 0.5:
+            actual_log.error(f"/MAT/LAW76/{mat_id}: Poisson's ratio NU must be in (-1.0, 0.5) (got {nu})", "MAT CHECK")
+
+        fct_t = int(getattr(mat, "fct_id_t", None) or getattr(mat, "fct_ID_T", None) or getattr(mat, "func_tens", None) or params.get("fct_id_t") or params.get("fct_ID_T") or params.get("func_tens") or 0)
+        if fct_t <= 0:
+            actual_log.error(f"/MAT/LAW76/{mat_id}: tension yield curve fct_ID_T is required and must be > 0 (got {fct_t}) (ANCMSG 126)", "MAT CHECK")
+
+        if actual_model is not None:
+            funcs = getattr(actual_model, "functions", {})
+            if funcs:
+                if fct_t > 0 and fct_t not in funcs:
+                    actual_log.error(f"/MAT/LAW76/{mat_id}: referenced tension curve fct_ID_T={fct_t} not found in model functions", "MAT CHECK")
+                fct_c = int(getattr(mat, "fct_id_c", None) or getattr(mat, "fct_ID_C", None) or getattr(mat, "func_comp", None) or params.get("fct_id_c") or params.get("fct_ID_C") or params.get("func_comp") or 0)
+                if fct_c > 0 and fct_c not in funcs:
+                    actual_log.error(f"/MAT/LAW76/{mat_id}: referenced compression curve fct_ID_C={fct_c} not found in model functions", "MAT CHECK")
+                fct_s = int(getattr(mat, "fct_id_s", None) or getattr(mat, "fct_ID_S", None) or getattr(mat, "func_shear", None) or params.get("fct_id_s") or params.get("fct_ID_S") or params.get("func_shear") or 0)
+                if fct_s > 0 and fct_s not in funcs:
+                    actual_log.error(f"/MAT/LAW76/{mat_id}: referenced shear curve fct_ID_S={fct_s} not found in model functions", "MAT CHECK")
+
+            parts_dict = getattr(actual_model, "parts", {})
+            props_dict = getattr(actual_model, "properties", {})
+            for pid, part in parts_dict.items():
+                if getattr(part, "mat_id", 0) == mat_id:
+                    prop_id = getattr(part, "prop_id", 0)
+                    prop = props_dict.get(prop_id)
+                    if prop is not None:
+                        ptype_val = getattr(prop, "type", getattr(prop, "prop_type", None))
+                        ptype = str(ptype_val or "").upper()
+                        if ptype_val in (2, 3, 4, 11) or any(s in ptype for s in ("TYPE2", "TYPE3", "TYPE4", "TYPE11", "BEAM", "TRUSS", "SPRING")):
+                            actual_log.error(
+                                f"/MAT/LAW76/{mat_id} is not supported for 1D elements ({ptype.lower()}) (ANCMSG 306)",
+                                "MAT CHECK",
+                            )
+
+
+_check_mat_law76 = check_mat_law76
+check_mat_samp = check_mat_law76
+check_mat_samp_1 = check_mat_law76
+
+
 def check_materials(model: Model, log: MessageLog) -> None:
     """Validate all material parameters across model."""
     # M539: Material LAW34 parameter validation
@@ -7624,6 +7729,14 @@ def check_materials(model: Model, log: MessageLog) -> None:
     for mid, mat110 in getattr(model, "mat_law110s", {}).items():
         if mid not in getattr(model, "materials", {}):
             check_mat_law110(model=model, mat_id=mid, mat=mat110, log=log)
+
+    # M588: Material LAW76 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in _LAW76_KEYS or getattr(mat, "law_name", None) in _LAW76_KEYS:
+            check_mat_law76(model=model, mat_id=mid, mat=mat, log=log)
+    for mid, mat76 in getattr(model, "mat_law76s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law76(model=model, mat_id=mid, mat=mat76, log=log)
 
 
 
@@ -7976,6 +8089,20 @@ _MAT_CHECKS: dict[Any, Any] = {
     "MAT_VEGTER": check_mat_law110,
     "MAT_PLAS_VEGTER": check_mat_law110,
     "MAT_110": check_mat_law110,
+    76: check_mat_law76,
+    "76": check_mat_law76,
+    "LAW76": check_mat_law76,
+    "SAMP": check_mat_law76,
+    "SAMP-1": check_mat_law76,
+    "SAMP_1": check_mat_law76,
+    "MAT_76": check_mat_law76,
+    "MAT_LAW76": check_mat_law76,
+    "MAT_SAMP": check_mat_law76,
+    "MAT_SAMP-1": check_mat_law76,
+    "MAT_SAMP_1": check_mat_law76,
+    "LAW76_SAMP": check_mat_law76,
+    "LAW76_SAMP-1": check_mat_law76,
+    "LAW76_SAMP_1": check_mat_law76,
 }
 
 
