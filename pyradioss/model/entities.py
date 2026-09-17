@@ -2429,6 +2429,7 @@ class RigidLink:
     skew_id: int = 0
     grnod_id: int = 0
     ipol: int = 0
+    node_ids: List[int] = field(default_factory=list)
 
     @property
     def tx(self) -> int:
@@ -2480,6 +2481,7 @@ class CylJoint:
     axis_dir: int = 1
     skew_id: int = 0
     tol: float = 1e-6
+    secondary_nodes: List[int] = field(default_factory=list)
 
     def __post_init__(self):
         if not self.node1 and self.node_id1:
@@ -11200,6 +11202,22 @@ class PropType17:
 
 PropStack = PropType17
 PropCompStack = PropType17
+
+
+@dataclass
+class PropType19:
+    """/PROP/TYPE19 or /PROP/SPR_TORS: Torsion spring property."""
+    id: int = 0
+    mass: float = 0.0
+    inertia: float = 0.0
+    k_theta: float = 0.0
+    c_theta: float = 0.0
+    title: str = ""
+
+
+PropSprTors = PropType19
+PropTorsion = PropType19
+
 
 
 @dataclass

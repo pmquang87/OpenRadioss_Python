@@ -72,6 +72,8 @@ from .mpc import build_mpc
 from .rbe3 import build_rbe3
 from .rigid_body import build_rigid_bodies
 from .rigid_wall import RigidWalls
+from .cyl_joint import build_cyl_joints
+from .rlink import build_rlinks
 from .sections import SectionForces
 from .sensors import Sensors
 
@@ -355,6 +357,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     rbe3s = build_rbe3(model, log)
     mpc = build_mpc(model, loads, log)     # /MPC (M6)
     lagmul = LagmulSolver(model, loads, log)
+    cyl_joints = build_cyl_joints(model, log)  # /CYL_JOINT (M586)
+    rlinks = build_rlinks(model, log)          # /RLINK (M586)
     sections = SectionForces(model, log)
     # /DT/NODA[/CST] (M6): nodal time step + mass scaling. Nodes whose
     # motion a constraint prescribes carry no stability constraint of
@@ -430,6 +434,10 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         mpc.enforce(model.v, model.vr, inv_mass, inv_inertia)
     if len(lagmul) > 0:
         lagmul.enforce(model.v, model.vr, inv_mass, inv_inertia)
+    for rl in rlinks:
+        rl.apply_velocity(model.v, mass_eff, getattr(model, "vr", None), getattr(model, "inertia", None))
+    for cj in cyl_joints:
+        cj.apply_velocity(model.v, model.x, mass_eff)
 
     real = model.mass < 1e29
     if resumed:
@@ -690,6 +698,10 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                                state.cycle)
         for r3 in rbe3s:
             r3.transfer_forces(fint, fext, fcont, mint, model.x)
+        for cj in cyl_joints:
+            cj.transfer_forces(fint, fext, fcont, mint, model.x)
+        for rl in rlinks:
+            rl.transfer_forces(fint, fext, fcont, mint, mass_eff)
 
         # ---- 3c. /DT/NODA[/CST]: nodal time step + mass scaling (M6) ------
         # Runs BEFORE the acceleration so the mass added for the target
@@ -738,6 +750,10 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             state.ams_iters = getattr(state, "ams_iters", 0) + iters
         else:
             acc = f_total * inv_mass[:, None]
+        for rl in rlinks:
+            rl.apply_acceleration(acc, mass_eff, getattr(model, "ar", None), getattr(model, "inertia", None))
+        for cj in cyl_joints:
+            cj.apply_acceleration(acc, model.x, mass_eff)
         model.fint = fint
         model.fext = fext
         model.a = acc
@@ -829,6 +845,10 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             mpc.enforce(model.v, model.vr, inv_mass, inv_inertia)
         if len(lagmul) > 0:
             lagmul.enforce(model.v, model.vr, inv_mass, inv_inertia)
+        for rl in rlinks:
+            rl.apply_velocity(model.v, mass_eff, getattr(model, "vr", None), getattr(model, "inertia", None))
+        for cj in cyl_joints:
+            cj.apply_velocity(model.v, model.x, mass_eff)
 
         # ---- 6. position update -------------------------------------------
         model.x += model.v * dt
@@ -842,6 +862,10 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             t2.enforce(model.x, model.v, model.vr, dt)
         for r3 in rbe3s:
             r3.enforce(model.x, model.v, model.vr, dt)
+        for rl in rlinks:
+            rl.enforce(model.x, model.v, dt)
+        for cj in cyl_joints:
+            cj.enforce(model.x, model.v, dt)
 
         # ---- 6c. numerical-dissipation ledger (M6) --------------------------
         # The kernels book internal energy as a STATE FUNCTION

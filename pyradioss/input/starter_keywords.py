@@ -1074,7 +1074,11 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_STEINB", "MAT_STEINBERG", "MAT_STEINBERG_GUINAN", "LAW49_STEINB"):
         read_mat_law49(block, model, log)
         return
-    if lawname in ("LAW76", "SAMP", "PLAS_SAMP", "SAMP_PLAS", "MAT_SAMP", "MAT_PLAS_SAMP", "LAW76_SAMP"):
+    if lawname in (
+        "76", "LAW76", "SAMP", "SAMP-1", "SAMP_1",
+        "PLAS_SAMP", "SAMP_PLAS", "MAT_SAMP", "MAT_SAMP-1",
+        "MAT_PLAS_SAMP", "LAW76_SAMP", "LAW76_SAMP-1", "MAT_LAW76",
+    ):
         read_mat_law76(block, model, log)
         return
     # M185 / M551: LAW60 (PLAS_T3, FABRIC), LAW63 (HANSEL), LAW48 (ZHAO), LAW26 (SESAM)
@@ -5187,6 +5191,9 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if typename in ("TYPE17", "STACK", "COMP_STACK", "PROP_TYPE17", "PROP_STACK", "P17_STACK"):
         read_prop_type17(block, model, log)
+        return
+    if typename in ("TYPE19", "SPR_TORS", "TORSION", "PROP_TYPE19", "PROP_SPR_TORS", "P19_SPR_TORS"):
+        read_prop_type19(block, model, log)
         return
     if typename in ("TYPE44", "SPR_CRUS", "CRUSH_SPRING", "SPRING_CRUSH", "PROP_TYPE44", "PROP_SPR_CRUS", "P44_SPR_CRUS"):
         read_prop_type44(block, model, log)
@@ -18232,9 +18239,20 @@ def read_rlink(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             skew_id = 0
             grnod_id = 0
             ipol = 0
+    node_ids = []
+    if len(cards) > 1:
+        for card in cards[1:]:
+            for tok in card.tokens():
+                try:
+                    nid = int(float(tok))
+                    if nid > 0:
+                        node_ids.append(nid)
+                except ValueError:
+                    pass
     model.rlinks[block.user_id] = RigidLink(
         id=block.user_id, title=title, dofs=dofs,
-        skew_id=skew_id, grnod_id=grnod_id, ipol=ipol
+        skew_id=skew_id, grnod_id=grnod_id, ipol=ipol,
+        node_ids=node_ids
     )
 
 
@@ -18244,6 +18262,7 @@ def read_cyl_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     Fortran origin: ``starter/source/constraints/general/cyl_joint/hm_read_cyljoint.F``.
     Card 1: TITLE (%-100s)
     Card 2: node_id1, node_id2, grnod_id (%10d%10d%10d) or node1, node2, axis_dir, skew_id, tol
+    Card 3...: optional list of secondary nodes
     """
     from ..model.entities import CylJoint
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -18270,9 +18289,20 @@ def read_cyl_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         axis_dir = int(float(toks[2])) if len(toks) > 2 else 1
         skew_id = int(float(toks[3])) if len(toks) > 3 else 0
         tol = float(toks[4]) if len(toks) > 4 else 1e-6
+    secondary_nodes = []
+    if len(cards) > 1:
+        for card in cards[1:]:
+            for tok in card.tokens():
+                try:
+                    nid = int(float(tok))
+                    if nid > 0:
+                        secondary_nodes.append(nid)
+                except ValueError:
+                    pass
     model.cyl_joints[block.user_id] = CylJoint(
         id=block.user_id, title=title, node_id1=n1, node_id2=n2, grnod_id=gr,
-        node1=n1, node2=n2, axis_dir=axis_dir, skew_id=skew_id, tol=tol
+        node1=n1, node2=n2, axis_dir=axis_dir, skew_id=skew_id, tol=tol,
+        secondary_nodes=secondary_nodes
     )
 
 
@@ -36410,17 +36440,24 @@ def read_mat_law76(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
     model.mat_law76s[mat_id] = m76
     model.materials[mat_id] = Material(
-        id=mat_id, law=76, rho0=rho, title=title,
+        id=mat_id, law=76, law_name="LAW76", rho0=rho, title=title,
         params={
             "rho": rho, "rho0": rho, "refer_rho": refer_rho,
-            "e": e, "E": e, "nu": nu, "pr": nu,
+            "e": e, "E": e, "young": e, "nu": nu, "pr": nu, "poisson": nu,
             "fun_d1": fun_d1, "fun_d2": fun_d2, "fun_d3": fun_d3, "fun_d4": fun_d4,
+            "fct_id_t": fun_d1, "fct_id_c": fun_d2, "fct_id_s": fun_d3, "fct_id_b": fun_d4,
+            "tab_id1": fun_d1, "tab_id2": fun_d2, "tab_id3": fun_d3,
             "fscale11": fscale11, "fscale22": fscale22, "fscale33": fscale33, "fscale12": fscale12,
-            "facx": facx, "mat_nut": mat_nut, "nu_p": mat_nut, "fun_b5": fun_b5, "mat_pscale": mat_pscale,
-            "israte": israte, "asrate": asrate,
-            "epsilon_f": epsilon_f, "epsilon_0": epsilon_0, "dc": dc,
-            "fun_a1": fun_a1, "fun_a2": fun_a2, "fun_a3": fun_a3, "scale": scale,
-            "iform": iform, "iflag": iflag, "gflag": gflag,
+            "fscale_t": fscale11, "fscale_c": fscale22, "fscale_s": fscale33, "fscale_b": fscale12,
+            "facx": facx, "mat_nut": mat_nut, "nu_p": mat_nut, "nup": mat_nut,
+            "fun_b5": fun_b5, "fct_id_nu": fun_b5, "fct_idpr": fun_b5,
+            "mat_pscale": mat_pscale, "fscale_pr": mat_pscale,
+            "israte": israte, "asrate": asrate, "fcut": asrate,
+            "epsilon_f": epsilon_f, "eps_f": epsilon_f, "epsilon_0": epsilon_0, "eps_r": epsilon_0, "dc": dc,
+            "fun_a1": fun_a1, "fun_a2": fun_a2, "fun_a3": fun_a3,
+            "fct_id_dmg": fun_a1, "scale": scale, "scale_dmg": scale,
+            "iform": iform, "iflag": iflag, "iquad": iflag, "gflag": gflag, "iconv": gflag,
+            "law": 76, "law_name": "LAW76",
         }
     )
 
@@ -36793,6 +36830,41 @@ def read_prop_type17(block: KeywordBlock, model: Model, log: MessageLog) -> None
             "ithick": ithick, "iplas": iplas,
             "vx": vx, "vy": vy, "vz": vz, "skew_id": skew_id, "iorth": iorth,
             "ipos": ipos, "refplane": refplane,
+        }
+    )
+
+
+def read_prop_type19(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE19/id`` or ``/PROP/SPR_TORS/id``: Torsion spring property."""
+    from ..model.entities import PropType19, Property
+    prop_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    if not valid_cards:
+        log.error(f"/PROP/TYPE19/{prop_id}: missing data card", block.source)
+        return
+
+    mass, inertia, k_theta, c_theta = 0.0, 0.0, 0.0, 0.0
+    toks = valid_cards[0].tokens()
+    if len(toks) > 0:
+        mass = _safe_float(toks[0])
+    if len(toks) > 1:
+        inertia = _safe_float(toks[1])
+    if len(toks) > 2:
+        k_theta = _safe_float(toks[2])
+    if len(toks) > 3:
+        c_theta = _safe_float(toks[3])
+
+    p19 = PropType19(
+        id=prop_id, mass=mass, inertia=inertia, k_theta=k_theta, c_theta=c_theta,
+        title=title,
+    )
+    model.prop_type19s[prop_id] = p19
+    model.properties[prop_id] = Property(
+        id=prop_id, type=19, title=title,
+        params={
+            "mass": mass, "inertia": inertia, "k_theta": k_theta, "c_theta": c_theta,
+            "k": k_theta, "c": c_theta,
         }
     )
 
@@ -87432,8 +87504,19 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT/STEINBERG_GUINAN": read_mat_law49,
     "LAW49_STEINB": read_mat_law49,
     "MAT_LAW76": read_mat,
+    "LAW76": read_mat,
+    "MAT/LAW76": read_mat,
     "MAT_SAMP": read_mat,
     "SAMP": read_mat,
+    "MAT/SAMP": read_mat,
+    "MAT_SAMP-1": read_mat,
+    "SAMP-1": read_mat,
+    "MAT/SAMP-1": read_mat,
+    "MAT_SAMP_1": read_mat,
+    "SAMP_1": read_mat,
+    "MAT/SAMP_1": read_mat,
+    "LAW76_SAMP": read_mat,
+    "LAW76_SAMP-1": read_mat,
     "MAT_PLAS_SAMP": read_mat,
     "PLAS_SAMP": read_mat,
     "MAT_SAMP_PLAS": read_mat,
