@@ -42,7 +42,7 @@ from .entities import (
     InitialTrussState, InitialBeamState, InitialSpringState,
     CyclicBoundaryCondition, SolidPartPerturbation, PBlastLoad,
     SubInterface, GuidedCable, ShellPartPerturbation, FailurePerturbation, SphGlobal, SmsGlobal,
-    BcsNrf, BcsWall, RigidLink, CylJoint, GeneralJoint,
+    BcsNrf, BcsWall, RigidLink, CylJoint, GJoint, GeneralJoint,
     MergeNode, MergeRbody, IniCrack, IniCrackSegment, LaserLoad,
     PcylLoad, PfluidLoad, Preload, PreloadAxial, DampInter, DampRange,
     AnalyGlobal, UpwindGlobal, CaaControl,
@@ -720,6 +720,7 @@ class Model:
         self.trusses: Optional[ElementGroup] = None   # /TRUSS  (IXT)
         self.springs: Optional[ElementGroup] = None   # /SPRING (IXR)
         self.beams: Optional[ElementGroup] = None     # /BEAM   (IXP)
+        self.beams_fiber: Optional[ElementGroup] = None  # /BEAM /PROP/TYPE18 (M593)
         self.shel16s: Optional[ElementGroup] = None   # /SHEL16 (IXS16)
         self.bric20s: Optional[ElementGroup] = None   # /BRIC20 / /HEXA20 (M122)
         self.penta6s: Optional[ElementGroup] = None   # /PENTA6 6-node wedge (M590)
@@ -857,7 +858,7 @@ class Model:
         self.laminates: Dict[int, Laminate] = {}       # /LAMINATE (M100)
         self.bcs_nrf: Dict[int, BcsNrf] = {}           # /BCS/NRF (M102)
         self.rlinks: Dict[int, RigidLink] = {}         # /RLINK (M102)
-        self.gjoints: Dict[int, GeneralJoint] = {}     # /GJOINT (M102)
+        self.gjoints: Dict[int, GJoint] = {}           # /GJOINT (M102, M594)
         self.node_merges: Dict[int, MergeNode] = {}    # /MERGE/NODE (M102)
         self.rbody_merges: Dict[int, MergeRbody] = {}  # /MERGE/RBODY (M102)
         self.inicracks: Dict[int, IniCrack] = {}       # /INICRACK (M102)
@@ -3796,7 +3797,7 @@ class Model:
     def element_groups(self):
         """Iterate (name, group) over the non-empty element groups."""
         for name in ("bricks", "bricks_heph", "tshells", "bric20s", "penta6s", "quads", "tetras", "tetra10s", "shel16s", "shells", "shells_qbat",
-                     "shells_qeph", "sh3n", "sh3n_dkt18", "trusses", "springs", "beams"):
+                     "shells_qeph", "sh3n", "sh3n_dkt18", "trusses", "springs", "beams", "beams_fiber"):
             g = getattr(self, name)
             if g is not None and g.n:
                 yield name, g

@@ -73,6 +73,7 @@ from .rbe3 import build_rbe3
 from .rigid_body import build_rigid_bodies
 from .rigid_wall import RigidWalls
 from .cyl_joint import build_cyl_joints
+from .gjoint import build_gjoints
 from .rlink import build_rlinks
 from .sections import SectionForces
 from .sensors import Sensors
@@ -362,6 +363,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     lagmul = LagmulSolver(model, loads, log)
     cyl_joints = build_cyl_joints(model, log)  # /CYL_JOINT (M586)
     rlinks = build_rlinks(model, log)          # /RLINK (M586)
+    gjoints = build_gjoints(model, log)        # /GJOINT (M594)
     sections = SectionForces(model, log)
     # /DT/NODA[/CST] (M6): nodal time step + mass scaling. Nodes whose
     # motion a constraint prescribes carry no stability constraint of
@@ -441,6 +443,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         rl.apply_velocity(model.v, mass_eff, getattr(model, "vr", None), getattr(model, "inertia", None))
     for cj in cyl_joints:
         cj.apply_velocity(model.v, model.x, mass_eff)
+    for gj in gjoints:
+        gj.apply_velocity(model.v, getattr(model, "vr", None), model.x, mass_eff, getattr(model, "inertia", None))
 
     real = model.mass < 1e29
     if resumed:
@@ -705,6 +709,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             cj.transfer_forces(fint, fext, fcont, mint, model.x)
         for rl in rlinks:
             rl.transfer_forces(fint, fext, fcont, mint, mass_eff)
+        for gj in gjoints:
+            gj.transfer_forces(fint, fext, fcont, mint, model.x, mass_eff, inv_mass, inv_inertia)
 
         # ---- 3c. /DT/NODA[/CST]: nodal time step + mass scaling (M6) ------
         # Runs BEFORE the acceleration so the mass added for the target
@@ -753,15 +759,21 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             state.ams_iters = getattr(state, "ams_iters", 0) + iters
         else:
             acc = f_total * inv_mass[:, None]
+        ar = mint * inv_inertia[:, None] if getattr(model, "vr", None) is not None else None
         for rl in rlinks:
-            rl.apply_acceleration(acc, mass_eff, getattr(model, "ar", None), getattr(model, "inertia", None))
+            rl.apply_acceleration(acc, mass_eff, ar, getattr(model, "inertia", None))
         for cj in cyl_joints:
             cj.apply_acceleration(acc, model.x, mass_eff)
+        for gj in gjoints:
+            gj.apply_acceleration(acc, ar, model.x, mass_eff, getattr(model, "inertia", None))
         model.fint = fint
         model.fext = fext
         model.a = acc
         model.v += acc * dt12
-        model.vr += mint * inv_inertia[:, None] * dt12
+        if ar is not None:
+            model.vr += ar * dt12
+        else:
+            model.vr += mint * inv_inertia[:, None] * dt12
         state.dt_prev = dt
 
         # ---- 4b. /DAMP mass damping (M6): exact integrating factor on the
@@ -852,6 +864,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             rl.apply_velocity(model.v, mass_eff, getattr(model, "vr", None), getattr(model, "inertia", None))
         for cj in cyl_joints:
             cj.apply_velocity(model.v, model.x, mass_eff)
+        for gj in gjoints:
+            gj.apply_velocity(model.v, getattr(model, "vr", None), model.x, mass_eff, getattr(model, "inertia", None))
 
         # ---- 6. position update -------------------------------------------
         model.x += model.v * dt
@@ -869,6 +883,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             rl.enforce(model.x, model.v, dt)
         for cj in cyl_joints:
             cj.enforce(model.x, model.v, dt)
+        for gj in gjoints:
+            gj.enforce(model.x, model.v, getattr(model, "vr", None), dt)
 
         # ---- 6c. numerical-dissipation ledger (M6) --------------------------
         # The kernels book internal energy as a STATE FUNCTION

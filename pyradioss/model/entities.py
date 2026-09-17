@@ -2495,14 +2495,15 @@ class CylJoint:
 
 
 @dataclass
-class GeneralJoint:
-    """/GJOINT (M102): General kinematic joint (GEAR, RACK, DIFF).
+class GJoint:
+    """/GJOINT (M102, M594): General kinematic mechanism joint (GEAR, DIFF, RACK, CV).
 
-    Fortran origin: ``starter/source/constraints/general/gjoint/hm_read_gjoint.F``.
+    Fortran origin: ``starter/source/constraints/general/gjoint/hm_read_gjoint.F``,
+    ``engine/source/tools/lagmul/lag_gjnt.F``, ``gjnt_gear.F``, ``gjnt_diff.F``, ``gjnt_rack.F``.
     """
     id: int
     title: str = ""
-    subtype: str = "DEFAULT"  # DEFAULT, GEAR, RACK, DIFF
+    subtype: str = "DEFAULT"  # DEFAULT, GEAR, RACK, DIFF, CV
     node_id0: int = 0
     fscale: float = 1.0
     mass0: float = 0.0
@@ -2519,6 +2520,13 @@ class GeneralJoint:
     mass3: float = 0.0
     inertia3: float = 0.0
     r3: Tuple[float, float, float] = (1.0, 0.0, 0.0)
+
+    @property
+    def alpha(self) -> float:
+        return self.fscale
+
+
+GeneralJoint = GJoint
 
 
 @dataclass
@@ -6216,6 +6224,12 @@ class MaterialLaw90:
     fct_ids: List[int] = field(default_factory=list)
     eps_dots: List[float] = field(default_factory=list)
     fscales: List[float] = field(default_factory=list)
+    alpha: float = 1.0
+    gamma: float = 1.0
+    tflag: int = 1
+    fail: int = 0
+    econt: float = 0.0
+    tcut: float = 1e20
 
 
 @dataclass
@@ -17434,6 +17448,18 @@ class PropType18:
     wy2: int = 0
     wz2: int = 0
     title: str = ""
+    area: float = 0.0
+    iyy: float = 0.0
+    izz: float = 0.0
+    ixx: float = 0.0
+    zy: float = 0.0
+    zz: float = 0.0
+    ishear: int = 0
+    iform: int = 0
+    params: Dict[str, Any] = field(default_factory=dict)
+
+
+PropIntBeam = PropType18
 
 
 @dataclass

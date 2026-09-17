@@ -44,7 +44,7 @@ from ..model.entities import (
     RadiationLoad, ImposedFlux, InitialTemperature,
     InitialBrickState, InitialShellState,
     InitialTrussState, InitialBeamState, InitialSpringState,
-    BcsNrf, BcsWall, RigidLink, CylJoint, GeneralJoint,
+    BcsNrf, BcsWall, RigidLink, CylJoint, GJoint, GeneralJoint,
     MergeNode, MergeRbody, IniCrack, IniCrackSegment, LaserLoad,
     PcylLoad, PfluidLoad, Preload, PreloadAxial, DampInter, DampRange,
     AnalyGlobal, UpwindGlobal, CaaControl,
@@ -921,7 +921,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW117", "COH_MC", "COHESIVE", "LAW117_COH_MC"):
         read_mat_law117(block, model, log)
         return
-    if lawname in ("LAW90", "TAB_FOAM", "TABULAR_FOAM", "LAW90_TAB_FOAM"):
+    if lawname in ("LAW90", "TAB_FOAM", "TABULAR_FOAM", "LAW90_TAB_FOAM", "HYST_FOAM", "LAW90_HYST_FOAM"):
         read_mat_law90(block, model, log)
         return
     if lawname in ("LAW33", "FOAM_PLAS", "LAW33_FOAM_PLAS"):
@@ -5207,6 +5207,9 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if typename in ("TYPE17", "STACK", "COMP_STACK", "PROP_TYPE17", "PROP_STACK", "P17_STACK"):
         read_prop_type17(block, model, log)
         return
+    if typename in ("TYPE18", "INT_BEAM", "BEAM_INT", "PROP_TYPE18", "PROP_INT_BEAM", "P18_INT_BEAM", "PROP_P18_INT_BEAM"):
+        read_prop_type18(block, model, log)
+        return
     if typename in ("TYPE19", "SPR_TORS", "TORSION", "PROP_TYPE19", "PROP_SPR_TORS", "P19_SPR_TORS"):
         read_prop_type19(block, model, log)
         return
@@ -6879,170 +6882,8 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             params["ip"] = int(float(t3[5])) if len(t3) > 5 else 0
 
     elif ptype == 18:  # INT_BEAM
-        params = {"isflag": 0, "ismstr": 0, "dm": 0.0, "df": 0.0,
-                  "nip": 1, "iref": 0, "y0": 0.0, "z0": 0.0,
-                  "fibers": [], "nitrs": 0, "l_params": [0.0] * 6,
-                  "rot_dofs": (0, 0, 0, 0, 0, 0),
-                  "area": 1.0, "iyy": 1.0, "izz": 1.0, "ixx": 1.0,
-                  "ishear": 0, "iform": 0}
-        # Check if legacy 3-card format (card 0 has 3 ints, or card 1 has 4 floats: Area Iyy Izz Ixx)
-        is_legacy = False
-        if cards:
-            toks0 = cards[0].tokens()
-            toks1 = cards[1].tokens() if len(cards) > 1 else []
-            if len(toks0) >= 3 or len(toks1) >= 4:
-                is_legacy = True
-
-        if is_legacy:
-            if block.fixed:
-                if cards and not cards[0].is_blank:
-                    f = cards[0].cut("PROP_INT_BEAM_1")
-                    params["ishear"] = _ival(f[0])
-                    params["iform"] = _ival(f[1]) if len(f) > 1 else 0
-                    params["nip"] = _ival(f[2]) if len(f) > 2 else 1
-                if len(cards) >= 2 and not cards[1].is_blank:
-                    a = cards[1].cut("PROP_INT_BEAM_2")
-                    params["area"] = _fval(a[0]) or 1.0
-                    params["iyy"] = _fval(a[1]) or 1.0
-                    params["izz"] = _fval(a[2]) or 1.0
-                    params["ixx"] = _fval(a[3]) or 1.0
-                if len(cards) >= 3 and not cards[2].is_blank:
-                    v = cards[2].cut("PROP_INT_BEAM_3")
-                    params["vy"] = _fval(v[0])
-                    params["vz"] = _fval(v[1])
-            else:
-                t0 = cards[0].tokens() if len(cards) > 0 else []
-                params["ishear"] = int(float(t0[0])) if len(t0) > 0 else 0
-                params["iform"] = int(float(t0[1])) if len(t0) > 1 else 0
-                params["nip"] = int(float(t0[2])) if len(t0) > 2 else 1
-
-                t1 = cards[1].tokens() if len(cards) > 1 else []
-                params["area"] = float(t1[0]) if len(t1) > 0 else 1.0
-                params["iyy"] = float(t1[1]) if len(t1) > 1 else 1.0
-                params["izz"] = float(t1[2]) if len(t1) > 2 else 1.0
-                params["ixx"] = float(t1[3]) if len(t1) > 3 else 1.0
-
-                t2 = cards[2].tokens() if len(cards) > 2 else []
-                params["vy"] = float(t2[0]) if len(t2) > 0 else 0.0
-                params["vz"] = float(t2[1]) if len(t2) > 1 else 0.0
-        else:
-            if block.fixed:
-                if len(cards) >= 1 and not cards[0].is_blank:
-                    f0 = cards[0].cut("PROP_INT_BEAM_FLAGS")
-                    params["isflag"] = _ival(f0[0])
-                    params["ismstr"] = _ival(f0[1]) if len(f0) > 1 else 0
-                if len(cards) >= 2 and not cards[1].is_blank:
-                    f1 = cards[1].cut("PROP_INT_BEAM_DAMP")
-                    params["dm"] = _fval(f1[0])
-                    params["df"] = _fval(f1[1])
-                if len(cards) >= 3 and not cards[2].is_blank:
-                    f2 = cards[2].cut("PROP_INT_BEAM_NIP")
-                    params["nip"] = _ival(f2[0]) or 1
-                    params["iref"] = _ival(f2[1]) if len(f2) > 1 else 0
-                    params["y0"] = _fval(f2[2]) if len(f2) > 2 else 0.0
-                    params["z0"] = _fval(f2[3]) if len(f2) > 3 else 0.0
-                icard = 3
-                if params["isflag"] == 0:
-                    fibers = []
-                    for k in range(params["nip"]):
-                        if icard < len(cards) and not cards[icard].is_blank:
-                            fib = cards[icard].cut("PROP_INT_BEAM_FIBER")
-                            y_ip = _fval(fib[0]) if len(fib) > 0 else 0.0
-                            z_ip = _fval(fib[1]) if len(fib) > 1 else 0.0
-                            a_ip = _fval(fib[2]) if len(fib) > 2 else 0.0
-                            fibers.append((y_ip, z_ip, a_ip))
-                        icard += 1
-                    params["fibers"] = fibers
-                else:
-                    if icard < len(cards) and not cards[icard].is_blank:
-                        f3 = _fixed_vals(cards[icard], [10, 10, 20, 20, 20, 20])
-                        params["nitrs"] = _ival(f3[0])
-                        l1 = _fval(f3[2]) if len(f3) > 2 else 0.0
-                        l2 = _fval(f3[3]) if len(f3) > 3 else 0.0
-                        l3 = _fval(f3[4]) if len(f3) > 4 else 0.0
-                        l4 = _fval(f3[5]) if len(f3) > 5 else 0.0
-                        icard += 1
-                        l5, l6 = 0.0, 0.0
-                        if icard < len(cards) and not cards[icard].is_blank:
-                            f4 = _fixed_vals(cards[icard], [20, 20])
-                            l5 = _fval(f4[0]) if len(f4) > 0 else 0.0
-                            l6 = _fval(f4[1]) if len(f4) > 1 else 0.0
-                            icard += 1
-                        params["l_params"] = [l1, l2, l3, l4, l5, l6]
-                if icard < len(cards) and not cards[icard].is_blank:
-                    rw = _fixed_vals(cards[icard], [3, 1, 1, 1, 1, 1, 1, 1])
-                    params["rot_dofs"] = tuple(_ival(rw[i]) for i in range(1, 7) if i < len(rw))
-            else:
-                t0 = cards[0].tokens() if len(cards) > 0 else []
-                params["isflag"] = _ival(t0[0]) if len(t0) > 0 else 0
-                params["ismstr"] = _ival(t0[1]) if len(t0) > 1 else 0
-
-                t1 = cards[1].tokens() if len(cards) > 1 else []
-                params["dm"] = _fval(t1[0]) if len(t1) > 0 else 0.0
-                params["df"] = _fval(t1[1]) if len(t1) > 1 else 0.0
-
-                t2 = cards[2].tokens() if len(cards) > 2 else []
-                params["nip"] = _ival(t2[0]) if len(t2) > 0 else 1
-                params["iref"] = _ival(t2[1]) if len(t2) > 1 else 0
-                params["y0"] = _fval(t2[2]) if len(t2) > 2 else 0.0
-                params["z0"] = _fval(t2[3]) if len(t2) > 3 else 0.0
-
-                icard = 3
-                if params["isflag"] == 0:
-                    fibers = []
-                    for k in range(params["nip"]):
-                        if icard < len(cards):
-                            toks = cards[icard].tokens()
-                            y_ip = _fval(toks[0]) if len(toks) > 0 else 0.0
-                            z_ip = _fval(toks[1]) if len(toks) > 1 else 0.0
-                            a_ip = _fval(toks[2]) if len(toks) > 2 else 0.0
-                            fibers.append((y_ip, z_ip, a_ip))
-                        icard += 1
-                    params["fibers"] = fibers
-                else:
-                    if icard < len(cards):
-                        toks = cards[icard].tokens()
-                        params["nitrs"] = _ival(toks[0]) if len(toks) > 0 else 0
-                        l1_4 = [_fval(x) for x in toks[1:5]]
-                        while len(l1_4) < 4:
-                            l1_4.append(0.0)
-                        icard += 1
-                        l5_6 = [0.0, 0.0]
-                        if icard < len(cards):
-                            toks2 = cards[icard].tokens()
-                            l5_6 = [_fval(x) for x in toks2[:2]]
-                            while len(l5_6) < 2:
-                                l5_6.append(0.0)
-                            icard += 1
-                        params["l_params"] = l1_4 + l5_6
-        from ..model.entities import PropType18, PropIntBeamIP
-        ips = [PropIntBeamIP(y=fib[0], z=fib[1], area=fib[2]) for fib in params.get("fibers", [])]
-        rot = params.get("rot_dofs", (0, 0, 0, 0, 0, 0))
-        lp = params.get("l_params", [0.0] * 6)
-        while len(lp) < 6:
-            lp.append(0.0)
-        p18 = PropType18(
-            id=block.user_id,
-            isflag=params.get("isflag", 0),
-            ismstr=params.get("ismstr", 0),
-            dm=params.get("dm", 0.0),
-            df=params.get("df", 0.0),
-            nip=params.get("nip", 1),
-            iref=params.get("iref", 0),
-            y0=params.get("y0", 0.0),
-            z0=params.get("z0", 0.0),
-            ips=ips,
-            nitrs=params.get("nitrs", 0),
-            l1=lp[0], l2=lp[1], l3=lp[2], l4=lp[3], l5=lp[4], l6=lp[5],
-            wx1=rot[0] if len(rot) > 0 else 0,
-            wy1=rot[1] if len(rot) > 1 else 0,
-            wz1=rot[2] if len(rot) > 2 else 0,
-            wx2=rot[3] if len(rot) > 3 else 0,
-            wy2=rot[4] if len(rot) > 4 else 0,
-            wz2=rot[5] if len(rot) > 5 else 0,
-            title=title,
-        )
-        model.prop_int_beams[block.user_id] = p18
+        read_prop_type18(block, model, log)
+        return
 
     elif ptype == 26:  # SPR_TAB
         params = {
@@ -18326,10 +18167,10 @@ def read_gjoint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     Fortran origin: ``starter/source/constraints/general/gjoint/hm_read_gjoint.F``.
     """
-    from ..model.entities import GeneralJoint
+    from ..model.entities import GJoint, GeneralJoint
     parts = block.keyword.split("/")
     subtype = "DEFAULT"
-    if len(parts) > 1 and parts[1].upper() in ("GEAR", "RACK", "DIFF"):
+    if len(parts) > 1 and parts[1].upper() in ("GEAR", "RACK", "DIFF", "CV"):
         subtype = parts[1].upper()
 
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -18423,7 +18264,7 @@ def read_gjoint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if rx != 0.0 or ry != 0.0 or rz != 0.0:
             r3 = (rx, ry, rz)
 
-    model.gjoints[block.user_id] = GeneralJoint(
+    model.gjoints[block.user_id] = GJoint(
         id=block.user_id, title=title, subtype=subtype,
         node_id0=node_id0, fscale=fscale, mass0=mass0, inertia0=inertia0,
         node_id1=node_id1, node_id2=node_id2, node_id3=node_id3,
@@ -27010,8 +26851,9 @@ def read_mat_law117(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law90(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW90`` or ``/MAT/TAB_FOAM`` (M171): Tabular strain-rate foam/plasticity material model."""
+    """``/MAT/LAW90`` or ``/MAT/HYST_FOAM`` (M171/M592): Tabular strain-rate hysteretic foam material model."""
     from ..model.entities import MaterialLaw90, Material
+    from ..materials.law90_foam import Law90Params
     mat_id = block.user_id or 1
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
@@ -27020,9 +26862,14 @@ def read_mat_law90(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     rho0, refer_rho = 0.0, 0.0
     e0, nu = 0.0, 0.0
+    tflag = 1
+    fail = 0
+    econt = 0.0
+    tcut = 1e20
     nl, ismooth = 0, 0
     fcut = 0.0
-    shape, hys = 0.0, 0.0
+    shape, hys = 1.0, 1.0
+    alpha = 1.0
     fct_ids: List[int] = []
     eps_dots: List[float] = []
     fscales: List[float] = []
@@ -27030,20 +26877,25 @@ def read_mat_law90(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if block.fixed:
         f1 = cards[0].cut("MAT_LAW90_1")
         rho0 = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
-        refer_rho = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        refer_rho = _fval(f1[1], rho0) if len(f1) > 1 and f1[1].strip() else rho0
 
         if len(cards) > 1 and not cards[1].is_blank:
             f2 = cards[1].cut("MAT_LAW90_2")
             e0 = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
             nu = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            tflag = _ival(f2[2], 1) if len(f2) > 2 and f2[2].strip() else 1
+            fail = _ival(f2[3], 0) if len(f2) > 3 and f2[3].strip() else 0
+            econt = _fval(f2[4], e0) if len(f2) > 4 and f2[4].strip() else e0
+            tcut = _fval(f2[5], 1e20) if len(f2) > 5 and f2[5].strip() else 1e20
 
         if len(cards) > 2 and not cards[2].is_blank:
             f3 = cards[2].cut("MAT_LAW90_3")
             nl = _ival(f3[0]) if len(f3) > 0 else 0
-            ismooth = _ival(f3[1]) if len(f3) > 1 else 0
-            fcut = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
-            shape = _fval(f3[3], 0.0) if len(f3) > 3 else 0.0
-            hys = _fval(f3[4], 0.0) if len(f3) > 4 else 0.0
+            ismooth = _ival(f3[1]) if len(f3) > 1 and f3[1].strip() else 0
+            fcut = _fval(f3[2], 0.0) if len(f3) > 2 and f3[2].strip() else 0.0
+            shape = _fval(f3[3], 1.0) if len(f3) > 3 and f3[3].strip() else 1.0
+            hys = _fval(f3[4], 1.0) if len(f3) > 4 and f3[4].strip() else 1.0
+            alpha = _fval(f3[5], 1.0) if len(f3) > 5 and f3[5].strip() else 1.0
 
         for c in cards[3:3 + nl]:
             if c.is_blank:
@@ -27055,20 +26907,25 @@ def read_mat_law90(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     else:
         t1 = cards[0].tokens()
         rho0 = float(t1[0]) if len(t1) > 0 else 0.0
-        refer_rho = float(t1[1]) if len(t1) > 1 else 0.0
+        refer_rho = float(t1[1]) if len(t1) > 1 else rho0
 
         if len(cards) > 1 and not cards[1].is_blank:
             t2 = cards[1].tokens()
             e0 = float(t2[0]) if len(t2) > 0 else 0.0
             nu = float(t2[1]) if len(t2) > 1 else 0.0
+            tflag = int(float(t2[2])) if len(t2) > 2 else 1
+            fail = int(float(t2[3])) if len(t2) > 3 else 0
+            econt = float(t2[4]) if len(t2) > 4 else e0
+            tcut = float(t2[5]) if len(t2) > 5 else 1e20
 
         if len(cards) > 2 and not cards[2].is_blank:
             t3 = cards[2].tokens()
             nl = int(float(t3[0])) if len(t3) > 0 else 0
             ismooth = int(float(t3[1])) if len(t3) > 1 else 0
             fcut = float(t3[2]) if len(t3) > 2 else 0.0
-            shape = float(t3[3]) if len(t3) > 3 else 0.0
-            hys = float(t3[4]) if len(t3) > 4 else 0.0
+            shape = float(t3[3]) if len(t3) > 3 else 1.0
+            hys = float(t3[4]) if len(t3) > 4 else 1.0
+            alpha = float(t3[5]) if len(t3) > 5 else 1.0
 
         for c in cards[3:3 + nl]:
             if c.is_blank:
@@ -27078,20 +26935,39 @@ def read_mat_law90(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             eps_dots.append(float(toks[1]) if len(toks) > 1 else 0.0)
             fscales.append(float(toks[2]) if len(toks) > 2 else 1.0)
 
+    if tcut <= 0.0:
+        tcut = 1e20
+    if shape <= 0.0:
+        shape = 1.0
+    if alpha <= 0.0:
+        alpha = 1.0
+    if hys <= 0.0:
+        hys = 1.0
+
     m90 = MaterialLaw90(
         id=mat_id, title=title, rho0=rho0, refer_rho=refer_rho,
         e0=e0, nu=nu, nl=nl, ismooth=ismooth, fcut=fcut, shape=shape,
         hys=hys, fct_ids=fct_ids, eps_dots=eps_dots, fscales=fscales,
+        alpha=alpha, gamma=alpha, tflag=tflag, fail=fail, econt=econt, tcut=tcut,
     )
     model.mat_law90s[mat_id] = m90
-    model.materials[mat_id] = Material(
+    mat = Material(
         id=mat_id, law=90, rho0=rho0, title=title,
         params={
             "E": e0, "E0": e0, "nu": nu, "NL": nl, "Ismooth": ismooth, "Fcut": fcut,
-            "shape": shape, "hys": hys, "fct_ids": fct_ids,
-            "eps_dots": eps_dots, "fscales": fscales,
+            "shape": shape, "hys": hys, "gamma": alpha, "alpha": alpha,
+            "tcut": tcut, "tflag": tflag, "fail": fail, "econt": econt,
+            "fct_ids": fct_ids, "eps_dots": eps_dots, "fscales": fscales,
+            "curves": [], "E_MAX": max(e0, 100.0 * e0),
         }
     )
+    mat.law90_params = Law90Params(
+        rho0=rho0, refer_rho=refer_rho, E0=e0, nu=nu, shape=shape,
+        hys=hys, gamma=alpha, alpha=alpha, tcut=tcut, tflag=tflag, fail=fail,
+        econt=econt, ismooth=ismooth, fcut=fcut, nl=nl, fct_ids=fct_ids,
+        eps_dots=eps_dots, fscales=fscales, E_MAX=max(e0, 100.0 * e0),
+    )
+    model.materials[mat_id] = mat
 
 
 def read_mat_law33(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -42361,6 +42237,228 @@ def read_prop_type19(block: KeywordBlock, model: Model, log: MessageLog) -> None
         id=prop_id, type=19, title=title,
         params={"mass": mass, "inertia": inertia, "stiffness_k": k, "damping_c": c, "fcut": fcut,
                 "k_tors": k, "c_tors": c, "k_theta": k, "c_theta": c, "k": k, "c": c}
+    )
+
+
+def read_prop_type18(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE18`` or ``/PROP/INT_BEAM/prop_ID`` (M593): Integrated fiber beam property."""
+    from ..model.entities import PropType18, PropIntBeamIP, Property
+    from ..elements.beam_fiber import generate_fiber_section
+
+    prop_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+
+    params = {
+        "isflag": 0, "ismstr": 0, "dm": 0.0, "df": 0.0,
+        "nip": 1, "iref": 0, "y0": 0.0, "z0": 0.0,
+        "fibers": [], "nitrs": 0, "l_params": [0.0] * 6,
+        "rot_dofs": (0, 0, 0, 0, 0, 0),
+        "area": 1.0, "iyy": 1.0, "izz": 1.0, "ixx": 1.0,
+        "zy": 0.0, "zz": 0.0,
+        "ishear": 0, "iform": 0,
+    }
+
+    is_legacy = False
+    if cards:
+        toks0 = cards[0].tokens()
+        toks1 = cards[1].tokens() if len(cards) > 1 else []
+        if len(toks0) >= 3 or len(toks1) >= 4:
+            is_legacy = True
+
+    if is_legacy:
+        if block.fixed:
+            if len(cards) >= 1:
+                f = cards[0].cut("PROP_INT_BEAM_1")
+                params["ishear"] = _ival(f[0])
+                params["iform"] = _ival(f[1]) if len(f) > 1 else 0
+                params["nip"] = _ival(f[2]) if len(f) > 2 else 1
+            if len(cards) >= 2:
+                a = cards[1].cut("PROP_INT_BEAM_2")
+                params["area"] = _fval(a[0]) or 1.0
+                params["iyy"] = _fval(a[1]) or 1.0
+                params["izz"] = _fval(a[2]) or 1.0
+                params["ixx"] = _fval(a[3]) or 1.0
+            if len(cards) >= 3:
+                v = cards[2].cut("PROP_INT_BEAM_3")
+                params["vy"] = _fval(v[0])
+                params["vz"] = _fval(v[1])
+        else:
+            t0 = cards[0].tokens() if len(cards) > 0 else []
+            params["ishear"] = int(float(t0[0])) if len(t0) > 0 else 0
+            params["iform"] = int(float(t0[1])) if len(t0) > 1 else 0
+            params["nip"] = int(float(t0[2])) if len(t0) > 2 else 1
+
+            t1 = cards[1].tokens() if len(cards) > 1 else []
+            params["area"] = float(t1[0]) if len(t1) > 0 else 1.0
+            params["iyy"] = float(t1[1]) if len(t1) > 1 else 1.0
+            params["izz"] = float(t1[2]) if len(t1) > 2 else 1.0
+            params["ixx"] = float(t1[3]) if len(t1) > 3 else 1.0
+
+            t2 = cards[2].tokens() if len(cards) > 2 else []
+            params["vy"] = float(t2[0]) if len(t2) > 0 else 0.0
+            params["vz"] = float(t2[1]) if len(t2) > 1 else 0.0
+    else:
+        if block.fixed:
+            if len(cards) >= 1:
+                f0 = cards[0].cut("PROP_INT_BEAM_FLAGS")
+                params["isflag"] = _ival(f0[0])
+                params["ismstr"] = _ival(f0[1]) if len(f0) > 1 else 0
+            if len(cards) >= 2:
+                f1 = cards[1].cut("PROP_INT_BEAM_DAMP")
+                params["dm"] = _fval(f1[0])
+                params["df"] = _fval(f1[1])
+            if len(cards) >= 3:
+                f2 = cards[2].cut("PROP_INT_BEAM_NIP")
+                params["nip"] = _ival(f2[0]) or 1
+                params["iref"] = _ival(f2[1]) if len(f2) > 1 else 0
+                params["y0"] = _fval(f2[2]) if len(f2) > 2 else 0.0
+                params["z0"] = _fval(f2[3]) if len(f2) > 3 else 0.0
+            icard = 3
+            if params["isflag"] == 0:
+                fibers = []
+                for k in range(params["nip"]):
+                    if icard < len(cards):
+                        fib = cards[icard].cut("PROP_INT_BEAM_FIBER")
+                        y_ip = _fval(fib[0]) if len(fib) > 0 else 0.0
+                        z_ip = _fval(fib[1]) if len(fib) > 1 else 0.0
+                        a_ip = _fval(fib[2]) if len(fib) > 2 else 0.0
+                        fibers.append((y_ip, z_ip, a_ip))
+                    icard += 1
+                params["fibers"] = fibers
+            else:
+                if icard < len(cards):
+                    f3 = _fixed_vals(cards[icard], [10, 10, 20, 20, 20, 20])
+                    params["nitrs"] = _ival(f3[0])
+                    l1 = _fval(f3[2]) if len(f3) > 2 else 0.0
+                    l2 = _fval(f3[3]) if len(f3) > 3 else 0.0
+                    l3 = _fval(f3[4]) if len(f3) > 4 else 0.0
+                    l4 = _fval(f3[5]) if len(f3) > 5 else 0.0
+                    icard += 1
+                    l5, l6 = 0.0, 0.0
+                    if icard < len(cards):
+                        f4 = _fixed_vals(cards[icard], [20, 20])
+                        l5 = _fval(f4[0]) if len(f4) > 0 else 0.0
+                        l6 = _fval(f4[1]) if len(f4) > 1 else 0.0
+                        icard += 1
+                    params["l_params"] = [l1, l2, l3, l4, l5, l6]
+            if icard < len(cards):
+                rw = _fixed_vals(cards[icard], [3, 1, 1, 1, 1, 1, 1, 1])
+                params["rot_dofs"] = tuple(_ival(rw[i]) for i in range(1, 7) if i < len(rw))
+        else:
+            t0 = cards[0].tokens() if len(cards) > 0 else []
+            params["isflag"] = _ival(t0[0]) if len(t0) > 0 else 0
+            params["ismstr"] = _ival(t0[1]) if len(t0) > 1 else 0
+
+            t1 = cards[1].tokens() if len(cards) > 1 else []
+            params["dm"] = _fval(t1[0]) if len(t1) > 0 else 0.0
+            params["df"] = _fval(t1[1]) if len(t1) > 1 else 0.0
+
+            t2 = cards[2].tokens() if len(cards) > 2 else []
+            params["nip"] = _ival(t2[0]) if len(t2) > 0 else 1
+            params["iref"] = _ival(t2[1]) if len(t2) > 1 else 0
+            params["y0"] = _fval(t2[2]) if len(t2) > 2 else 0.0
+            params["z0"] = _fval(t2[3]) if len(t2) > 3 else 0.0
+
+            icard = 3
+            if params["isflag"] == 0:
+                fibers = []
+                for k in range(params["nip"]):
+                    if icard < len(cards):
+                        toks = cards[icard].tokens()
+                        y_ip = _fval(toks[0]) if len(toks) > 0 else 0.0
+                        z_ip = _fval(toks[1]) if len(toks) > 1 else 0.0
+                        a_ip = _fval(toks[2]) if len(toks) > 2 else 0.0
+                        fibers.append((y_ip, z_ip, a_ip))
+                    icard += 1
+                params["fibers"] = fibers
+            else:
+                if icard < len(cards):
+                    toks = cards[icard].tokens()
+                    params["nitrs"] = _ival(toks[0]) if len(toks) > 0 else 0
+                    l1_4 = [_fval(x) for x in toks[1:5]]
+                    while len(l1_4) < 4:
+                        l1_4.append(0.0)
+                    icard += 1
+                    l5_6 = [0.0, 0.0]
+                    if icard < len(cards):
+                        toks2 = cards[icard].tokens()
+                        l5_6 = [_fval(x) for x in toks2[:2]]
+                        while len(l5_6) < 2:
+                            l5_6.append(0.0)
+                        icard += 1
+                    params["l_params"] = l1_4 + l5_6
+            if icard < len(cards):
+                toks = cards[icard].tokens()
+                if len(toks) >= 6:
+                    params["rot_dofs"] = tuple(_ival(x) for x in toks[:6])
+
+    ips = [PropIntBeamIP(y=fib[0], z=fib[1], area=fib[2]) for fib in params.get("fibers", [])]
+    rot = params.get("rot_dofs", (0, 0, 0, 0, 0, 0))
+    lp = params.get("l_params", [0.0] * 6)
+    while len(lp) < 6:
+        lp.append(0.0)
+
+    try:
+        y_pts, z_pts, a_pts, sec_props = generate_fiber_section(
+            isflag=params.get("isflag", 0),
+            nitrs=params.get("nitrs", 0),
+            l_params=lp,
+            nip=len(params.get("fibers", [])),
+            user_fibers=params.get("fibers", []),
+            iref=params.get("iref", 0),
+            y0=params.get("y0", 0.0),
+            z0=params.get("z0", 0.0),
+        )
+        if not is_legacy:
+            params["area"] = sec_props["area"]
+            params["iyy"] = sec_props["iyy"]
+            params["izz"] = sec_props["izz"]
+            params["ixx"] = sec_props["ixx"]
+            params["zy"] = sec_props["zy"]
+            params["zz"] = sec_props["zz"]
+            if not ips and len(y_pts) > 0:
+                ips = [PropIntBeamIP(y=y_pts[i], z=z_pts[i], area=a_pts[i]) for i in range(len(y_pts))]
+    except Exception:
+        pass
+
+    p18 = PropType18(
+        id=prop_id,
+        isflag=params.get("isflag", 0),
+        ismstr=params.get("ismstr", 0),
+        dm=params.get("dm", 0.0),
+        df=params.get("df", 0.0),
+        nip=params.get("nip", len(ips) if ips else 1),
+        iref=params.get("iref", 0),
+        y0=params.get("y0", 0.0),
+        z0=params.get("z0", 0.0),
+        ips=ips,
+        nitrs=params.get("nitrs", 0),
+        l1=lp[0], l2=lp[1], l3=lp[2], l4=lp[3], l5=lp[4], l6=lp[5],
+        wx1=rot[0] if len(rot) > 0 else 0,
+        wy1=rot[1] if len(rot) > 1 else 0,
+        wz1=rot[2] if len(rot) > 2 else 0,
+        wx2=rot[3] if len(rot) > 3 else 0,
+        wy2=rot[4] if len(rot) > 4 else 0,
+        wz2=rot[5] if len(rot) > 5 else 0,
+        title=title,
+        area=params.get("area", 1.0),
+        iyy=params.get("iyy", 1.0),
+        izz=params.get("izz", 1.0),
+        ixx=params.get("ixx", 1.0),
+        zy=params.get("zy", 0.0),
+        zz=params.get("zz", 0.0),
+        ishear=params.get("ishear", 0),
+        iform=params.get("iform", 0),
+        params=params,
+    )
+    model.prop_int_beams[prop_id] = p18
+    model.prop_type18s[prop_id] = p18
+    model.properties[prop_id] = Property(
+        id=prop_id,
+        type=18,
+        title=title,
+        params=params,
     )
 
 
@@ -87322,8 +87420,12 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "COH_MC": read_mat,
     "COHESIVE": read_mat,
     "MAT_LAW90": read_mat,
+    "LAW90": read_mat,
     "MAT_TAB_FOAM": read_mat,
     "TAB_FOAM": read_mat,
+    "MAT_HYST_FOAM": read_mat,
+    "HYST_FOAM": read_mat,
+    "LAW90_HYST_FOAM": read_mat,
     "MAT_LAW33": read_mat,
     "MAT_FOAM_PLAS": read_mat,
     "HEAT_TRANSFER": read_heat,
@@ -88135,9 +88237,14 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "/MAT/LAW82": read_mat_law82,
     "/MAT/OGDEN": read_mat,
     "/MAT/LAW82_OGDEN": read_mat_law82,
-    "PROP_TYPE18": read_prop,
-    "PROP_INT_BEAM": read_prop,
-    "INT_BEAM": read_prop,
+    "PROP_TYPE18": read_prop_type18,
+    "PROP_INT_BEAM": read_prop_type18,
+    "INT_BEAM": read_prop_type18,
+    "TYPE18": read_prop_type18,
+    "PROP_P18_INT_BEAM": read_prop_type18,
+    "P18_INT_BEAM": read_prop_type18,
+    "/PROP/TYPE18": read_prop_type18,
+    "/PROP/INT_BEAM": read_prop_type18,
     "DEFAULT_INTER": read_def_inter,
     "DEF_INTER_TYPE11": read_def_inter,
     "DEF_INTER_TYPE19": read_def_inter,

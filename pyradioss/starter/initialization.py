@@ -261,6 +261,7 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
     _dispatch_solid_formulations(model, log)
     _dispatch_shell_formulations(model, log)
     _dispatch_sh3n_formulations(model, log)
+    _dispatch_beam_formulations(model, log)
 
 
 def _subset_element_group(src: ElementGroup, mask: np.ndarray) -> ElementGroup:
@@ -366,6 +367,28 @@ def _dispatch_sh3n_formulations(model: Model, log: MessageLog) -> None:
                  f"{gname.split('_', 1)[1].upper()} FORMULATION KERNEL "
                  f"(Ish3n dispatch)")
     model.sh3n = _subset_element_group(src, keep) if keep.any() else None
+
+
+def _dispatch_beam_formulations(model: Model, log: MessageLog) -> None:
+    """Beam element-technology dispatch (M593): split /BEAM parts whose
+    property is /PROP/TYPE18 (/PROP/INT_BEAM) out of the generic beam group
+    into model.beams_fiber (pyradioss.elements.beam_fiber)."""
+    src = model.beams
+    if src is None or not src.n:
+        return
+    mask = np.zeros(src.n, dtype=bool)
+    slices = src.state.get("slices", [])
+    for sl, mat, prop in slices:
+        pt = getattr(prop, "type", 0)
+        if pt == 18:
+            mask[sl] = True
+    if not mask.any():
+        return
+    keep = ~mask
+    model.beams_fiber = _subset_element_group(src, mask)
+    log.info(f"     {int(mask.sum())} /BEAM ELEMENT(S) ROUTED TO THE "
+             f"INTEGRATED FIBER BEAM KERNEL (PROP/TYPE18 dispatch)")
+    model.beams = _subset_element_group(src, keep) if keep.any() else None
 
 
 # ----------------------------------------------------------------------------
@@ -511,6 +534,10 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
             from ..materials import law94_yeoh
             if hasattr(law94_yeoh, "resolve"):
                 law94_yeoh.resolve(mat, model, log)
+        elif mat.law in (90, "90", "LAW90", "HYST_FOAM", "TAB_FOAM", "MAT_LAW90", "MAT_HYST_FOAM", "MAT_TAB_FOAM", "LAW90_HYST_FOAM") or getattr(mat, "law_name", None) in ("90", "LAW90", "HYST_FOAM", "TAB_FOAM", "MAT_LAW90", "MAT_HYST_FOAM", "MAT_TAB_FOAM", "LAW90_HYST_FOAM"):
+            from ..materials import law90_foam
+            if hasattr(law90_foam, "resolve"):
+                law90_foam.resolve(mat, model, log)
 
     for mat_id, fm, source in model.raw_fails:
         mat = model.materials.get(mat_id)
@@ -667,7 +694,7 @@ _EGROUP_FAMILIES = {
     "TSHELL": ("tshells",),
     "QUAD": ("quads",),
     "TRUS": ("trusses",),
-    "BEAM": ("beams",),
+    "BEAM": ("beams", "beams_fiber"),
     "SPRI": ("springs",),
 }
 
@@ -1697,6 +1724,22 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
             model.v[g.node_idx] += iv.v + iv.omega * np.cross(iv.axis, r)
         else:
             model.v[g.node_idx] = iv.v
+
+    # /GJOINT added mass & inertia (hm_read_gjoint.F 168-173, M594)
+    if hasattr(model, "gjoints"):
+        for gj in model.gjoints.values():
+            for nid, m_add, i_add in [
+                (gj.node_id0, gj.mass0, gj.inertia0),
+                (gj.node_id1, gj.mass1, gj.inertia1),
+                (gj.node_id2, gj.mass2, gj.inertia2),
+                (getattr(gj, "node_id3", 0), getattr(gj, "mass3", 0.0), getattr(gj, "inertia3", 0.0)),
+            ]:
+                if nid and nid in model._id2idx:
+                    idx = model.node_index(nid)
+                    if m_add > 0.0:
+                        model.mass[idx] += m_add
+                    if i_add > 0.0:
+                        model.inertia[idx] += i_add
 
     # massless nodes: harmless if nothing ever loads them, fatal otherwise.
     # The Engine divides force by mass, so give unreferenced nodes a tiny
