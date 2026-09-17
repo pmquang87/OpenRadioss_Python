@@ -67,7 +67,8 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                law60_plast3,
                law62_hypervisco, law69_hyperelastic, law70_tabfoam, law79_john_holm, law81_druckerprager,
                law82_ogden,
-               law83_spotweld, law114_seatbelt, law120_advanced,
+               law83_spotweld, law114_seatbelt, law119_seatbelt, law120_advanced,
+               law120_tapo, law121_plas_rate,
                law58_fabr_a,
                law57_barlat,
                law66_plas_tab,
@@ -90,12 +91,87 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                law107_paper_light,
                law109_tab_plas,
                law110_vegter,
+               law117_cohesive,
+               law123_daimler,
+               law124_cdpm2,
                law126_hjc,
                law169_arup,
                law163_crush_foam,
                law76_samp,
                law90_foam,
+               law190_dubois,
                mat_gas, mat_void)
+from .law120_tapo import (
+    Law120Params,
+    build_law120,
+    solid_update as law120_solid_update,
+    shell_update as law120_shell_update,
+    sound_speed as law120_sound_speed,
+    solid_tangent as law120_solid_tangent,
+    consistent_solid_tangent as law120_consistent_solid_tangent,
+    consistent_shell_tangent as law120_consistent_shell_tangent,
+    shell_membrane_tangent as law120_shell_membrane_tangent,
+    extra_shapes as law120_extra_shapes,
+    resolve as law120_resolve,
+)
+from .law121_plas_rate import (
+    Law121Params,
+    build_law121,
+    solid_update as law121_solid_update,
+    shell_update as law121_shell_update,
+    sound_speed as law121_sound_speed,
+    sound_speed_solid as law121_sound_speed_solid,
+    sound_speed_shell as law121_sound_speed_shell,
+    solid_tangent as law121_solid_tangent,
+    consistent_solid_tangent as law121_consistent_solid_tangent,
+    consistent_shell_tangent as law121_consistent_shell_tangent,
+    shell_tangent as law121_shell_tangent,
+    extra_shapes as law121_extra_shapes,
+    resolve as law121_resolve,
+)
+from .law123_daimler import (
+    Law123Params,
+    Law132Params,
+    build_law123,
+    build_law132,
+    solid_step as law123_solid_step,
+    shell_step as law123_shell_step,
+    solid_update as law123_solid_update,
+    shell_update as law123_shell_update,
+    sound_speed as law123_sound_speed,
+    solid_tangent as law123_solid_tangent,
+    shell_tangent as law123_shell_tangent,
+    consistent_solid_tangent as law123_consistent_solid_tangent,
+    consistent_shell_tangent as law123_consistent_shell_tangent,
+    extra_shapes as law123_extra_shapes,
+)
+from .law190_dubois import (
+    Law190Params,
+    build_law190,
+    solid_step as law190_solid_step,
+    solid_update as law190_solid_update,
+    sound_speed as law190_sound_speed,
+    solid_tangent as law190_solid_tangent,
+    consistent_solid_tangent as law190_consistent_solid_tangent,
+    shell_update as law190_shell_update,
+    extra_shapes as law190_extra_shapes,
+    resolve as law190_resolve,
+)
+from .law117_cohesive import (
+    Law117Params,
+    build_law117,
+    solid_step as law117_solid_step,
+    shell_step as law117_shell_step,
+    solid_update as law117_solid_update,
+    shell_update as law117_shell_update,
+    sound_speed as law117_sound_speed,
+    solid_tangent as law117_solid_tangent,
+    shell_tangent as law117_shell_tangent,
+    consistent_solid_tangent as law117_consistent_solid_tangent,
+    consistent_shell_tangent as law117_consistent_shell_tangent,
+    shell_membrane_tangent as law117_shell_membrane_tangent,
+    extra_shapes as law117_extra_shapes,
+)
 from .law90_foam import (
     Law90Params,
     build_law90,
@@ -106,6 +182,17 @@ from .law90_foam import (
     consistent_solid_tangent as law90_consistent_solid_tangent,
     shell_update as law90_shell_update,
     extra_shapes as law90_extra_shapes,
+)
+from .law124_cdpm2 import (
+    Law124Params,
+    build_law124,
+    solid_step as law124_solid_step,
+    solid_update as law124_solid_update,
+    sound_speed as law124_sound_speed,
+    solid_tangent as law124_solid_tangent,
+    consistent_solid_tangent as law124_consistent_solid_tangent,
+    extra_shapes as law124_extra_shapes,
+    resolve as law124_resolve,
 )
 from .law126_hjc import (
     Law126Params,
@@ -1694,15 +1781,176 @@ _LAW169_KEYS = (
     "LAW169_ARUP_ADHESIVE", "ARUP", "ADHESIVE",
 )
 
+_LAW117_KEYS = (
+    117, "117", "LAW117", "COH_MC", "COH_TAB", "COHESIVE",
+    "COHESIVE_TABULATED", "MAT_LAW117", "MAT_COH_MC", "MAT_COH_TAB",
+    "LAW117_COH_MC", "LAW117_COH_TAB", "MLAW117",
+)
+
+
+def _register_law117():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law117_cohesive, "build_law117", None)
+        if builder is not None:
+            for k in _LAW117_KEYS:
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law117()
+
+_LAW114_KEYS = (
+    114, "114", "LAW114", "SPR_SEATBELT", "MAT_LAW114", "MAT_SPR_SEATBELT", "SEATBELT_SPR",
+)
+
+
+def _register_law114():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law114_seatbelt, "build_law114", None)
+        if builder is not None:
+            for k in _LAW114_KEYS:
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law114()
+
+_LAW119_KEYS = (
+    119, "119", "LAW119", "SH_SEATBELT", "SEATBELT_SH", "SEATBELT_SHELL", "MAT_LAW119", "MAT_SH_SEATBELT", "LAW119_SH_SEATBELT",
+)
+
+
+def _register_law119():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law119_seatbelt, "build_law119", None)
+        if builder is not None:
+            for k in _LAW119_KEYS:
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law119()
+
+_LAW123_KEYS = (
+    123, "123", "LAW123", "DAIMLER_PINHO", "DAIMLER-PINHO",
+    "LAMINATED_FRACTURE_DAIMLER_PINHO", "MAT_LAW123", "MAT_DAIMLER_PINHO",
+    "LAW123_DAIMLER_PINHO",
+)
+
+_LAW132_KEYS = (
+    132, "132", "LAW132", "DAIMLER_CAMANHO", "DAIMLER-CAMANHO",
+    "LAMINATED_FRACTURE_DAIMLER_CAMANHO", "MAT_LAW132", "MAT_DAIMLER_CAMANHO",
+    "LAW132_DAIMLER_CAMANHO",
+)
+
+
+def _register_law123():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder123 = getattr(law123_daimler, "build_law123", None)
+        if builder123 is not None:
+            for k in _LAW123_KEYS:
+                MAT_PHYSICS_REGISTRY[k] = builder123
+        builder132 = getattr(law123_daimler, "build_law132", None)
+        if builder132 is not None:
+            for k in _LAW132_KEYS:
+                MAT_PHYSICS_REGISTRY[k] = builder132
+    except Exception:
+        pass
+
+
+_register_law123()
+
+_LAW124_KEYS = (
+    124, "124", "LAW124", "CDPM2", "CONCRETE_DAMAGE_PLASTICITY_2",
+    "MAT_LAW124", "MAT_CDPM2", "LAW124_CDPM2", "MLAW124",
+)
+
+
+def _register_law124():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law124_cdpm2, "build_law124", None)
+        if builder is not None:
+            for k in _LAW124_KEYS:
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law124()
+
+_LAW120_KEYS = (
+    120, "120", "LAW120", "TAPO", "MAT_LAW120", "MAT_TAPO", "LAW120_TAPO",
+    "TAB_PONT_ORTH", "MAT_TAB_PONT_ORTH", "MAT_120",
+)
+
+
+def _register_law120():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law120_tapo, "build_law120", None)
+        if builder is not None:
+            for k in _LAW120_KEYS:
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law120()
+
+_LAW121_KEYS = (
+    121, "121", "LAW121", "PLAS_RATE", "MAT_LAW121", "MAT_PLAS_RATE",
+    "LAW121_PLAS_RATE", "PLAS_TAB_RATE", "MAT_PLAS_TAB_RATE", "MAT_121",
+)
+
+
+def _register_law121():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law121_plas_rate, "build_law121", None)
+        if builder is not None:
+            for k in _LAW121_KEYS:
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law121()
+
 _LAW90_KEYS = (
     90, "90", "LAW90", "HYST_FOAM", "TAB_FOAM", "TABULAR_FOAM",
     "MAT_LAW90", "MAT_HYST_FOAM", "MAT_TAB_FOAM", "LAW90_HYST_FOAM", "LAW90_TAB_FOAM",
 )
 
+_LAW190_KEYS = (
+    190, "190", "LAW190", "FOAM_DUBOIS", "DUBOIS",
+    "MAT_LAW190", "MAT_FOAM_DUBOIS", "LAW190_FOAM_DUBOIS", "MAT_190",
+)
 
+
+def _register_law190():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law190_dubois, "build_law190", None)
+        if builder is not None:
+            for k in _LAW190_KEYS:
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law190()
 
 
 _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
+    "uv190": (16,),
     "uv90": (10,),
     "uv15": (8,),
     "uv22": (4,),
@@ -2014,6 +2262,14 @@ LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
     "MAT_VEGTER": {"plane_stress": True, "solid": False, "shell": True},
     "MAT_PLAS_VEGTER": {"plane_stress": True, "solid": False, "shell": True},
     "MAT_110": {"plane_stress": True, "solid": False, "shell": True},
+    # M598: LAW124 (Concrete Damage Plasticity Model 2 / CDPM2)
+    124: {"plane_stress": False, "solid": True, "shell": False},
+    "124": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW124": {"plane_stress": False, "solid": True, "shell": False},
+    "CDPM2": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_LAW124": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_CDPM2": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW124_CDPM2": {"plane_stress": False, "solid": True, "shell": False},
     # M591: LAW126 (Johnson-Holmquist Concrete / HJC) and LAW169 (Arup Structural Adhesive)
     126: {"plane_stress": False, "solid": True, "shell": False},
     "126": {"plane_stress": False, "solid": True, "shell": False},
@@ -2031,19 +2287,70 @@ LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
     "MAT_ARUP_ADHESIVE": {"plane_stress": True, "solid": True, "shell": True},
     "ARUP": {"plane_stress": True, "solid": True, "shell": True},
     "ADHESIVE": {"plane_stress": True, "solid": True, "shell": True},
+    117: {"plane_stress": True, "solid": True, "shell": True},
+    "117": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW117": {"plane_stress": True, "solid": True, "shell": True},
+    "COH_MC": {"plane_stress": True, "solid": True, "shell": True},
+    "COH_TAB": {"plane_stress": True, "solid": True, "shell": True},
+    "COHESIVE": {"plane_stress": True, "solid": True, "shell": True},
+    "COHESIVE_TABULATED": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_LAW117": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_COH_MC": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_COH_TAB": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW117_COH_MC": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW117_COH_TAB": {"plane_stress": True, "solid": True, "shell": True},
+    "MLAW117": {"plane_stress": True, "solid": True, "shell": True},
     90: {"plane_stress": False, "solid": True, "shell": False},
     "90": {"plane_stress": False, "solid": True, "shell": False},
     "LAW90": {"plane_stress": False, "solid": True, "shell": False},
     "HYST_FOAM": {"plane_stress": False, "solid": True, "shell": False},
     "MAT_LAW90": {"plane_stress": False, "solid": True, "shell": False},
     "MAT_HYST_FOAM": {"plane_stress": False, "solid": True, "shell": False},
+    # M600: LAW120 (TAPO) and LAW121 (PLAS_RATE)
+    120: {"plane_stress": True, "solid": True, "shell": True},
+    "120": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW120": {"plane_stress": True, "solid": True, "shell": True},
+    "TAPO": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_LAW120": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_TAPO": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW120_TAPO": {"plane_stress": True, "solid": True, "shell": True},
+    "TAB_PONT_ORTH": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_TAB_PONT_ORTH": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_120": {"plane_stress": True, "solid": True, "shell": True},
+    121: {"plane_stress": True, "solid": True, "shell": True},
+    "121": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW121": {"plane_stress": True, "solid": True, "shell": True},
+    "PLAS_RATE": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_LAW121": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_PLAS_RATE": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW121_PLAS_RATE": {"plane_stress": True, "solid": True, "shell": True},
+    "PLAS_TAB_RATE": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_PLAS_TAB_RATE": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_121": {"plane_stress": True, "solid": True, "shell": True},
 }
 
 MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
+    120: law120_solid_update, "120": law120_solid_update, "LAW120": law120_solid_update,
+    "TAPO": law120_solid_update, "MAT_LAW120": law120_solid_update, "MAT_TAPO": law120_solid_update,
+    "LAW120_TAPO": law120_solid_update, "TAB_PONT_ORTH": law120_solid_update,
+    "MAT_TAB_PONT_ORTH": law120_solid_update, "MAT_120": law120_solid_update,
+    121: law121_solid_update, "121": law121_solid_update, "LAW121": law121_solid_update,
+    "PLAS_RATE": law121_solid_update, "MAT_LAW121": law121_solid_update, "MAT_PLAS_RATE": law121_solid_update,
+    "LAW121_PLAS_RATE": law121_solid_update, "PLAS_TAB_RATE": law121_solid_update,
+    "MAT_PLAS_TAB_RATE": law121_solid_update, "MAT_121": law121_solid_update,
+    117: law117_solid_update, "117": law117_solid_update, "LAW117": law117_solid_update,
+    "COH_MC": law117_solid_update, "COH_TAB": law117_solid_update, "COHESIVE": law117_solid_update,
+    "COHESIVE_TABULATED": law117_solid_update, "MAT_LAW117": law117_solid_update,
+    "MAT_COH_MC": law117_solid_update, "MAT_COH_TAB": law117_solid_update,
+    "LAW117_COH_MC": law117_solid_update, "LAW117_COH_TAB": law117_solid_update,
+    "MLAW117": law117_solid_update,
     90: law90_solid_update, "90": law90_solid_update, "LAW90": law90_solid_update,
     "HYST_FOAM": law90_solid_update, "MAT_LAW90": law90_solid_update,
     "MAT_HYST_FOAM": law90_solid_update, "TAB_FOAM": law90_solid_update,
     "MAT_TAB_FOAM": law90_solid_update, "LAW90_HYST_FOAM": law90_solid_update,
+    124: law124_solid_update, "124": law124_solid_update, "LAW124": law124_solid_update,
+    "CDPM2": law124_solid_update, "MAT_LAW124": law124_solid_update,
+    "MAT_CDPM2": law124_solid_update, "LAW124_CDPM2": law124_solid_update,
     126: law126_solid_update, "126": law126_solid_update, "LAW126": law126_solid_update,
     "JOHNSON_HOLMQUIST_CONCRETE": law126_solid_update, "MAT_LAW126": law126_solid_update,
     "MAT_JOHNSON_HOLMQUIST_CONCRETE": law126_solid_update, "HJC": law126_solid_update, "MAT_HJC": law126_solid_update,
@@ -2173,6 +2480,20 @@ MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
 }
 
 MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
+    120: law120_shell_update, "120": law120_shell_update, "LAW120": law120_shell_update,
+    "TAPO": law120_shell_update, "MAT_LAW120": law120_shell_update, "MAT_TAPO": law120_shell_update,
+    "LAW120_TAPO": law120_shell_update, "TAB_PONT_ORTH": law120_shell_update,
+    "MAT_TAB_PONT_ORTH": law120_shell_update, "MAT_120": law120_shell_update,
+    121: law121_shell_update, "121": law121_shell_update, "LAW121": law121_shell_update,
+    "PLAS_RATE": law121_shell_update, "MAT_LAW121": law121_shell_update, "MAT_PLAS_RATE": law121_shell_update,
+    "LAW121_PLAS_RATE": law121_shell_update, "PLAS_TAB_RATE": law121_shell_update,
+    "MAT_PLAS_TAB_RATE": law121_shell_update, "MAT_121": law121_shell_update,
+    117: law117_shell_update, "117": law117_shell_update, "LAW117": law117_shell_update,
+    "COH_MC": law117_shell_update, "COH_TAB": law117_shell_update, "COHESIVE": law117_shell_update,
+    "COHESIVE_TABULATED": law117_shell_update, "MAT_LAW117": law117_shell_update,
+    "MAT_COH_MC": law117_shell_update, "MAT_COH_TAB": law117_shell_update,
+    "LAW117_COH_MC": law117_shell_update, "LAW117_COH_TAB": law117_shell_update,
+    "MLAW117": law117_shell_update,
     169: law169_shell_update, "169": law169_shell_update, "LAW169": law169_shell_update,
     "ARUP_ADHESIVE": law169_shell_update, "MAT_LAW169": law169_shell_update,
     "MAT_ARUP_ADHESIVE": law169_shell_update, "ARUP": law169_shell_update, "ADHESIVE": law169_shell_update,
@@ -2400,6 +2721,14 @@ def register_materials():
         law126_hjc._register()
     if hasattr(law169_arup, "_register"):
         law169_arup._register()
+    if hasattr(law117_cohesive, "_register"):
+        law117_cohesive._register()
+    _register_law117()
+    if hasattr(law123_daimler, "_register"):
+        law123_daimler._register()
+    _register_law123()
+    _register_law120()
+    _register_law121()
 
 
 def extra_shapes(mat, nip=None):
@@ -2599,12 +2928,26 @@ def extra_shapes(mat, nip=None):
         shapes.update(law109_extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
         shapes.update(law110_extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW124_KEYS or getattr(mat, "law_name", None) in _LAW124_KEYS:
+        shapes.update(law124_extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
         shapes.update(law126_extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in _LAW169_KEYS or getattr(mat, "law_name", None) in _LAW169_KEYS:
         shapes.update(law169_extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW117_KEYS or getattr(mat, "law_name", None) in _LAW117_KEYS:
+        shapes.update(law117_extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW119_KEYS or getattr(mat, "law_name", None) in _LAW119_KEYS:
+        shapes.update(law119_seatbelt.extra_shapes(mat, nip=nip))
     if getattr(mat, "law", None) in _LAW90_KEYS or getattr(mat, "law_name", None) in _LAW90_KEYS:
         shapes.update(law90_extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW190_KEYS or getattr(mat, "law_name", None) in _LAW190_KEYS:
+        shapes.update(law190_extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW123_KEYS or getattr(mat, "law_name", None) in _LAW123_KEYS or getattr(mat, "law", None) in _LAW132_KEYS or getattr(mat, "law_name", None) in _LAW132_KEYS:
+        shapes.update(law123_extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW120_KEYS or getattr(mat, "law_name", None) in _LAW120_KEYS:
+        shapes.update(law120_extra_shapes(mat, nip=nip))
+    if getattr(mat, "law", None) in _LAW121_KEYS or getattr(mat, "law_name", None) in _LAW121_KEYS:
+        shapes.update(law121_extra_shapes(mat, nip=nip))
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
         shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
     return shapes
@@ -2612,7 +2955,7 @@ def extra_shapes(mat, nip=None):
 
 def needs_defgrad(mat) -> bool:
     """True if the law is total-strain and needs F from the kernel
-    (LAW42 Ogden; LAW62 hyper-visco foam since M37 pack 2; LAW69 hyperelastic M550; LAW82 Ogden M549; LAW95 Bergstrom-Boyce M569; LAW100 Multi-Network M570; LAW101 Bouvard PP M571)."""
+    (LAW42 Ogden; LAW62 hyper-visco foam since M37 pack 2; LAW69 hyperelastic M550; LAW82 Ogden M549; LAW95 Bergstrom-Boyce M569; LAW100 Multi-Network M570; LAW101 Bouvard PP M571; LAW190 Du Bois Foam)."""
     return (mat.law in (42, 62, 69, 82, 95, 100, 101)
             or getattr(mat, "law_name", None) in ("LAW42", "LAW62", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN", "LAW95", "95", "BERGSTROM_BOYCE", "BERGSTROM-BOYCE", "MAT_LAW95", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE", "LAW100", "100", "VISC_HYP", "MNF", "MAT_LAW100", "MAT_VISC_HYP", "MAT_MNF", "LAW101", "101", "PP", "MAT_PP", "PLAS_POLY", "MAT_PLAS_POLY", "MAT_LAW101", "LAW101_PP", "LAW101_PLAS_POLY")
             or getattr(mat, "law", None) in _LAW95_KEYS
@@ -2620,34 +2963,14 @@ def needs_defgrad(mat) -> bool:
             or getattr(mat, "law", None) in _LAW100_KEYS
             or getattr(mat, "law_name", None) in _LAW100_KEYS
             or getattr(mat, "law", None) in _LAW101_KEYS
-            or getattr(mat, "law_name", None) in _LAW101_KEYS)
+            or getattr(mat, "law_name", None) in _LAW101_KEYS
+            or getattr(mat, "law", None) in _LAW190_KEYS
+            or getattr(mat, "law_name", None) in _LAW190_KEYS)
 
 
 def needs_env(mat) -> bool:
     """True if the law wants the kernel's per-cycle environment views in
-    ``extra`` — current density ``rho`` and internal energy ``eint``
-    (M37 pack 2: LAW24's dilatancy gates ALPHA on EINT <= 0 and
-    RHO < RHO0, LAW81's maximum-dilatancy clamp on RHO; M37 pack 1:
-    LAW35's relative volume / air pressure, LAW44's total pressure
-    P = K*(rho/rho0 - 1) and LAW70's Itens tension scale all need
-    ``rho``; LAW62's CIMAX sound-speed bound divides by the current
-    density; LAW40's sound speed too; M40: LAW36 solids use the same
-    total pressure as LAW44 — sigeps36.F P = BULK*AMU; M539: LAW34 air pressure;
-    M540: LAW37 biphasic liquid-gas density; M541: LAW38 density and time;
-    LAW25: composite density; LAW15: Chang-Chang composite density;
-    M548: LAW43 Hill tabulated density and sound speed; M549: LAW82 Ogden;
-    M550: LAW69 hyperelastic; M552: LAW48 Zhao dynamic plasticity;
-    M555: LAW57 Barlat anisotropic plasticity; M557: LAW49 Steinberg-Guinan;
-    M558: LAW79 Johnson-Holmquist JH-2; M559: LAW50 Viscoelastic Honeycomb;
-    M562: LAW66 Asymmetric Tabulated Plasticity;
-    M563: LAW74 3D Tabulated Hill Plasticity;
-    M565: LAW88 Tabulated Hyperelasticity;
-    M566: LAW92 Arruda-Boyce Hyperelasticity;
-    M568: LAW93 Orthotropic Hill Plasticity;
-    M569: LAW95 Bergstrom-Boyce Hyperelasticity;
-    M570: LAW100 Multi-Network Hyperelasticity;
-    M571: LAW101 Bouvard Polypropylene Viscoplasticity;
-    M576: LAW105 Powder Burn Propellant)."""
+    ``extra`` — current density ``rho`` and internal energy ``eint``"""
     if getattr(mat, "law", None) in _LAW88_KEYS or getattr(mat, "law_name", None) in _LAW88_KEYS:
         return True
     if getattr(mat, "law", None) in _LAW92_KEYS or getattr(mat, "law_name", None) in _LAW92_KEYS:
@@ -2674,14 +2997,26 @@ def needs_env(mat) -> bool:
         return True
     if getattr(mat, "law", None) in _LAW76_KEYS or getattr(mat, "law_name", None) in _LAW76_KEYS:
         return True
+    if getattr(mat, "law", None) in _LAW124_KEYS or getattr(mat, "law_name", None) in _LAW124_KEYS:
+        return True
     if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
         return True
     if getattr(mat, "law", None) in _LAW169_KEYS or getattr(mat, "law_name", None) in _LAW169_KEYS:
         return True
     if getattr(mat, "law", None) in _LAW90_KEYS or getattr(mat, "law_name", None) in _LAW90_KEYS:
         return True
-    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 21, "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", 49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", 52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", 58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", 60, "60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", 62, 66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB", 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", 70, 73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL", 74, "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "LAW74_HILL_3D", 79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", 81, 82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", 87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000", "LAW87_BARLAT2000", 163, "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM")
-            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", "LAW22", "DAMA", "PLAS_DAMA", "MAT_LAW22", "MAT_DAMA", "MAT_PLAS_DAMA", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB", "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", "LAW60", "PLAS_T3", "FABRIC", "MAT_LAW60", "MAT_PLAS_T3", "MAT_FABRIC", "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC", "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL", "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "LAW74_HILL_3D", "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000", "LAW87_BARLAT2000", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN", "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM"))
+    if getattr(mat, "law", None) in _LAW190_KEYS or getattr(mat, "law_name", None) in _LAW190_KEYS:
+        return True
+    if getattr(mat, "law", None) in _LAW123_KEYS or getattr(mat, "law_name", None) in _LAW123_KEYS:
+        return True
+    if getattr(mat, "law", None) in _LAW132_KEYS or getattr(mat, "law_name", None) in _LAW132_KEYS:
+        return True
+    if getattr(mat, "law", None) in _LAW120_KEYS or getattr(mat, "law_name", None) in _LAW120_KEYS:
+        return True
+    if getattr(mat, "law", None) in _LAW121_KEYS or getattr(mat, "law_name", None) in _LAW121_KEYS:
+        return True
+    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 21, "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", 49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", 52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", 58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", 60, "60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", 62, 66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB", 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", 70, 73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL", 74, "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "LAW74_HILL_3D", 79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", 81, 82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", 87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000", "LAW87_BARLAT2000", 163, "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM", 190, "190", "LAW190", "FOAM_DUBOIS", "DUBOIS", "MAT_LAW190", "MAT_FOAM_DUBOIS", "LAW190_FOAM_DUBOIS")
+            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", "LAW22", "DAMA", "PLAS_DAMA", "MAT_LAW22", "MAT_DAMA", "MAT_PLAS_DAMA", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB", "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", "LAW60", "PLAS_T3", "FABRIC", "MAT_LAW60", "MAT_PLAS_T3", "MAT_FABRIC", "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC", "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL", "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "LAW74_HILL_3D", "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000", "LAW87_BARLAT2000", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN", "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM", "190", "LAW190", "FOAM_DUBOIS", "DUBOIS", "MAT_LAW190", "MAT_FOAM_DUBOIS", "LAW190_FOAM_DUBOIS"))
 
 
 def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
@@ -2700,6 +3035,10 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
         raise NotImplementedError("LAW58 (/MAT/FABR_A) is implemented for shell elements only.")
     if getattr(mat, "law", None) in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG") or getattr(mat, "law_name", None) in ("15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG"):
         raise NotImplementedError("LAW15 is for shell elements only")
+    if getattr(mat, "law", None) in _LAW114_KEYS or getattr(mat, "law_name", None) in _LAW114_KEYS:
+        raise NotImplementedError("LAW114 (/MAT/SPR_SEATBELT) is for spring elements only.")
+    if getattr(mat, "law", None) in _LAW119_KEYS or getattr(mat, "law_name", None) in _LAW119_KEYS:
+        raise NotImplementedError("LAW119 (/MAT/SH_SEATBELT) is implemented for shell elements only.")
     if getattr(mat, "law", None) in (32, "32", "LAW32", "HILL") or getattr(mat, "law_name", None) in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL"):
         raise NotImplementedError("LAW32 (HILL anisotropic plasticity) is implemented for shell elements only.")
     if mat.law == 1:
@@ -3412,6 +3751,29 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
         return sig, epsp_out, c
     if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
         raise NotImplementedError("material LAW110 (VEGTER) is only supported for shells")
+    if getattr(mat, "law", None) in _LAW124_KEYS or getattr(mat, "law_name", None) in _LAW124_KEYS:
+        res = law124_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        if isinstance(res, tuple):
+            if len(res) == 3:
+                sign, epsp_out, c = res
+            elif len(res) == 2:
+                sign, epsp_out = res
+                c = law124_sound_speed(mat, rho=extra.get("rho") if extra else None)
+            else:
+                sign, epsp_out, c = res[0], epsp, None
+        else:
+            sign, epsp_out, c = res, epsp, None
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = sign
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
     if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
         res = law126_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
         if isinstance(res, tuple):
@@ -3458,6 +3820,52 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
             except Exception:
                 pass
         return sig, epsp_out, c
+    if getattr(mat, "law", None) in _LAW117_KEYS or getattr(mat, "law_name", None) in _LAW117_KEYS:
+        res = law117_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        if isinstance(res, tuple):
+            if len(res) == 3:
+                sign, epsp_out, c = res
+            elif len(res) == 2:
+                sign, epsp_out = res
+                c = law117_sound_speed(mat, rho=extra.get("rho") if extra else None)
+            else:
+                sign, epsp_out, c = res[0], epsp, None
+        else:
+            sign, epsp_out, c = res, epsp, None
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = sign
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
+    if getattr(mat, "law", None) in _LAW123_KEYS or getattr(mat, "law_name", None) in _LAW123_KEYS or getattr(mat, "law", None) in _LAW132_KEYS or getattr(mat, "law_name", None) in _LAW132_KEYS:
+        res = law123_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        if isinstance(res, tuple):
+            if len(res) == 3:
+                sign, epsp_out, c = res
+            elif len(res) == 2:
+                sign, epsp_out = res
+                c = law123_sound_speed(mat, rho=extra.get("rho") if extra else None)
+            else:
+                sign, epsp_out, c = res[0], epsp, None
+        else:
+            sign, epsp_out, c = res, epsp, None
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = sign
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
     if getattr(mat, "law", None) in _LAW90_KEYS or getattr(mat, "law_name", None) in _LAW90_KEYS:
         res = law90_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
         if isinstance(res, tuple):
@@ -3481,6 +3889,75 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
             except Exception:
                 pass
         return sig, epsp_out, c
+    if getattr(mat, "law", None) in _LAW190_KEYS or getattr(mat, "law_name", None) in _LAW190_KEYS:
+        res = law190_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        if isinstance(res, tuple):
+            if len(res) == 3:
+                sign, epsp_out, c = res
+            elif len(res) == 2:
+                sign, epsp_out = res
+                c = law190_sound_speed(mat, extra=extra)
+            else:
+                sign, epsp_out, c = res[0], epsp, None
+        else:
+            sign, epsp_out, c = res, epsp, None
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = sign
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
+    if getattr(mat, "law", None) in _LAW120_KEYS or getattr(mat, "law_name", None) in _LAW120_KEYS:
+        res = law120_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        if isinstance(res, tuple):
+            if len(res) == 3:
+                sign, epsp_out, c = res
+            elif len(res) == 2:
+                sign, epsp_out = res
+                c = law120_sound_speed(mat, extra=extra)
+            else:
+                sign, epsp_out, c = res[0], epsp, None
+        else:
+            sign, epsp_out, c = res, epsp, None
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = sign
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
+    if getattr(mat, "law", None) in _LAW121_KEYS or getattr(mat, "law_name", None) in _LAW121_KEYS:
+        res = law121_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        if isinstance(res, tuple):
+            if len(res) == 3:
+                sign, epsp_out, c = res
+            elif len(res) == 2:
+                sign, epsp_out = res
+                c = law121_sound_speed(mat, extra=extra)
+            else:
+                sign, epsp_out, c = res[0], epsp, None
+        else:
+            sign, epsp_out, c = res, epsp, None
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = sign
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
     raise NotImplementedError(f"material LAW{mat.law} not ported for solids")
 
 
@@ -3488,12 +3965,26 @@ def sound_speed(mat, rho=None, extra=None, is_shell: bool = False):
     """Dispatch sound speed calculation to material law."""
     law = getattr(mat, "law", None)
     law_name = getattr(mat, "law_name", None)
+    if law in _LAW120_KEYS or law_name in _LAW120_KEYS:
+        return law120_sound_speed(mat, rho=rho, extra=extra, is_shell=is_shell)
+    if law in _LAW121_KEYS or law_name in _LAW121_KEYS:
+        return law121_sound_speed(mat, rho=rho, extra=extra, is_shell=is_shell)
+    if law in _LAW190_KEYS or law_name in _LAW190_KEYS:
+        return law190_sound_speed(mat, rho=rho, extra=extra)
     if law in _LAW90_KEYS or law_name in _LAW90_KEYS:
         return law90_sound_speed(mat, rho=rho, extra=extra)
+    if law in _LAW124_KEYS or law_name in _LAW124_KEYS:
+        return law124_sound_speed(mat, rho=rho)
     if law in _LAW126_KEYS or law_name in _LAW126_KEYS:
         return law126_sound_speed(mat, rho=rho)
     if law in _LAW169_KEYS or law_name in _LAW169_KEYS:
         return law169_sound_speed(mat, rho=rho)
+    if law in _LAW117_KEYS or law_name in _LAW117_KEYS:
+        return law117_sound_speed(mat, rho=rho, extra=extra, is_shell=is_shell)
+    if law in _LAW119_KEYS or law_name in _LAW119_KEYS:
+        return law119_seatbelt.sound_speed(mat, rho=rho, extra=extra, is_shell=is_shell)
+    if law in _LAW123_KEYS or law_name in _LAW123_KEYS or law in _LAW132_KEYS or law_name in _LAW132_KEYS:
+        return law123_sound_speed(mat, rho=rho, extra=extra, is_shell=is_shell)
     if law in _LAW110_KEYS or law_name in _LAW110_KEYS:
         return law110_sound_speed(mat, rho=rho, is_shell=is_shell)
     if law in _LAW109_KEYS or law_name in _LAW109_KEYS:
@@ -3878,6 +4369,8 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
             except Exception:
                 pass
         return s_out, ep_out
+    if getattr(mat, "law", None) in _LAW124_KEYS or getattr(mat, "law_name", None) in _LAW124_KEYS:
+        raise NotImplementedError("material LAW124 (CDPM2) is only supported for solids")
     if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
         raise NotImplementedError("material LAW126 (HJC) is only supported for solids")
     if getattr(mat, "law", None) in _LAW169_KEYS or getattr(mat, "law_name", None) in _LAW169_KEYS:
@@ -3899,8 +4392,52 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
             except Exception:
                 pass
         return s_out, ep_out
+    if getattr(mat, "law", None) in _LAW117_KEYS or getattr(mat, "law_name", None) in _LAW117_KEYS:
+        res = law117_shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        if isinstance(res, tuple):
+            s_out = res[0]
+            ep_out = res[1] if len(res) > 1 else epsp
+        else:
+            s_out = res
+            ep_out = epsp
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = s_out
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = ep_out
+            except Exception:
+                pass
+        return s_out, ep_out
+    if getattr(mat, "law", None) in _LAW123_KEYS or getattr(mat, "law_name", None) in _LAW123_KEYS or getattr(mat, "law", None) in _LAW132_KEYS or getattr(mat, "law_name", None) in _LAW132_KEYS:
+        res = law123_shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        if isinstance(res, tuple):
+            s_out = res[0]
+            ep_out = res[1] if len(res) > 1 else epsp
+        else:
+            s_out = res
+            ep_out = epsp
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = s_out
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = ep_out
+            except Exception:
+                pass
+        return s_out, ep_out
     if getattr(mat, "law", None) in _LAW90_KEYS or getattr(mat, "law_name", None) in _LAW90_KEYS:
         raise NotImplementedError("material LAW90 (tabulated hysteretic foam) is formulated for 3D solid elements only")
+    if getattr(mat, "law", None) in _LAW190_KEYS or getattr(mat, "law_name", None) in _LAW190_KEYS:
+        raise NotImplementedError("material LAW190 (FOAM_DUBOIS) is formulated for 3D solid elements only")
+    if getattr(mat, "law", None) in _LAW119_KEYS or getattr(mat, "law_name", None) in _LAW119_KEYS:
+        return law119_seatbelt.shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+    if getattr(mat, "law", None) in _LAW114_KEYS or getattr(mat, "law_name", None) in _LAW114_KEYS:
+        raise NotImplementedError("LAW114 (/MAT/SPR_SEATBELT) is for spring elements only.")
     raise NotImplementedError(f"material LAW{mat.law} not ported for shells")
 
 
@@ -4115,12 +4652,20 @@ def solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
         return law109_solid_tangent(mat, sig=sig, extra=extra)
     if getattr(mat, "law", None) in _LAW110_KEYS or getattr(mat, "law_name", None) in _LAW110_KEYS:
         raise NotImplementedError("material LAW110 (VEGTER) is only supported for shells")
+    if getattr(mat, "law", None) in _LAW124_KEYS or getattr(mat, "law_name", None) in _LAW124_KEYS:
+        return law124_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
         return law126_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     if getattr(mat, "law", None) in _LAW169_KEYS or getattr(mat, "law_name", None) in _LAW169_KEYS:
         return law169_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
+    if getattr(mat, "law", None) in _LAW117_KEYS or getattr(mat, "law_name", None) in _LAW117_KEYS:
+        return law117_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
+    if getattr(mat, "law", None) in _LAW123_KEYS or getattr(mat, "law_name", None) in _LAW123_KEYS or getattr(mat, "law", None) in _LAW132_KEYS or getattr(mat, "law_name", None) in _LAW132_KEYS:
+        return law123_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     if getattr(mat, "law", None) in _LAW90_KEYS or getattr(mat, "law_name", None) in _LAW90_KEYS:
         return law90_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
+    if getattr(mat, "law", None) in _LAW190_KEYS or getattr(mat, "law_name", None) in _LAW190_KEYS:
+        return law190_solid_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
         f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW34, LAW35, LAW36, LAW38, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
@@ -4132,6 +4677,10 @@ consistent_solid_tangent = solid_tangent
 
 def resolve_curves(mat, model, log=None):
     """Wire curve resolution hook for /FUNCT references so model.curves can be accessed by the kernel."""
+    if getattr(mat, "law", None) in _LAW190_KEYS or getattr(mat, "law_name", None) in _LAW190_KEYS:
+        if hasattr(law190_dubois, "resolve"):
+            return law190_dubois.resolve(mat, model, log)
+
     if getattr(mat, "law", None) in _LAW90_KEYS or getattr(mat, "law_name", None) in _LAW90_KEYS:
         if hasattr(law90_foam, "resolve"):
             return law90_foam.resolve(mat, model, log)
@@ -4339,6 +4888,10 @@ def shell_membrane_tangent(mat):
             [nu * c, c, 0.0],
             [0.0, 0.0, g],
         ])
+    if getattr(mat, "law", None) in _LAW117_KEYS or getattr(mat, "law_name", None) in _LAW117_KEYS:
+        return law117_shell_membrane_tangent(mat)
+    if getattr(mat, "law", None) in _LAW123_KEYS or getattr(mat, "law_name", None) in _LAW123_KEYS or getattr(mat, "law", None) in _LAW132_KEYS or getattr(mat, "law_name", None) in _LAW132_KEYS:
+        return law123_shell_tangent(mat)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic, "
         f"LAW3 plas_bost, LAW19 fabric, LAW34 Boltzmann, LAW32 Hill and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")
@@ -4496,8 +5049,16 @@ def shell_layer_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
         raise NotImplementedError("LAW126 (Johnson-Holmquist Concrete / HJC) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in _LAW169_KEYS or getattr(mat, "law_name", None) in _LAW169_KEYS:
         return law169_consistent_shell_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
+    if getattr(mat, "law", None) in _LAW117_KEYS or getattr(mat, "law_name", None) in _LAW117_KEYS:
+        return law117_consistent_shell_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
+    if getattr(mat, "law", None) in _LAW119_KEYS or getattr(mat, "law_name", None) in _LAW119_KEYS:
+        return law119_seatbelt.consistent_shell_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, extra=extra)
+    if getattr(mat, "law", None) in _LAW123_KEYS or getattr(mat, "law_name", None) in _LAW123_KEYS or getattr(mat, "law", None) in _LAW132_KEYS or getattr(mat, "law_name", None) in _LAW132_KEYS:
+        return law123_consistent_shell_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
     if getattr(mat, "law", None) in _LAW90_KEYS or getattr(mat, "law_name", None) in _LAW90_KEYS:
         raise NotImplementedError("LAW90 (tabulated hysteretic foam) is implemented for 3D solid elements only.")
+    if getattr(mat, "law", None) in _LAW190_KEYS or getattr(mat, "law_name", None) in _LAW190_KEYS:
+        raise NotImplementedError("LAW190 (FOAM_DUBOIS) is implemented for 3D solid elements only.")
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 "
         f"elastic, LAW2, LAW3, LAW36 and LAW44 elastoplastic, LAW27 brittle cracking, "

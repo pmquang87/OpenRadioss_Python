@@ -10605,13 +10605,14 @@ def read_load_centri(block: KeywordBlock, model: Model, log: MessageLog) -> None
         scale_x = _fval(f[6], default=1.0) if len(f) > 6 else 1.0
         scale_y = _fval(f[7], default=1.0) if len(f) > 7 else 1.0
     else:
-        t = cards[0].tokens()
-        funct_id = int(t[0]) if len(t) > 0 else 0
+        raw = cards[0].raw.replace(",", " ")
+        t = raw.split()
+        funct_id = int(float(t[0])) if len(t) > 0 else 0
         dir_str = t[1].upper() if len(t) > 1 and t[1] else "XX"
-        frame_id = int(t[2]) if len(t) > 2 else 0
-        sens_id = int(t[3]) if len(t) > 3 else 0
-        grnod_id = int(t[4]) if len(t) > 4 else 0
-        ivar = int(t[5]) if len(t) > 5 else 1
+        frame_id = int(float(t[2])) if len(t) > 2 else 0
+        sens_id = int(float(t[3])) if len(t) > 3 else 0
+        grnod_id = int(float(t[4])) if len(t) > 4 else 0
+        ivar = int(float(t[5])) if len(t) > 5 else 1
         scale_x = float(t[6]) if len(t) > 6 else 1.0
         scale_y = float(t[7]) if len(t) > 7 else 1.0
 
@@ -10625,6 +10626,8 @@ def read_load_centri(block: KeywordBlock, model: Model, log: MessageLog) -> None
         frame_id=frame_id, sens_id=sens_id, grnod_id=grnod_id,
         ivar=ivar, scale_x=scale_x, scale_y=scale_y, title=title,
     )
+    cl.grnd_id = grnod_id
+    cl.fct_id = funct_id
     model.centri_loads.append(cl)
     from ..model.entities import LoadCentri
     model.load_centris[block.user_id] = LoadCentri(
@@ -10632,6 +10635,7 @@ def read_load_centri(block: KeywordBlock, model: Model, log: MessageLog) -> None
         fct_id=funct_id, frame_id=frame_id, sens_id=sens_id,
         grnod_id=grnod_id, ivar=ivar, ascalex=scale_x, fscaley=scale_y,
     )
+    model.centris[block.user_id] = cl
 
 
 def read_load_pressure(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -11430,9 +11434,44 @@ def split_imposed_card(cards) -> Optional[dict]:
         if len(vals) > 3 and vals[3] != 0.0:
             out["tstop"] = vals[3]
     else:
-        t = cards[0].tokens()
-        out.update(fct=int(t[0]), dir=t[1].upper(), grnod=int(t[2]),
-                   scale=float(t[3]) if len(t) > 3 else 1.0)
+        raw0 = cards[0].raw.replace(",", " ")
+        t = raw0.split()
+        if len(t) >= 5 and t[1].upper() in _IMP_DIRS:
+            out.update(fct=int(float(t[0])), dir=t[1].upper(),
+                       skew=int(float(t[2])) if len(t) > 2 and t[2] else 0,
+                       sens=int(float(t[3])) if len(t) > 3 and t[3] else 0,
+                       grnod=int(float(t[4])) if len(t) > 4 and t[4] else 0,
+                       frame=int(float(t[5])) if len(t) > 5 and t[5] else 0,
+                       icoor=int(float(t[6])) if len(t) > 6 and t[6] else 0)
+            if len(cards) > 1 and not cards[1].is_blank:
+                raw1 = cards[1].raw.replace(",", " ")
+                t2 = raw1.split()
+                if len(t2) > 0 and float(t2[0]) != 0.0:
+                    out["xscale"] = float(t2[0])
+                if len(t2) > 1 and float(t2[1]) != 0.0:
+                    out["scale"] = float(t2[1])
+                if len(t2) > 2:
+                    out["tstart"] = float(t2[2])
+                if len(t2) > 3 and float(t2[3]) != 0.0:
+                    out["tstop"] = float(t2[3])
+        elif len(t) >= 3 and t[1].upper() in _IMP_DIRS:
+            out.update(fct=int(float(t[0])), dir=t[1].upper(), grnod=int(float(t[2])),
+                       scale=float(t[3]) if len(t) > 3 else 1.0)
+            if len(cards) > 1 and not cards[1].is_blank:
+                raw1 = cards[1].raw.replace(",", " ")
+                t2 = raw1.split()
+                if len(t2) > 0 and float(t2[0]) != 0.0:
+                    out["xscale"] = float(t2[0])
+                if len(t2) > 1 and float(t2[1]) != 0.0:
+                    out["scale"] = float(t2[1])
+                if len(t2) > 2:
+                    out["tstart"] = float(t2[2])
+                if len(t2) > 3 and float(t2[3]) != 0.0:
+                    out["tstop"] = float(t2[3])
+        elif len(t) > 0:
+            out.update(fct=int(float(t[0])), dir=t[1].upper() if len(t) > 1 else "X",
+                       grnod=int(float(t[2])) if len(t) > 2 else 0,
+                       scale=float(t[3]) if len(t) > 3 else 1.0)
     return out
 
 
@@ -26833,20 +26872,26 @@ def read_mat_law117(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         exp_g=exp_g, exp_bk=exp_bk, gamma=gamma,
     )
     model.mat_law117s[mat_id] = m117
+    params_117 = {
+        "E_n": e_elas_n, "e_elas_n": e_elas_n, "E_elas_n": e_elas_n, "EN": e_elas_n, "en": e_elas_n, "E": e_elas_n, "e": e_elas_n, "MAT_E_ELAS_N": e_elas_n,
+        "E_t": e_elas_s, "e_elas_s": e_elas_s, "E_elas_s": e_elas_s, "ES": e_elas_s, "es": e_elas_s, "G": e_elas_s, "g": e_elas_s, "MAT_E_ELAS_S": e_elas_s,
+        "sigma_max": tmax_n, "tmax_n": tmax_n, "TMAX_N": tmax_n, "TN": tmax_n, "tn": tmax_n, "MAT_TMAX_N": tmax_n,
+        "tau_max": tmax_s, "tmax_s": tmax_s, "TMAX_S": tmax_s, "TS": tmax_s, "ts": tmax_s, "MAT_TMAX_S": tmax_s,
+        "G_Ic": gic, "gic": gic, "GIC": gic, "MAT_GIC": gic,
+        "G_IIc": giic, "giic": giic, "GIIC": giic, "MAT_GIIC": giic,
+        "imass": imass, "idel": idel, "irupt": irupt,
+        "fct_tn": fct_tn, "fct_tt": fct_tt, "fscale_x": fscale_x,
+        "exp_g": exp_g, "exp_bk": exp_bk, "gamma": gamma,
+        "rho0": rho0, "rho": rho0, "refer_rho": refer_rho, "MAT_RHO": rho0,
+    }
     model.materials[mat_id] = Material(
         id=mat_id, law=117, rho0=rho0, title=title,
-        params={
-            "E_elas_n": e_elas_n, "e_elas_n": e_elas_n,
-            "E_elas_s": e_elas_s, "e_elas_s": e_elas_s,
-            "imass": imass, "idel": idel, "irupt": irupt,
-            "fct_tn": fct_tn, "fct_tt": fct_tt,
-            "TMAX_N": tmax_n, "tmax_n": tmax_n,
-            "TMAX_S": tmax_s, "tmax_s": tmax_s,
-            "fscale_x": fscale_x,
-            "GIC": gic, "gic": gic,
-            "GIIC": giic, "giic": giic,
-            "exp_g": exp_g, "exp_bk": exp_bk, "gamma": gamma,
-        }
+        params=params_117
+    )
+    from .mat_reader import GenericMaterialRecord
+    model.materials[mat_id].record = GenericMaterialRecord(
+        law_name="LAW117", law_number=117, id=mat_id, title=title,
+        params=params_117, density=rho0, unit_id=block.unit_id,
     )
 
 
@@ -33274,6 +33319,7 @@ def read_mat_law190(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     rho, e0, nu = 0.0, 0.0, 0.0
     hu, shape = 0.0, 1.0
     fun_1, xscale_1, scale_1 = 0, 1.0, 1.0
+    tcut, fail = 1.0e20, 0
 
     if block.fixed:
         f1 = valid_cards[0].cut("MAT_LAW190_1")
@@ -33294,6 +33340,11 @@ def read_mat_law190(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             fun_1 = _ival(f4[0]) if len(f4) > 0 else 0
             xscale_1 = _fval(f4[1], 1.0) if len(f4) > 1 and f4[1].strip() else 1.0
             scale_1 = _fval(f4[2], 1.0) if len(f4) > 2 and f4[2].strip() else 1.0
+
+        if len(valid_cards) > 4:
+            f5 = valid_cards[4].cut("MAT_LAW190_5")
+            tcut = _fval(f5[0], 1.0e20) if len(f5) > 0 and f5[0].strip() else 1.0e20
+            fail = _ival(f5[1], 0) if len(f5) > 1 and f5[1].strip() else 0
     else:
         toks1 = valid_cards[0].tokens()
         rho = float(toks1[0]) if len(toks1) > 0 else 0.0
@@ -33314,15 +33365,33 @@ def read_mat_law190(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             xscale_1 = float(toks4[1]) if len(toks4) > 1 else 1.0
             scale_1 = float(toks4[2]) if len(toks4) > 2 else 1.0
 
+        if len(valid_cards) > 4:
+            toks5 = valid_cards[4].tokens()
+            tcut = float(toks5[0]) if len(toks5) > 0 else 1.0e20
+            fail = int(float(toks5[1])) if len(toks5) > 1 else 0
+
     m190 = MatLaw190(
         id=mat_id, rho=rho, e0=e0, nu=nu, hu=hu, shape=shape,
-        fun_1=fun_1, xscale_1=xscale_1, scale_1=scale_1, title=title,
+        fun_1=fun_1, xscale_1=xscale_1, scale_1=scale_1,
+        tcut=tcut, fail=fail, title=title,
     )
     model.mat_law190s[mat_id] = m190
+
+    params = {
+        "E": e0, "E0": e0, "e0": e0, "MAT_E": e0,
+        "nu": nu, "Nu": nu, "MAT_NU": nu,
+        "MAT_RHO": rho, "rho0": rho, "rho": rho,
+        "MAT_HU": hu, "hu": hu, "hys": hu, "HU": hu,
+        "MAT_SHAPE": shape, "shape": shape, "SHAPE": shape,
+        "FUN_1": fun_1, "fun_1": fun_1, "table_id": fun_1,
+        "XSCALE_1": xscale_1, "xscale_1": xscale_1, "xscale": xscale_1,
+        "SCALE_1": scale_1, "scale_1": scale_1, "scale": scale_1,
+        "tcut": tcut, "TCUT": tcut, "fail": fail, "FAIL": fail,
+    }
     from .mat_reader import GenericMaterialRecord
     mat190 = Material(
         id=mat_id, law=190, rho0=rho, title=title,
-        params={"E": e0, "nu": nu, "MAT_RHO": rho, "MAT_HU": hu, "MAT_SHAPE": shape, "FUN_1": fun_1}
+        params=params,
     )
     mat190.record = GenericMaterialRecord(
         law_name="LAW190", law_number=190, id=mat_id, title=title,
@@ -86690,7 +86759,11 @@ def read_centri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     c = CentrifugalLoad(id=centri_id, title=title, grnd_id=grnd_id, sens_id=sens_id,
                         fct_id=fct_id, node_orig=node_orig, node_axis=node_axis,
                         omega=omega, scale_x=scale_x, scale_y=scale_y, scale_z=scale_z)
+    c.grnod_id = grnd_id
+    c.funct_id = fct_id
     model.centris[centri_id] = c
+    if not any(cl.id == centri_id for cl in model.centri_loads):
+        model.centri_loads.append(c)
 
 
 def read_monvol_comm(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -88340,6 +88413,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "RELAX_SYSTEM": read_relax,
     "RELAX_DYNA": read_relax,
     "CENTRI": read_centri,
+    "LOAD_CENTRI": read_load_centri,
     "DTTSH": read_dttsh,
     "DT_TSH": read_dttsh,
     "H3D": read_h3d,
@@ -95707,10 +95781,31 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_ARUP_ADHESIVE": read_mat_law169,
     "LAW169": read_mat_law169,
     "ARUP_ADHESIVE": read_mat_law169,
+    # LAW117 (Cohesive Zone Material)
+    "MAT_LAW117": read_mat_law117,
+    "MAT_COH_MC": read_mat_law117,
+    "MAT_COH_TAB": read_mat_law117,
+    "LAW117": read_mat_law117,
+    "COH_MC": read_mat_law117,
+    "COH_TAB": read_mat_law117,
 }
 
 
 MATERIAL_DISPATCH: Dict[str, Any] = {
+    "/MAT/LAW117": read_mat_law117,
+    "/MAT/COH_MC": read_mat_law117,
+    "/MAT/COH_TAB": read_mat_law117,
+    "LAW117": read_mat_law117,
+    "COH_MC": read_mat_law117,
+    "COH_TAB": read_mat_law117,
+    "COHESIVE": read_mat_law117,
+    "COHESIVE_TABULATED": read_mat_law117,
+    "MAT_LAW117": read_mat_law117,
+    "MAT_COH_MC": read_mat_law117,
+    "MAT_COH_TAB": read_mat_law117,
+    "LAW117_COH_MC": read_mat_law117,
+    "LAW117_COH_TAB": read_mat_law117,
+    "MLAW117": read_mat_law117,
     "/MAT/LAW50": read_mat_law50,
     "/MAT/VISC_HONEY": read_mat_law50,
     "/MAT/HYP_FOAM": read_mat_law50,
