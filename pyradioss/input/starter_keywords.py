@@ -15701,7 +15701,7 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "NSTRAND", "STRAND", "SPHCEL", "SPH", "MODE", "CYL_JO", "CYL_JOINT",
         "FXBODY", "GAUGE", "GRSHEL", "GRBRIC", "GRQUAD", "GRSH3N",
         "GRBEAM", "GRTRUS", "GRSPRI", "SENSOR", "CLUSTER",
-        "MONVOL", "AIRBAG", "FVMBAG", "COMMU", "ALE", "ALEGRID", "ALECFD",
+        "MONVOL", "MONV", "AIRBAG", "FVMBAG", "COMMU", "ALE", "ALEGRID", "ALECFD",
         "SUBS", "SUBDOMAIN", "SUBMODEL", "LAGMUL", "GEAR", "RACK", "DIFF",
         "IMPDISP", "IMPVEL", "PLOAD", "PROP", "MAT", "STACK", "PLY",
         "WAVE_SHAPER", "DET", "GUIDED_CABLE", "KJOINT", "SUBINTER",
@@ -15741,6 +15741,8 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "SUBS"
     elif kind == "INTER_GUIDED_CABLE":
         kind = "GUIDED_CABLE"
+    elif kind == "MONV":
+        kind = "MONVOL"
     if kind not in _TH_KINDS:
         log.warning(f"/TH/{kind} not ported", block.source)
         return
@@ -15814,6 +15816,7 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "BRIC":   ["SIGXX", "SIGYY", "SIGZZ", "SIGXY", "SIGYZ", "SIGZX"],
             "RWALL":  ["FN", "FT"],
             "INTER":  ["FN", "FT"],
+            "MONVOL": ["P", "VOL", "MASS", "TEMP"],
         }
         defaults = _TH_DEFAULTS.get(kind, ["DEF"])
         rest = [v for v in variables if v != "DEF"]
@@ -17837,6 +17840,21 @@ def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     pass
         model.generic_sets.setdefault("SUB", {})[block.user_id] = SetGeneric(
             id=block.user_id, set_type="SUB", title=title, ids=ids
+        )
+    elif stype in ("GENERAL", "GENE"):
+        # /SET/GENERAL/id
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        ids = []
+        for c in cards:
+            if c.is_blank:
+                continue
+            for t in c.tokens():
+                try:
+                    ids.append(int(float(t)))
+                except ValueError:
+                    pass
+        model.generic_sets.setdefault("GENERAL", {})[block.user_id] = SetGeneric(
+            id=block.user_id, set_type="GENERAL", title=title, ids=ids
         )
     else:
         log.warning(f"/SET/{stype} not ported", block.source)
@@ -87248,6 +87266,13 @@ def read_visc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_mat_visc_prony(block, model, log)
 
 
+def read_preproc_metadata(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """Preprocessor & positioning metadata blocks (e.g. /ASSEMBLY, /HPOINT, /DUMMY_*, /MECHANISM_*)."""
+    if not hasattr(model, "preproc_metadata"):
+        model.preproc_metadata = {}
+    model.preproc_metadata.setdefault(block.key0, []).append(block)
+
+
 KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = {
 
     # M37: complete table of Starter keywords. All 204 law numbers
@@ -95962,6 +95987,17 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "BEM_DAA": read_bem,
     "DFS_WAV_SHA": read_dfs,
     "DFS_DETCORD": read_dfs,
+
+    # Preprocessor & positioning metadata
+    "MECHANISM_START": read_preproc_metadata,
+    "MECHANISM_END": read_preproc_metadata,
+    "ASSEMBLY": read_preproc_metadata,
+    "CONNECTION_LINE": read_preproc_metadata,
+    "CONNECTION_HINGE": read_preproc_metadata,
+    "POSITION": read_preproc_metadata,
+    "DUMMY_START": read_preproc_metadata,
+    "DUMMY_END": read_preproc_metadata,
+    "HPOINT": read_preproc_metadata,
 }
 
 
@@ -96066,7 +96102,7 @@ ENGINE_KEYWORDS_IGNORE = {
     # are NOT listed here (KEYWORD_PARSERS is checked first in dispatch).
     "ANIM", "DEBUG", "DT", "DTIX", "MON",
     "IMPL", "PROC", "ABF", "RUN", "TFILE", "RFILE", "STOP", "VERS",
-    "PRIVATE",
+    "PRIVATE", "UPWM", "H3D", "PARITH",
 }
 
 def parse_starter_deck(blocks: Union[List[KeywordBlock], str, Any],
@@ -96124,7 +96160,9 @@ def parse_starter_deck(blocks: Union[List[KeywordBlock], str, Any],
             "INIQUA", "INIQUAD", "INISTA", "INISTATE", "SPH_RESERVE", "MOVE_FUNCT",
             "EIG", "SHFRA", "SHFRA_V4", "INTTHICK", "INT_THICK", "STR_FILE", "MEMORY", "PLOAD",
             "ARCH", "ALTDOCTAG", "EXTERN", "EXTLNK", "SUBDOMAIN",
-            "FUNCT_PYTHON", "PYTHON_FUNCT", "SPH_FLOW", "MID", "PID", "FRICTION", "REFSTA", "EREF", "NBCS", "BEM"
+            "FUNCT_PYTHON", "PYTHON_FUNCT", "SPH_FLOW", "MID", "PID", "FRICTION", "REFSTA", "EREF", "NBCS", "BEM",
+            "MECHANISM_START", "MECHANISM_END", "ASSEMBLY", "CONNECTION_LINE", "CONNECTION_HINGE",
+            "POSITION", "DUMMY_START", "DUMMY_END", "HPOINT"
         ):
             # /FAIL's second trailing id is its OWN option id in the
             # legacy dialect (read_fail handles it), and /ADMAS headers

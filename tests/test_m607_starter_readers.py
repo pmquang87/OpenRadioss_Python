@@ -492,3 +492,140 @@ class TestDeckWriterSerializers:
         assert "/LINK/8" in rendered
         assert "/JOINT/9" in rendered
 
+
+class TestCorpusKeywordsAndFixes:
+    """Tests for real-world corpus keywords and syntax variations."""
+
+    def test_th_monv_and_monvol(self):
+        deck = (
+            "/BEGIN\n"
+            "TH MONV TEST\n"
+            "/TH/MONV/1\n"
+            "monvol_th1\n"
+            "DEF\n"
+            "10\n"
+            "/TH/MONVOL/2\n"
+            "monvol_th2\n"
+            "P VOL\n"
+            "20\n"
+            "/END\n"
+        )
+        model, log = _parse(deck)
+        assert len(log.errors) == 0
+        assert len(log.warnings) == 0
+        assert len(model.th_requests) == 2
+        req1 = model.th_requests[0]
+        assert req1.id == 1
+        assert req1.kind == "MONVOL"
+        assert req1.ids == [10]
+        assert "P" in req1.variables
+        assert "VOL" in req1.variables
+
+        req2 = model.th_requests[1]
+        assert req2.id == 2
+        assert req2.kind == "MONVOL"
+        assert req2.ids == [20]
+        assert req2.variables == ["P", "VOL"]
+
+    def test_spaced_headers(self):
+        deck = (
+            "/BEGIN\n"
+            "SPACED HEADER TEST\n"
+            "/IMPVEL  /       1\n"
+            "Impvel with spaces\n"
+            "         1         X         0\n"
+            "       0.0       0.0      10.0\n"
+            "/MAT  /  LAW1  /  2\n"
+            "Elastic with spaces\n"
+            "7.85e-9\n"
+            "210000.0 0.3\n"
+            "/END\n"
+        )
+        model, log = _parse(deck)
+        assert len(log.errors) == 0
+        assert len(log.warnings) == 0
+        assert len(model.impvel) == 1
+        assert model.impvel[0].id == 1
+        assert 2 in model.materials
+
+    def test_include_quotes_and_plain(self, tmp_path):
+        inc_file = tmp_path / "sub_mesh.inc"
+        inc_file.write_text(
+            "/NODE\n"
+            "         1       0.0       0.0       0.0\n"
+            "         2       1.0       0.0       0.0\n",
+            encoding="utf-8"
+        )
+        main_deck = tmp_path / "main_0000.rad"
+        main_deck.write_text(
+            f"/BEGIN\n"
+            f"MAIN DECK\n"
+            f'/INCLUDE "{inc_file.name}"\n'
+            f"/END\n",
+            encoding="utf-8"
+        )
+        from pyradioss.input.deck_reader import read_deck
+        blocks = read_deck(str(main_deck))
+        model = parse_starter_deck(blocks)
+        assert len(model.node_ids) == 2
+        assert list(model.node_ids) == [1, 2]
+
+    def test_preproc_metadata(self):
+        deck = (
+            "/BEGIN\n"
+            "PREPROC TEST\n"
+            "/DUMMY_START/1\n"
+            "Dummy Model\n"
+            "/HPOINT/15035931\n"
+            "Hpoint Title\n"
+            "0 10.09 0 15000058\n"
+            "/ASSEMBLY/1\n"
+            "Pelvis_Torso\n"
+            "1 1 3 1\n"
+            "/MECHANISM_START/1\n"
+            "Driver Seat\n"
+            "/CONNECTION_LINE\n"
+            "Rail Connection\n"
+            "1 2 10 20 50.0 -100.0\n"
+            "/CONNECTION_HINGE\n"
+            "Seat Hinge\n"
+            "2 4 0 0 -2\n"
+            "/POSITION\n"
+            "Seat Pos\n"
+            "1\n"
+            "0.0 0.0 0.0\n"
+            "/MECHANISM_END\n"
+            "/DUMMY_END\n"
+            "/END\n"
+        )
+        model, log = _parse(deck)
+        assert len(log.errors) == 0
+        assert len(log.warnings) == 0
+        assert hasattr(model, "preproc_metadata")
+        assert "DUMMY_START" in model.preproc_metadata
+        assert "HPOINT" in model.preproc_metadata
+        assert "ASSEMBLY" in model.preproc_metadata
+        assert "MECHANISM_START" in model.preproc_metadata
+        assert "CONNECTION_LINE" in model.preproc_metadata
+        assert "CONNECTION_HINGE" in model.preproc_metadata
+        assert "POSITION" in model.preproc_metadata
+        assert "MECHANISM_END" in model.preproc_metadata
+        assert "DUMMY_END" in model.preproc_metadata
+
+    def test_engine_keywords_ignored_in_starter(self):
+        deck = (
+            "/BEGIN\n"
+            "ENGINE KEYWORDS TEST\n"
+            "/UPWM\n"
+            "/H3D\n"
+            "1.0 1.0\n"
+            "/PARITH/ON\n"
+            "/ANIM/DT\n"
+            "0.0 1.0\n"
+            "/END\n"
+        )
+        model, log = _parse(deck)
+        assert len(log.errors) == 0
+        assert len(log.warnings) == 0
+
+

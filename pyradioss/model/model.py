@@ -904,6 +904,7 @@ class Model:
         self.drapes: Dict[int, Drape] = {}             # /DRAPE (M107)
         self.inibri_erefs: List[IniBriEref] = []       # /INIBRI/EREF (M107)
         self.dyna_includes: List[IncludeDyna] = []     # /INCLUDE_DYNA (M107)
+        self.preproc_metadata: Dict[str, List[Any]] = {} # /ASSEMBLY, /HPOINT, /MECHANISM_*, etc.
         self.monvol_fvmbags: Dict[int, MonvolFvmBag1] = {} # /MONVOL/FVMBAG1 (M108)
         self.detonations: List[DetonationWave] = []    # /INIT/DET_* (M110)
         self.activations: List[ElementActivation] = [] # /ACTIV (M110)
