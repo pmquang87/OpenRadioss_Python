@@ -138,11 +138,38 @@ class Dampers:
         return de
 
 
-class DynamicRelaxation:
-    """Dynamic Relaxation solver controls (/DYREL, /KEREL).
+def butterworth_filter(dt: float, freq: float, x2: float, x1: float, x: float,
+                       fx2: float, fx1: float) -> float:
+    """Second-order Butterworth low-pass digital filter.
 
-    Fortran origin: ``engine/source/general_controls/damping/static.F`` (subroutine
-    ``STATIC`` called from ``resol.F:7321``).
+    Upstream Fortran reference:
+    ``engine/source/tools/univ/butterworth.F``
+    """
+    dt2 = dt / 2.0
+    wd = np.sqrt(2.0) * np.pi * freq * (5.0 / 3.0)
+    cos_val = np.cos(wd * dt2)
+    if abs(cos_val) < 1e-15:
+        wa = 1e15
+    else:
+        wa = np.sin(wd * dt2) / cos_val
+    wa2 = wa * wa
+    c1 = 1.0 + np.sqrt(2.0) * wa + wa2
+    if abs(c1) < 1e-20:
+        return float(x)
+    a0 = wa2 / c1
+    a1 = 2.0 * a0
+    a2 = a0
+    b1 = -2.0 * (wa2 - 1.0) / c1
+    b2 = (-1.0 + np.sqrt(2.0) * wa - wa2) / c1
+    fx = a0 * x + a1 * x1 + a2 * x2 + b1 * fx1 + b2 * fx2
+    return float(fx)
+
+
+class DynamicRelaxation:
+    """Dynamic Relaxation solver controls (/DYREL, /KEREL, /ADYREL, /RELAX).
+
+    Fortran origin: ``engine/source/general_controls/damping/static.F`` (subroutines
+    ``STATIC``, ``E_PERIOD``, and ``ENER_W0`` called from ``resol.F:7321`` and ``resol.F:8294``).
 
     Supports:
     1. /DYREL (ISTAT=1): Viscous relaxation damping on velocities matching static.F:
@@ -154,6 +181,10 @@ class DynamicRelaxation:
        energy on the relaxation node group; when a peak is detected (ke < ke_prev),
        all velocities on the group are reset to zero, freezing the structure at
        the static equilibrium point.
+    3. /ADYREL (ISTAT=3): Adaptive dynamic relaxation. Uses a 2nd-order Butterworth
+       low-pass filter on kinetic and internal energy to estimate the fundamental
+       oscillation period and automatically adapts betate.
+    4. /RELAX: Canonical Radioss relaxation directive.
     """
 
     def __init__(self, model: Model, controls, log=None):
@@ -178,10 +209,31 @@ class DynamicRelaxation:
             self.kerel_tstop = float(getattr(controls, "t_end", 0.0) or 1e30)
         self.kerel_istatg = int(getattr(controls, "kerel_istatg", 0))
 
+        self.adyrel_active = bool(getattr(controls, "adyrel_active", False))
+        self.adyrel_freq_c = float(getattr(controls, "adyrel_freq_c", 0.0))
+        self.adyrel_tstart = float(getattr(controls, "adyrel_tstart", 0.0))
+        self.adyrel_tstop = float(getattr(controls, "adyrel_tstop", 0.0))
+        if self.adyrel_tstop <= 0.0:
+            self.adyrel_tstop = float(getattr(controls, "t_end", 0.0) or 1e30)
+        self.adyrel_istatg = int(getattr(controls, "adyrel_istatg", 0))
+
+        # ADYREL frequency adaptation state
+        self.fil_ke = np.zeros(4, dtype=np.float64)
+        self.fil_ie = np.zeros(4, dtype=np.float64)
+        self.pcin = 0.0
+        self.pint = 0.0
+        self.pcmax = 0.0
+        self.pimax = 0.0
+        self.encin_0 = 0.0
+        self.eint_0 = 0.0
+        self.ifirst = 0
+        self.adyrel_betate = 0.0
+
         self.ke_prev = 0.0
 
         self.dyrel_idx = self._resolve_nodes(self.dyrel_istatg)
         self.kerel_idx = self._resolve_nodes(self.kerel_istatg)
+        self.adyrel_idx = self._resolve_nodes(self.adyrel_istatg)
 
         if log is not None:
             if self.dyrel_active:
@@ -191,6 +243,9 @@ class DynamicRelaxation:
             if self.kerel_active:
                 log.info(f"     /KEREL: ACTIVE {self.kerel_tstart:g} TO {self.kerel_tstop:g} "
                          f"ON {len(self.kerel_idx)} NODE(S)")
+            if self.adyrel_active:
+                log.info(f"     /ADYREL: ACTIVE {self.adyrel_tstart:g} TO {self.adyrel_tstop:g} "
+                         f"(FREQ_C = {self.adyrel_freq_c:g}) ON {len(self.adyrel_idx)} NODE(S)")
 
     def _resolve_nodes(self, istatg: int) -> np.ndarray:
         if istatg != 0 and hasattr(self.model, "node_groups"):
@@ -206,14 +261,136 @@ class DynamicRelaxation:
 
     @property
     def active(self) -> bool:
-        return bool(self.dyrel_active or self.kerel_active)
+        return bool(self.dyrel_active or self.kerel_active or self.adyrel_active)
 
     def __len__(self) -> int:
         return 1 if self.active else 0
 
+    def e_period(self, dt: float, encin: float, enint: float, t: float) -> tuple[int, int]:
+        """Port of E_PERIOD from static.F:211.
+        Returns (ipi, ipc) peak detection indicators.
+        """
+        f_fil = self.adyrel_freq_c
+        if t == 0.0 or (self.fil_ke[0] == 0.0 and self.fil_ie[0] == 0.0 and encin > 0.0):
+            self.fil_ke[:] = encin
+            self.fil_ie[:] = enint
+
+        if f_fil > 0.0 and dt > 0.0:
+            dt2 = dt / 2.0
+            fv_ke = butterworth_filter(
+                dt2, f_fil,
+                self.fil_ke[1], self.fil_ke[0], encin,
+                self.fil_ke[3], self.fil_ke[2]
+            )
+            self.fil_ke[1] = self.fil_ke[0]
+            self.fil_ke[0] = encin
+            self.fil_ke[3] = self.fil_ke[2]
+            self.fil_ke[2] = fv_ke
+            encint = fv_ke
+
+            fv_ie = butterworth_filter(
+                dt2, f_fil,
+                self.fil_ie[1], self.fil_ie[0], enint,
+                self.fil_ie[3], self.fil_ie[2]
+            )
+            self.fil_ie[1] = self.fil_ie[0]
+            self.fil_ie[0] = enint
+            self.fil_ie[3] = self.fil_ie[2]
+            self.fil_ie[2] = fv_ie
+            eint = fv_ie
+        else:
+            encint = encin
+            eint = enint
+
+        self.pcin += dt
+        self.pint += dt
+        self.pcmax = max(self.pcmax, self.pcin)
+        self.pimax = max(self.pimax, self.pint)
+
+        if encint < self.encin_0 and encint >= 0.0:
+            self.encin_0 = 0.0
+            self.pcin = 0.0
+            ipc = 1
+        else:
+            ipc = 0
+            self.encin_0 = encint
+
+        if eint < 0.0:
+            self.eint_0 = 0.0
+            self.pint = 0.0
+            ipi = -2
+        elif eint < self.eint_0 and eint >= 0.0:
+            self.eint_0 = 0.0
+            self.pint = 0.0
+            ipi = 1
+        else:
+            self.eint_0 = eint
+            ipi = 0
+
+        return ipi, ipc
+
+    def update_adaptive_frequency(self, t: float, dt: float, cycle: int,
+                                  e_int: float, e_kin: float):
+        """Port of ENER_W0 from static.F:312.
+        Adapts self.adyrel_betate at each cycle.
+        """
+        if not self.adyrel_active or dt <= 0.0:
+            return
+
+        ipi, ipc = self.e_period(dt, e_kin, e_int, t)
+        if cycle == 0:
+            return
+
+        nc_act = 200
+        ei_tol = 1.0e-12
+        f_max = 0.01 / dt
+        if self.adyrel_freq_c < 0.0:
+            self.adyrel_freq_c = -self.adyrel_freq_c * f_max
+        f_0 = 0.01 * f_max
+        betate_n = f_max
+
+        if ipi == 1:
+            fi = 1.0 / max(1e-20, self.pimax)
+            betate_n = min(f_max, fi)
+            if self.adyrel_betate == 0.0 and self.eint_0 > ei_tol:
+                if cycle >= nc_act:
+                    self.adyrel_betate = min(f_0, betate_n)
+                    self.ifirst = 1
+            elif self.ifirst == 1:
+                self.adyrel_betate = betate_n
+                self.ifirst += 1
+            else:
+                self.adyrel_betate = min(self.adyrel_betate, betate_n)
+
+        if ipc == 1:
+            fc = 1.0 / max(1e-20, self.pcmax)
+            betate_n = min(f_max, fc)
+            if self.adyrel_betate == 0.0 and self.eint_0 > ei_tol:
+                if cycle >= nc_act:
+                    self.adyrel_betate = min(f_0, betate_n)
+                    self.ifirst = 1
+            elif self.ifirst == 1:
+                self.adyrel_betate = betate_n
+                self.ifirst += 1
+            else:
+                ratio = self.encin_0 / max(1e-20, self.eint_0)
+                if ratio > 1.0e-3 and self.adyrel_betate < betate_n * 1.5:
+                    betate_m = 0.5 * self.adyrel_betate
+                    self.adyrel_betate = min(self.adyrel_betate, betate_n)
+                    self.adyrel_betate = max(self.adyrel_betate, betate_m)
+
+        if self.adyrel_betate == 0.0 and self.eint_0 > ei_tol and cycle >= nc_act:
+            self.adyrel_betate = f_0
+            self.ifirst = 1
+
+        if self.ifirst >= 1 and (ipc + ipi) == 0:
+            fi = 1.0 / max(1e-20, max(self.pimax, self.pcmax))
+            if self.adyrel_betate > 1.1 * fi:
+                self.adyrel_betate = fi
+
     def apply(self, t: float, dt: float, v: np.ndarray, vr: Optional[np.ndarray],
               mass: np.ndarray, inertia: Optional[np.ndarray]) -> float:
-        """Apply dynamic relaxation (DYREL and/or KEREL) and return dissipated energy."""
+        """Apply dynamic relaxation (DYREL, KEREL, and/or ADYREL) and return dissipated energy."""
         de = 0.0
         if dt <= 0.0 or not self.active:
             return de
@@ -243,7 +420,6 @@ class DynamicRelaxation:
                 ke += float(0.5 * np.sum(inertia[ir, None] * (vr[ir] ** 2)))
 
             if ke < self.ke_prev and self.ke_prev > 0.0:
-                # Kinetic energy peak detected!
                 v[idx] = 0.0
                 if vr is not None and inertia is not None and np.any(has_in):
                     vr[ir] = 0.0
@@ -251,6 +427,21 @@ class DynamicRelaxation:
                 self.ke_prev = 0.0
             else:
                 self.ke_prev = ke
+
+        # 3. /ADYREL adaptive dynamic relaxation damping
+        if self.adyrel_active and (self.adyrel_tstart <= t <= self.adyrel_tstop) and len(self.adyrel_idx) > 0 and self.adyrel_betate > 0.0:
+            idx = self.adyrel_idx
+            omega = self.adyrel_betate * dt
+            fac = max(0.0, 1.0 - 2.0 * omega)
+            omega2 = fac * fac
+            de += float(0.5 * (1.0 - omega2) * np.sum(mass[idx, None] * (v[idx] ** 2)))
+            v[idx] *= fac
+            if vr is not None and inertia is not None:
+                has_in = inertia[idx] > 0.0
+                if np.any(has_in):
+                    ir = idx[has_in]
+                    de += float(0.5 * (1.0 - omega2) * np.sum(inertia[ir, None] * (vr[ir] ** 2)))
+                    vr[ir] *= fac
 
         return de
 

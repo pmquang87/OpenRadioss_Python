@@ -210,6 +210,11 @@ class EngineControls:
     dyrel_beta: float = 1.0
     dyrel_period: float = 0.0
     dyrel_istatg: int = 0
+    adyrel_active: bool = False                                                      # /ADYREL (M604)
+    adyrel_freq_c: float = 0.0
+    adyrel_tstart: float = 0.0
+    adyrel_tstop: float = 0.0
+    adyrel_istatg: int = 0
     thermal_acc_fact: float = 1.0                                                    # /THERMAL (M146)
     thermal_dt: float = 0.0                                                          # /THERMAL/DT, /HEAT/DT (M146)
     thermal_tstart: float = 0.0

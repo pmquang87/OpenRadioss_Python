@@ -949,6 +949,16 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         state.e_num += w_leave - (e_booked - state.e_booked_prev)
         state.e_booked_prev = e_booked
 
+        # ---- ADYREL adaptive dynamic relaxation frequency adaptation (static.F:312) ---
+        if dyn_relax.adyrel_active:
+            ke_curr = float(0.5 * np.sum(model.mass[real, None] * (model.v[real] ** 2)))
+            if getattr(model, "vr", None) is not None and getattr(model, "inertia", None) is not None:
+                has_in = (model.inertia[real] > 0.0)
+                if np.any(has_in):
+                    ir = real[has_in]
+                    ke_curr += float(0.5 * np.sum(model.inertia[ir, None] * (model.vr[ir] ** 2)))
+            dyn_relax.update_adaptive_frequency(state.t, dt, state.cycle, e_booked, ke_curr)
+
         state.t += dt
         state.cycle += 1
 

@@ -1388,6 +1388,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
             elif key == "KEREL":
                 # /KEREL (M146): freform.F
                 ec.kerel_active = True
+                if len(block.parts) > 1 and block.parts[1].isdigit():
+                    ec.kerel_istatg = int(block.parts[1])
                 for c in block.cards:
                     if c.is_blank:
                         continue
@@ -1403,6 +1405,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
             elif key == "DYREL":
                 # /DYREL (M146): freform.F
                 ec.dyrel_active = True
+                if len(block.parts) > 1 and block.parts[1].isdigit():
+                    ec.dyrel_istatg = int(block.parts[1])
                 for c in block.cards:
                     if c.is_blank:
                         continue
@@ -1415,6 +1419,57 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             ec.dyrel_istatg = int(v[0])
                         else:
                             ec.dyrel_beta = v[0]
+            elif key == "ADYREL":
+                # /ADYREL, /ADYREL/FREQ_ (M604): freform.F
+                ec.adyrel_active = True
+                has_freq = any(p.upper().startswith("FREQ") for p in block.parts[1:])
+                for p in block.parts[1:]:
+                    if p.isdigit():
+                        ec.adyrel_istatg = int(p)
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    v = c.floats()
+                    if has_freq and ec.adyrel_freq_c == 0.0 and len(v) >= 1:
+                        ec.adyrel_freq_c = v[0]
+                        has_freq = False
+                    elif len(v) >= 2:
+                        ec.adyrel_tstart = v[0]
+                        ec.adyrel_tstop = v[1]
+                    elif len(v) == 1:
+                        if v[0].is_integer() and ec.adyrel_istatg == 0:
+                            ec.adyrel_istatg = int(v[0])
+                        else:
+                            ec.adyrel_tstart = v[0]
+            elif key == "RELAX":
+                # /RELAX, /RELAX/SYSTEM, /RELAX/DYNA (M604): standard Radioss relaxation alias
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                istatg = int(block.parts[1]) if (len(block.parts) > 1 and block.parts[1].isdigit()) else 0
+                if sub == "DYNA":
+                    ec.dyrel_active = True
+                    ec.dyrel_istatg = istatg
+                    for c in block.cards:
+                        if c.is_blank:
+                            continue
+                        v = c.floats()
+                        if len(v) >= 2:
+                            ec.dyrel_beta = v[0]
+                            ec.dyrel_period = v[1]
+                        elif len(v) == 1:
+                            if v[0].is_integer() and ec.dyrel_istatg == 0:
+                                ec.dyrel_istatg = int(v[0])
+                            else:
+                                ec.dyrel_beta = v[0]
+                else:
+                    parsed_cards = [c.floats() for c in block.cards if not c.is_blank]
+                    ec.kerel_active = True
+                    ec.kerel_istatg = istatg
+                    for v in parsed_cards:
+                        if len(v) >= 2:
+                            ec.kerel_tstart = v[0]
+                            ec.kerel_tstop = v[1]
+                        elif len(v) == 1 and v[0].is_integer() and ec.kerel_istatg == 0:
+                            ec.kerel_istatg = int(v[0])
             elif key in ("THERMAL", "HEAT"):
                 # /THERMAL, /HEAT, /THERMAL/DT, /HEAT/DT (M146/M202): frethermal.F
                 ec.heat_active = True
