@@ -10496,8 +10496,80 @@ class StarterDeck:
 
     def inishe_generic(self, kind: str, iid: int, title: str, data_cards) -> None:
         """Generic pass-through for ``/INISHE/<kind>``."""
-        self._header("INISHE", kind, iid)
-        self._title(title)
+        if kind:
+            self._header("INISHE", kind, iid)
+        else:
+            self._header("INISHE", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def inibri_generic(self, kind: str, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/INIBRI/<kind>``."""
+        if kind:
+            self._header("INIBRI", kind, iid)
+        else:
+            self._header("INIBRI", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def initru_generic(self, kind: str, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/INITRU/<kind>``."""
+        if kind:
+            self._header("INITRU", kind, iid)
+        else:
+            self._header("INITRU", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def inibea_generic(self, kind: str, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/INIBEA/<kind>``."""
+        if kind:
+            self._header("INIBEA", kind, iid)
+        else:
+            self._header("INIBEA", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def inispr_generic(self, kind: str, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/INISPR/<kind>``."""
+        if kind:
+            self._header("INISPR", kind, iid)
+        else:
+            self._header("INISPR", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def inisphcel_generic(self, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/INISPHCEL``."""
+        self._header("INISPHCEL", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def sphio_generic(self, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/SPHIO``."""
+        self._header("SPHIO", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def rlink_generic(self, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/LINK``."""
+        self._header("LINK", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def cyl_joint_generic(self, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/JOINT``."""
+        self._header("JOINT", iid)
+        if title:
+            self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
     def impacc(self, iid: int, title: str, data_cards) -> None:
@@ -12637,9 +12709,37 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
         else:
             d.raw_block("/".join(b.parts), [c.raw for c in b.cards], note=f"unknown load {kind}")
     elif key0 == "INISHE":
-        kind = b.parts[1].upper() if len(b.parts) > 1 else ""
+        kind = b.parts[1].upper() if len(b.parts) > 1 and not b.parts[1].isdigit() else ""
         title, cards = _title_cards(b)
         d.inishe_generic(kind, b.user_id, title, cards)
+    elif key0 == "INIBRI":
+        kind = b.parts[1].upper() if len(b.parts) > 1 and not b.parts[1].isdigit() else ""
+        title, cards = _title_cards(b)
+        d.inibri_generic(kind, b.user_id, title, cards)
+    elif key0 in ("INITRU", "INITRUSS"):
+        kind = b.parts[1].upper() if len(b.parts) > 1 and not b.parts[1].isdigit() else ""
+        title, cards = _title_cards(b)
+        d.initru_generic(kind, b.user_id, title, cards)
+    elif key0 in ("INIBEA", "INIBEAM"):
+        kind = b.parts[1].upper() if len(b.parts) > 1 and not b.parts[1].isdigit() else ""
+        title, cards = _title_cards(b)
+        d.inibea_generic(kind, b.user_id, title, cards)
+    elif key0 in ("INISPR", "INISPRI"):
+        kind = b.parts[1].upper() if len(b.parts) > 1 and not b.parts[1].isdigit() else ""
+        title, cards = _title_cards(b)
+        d.inispr_generic(kind, b.user_id, title, cards)
+    elif key0 == "INISPHCEL":
+        title, cards = _title_cards(b)
+        d.inisphcel_generic(b.user_id, title, cards)
+    elif key0 in ("SPHIO", "SPH_IO"):
+        title, cards = _title_cards(b)
+        d.sphio_generic(b.user_id, title, cards)
+    elif key0 in ("RLINK", "LINK"):
+        title, cards = _title_cards(b)
+        d.rlink_generic(b.user_id, title, cards)
+    elif key0 in ("CYL_JOINT", "CYL_JO", "JOINT"):
+        title, cards = _title_cards(b)
+        d.cyl_joint_generic(b.user_id, title, cards)
     elif key0 == "IMPACC":
         title, cards = _title_cards(b)
         d.impacc(b.user_id, title, cards)

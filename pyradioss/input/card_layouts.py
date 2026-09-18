@@ -2572,6 +2572,8 @@ LAYOUTS: Dict[str, List[int]] = {
     # SPH/INOUT (M112)
     "SPH_INOUT_1": [10, 10, 10],
     "SPH_INOUT_2": [20, 20, 20],
+    "SPHIO_1": [10, 10, 10],
+    "SPHIO_2": [20, 20, 20],
 
     # SPHBCS (M113)
     "SPHBCS_1": [10, 10, 10, 10, 10],
@@ -5119,6 +5121,11 @@ LAYOUTS: Dict[str, List[int]] = {
     "SPH_INOUT_INLET_2": [10],
     "SPH_INOUT_OUTLET_1": [30, 10, 20],
     "SPH_INOUT_NRF_1": [30, 10, 20, 20],
+    "SPHIO_EXT_1": [10, 10, 10, 20, 10, 10, 10, 20],
+    "SPHIO_INLET_1": [10, 20, 30, 10, 20],
+    "SPHIO_INLET_2": [10],
+    "SPHIO_OUTLET_1": [30, 10, 20],
+    "SPHIO_NRF_1": [30, 10, 20, 20],
     # M203: LAGMUL GEAR/RACK/DIFF, INTER TYPE26, SENSOR PYTHON, CHECKSUM, POS
     "LAGMUL_GEAR_1": [10, 10, 20, 10, 10, 10, 10],
     "LAGMUL_RACK_1": [10, 10, 20, 10, 10, 10, 10],

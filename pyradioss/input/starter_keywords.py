@@ -95910,6 +95910,58 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "LAW117": read_mat_law117,
     "COH_MC": read_mat_law117,
     "COH_TAB": read_mat_law117,
+
+    # --- M607: Comprehensive Starter & Input Reader Completion ---
+    # SPH_INOUT / SPHIO aliases
+    "SPHIO": read_sph_inout,
+    "SPH_INOUT": read_sph_inout,
+    "SPH_INLET": read_sph_inout,
+    "SPH_OUTLET": read_sph_inout,
+    "SPH_IO": read_sph_inout,
+
+    # Kinematic joints / links
+    "JOINT": read_cyl_joint,
+    "CYL_JO": read_cyl_joint,
+    "CYL_JOINT": read_cyl_joint,
+    "LINK": read_rlink,
+    "RLINK": read_rlink,
+
+    # MADYMO couplings
+    "MADYMO_EXFEM": read_madymo_exfem,
+    "MADYMO_LINK": read_madymo_link,
+
+    # Rigid body & preload & bcs
+    "MERGE_RBODY": read_merge,
+    "PRELOAD_BOLT": read_preload_bolt,
+    "BCS_WALL": read_bcs_wall,
+
+    # Damping
+    "DAMP_INTER": read_damp_inter,
+    "DAMP_RANGE": read_damp_range,
+    "DAMP_FUNCT": read_damp_funct,
+
+    # Gauges, Sections & Surfaces
+    "GAUGE_POINT": read_gauge_point,
+    "SECT_CIRCLE": read_sect_circle,
+    "SECT_PARAL": read_sect_paral,
+    "SURF_SURF": read_surf_surf,
+
+    # Initial states & conditions
+    "INIBRI_EREF": read_inibri_eref,
+    "INIVEL_FVM": read_inivel_fvm,
+    "INIVEL_NODE": read_inivel_node,
+    "INISPHCEL": read_inisphcel,
+    "INIQUA": read_iniqua,
+    "INIQUAD": read_iniqua,
+
+    # Failure models
+    "FAIL_WINDSHIELD": read_fail_alter,
+    "FAIL_WINDSHIELD_ALTER": read_fail_alter,
+
+    # BEM & Detonations
+    "BEM_DAA": read_bem,
+    "DFS_WAV_SHA": read_dfs,
+    "DFS_DETCORD": read_dfs,
 }
 
 
@@ -96013,6 +96065,8 @@ ENGINE_KEYWORDS_IGNORE = {
     # Keys already in KEYWORD_PARSERS are handled by their own parser and
     # are NOT listed here (KEYWORD_PARSERS is checked first in dispatch).
     "ANIM", "DEBUG", "DT", "DTIX", "MON",
+    "IMPL", "PROC", "ABF", "RUN", "TFILE", "RFILE", "STOP", "VERS",
+    "PRIVATE",
 }
 
 def parse_starter_deck(blocks: Union[List[KeywordBlock], str, Any],
@@ -96047,7 +96101,9 @@ def parse_starter_deck(blocks: Union[List[KeywordBlock], str, Any],
         if parser is None:
             parser = KEYWORD_PARSERS.get(block.key0)
         if parser is None:
-            if block.key0 in ENGINE_KEYWORDS_IGNORE:
+            if (block.key0 in ENGINE_KEYWORDS_IGNORE or
+                    block.key0.startswith("PRIVATE") or
+                    (block.parts and block.parts[0] == "PRIVATE")):
                 # Silently bypass engine output requests and control flags
                 # that often slip into shared input decks. The engine will
                 # parse them later if they are in the engine deck.

@@ -249,7 +249,11 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
         base_dir = "."
         path_name = "<memory>"
         fh_ctx = io.StringIO("\n".join(path))
-
+    elif isinstance(path, str) and ("\n" in path or "\r" in path):
+        import io
+        base_dir = "."
+        path_name = "<memory>"
+        fh_ctx = io.StringIO(path)
     else:
         base_dir = os.path.dirname(os.path.abspath(path))
         path_name = str(path)
