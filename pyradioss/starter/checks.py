@@ -216,6 +216,13 @@ for _fam in ("shells", "shells_qbat", "shells_qeph", "sh3n"):
     if _fam in _ALLOWED_LAWS:
         _ALLOWED_LAWS[_fam].update(_LAW110_KEYS)
 
+_LAW124_KEYS = {
+    124, "124", "LAW124", "CDPM2", "CONCRETE_DAMAGE_PLASTICITY_2",
+    "MAT_LAW124", "MAT_CDPM2", "LAW124_CDPM2", "MLAW124",
+}
+for _fam in ("bricks", "tetras", "penta6", "pyra5"):
+    _ALLOWED_LAWS[_fam].update(_LAW124_KEYS)
+
 _LAW126_KEYS = {
     126, "126", "LAW126", "JOHNSON_HOLMQUIST_CONCRETE", "MAT_LAW126",
     "MAT_JOHNSON_HOLMQUIST_CONCRETE", "LAW126_JOHNSON_HOLMQUIST_CONCRETE", "HJC", "MAT_HJC",
@@ -7422,6 +7429,81 @@ check_mat_samp = check_mat_law76
 check_mat_samp_1 = check_mat_law76
 
 
+def check_mat_law124(*args: Any, **kwargs: Any) -> None:
+    """Validate /MAT/LAW124 (/MAT/CDPM2) parameter bounds (M598)."""
+    actual_log = None
+    actual_model = None
+    actual_mat = None
+    actual_mid = None
+
+    if "model" in kwargs:
+        actual_model = kwargs["model"]
+    if "mat" in kwargs:
+        actual_mat = kwargs["mat"]
+    if "log" in kwargs:
+        actual_log = kwargs["log"]
+    if "mat_id" in kwargs:
+        actual_mid = kwargs["mat_id"]
+
+    for c in args:
+        if isinstance(c, MessageLog):
+            actual_log = c
+        elif isinstance(c, Model):
+            actual_model = c
+        elif hasattr(c, "id") and (hasattr(c, "fc") or hasattr(c, "ft") or hasattr(c, "law") or hasattr(c, "params")):
+            actual_mat = c
+        elif isinstance(c, int):
+            actual_mid = c
+
+    if actual_log is None:
+        actual_log = MessageLog()
+
+    mat = actual_mat
+    mat_id = actual_mid if actual_mid is not None else (mat.id if mat is not None else 0)
+
+    if mat is not None:
+        params = getattr(mat, "params", {}) if hasattr(mat, "params") and isinstance(mat.params, dict) else (mat if isinstance(mat, dict) else {})
+        rho = float(getattr(mat, "rho", None) or getattr(mat, "rho0", None) or params.get("rho") or params.get("rho0") or params.get("MAT_RHO") or 0.0)
+        if rho <= 0.0:
+            actual_log.error(f"/MAT/LAW124/{mat_id}: initial density RHO must be strictly positive (got {rho}) (ANCMSG 1514)", "MAT CHECK")
+
+        young = float(getattr(mat, "E", None) or getattr(mat, "e", None) or params.get("E") or params.get("e") or params.get("MAT_E") or 0.0)
+        if young <= 0.0:
+            actual_log.error(f"/MAT/LAW124/{mat_id}: Young's modulus E must be strictly positive (got {young}) (ANCMSG 1514)", "MAT CHECK")
+
+        nu = float(getattr(mat, "nu", None) or params.get("nu") or params.get("MAT_NU") if (getattr(mat, "nu", None) is not None or params.get("nu") is not None or params.get("MAT_NU") is not None) else 0.2)
+        if nu < 0.0 or nu >= 0.5:
+            actual_log.error(f"/MAT/LAW124/{mat_id}: Poisson's ratio NU must satisfy 0 <= NU < 0.5 (got {nu}) (ANCMSG 49)", "MAT CHECK")
+
+        fc = float(getattr(mat, "fc", None) or params.get("fc") or params.get("MAT_FC") or 0.0)
+        if fc <= 0.0:
+            actual_log.error(f"/MAT/LAW124/{mat_id}: compressive strength FC must be strictly positive (got {fc})", "MAT CHECK")
+
+        ft = float(getattr(mat, "ft", None) or params.get("ft") or params.get("MAT_FT") or 0.0)
+        if ft <= 0.0:
+            actual_log.error(f"/MAT/LAW124/{mat_id}: tensile strength FT must be strictly positive (got {ft})", "MAT CHECK")
+
+        if actual_model is not None:
+            parts_dict = getattr(actual_model, "parts", {})
+            props_dict = getattr(actual_model, "properties", {})
+            for pid, part in parts_dict.items():
+                if getattr(part, "mat_id", 0) == mat_id:
+                    prop_id = getattr(part, "prop_id", 0)
+                    prop = props_dict.get(prop_id)
+                    if prop is not None:
+                        ptype_val = getattr(prop, "type", getattr(prop, "prop_type", None))
+                        ptype = str(ptype_val or "").upper()
+                        if ptype_val in (1, 2, 3, 4, 11) or any(s in ptype for s in ("SHELL", "SH3N", "TYPE1", "TYPE2", "TYPE3", "TYPE4", "TYPE11", "BEAM", "TRUSS", "SPRING")):
+                            actual_log.error(
+                                f"/MAT/LAW124/{mat_id} is only supported for 3D solid elements (assigned to {ptype.lower()}) (ANCMSG 306)",
+                                "MAT CHECK",
+                            )
+
+
+_check_mat_law124 = check_mat_law124
+check_mat_cdpm2 = check_mat_law124
+
+
 def check_mat_law126(*args: Any, **kwargs: Any) -> None:
     """Validate /MAT/LAW126 (/MAT/JOHNSON_HOLMQUIST_CONCRETE, /MAT/HJC) parameter bounds (M591)."""
     actual_log = None
@@ -7925,6 +8007,17 @@ def check_materials(model: Model, log: MessageLog) -> None:
         if mid not in getattr(model, "materials", {}):
             check_mat_law76(model=model, mat_id=mid, mat=mat76, log=log)
 
+    # M598: Material LAW124 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in _LAW124_KEYS or getattr(mat, "law_name", None) in _LAW124_KEYS:
+            check_mat_law124(model=model, mat_id=mid, mat=mat, log=log)
+    for mid, mat124 in getattr(model, "mat_law124s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law124(model=model, mat_id=mid, mat=mat124, log=log)
+    for mid, matcdpm2 in getattr(model, "mat_cdpm2s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law124(model=model, mat_id=mid, mat=matcdpm2, log=log)
+
     # M591: Material LAW126 and LAW169 parameter validation
     for mid, mat in getattr(model, "materials", {}).items():
         if getattr(mat, "law", None) in _LAW126_KEYS or getattr(mat, "law_name", None) in _LAW126_KEYS:
@@ -8303,6 +8396,13 @@ _MAT_CHECKS: dict[Any, Any] = {
     "LAW76_SAMP": check_mat_law76,
     "LAW76_SAMP-1": check_mat_law76,
     "LAW76_SAMP_1": check_mat_law76,
+    124: check_mat_law124,
+    "124": check_mat_law124,
+    "LAW124": check_mat_law124,
+    "CDPM2": check_mat_law124,
+    "MAT_LAW124": check_mat_law124,
+    "MAT_CDPM2": check_mat_law124,
+    "LAW124_CDPM2": check_mat_law124,
     126: check_mat_law126,
     "126": check_mat_law126,
     "LAW126": check_mat_law126,
