@@ -628,4 +628,80 @@ class TestCorpusKeywordsAndFixes:
         assert len(log.errors) == 0
         assert len(log.warnings) == 0
 
+    def test_fail_numeric_defaults_to_johnson(self):
+        deck = (
+            "/BEGIN\n"
+            "FAIL DEFAULT TEST\n"
+            "/FAIL/1\n"
+            "Johnson failure default\n"
+            "0.1 0.2 0.0 0.0 0.0\n"
+            "/END\n"
+        )
+        model, log = _parse(deck)
+        assert len(log.errors) == 0
+        assert 1 in model.fails_johnson
+        assert model.fails_johnson[1].mat_id == 1
+
+    def test_sensor_numeric_defaults_to_time(self):
+        deck = (
+            "/BEGIN\n"
+            "SENSOR DEFAULT TEST\n"
+            "/SENSOR/5\n"
+            "Sensor Time Default\n"
+            "0.025\n"
+            "/END\n"
+        )
+        model, log = _parse(deck)
+        assert len(log.errors) == 0
+        s = next(s for s in model.sensors if s.id == 5)
+        assert s.kind == "TIME"
+        assert s.tdelay == pytest.approx(0.025)
+
+    def test_inter_lagdt_subtype(self):
+        deck = (
+            "/BEGIN\n"
+            "INTER LAGDT TEST\n"
+            "/INTER/LAGDT/TYPE7/10\n"
+            "Lagdt interface\n"
+            "1 2\n"
+            "0.1 0.0 0.0 0.0 0.0 0.0 0.0\n"
+            "/END\n"
+        )
+        model, log = _parse(deck)
+        assert len(log.errors) == 0
+        assert any(i.id == 10 for i in model.interfaces)
+        assert next(i for i in model.interfaces if i.id == 10).type == 7
+
+    def test_th_frame(self):
+        deck = (
+            "/BEGIN\n"
+            "TH FRAME TEST\n"
+            "/TH/FRAME/1\n"
+            "Frame TH\n"
+            "VX VY VZ\n"
+            "1\n"
+            "/END\n"
+        )
+        model, log = _parse(deck)
+        assert len(log.errors) == 0
+        assert len(model.th_requests) == 1
+        assert model.th_requests[0].kind == "FRAME"
+
+    def test_ale_done_donea(self):
+        deck = (
+            "/BEGIN\n"
+            "ALE DONE TEST\n"
+            "/ALE/DONEA/1\n"
+            "1.0 100.0 1.0 1.0 1.0\n"
+            "-1.0\n"
+            "/END\n"
+        )
+        model, log = _parse(deck)
+        assert len(log.errors) == 0
+        assert model.ale_grid_donea is not None
+        assert model.ale_grid_donea.alpha == pytest.approx(1.0)
+        assert model.ale_grid_donea.v_min == pytest.approx(-1.0)
+
+
+
 

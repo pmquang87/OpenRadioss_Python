@@ -1749,6 +1749,8 @@ def read_ale(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_ale_bcs(block, model, log)
     elif sub in ("DONE", "GRID/DONE"):
         read_ale_done(block, model, log)
+    elif sub in ("DONEA", "GRID/DONEA"):
+        read_ale_grid(block, model, log)
     elif sub in ("GRID", "STANDARD", "SPRING", "DISP", "LAPLACIAN", "VOLUME", "LAGRANGE") or (len(block.parts) > 2 and block.parts[1].upper() == "GRID"):
         read_ale_grid(block, model, log)
     elif sub == "LINK" or (len(block.parts) > 2 and block.parts[1].upper() == "LINK"):
@@ -2259,6 +2261,8 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     from ..failure import biquad as fail_biquad
     from ..model.entities import FailureModel
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if not kind or kind.isdigit():
+        kind = "JOHNSON"
     if kind in ("TSAI-WU", "TSAI_WU"):
         kind = "TSAIWU"
     elif kind in ("TSAI-HILL", "TSAI_HILL"):
@@ -9896,7 +9900,15 @@ def read_ale_done(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 def read_ale_grid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/ALE/GRID/...`` (M63, M105, M113): ALE grid formulation and damping controls."""
-    grid_sub = block.parts[2].upper() if len(block.parts) > 2 else (block.parts[1].upper() if len(block.parts) > 1 else "STANDARD")
+    if len(block.parts) > 1 and block.parts[1].upper() == "GRID":
+        if len(block.parts) > 2 and not block.parts[2].isdigit():
+            grid_sub = block.parts[2].upper()
+        else:
+            grid_sub = "STANDARD"
+    elif len(block.parts) > 1 and not block.parts[1].isdigit():
+        grid_sub = block.parts[1].upper()
+    else:
+        grid_sub = "STANDARD"
     gid = block.user_id if block.user_id is not None else 1
     cards = [c for c in (block.fixed_cards() if block.fixed else block.cards) if not c.is_blank]
     title = ""
@@ -9906,7 +9918,7 @@ def read_ale_grid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         AleGridLaplacian, AleGridVolume
     )
 
-    if grid_sub == "DONEA":
+    if grid_sub in ("DONE", "DONEA"):
         alpha, gamma, vx, vy, vz = 0.0, 100.0, 1.0, 1.0, 1.0
         vmin = -1e30
         if cards:
@@ -12069,6 +12081,8 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         /SENSOR/TEMP:   card 1: title, card 2: Tdelay, card 3: Grnod_Id Tempmax Tempmin Tempmean Tmin
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if not kind or kind.isdigit():
+        kind = "TIME"
     if kind == "NIC_NIJ":
         kind = "NIC"
     elif kind == "TYPE10":
@@ -13744,6 +13758,8 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     scaling.
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if kind == "LAGDT" and len(block.parts) > 2:
+        kind = block.parts[2].upper()
     if kind in ("GUIDED_CABLE", "CABLE", "TYPE26", "26"):
         read_guided_cable(block, model, log)
         return
@@ -15706,7 +15722,7 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "IMPDISP", "IMPVEL", "PLOAD", "PROP", "MAT", "STACK", "PLY",
         "WAVE_SHAPER", "DET", "GUIDED_CABLE", "KJOINT", "SUBINTER",
         "EBCS", "SEATBELT", "SPH_FLOW", "HEAT", "TEMPER", "THERM",
-        "INITEMP", "IMPTEMP", "INICRACK", "XFEM"
+        "INITEMP", "IMPTEMP", "INICRACK", "XFEM", "FRAME"
     }
     if block.key0.startswith("THPART_") or (block.key0 == "THPART" and len(block.parts) > 1 and block.parts[1].upper().startswith("GR")):
         read_thpart_group(block, model, log)
