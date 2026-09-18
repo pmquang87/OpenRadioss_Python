@@ -42,7 +42,7 @@ from .entities import (
     InitialTrussState, InitialBeamState, InitialSpringState,
     CyclicBoundaryCondition, SolidPartPerturbation, PBlastLoad,
     SubInterface, GuidedCable, ShellPartPerturbation, FailurePerturbation, SphGlobal, SmsGlobal,
-    BcsNrf, BcsWall, RigidLink, CylJoint, GJoint, GeneralJoint,
+    BcsNrf, BcsWall, RigidLink, CylJoint, GJoint, GeneralJoint, KJoint,
     MergeNode, MergeRbody, IniCrack, IniCrackSegment, LaserLoad,
     PcylLoad, PfluidLoad, Preload, PreloadAxial, DampInter, DampRange,
     AnalyGlobal, UpwindGlobal, CaaControl,
@@ -1561,6 +1561,7 @@ class Model:
         # M209 Entities
         self.slider_joints: Dict[int, Any] = {}                      # /LAGMUL/SLIDER, /SLIDER (M209)
         self.cyl_joints: Dict[int, Any] = {}                         # /LAGMUL/CYL_JOINT, /CYL_JOINT (M209)
+        self.kjoints: Dict[int, Any] = {}                            # /PROP/TYPE33, /PROP/TYPE45 (M602)
         self.damp_parts: Dict[int, Any] = {}                         # /DAMP/PART (M209)
         self.sub_cycle_enabled: bool = False                         # /ENG/SUB_CYCLE, /SUB_CYCLE (M209)
         self.sub_cycle_ratio: int = 1
@@ -3792,6 +3793,12 @@ class Model:
     @property
     def numnod(self) -> int:
         return len(self.node_ids)
+
+    @numnod.setter
+    def numnod(self, val: int) -> None:
+        if len(self.node_ids) != val:
+            self.node_ids = np.arange(1, val + 1, dtype=np.int64)
+            self._id2idx = {int(nid): i for i, nid in enumerate(self.node_ids)}
 
     # ----------------------------------------------------------------------
     def element_groups(self):

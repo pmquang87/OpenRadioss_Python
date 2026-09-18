@@ -10594,17 +10594,21 @@ def read_load_centri(block: KeywordBlock, model: Model, log: MessageLog) -> None
     if not cards or cards[0].is_blank:
         log.error(f"/LOAD/CENTRI/{block.user_id}: missing data card", block.source)
         return
-    if block.fixed:
-        f = cards[0].cut("LOAD_CENTRI")
-        funct_id = _ival(f[0])
-        dir_str = f[1].strip().upper() if len(f) > 1 and f[1].strip() else "XX"
-        frame_id = _ival(f[2]) if len(f) > 2 else 0
-        sens_id = _ival(f[3]) if len(f) > 3 else 0
-        grnod_id = _ival(f[4]) if len(f) > 4 else 0
-        ivar = _ival(f[5], default=1) if len(f) > 5 else 1
-        scale_x = _fval(f[6], default=1.0) if len(f) > 6 else 1.0
-        scale_y = _fval(f[7], default=1.0) if len(f) > 7 else 1.0
-    else:
+    is_fixed = block.fixed and ("," not in cards[0].raw)
+    if is_fixed:
+        try:
+            f = cards[0].cut("LOAD_CENTRI")
+            funct_id = _ival(f[0])
+            dir_str = f[1].strip().upper() if len(f) > 1 and f[1].strip() else "XX"
+            frame_id = _ival(f[2]) if len(f) > 2 else 0
+            sens_id = _ival(f[3]) if len(f) > 3 else 0
+            grnod_id = _ival(f[4]) if len(f) > 4 else 0
+            ivar = _ival(f[5], default=1) if len(f) > 5 else 1
+            scale_x = _fval(f[6], default=1.0) if len(f) > 6 else 1.0
+            scale_y = _fval(f[7], default=1.0) if len(f) > 7 else 1.0
+        except ValueError:
+            is_fixed = False
+    if not is_fixed:
         raw = cards[0].raw.replace(",", " ")
         t = raw.split()
         funct_id = int(float(t[0])) if len(t) > 0 else 0
@@ -26133,6 +26137,7 @@ def read_mat_cdpm2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     e, nu = 0.0, 0.0
     irate = 0
     fcut = 0.0
+    idel = 1
     ecc, qh0, ft, fc, hp = 0.0, 0.0, 0.0, 0.0, 0.0
     ah, bh, ch, dh = 0.0, 0.0, 0.0, 0.0
     as_, bs, df = 0.0, 0.0, 0.0
@@ -26143,10 +26148,20 @@ def read_mat_cdpm2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         rho = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
         if len(cards) > 1 and not cards[1].is_blank:
             f2 = cards[1].cut("MAT_LAW124_2")
-            e = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
-            nu = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
-            irate = _ival(f2[3], 0) if len(f2) > 3 else 0
-            fcut = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+            if len(f2) >= 7:
+                e = _fval(f2[0], 0.0)
+                nu = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                idel = _ival(f2[3], 1) if len(f2) > 3 and f2[3].strip() else 1
+                irate = _ival(f2[5], 0) if len(f2) > 5 else 0
+                fcut = _fval(f2[6], 0.0) if len(f2) > 6 else 0.0
+            elif len(f2) >= 5:
+                e = _fval(f2[0], 0.0)
+                nu = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                irate = _ival(f2[3], 0) if len(f2) > 3 else 0
+                fcut = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+            else:
+                e = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                nu = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
         if len(cards) > 2 and not cards[2].is_blank:
             f3 = cards[2].cut("MAT_LAW124_3")
             ecc = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
@@ -26181,8 +26196,15 @@ def read_mat_cdpm2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             t2 = cards[1].tokens()
             e = float(t2[0]) if len(t2) > 0 else 0.0
             nu = float(t2[1]) if len(t2) > 1 else 0.0
-            irate = int(float(t2[2])) if len(t2) > 2 else 0
-            fcut = float(t2[3]) if len(t2) > 3 else 0.0
+            if len(t2) >= 5:
+                idel = int(float(t2[2]))
+                irate = int(float(t2[3]))
+                fcut = float(t2[4])
+            elif len(t2) >= 4:
+                irate = int(float(t2[2]))
+                fcut = float(t2[3])
+            elif len(t2) >= 3:
+                irate = int(float(t2[2]))
         if len(cards) > 2 and not cards[2].is_blank:
             t3 = cards[2].tokens()
             ecc = float(t3[0]) if len(t3) > 0 else 0.0
@@ -26217,7 +26239,29 @@ def read_mat_cdpm2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         wf=wf, wf1=wf1, ft1=ft1, efc=efc
     )
     model.mat_cdpm2s[mat_id] = mat
-    model.materials[mat_id] = mat
+    from ..model.entities import Material
+    from .mat_reader import GenericMaterialRecord
+    mat124 = Material(
+        id=mat_id, law=124, rho0=rho, title=title,
+        params={
+            "E": e if e > 0.0 else 1.0, "nu": nu if 0.0 <= nu < 0.5 else 0.2,
+            "MAT_E": e, "MAT_NU": nu, "IRATE": irate, "FCUT": fcut, "IDEL": idel,
+            "MAT_ECC": ecc, "MAT_QH0": qh0, "MAT_FT": ft, "MAT_FC": fc, "MAT_HP": hp,
+            "MAT_AH": ah, "MAT_BH": bh, "MAT_CH": ch, "MAT_DH": dh,
+            "MAT_AS": as_, "MAT_BS": bs, "MAT_DF": df, "DFLAG": dflag, "DTYPE": dtype, "IREG": ireg,
+            "MAT_WF": wf, "MAT_WF1": wf1, "MAT_FT1": ft1, "MAT_EFC": efc,
+            "e": e, "nu": nu, "irate": irate, "fcut": fcut, "idel": idel,
+            "ecc": ecc, "qh0": qh0, "ft": ft, "fc": fc, "hp": hp,
+            "ah": ah, "bh": bh, "ch": ch, "dh": dh,
+            "as": as_, "bs": bs, "df": df, "dflag": dflag, "dtype": dtype, "ireg": ireg,
+            "wf": wf, "wf1": wf1, "ft1": ft1, "efc": efc,
+        }
+    )
+    mat124.record = GenericMaterialRecord(
+        law_name="CDPM2", law_number=124, id=mat_id, title=title,
+        params=mat124.params, density=rho, unit_id=block.unit_id,
+    )
+    model.materials[mat_id] = mat124
 
 
 def read_mat_conc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -28991,6 +29035,7 @@ def read_mat_law124(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     e, nu = 0.0, 0.0
     irate = 0
     fcut = 0.0
+    idel = 1
     ecc, qh0, ft, fc, hp = 0.0, 0.0, 0.0, 0.0, 0.0
     ah, bh, ch, dh = 0.0, 0.0, 0.0, 0.0
     as_, bs, df = 0.0, 0.0, 0.0
@@ -29005,10 +29050,20 @@ def read_mat_law124(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             rho0 = _f(f1[0])
         if len(valid_cards) > 1:
             f2 = cut(valid_cards[1].raw, "MAT_LAW124_2")
-            e = _f(f2[0])
-            nu = _f(f2[1]) if len(f2) > 1 else 0.0
-            irate = _i(f2[3]) if len(f2) > 3 else 0
-            fcut = _f(f2[4]) if len(f2) > 4 else 0.0
+            if len(f2) >= 7:
+                e = _f(f2[0])
+                nu = _f(f2[1]) if len(f2) > 1 else 0.0
+                idel = _i(f2[3]) if len(f2) > 3 and f2[3].strip() else 1
+                irate = _i(f2[5]) if len(f2) > 5 else 0
+                fcut = _f(f2[6]) if len(f2) > 6 else 0.0
+            elif len(f2) >= 5:
+                e = _f(f2[0])
+                nu = _f(f2[1]) if len(f2) > 1 else 0.0
+                irate = _i(f2[3]) if len(f2) > 3 else 0
+                fcut = _f(f2[4]) if len(f2) > 4 else 0.0
+            else:
+                e = _f(f2[0]) if len(f2) > 0 else 0.0
+                nu = _f(f2[1]) if len(f2) > 1 else 0.0
         if len(valid_cards) > 2:
             f3 = cut(valid_cards[2].raw, "MAT_LAW124_3")
             ecc = _f(f3[0])
@@ -29044,8 +29099,15 @@ def read_mat_law124(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             t2 = valid_cards[1].tokens()
             e = float(t2[0]) if len(t2) > 0 else 0.0
             nu = float(t2[1]) if len(t2) > 1 else 0.0
-            irate = int(float(t2[2])) if len(t2) > 2 else 0
-            fcut = float(t2[3]) if len(t2) > 3 else 0.0
+            if len(t2) >= 5:
+                idel = int(float(t2[2]))
+                irate = int(float(t2[3]))
+                fcut = float(t2[4])
+            elif len(t2) >= 4:
+                irate = int(float(t2[2]))
+                fcut = float(t2[3])
+            elif len(t2) >= 3:
+                irate = int(float(t2[2]))
         if len(valid_cards) > 2:
             t3 = valid_cards[2].tokens()
             ecc = float(t3[0]) if len(t3) > 0 else 0.0
@@ -29087,12 +29149,12 @@ def read_mat_law124(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=mat_id, law=124, rho0=rho0, title=title,
         params={
             "E": e if e > 0.0 else 1.0, "nu": nu if 0.0 <= nu < 0.5 else 0.2,
-            "MAT_E": e, "MAT_NU": nu, "IRATE": irate, "FCUT": fcut,
+            "MAT_E": e, "MAT_NU": nu, "IRATE": irate, "FCUT": fcut, "IDEL": idel,
             "MAT_ECC": ecc, "MAT_QH0": qh0, "MAT_FT": ft, "MAT_FC": fc, "MAT_HP": hp,
             "MAT_AH": ah, "MAT_BH": bh, "MAT_CH": ch, "MAT_DH": dh,
             "MAT_AS": as_, "MAT_BS": bs, "MAT_DF": df, "DFLAG": dflag, "DTYPE": dtype, "IREG": ireg,
             "MAT_WF": wf, "MAT_WF1": wf1, "MAT_FT1": ft1, "MAT_EFC": efc,
-            "e": e, "nu": nu, "irate": irate, "fcut": fcut,
+            "e": e, "nu": nu, "irate": irate, "fcut": fcut, "idel": idel,
             "ecc": ecc, "qh0": qh0, "ft": ft, "fc": fc, "hp": hp,
             "ah": ah, "bh": bh, "ch": ch, "dh": dh,
             "as": as_, "bs": bs, "df": df, "dflag": dflag, "dtype": dtype, "ireg": ireg,
@@ -32867,14 +32929,14 @@ def read_mat_law169(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=mat_id, law=169, rho0=rho0, title=title,
         params={
             "E": young, "nu": nu, "Rho": rho0, "MAT_RHO": rho0,
-            "SHT_SL": sht_sl, "MAT169_SHT_SL": sht_sl,
-            "TENMAX": tenmax, "MAT169_TENMAX": tenmax,
-            "GCTEN": gcten, "MAT169_GCTEN": gcten,
-            "SHRMAX": shrmax, "MAT169_SHRMAX": shrmax,
-            "GCSHR": gcshr, "MAT169_GCSHR": gcshr,
-            "PWRT": pwrt, "MAT169_PWRT": pwrt,
-            "PWRS": pwrs, "MAT169_PWRS": pwrs,
-            "SHRP": shrp, "MAT169_SHRP": shrp,
+            "SHT_SL": sht_sl, "MAT169_SHT_SL": sht_sl, "sht_sl": sht_sl,
+            "TENMAX": tenmax, "MAT169_TENMAX": tenmax, "tenmax": tenmax,
+            "GCTEN": gcten, "MAT169_GCTEN": gcten, "gcten": gcten,
+            "SHRMAX": shrmax, "MAT169_SHRMAX": shrmax, "shrmax": shrmax,
+            "GCSHR": gcshr, "MAT169_GCSHR": gcshr, "gcshr": gcshr,
+            "PWRT": pwrt, "MAT169_PWRT": pwrt, "pwrt": pwrt,
+            "PWRS": pwrs, "MAT169_PWRS": pwrs, "pwrs": pwrs,
+            "SHRP": shrp, "MAT169_SHRP": shrp, "shrp": shrp,
         }
     )
     from ..materials.law169_arup import build_law169
@@ -86721,21 +86783,25 @@ def read_centri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     grnd_id, sens_id, fct_id, node_orig, node_axis = 0, 0, 0, 0, 0
     omega = 0.0
     scale_x, scale_y, scale_z = 1.0, 1.0, 1.0
-    if block.fixed:
-        f1 = cards[0].cut("CENTRI_1")
-        grnd_id = _ival(f1[0]) if len(f1) > 0 else 0
-        sens_id = _ival(f1[1]) if len(f1) > 1 else 0
-        fct_id = _ival(f1[2]) if len(f1) > 2 else 0
-        node_orig = _ival(f1[3]) if len(f1) > 3 else 0
-        node_axis = _ival(f1[4]) if len(f1) > 4 else 0
-        omega = _fval(f1[5], 0.0) if len(f1) > 5 else 0.0
-        if len(cards) > 1:
-            f2 = cards[1].cut("CENTRI_2")
-            scale_x = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
-            scale_y = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
-            scale_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
-    else:
-        t1 = cards[0].tokens()
+    is_fixed = block.fixed and ("," not in cards[0].raw)
+    if is_fixed:
+        try:
+            f1 = cards[0].cut("CENTRI_1")
+            grnd_id = _ival(f1[0]) if len(f1) > 0 else 0
+            sens_id = _ival(f1[1]) if len(f1) > 1 else 0
+            fct_id = _ival(f1[2]) if len(f1) > 2 else 0
+            node_orig = _ival(f1[3]) if len(f1) > 3 else 0
+            node_axis = _ival(f1[4]) if len(f1) > 4 else 0
+            omega = _fval(f1[5], 0.0) if len(f1) > 5 else 0.0
+            if len(cards) > 1 and ("," not in cards[1].raw):
+                f2 = cards[1].cut("CENTRI_2")
+                scale_x = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+                scale_y = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
+                scale_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+        except ValueError:
+            is_fixed = False
+    if not is_fixed:
+        t1 = cards[0].raw.replace(",", " ").split()
         if len(t1) > 0:
             grnd_id = _safe_int(t1[0])
         if len(t1) > 1:
@@ -86749,7 +86815,7 @@ def read_centri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if len(t1) > 5:
             omega = _safe_float(t1[5])
         if len(cards) > 1:
-            t2 = cards[1].tokens()
+            t2 = cards[1].raw.replace(",", " ").split()
             if len(t2) > 0:
                 scale_x = _safe_float(t2[0])
             if len(t2) > 1:

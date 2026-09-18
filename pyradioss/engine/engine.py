@@ -75,6 +75,7 @@ from .rigid_wall import RigidWalls
 from .cyl_joint import build_cyl_joints
 from .gjoint import build_gjoints
 from .rlink import build_rlinks
+from .kjoint import build_kjoints
 from .sections import SectionForces
 from .sensors import Sensors
 
@@ -106,6 +107,15 @@ class EngineState:
         self.e_damp = 0.0      # /DAMP dissipation (M6)
         self.dt_prev = None    # previous cycle time step for leapfrog dt12
         self.stop_reason = ""
+
+    @property
+    def e_ext(self) -> float:
+        """Alias for wext (external work ledger)."""
+        return self.wext
+
+    @e_ext.setter
+    def e_ext(self, val: float) -> None:
+        self.wext = val
 
 
 def _deleted_count(model: Model) -> int:
@@ -364,6 +374,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     cyl_joints = build_cyl_joints(model, log)  # /CYL_JOINT (M586)
     rlinks = build_rlinks(model, log)          # /RLINK (M586)
     gjoints = build_gjoints(model, log)        # /GJOINT (M594)
+    kjoints = build_kjoints(model, log)        # /PROP/TYPE33, /PROP/TYPE45 (M602)
     sections = SectionForces(model, log)
     # /DT/NODA[/CST] (M6): nodal time step + mass scaling. Nodes whose
     # motion a constraint prescribes carry no stability constraint of
@@ -445,6 +456,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         cj.apply_velocity(model.v, model.x, mass_eff)
     for gj in gjoints:
         gj.apply_velocity(model.v, getattr(model, "vr", None), model.x, mass_eff, getattr(model, "inertia", None))
+    for kj in kjoints:
+        kj.apply_velocity(model.v, getattr(model, "vr", None), model.x, mass_eff, getattr(model, "inertia", None))
 
     real = model.mass < 1e29
     if resumed:
@@ -711,6 +724,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             rl.transfer_forces(fint, fext, fcont, mint, mass_eff)
         for gj in gjoints:
             gj.transfer_forces(fint, fext, fcont, mint, model.x, mass_eff, inv_mass, inv_inertia)
+        for kj in kjoints:
+            kj.transfer_forces(fint, fext, fcont, mint, model.x, mass_eff, inv_mass, inv_inertia)
 
         # ---- 3c. /DT/NODA[/CST]: nodal time step + mass scaling (M6) ------
         # Runs BEFORE the acceleration so the mass added for the target
@@ -766,6 +781,14 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             cj.apply_acceleration(acc, model.x, mass_eff)
         for gj in gjoints:
             gj.apply_acceleration(acc, ar, model.x, mass_eff, getattr(model, "inertia", None))
+        for kj in kjoints:
+            kj.apply_acceleration(acc, ar, model.x, mass_eff, getattr(model, "inertia", None))
+        # /IMPACC imposed acceleration (M595)
+        state.wext += loads.apply_acceleration(
+            state.t, dt12, acc, ar, mass_eff, getattr(model, "inertia", None),
+            model.v, getattr(model, "vr", None), v_old, vr_old, sensors
+        )
+        model.impacc_reactions = loads.impacc_reactions
         model.fint = fint
         model.fext = fext
         model.a = acc
@@ -866,6 +889,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             cj.apply_velocity(model.v, model.x, mass_eff)
         for gj in gjoints:
             gj.apply_velocity(model.v, getattr(model, "vr", None), model.x, mass_eff, getattr(model, "inertia", None))
+        for kj in kjoints:
+            kj.apply_velocity(model.v, getattr(model, "vr", None), model.x, mass_eff, getattr(model, "inertia", None))
 
         # ---- 6. position update -------------------------------------------
         model.x += model.v * dt
@@ -885,6 +910,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             cj.enforce(model.x, model.v, dt)
         for gj in gjoints:
             gj.enforce(model.x, model.v, getattr(model, "vr", None), dt)
+        for kj in kjoints:
+            kj.enforce(model.x, model.v, getattr(model, "vr", None), dt)
 
         # ---- 6c. numerical-dissipation ledger (M6) --------------------------
         # The kernels book internal energy as a STATE FUNCTION

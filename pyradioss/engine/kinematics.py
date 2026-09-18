@@ -34,6 +34,8 @@ import numpy as np
 
 from ..contact import tracking
 from ..model.model import Model
+from .centri import CentrifugalLoadEngine
+from .impacc import ImposedAccelerationEngine
 
 
 class LoadsAndConstraints:
@@ -284,6 +286,11 @@ class LoadsAndConstraints:
                                 pl.scale, gtype, elem, deletable,
                                 pl.sens_id))
 
+        # Centrifugal loads and Imposed accelerations (M595)
+        self.centri_engine = CentrifugalLoadEngine(model, log)
+        self.impacc_engine = ImposedAccelerationEngine(model, log)
+        self.impacc = self.impacc_engine.entries
+
     # ------------------------------------------------------------------
     def external_forces(self, t: float, fext: np.ndarray,
                         x: np.ndarray, sensors=None) -> None:
@@ -335,6 +342,27 @@ class LoadsAndConstraints:
                     valid_nodes = (nodes_k >= 0) & (nodes_k < len(fext))
                     if np.any(valid_nodes):
                         np.add.at(fext, nodes_k[valid_nodes], (wgt[valid_k, k, None] * fseg[valid_k])[valid_nodes])
+
+        # Centrifugal body forces (/LOAD/CENTRI and /CENTRI, M595)
+        self.centri_engine.compute_forces(t, x, fext, sensors)
+
+    # ------------------------------------------------------------------
+    @property
+    def impacc_reactions(self):
+        """Reaction forces from /IMPACC imposed accelerations."""
+        return self.impacc_engine.reactions
+
+    def apply_acceleration(self, t: float, dt: float,
+                           acc: np.ndarray, ar: Optional[np.ndarray],
+                           mass: np.ndarray, inertia: Optional[np.ndarray],
+                           v: np.ndarray, vr: Optional[np.ndarray],
+                           v_old: np.ndarray, vr_old: Optional[np.ndarray],
+                           sensors=None) -> float:
+        """Enforce /IMPACC conditions during acceleration update (Step 4, M595),
+        tracking reaction forces and returning external work."""
+        return self.impacc_engine.apply(
+            t, dt, acc, ar, mass, inertia, v, vr, v_old, vr_old, sensors
+        )
 
     # ------------------------------------------------------------------
     def apply_kinematic(self, t: float, v: np.ndarray, vr: np.ndarray,
