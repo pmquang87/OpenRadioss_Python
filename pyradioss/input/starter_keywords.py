@@ -18394,7 +18394,7 @@ def read_merge(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """
     from ..model.entities import MergeNode, MergeRbody
     parts = block.keyword.split("/")
-    is_node = len(parts) > 1 and parts[1].upper() == "NODE"
+    is_node = (len(parts) > 1 and parts[1].upper() == "NODE") or ("NODE" in block.key0.upper())
 
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if is_node:
@@ -96014,6 +96014,28 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "DUMMY_START": read_preproc_metadata,
     "DUMMY_END": read_preproc_metadata,
     "HPOINT": read_preproc_metadata,
+
+    # Node merging & ALE controls
+    "MERGE_NODE": read_merge,
+    "ALE_BCS": read_ale_bcs,
+    "ALE_LINK": read_ale_link,
+    "ALE_CLOS": read_ale_close,
+    "ALE_CLOSE": read_ale_close,
+    "ALE_DONE": read_ale_done,
+    "ALE_DONEA": read_ale_grid,
+    "ALE_GRID": read_ale_grid,
+    "ALE_SOLVER": read_ale_solver,
+    "ALE_MUSCL": read_ale_muscl,
+
+    # State & Output controls
+    "DYNAIN_DT": read_dynain_dt,
+    "RWALL_THERM": read_rwall_therm,
+    "STAT": read_state,
+    "STATIC": read_state,
+    "PLOAD_PCYL": read_pcyl,
+    "IMPDISP_FGEO": read_impdisp_fgeo,
+    "IMPVEL_FGEO": read_impvel_fgeo,
+    "ADMAS_NON_UNIFORM": read_admas_non_uniform,
 }
 
 
@@ -96119,6 +96141,9 @@ ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DEBUG", "DT", "DTIX", "MON",
     "IMPL", "PROC", "ABF", "RUN", "TFILE", "RFILE", "STOP", "VERS",
     "PRIVATE", "UPWM", "H3D", "PARITH",
+    "DEL", "DLI7", "KEREL", "DYREL", "ADYREL", "RELAX", "VIPER",
+    "RAD2R", "RAD2RAD", "PERF", "DT1TET10", "DTTSH", "REPORT", "REPOR",
+    "NEGVOL", "NEGVO", "STATIC", "FLOW", "NOIS",
 }
 
 def parse_starter_deck(blocks: Union[List[KeywordBlock], str, Any],

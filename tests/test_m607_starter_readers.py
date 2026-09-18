@@ -702,6 +702,51 @@ class TestCorpusKeywordsAndFixes:
         assert model.ale_grid_donea.alpha == pytest.approx(1.0)
         assert model.ale_grid_donea.v_min == pytest.approx(-1.0)
 
+    def test_additional_starter_aliases_and_engine_bypass(self):
+        deck = (
+            "/BEGIN\n"
+            "ADDITIONAL ALIASES TEST\n"
+            "/MERGE_NODE/1\n"
+            "Merge node\n"
+            "0.01 10 1\n"
+            "/ALE_BCS/2\n"
+            "ALE BCS\n"
+            "111000 0 1\n"
+            "/ALE_LINK/3\n"
+            "1 2 1.0\n"
+            "/ALE_CLOS\n"
+            "0.01 0.005\n"
+            "/ALE_SOLVER\n"
+            "1 2\n"
+            "/ALE_MUSCL\n"
+            "1.5\n"
+            "/DYNAIN_DT\n"
+            "0.0 0.01\n"
+            "/STAT/DT\n"
+            "0.0 0.05\n"
+            "/STATIC\n"
+            "/DEL\n"
+            "/KEREL\n"
+            "/DYREL\n"
+            "/ADYREL\n"
+            "/RELAX\n"
+            "/VIPER\n"
+            "/PERF\n"
+            "/REPORT\n"
+            "/NEGVOL\n"
+            "/END\n"
+        )
+        model, log = _parse(deck)
+        assert len(log.errors) == 0
+        assert len(log.warnings) == 0
+        assert 1 in model.node_merges
+        assert any(b.id == 2 for b in model.ale_bcs)
+        assert 3 in model.ale_links
+        assert model.ale_close is not None
+        assert model.ale_solver is not None
+        assert len(model.state_dts) >= 2
+
+
 
 
 
