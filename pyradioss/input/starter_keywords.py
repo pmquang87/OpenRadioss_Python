@@ -1363,6 +1363,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if (lawname in ("DRUCKER_PRAGER", "BRITTLE", "MAT_DRUCKER_PRAGER", "MAT_BRITTLE", "LAW51_DRUCKER_PRAGER", "LAW51_BRITTLE")
             or subaction in ("DRUCKER_PRAGER", "BRITTLE")):
         read_mat_law51(block, model, log)
+        return
     # M591: LAW126 (Johnson-Holmquist Concrete / HJC) and LAW169 (Arup Structural Adhesive)
     if lawname in ("LAW126", "JOHNSON_HOLMQUIST_CONCRETE", "MAT_LAW126", "MAT_JOHNSON_HOLMQUIST_CONCRETE", "LAW126_JOHNSON_HOLMQUIST_CONCRETE", "HJC", "MAT_HJC"):
         read_mat_law126(block, model, log)

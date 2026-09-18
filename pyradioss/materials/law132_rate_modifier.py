@@ -404,15 +404,3 @@ def shell_tangent(
 
 
 consistent_shell_tangent = shell_tangent
-
-
-def _register() -> None:
-    try:
-        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
-        for key in (132, "132", "LAW132", "RATE_MODIFIER", "MAT_LAW132"):
-            MAT_PHYSICS_REGISTRY[key] = build_law132
-    except Exception:
-        pass
-
-
-_register()

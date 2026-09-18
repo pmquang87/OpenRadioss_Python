@@ -100,7 +100,19 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                law76_samp,
                law90_foam,
                law190_dubois,
-               mat_gas, mat_void)
+               mat_gas, mat_void,
+               law00_void, law11_fluid_visc, law13_fluid_ale, law16_gray_ewing, law17_orth_elastic,
+               law18_plas_iso, law20_rigid, law23_user_mat, law26_honeycomb_sesame, law41_jwl_burn,
+               law45_orth_fabric, law46_kin_hard, law51_granular_soil, law53_tab_foam, law54_hyd_visc,
+               law55_shell_orth, law56_orth_fail, law59_spring_rate, law63_composite_shell, law64_rate_comp,
+               law65_thermo_visc, law68_tab_plas, law72_hill_mmc, law75_thermo_trans, law77_visc_poly,
+               law78_yoshida, law80_ramberg, law84_mooney_rivlin, law85_void_pinch, law86_honeycomb_shell,
+               law91_pinch_shell, law96_thermo_visc, law97_orth_nonlinear, law98_loss_optim, law108_yield_fit,
+               law111_barlat_yld2004, law112_xia_damage, law113_yield_curve_fit, law115_perzyna, law116_spotweld,
+               law118_reserved, law122_chaboche, law125_tab_aniso_rate, law127_mohr_coulomb, law128_hill_rate_shell,
+               law129_barlat_yld2000, law130_nonlocal_damage, law131_modular_elastoplas, law132_rate_modifier,
+               law133_microplane_concrete, law134_fabric_wrinkle, law135_modular_user, law151_multimat_ale,
+               law158_progressive_composite, law187_samp1_polymer)
 from .law120_tapo import (
     Law120Params,
     build_law120,
@@ -1948,6 +1960,100 @@ def _register_law190():
 
 _register_law190()
 
+_NEW_PORTED_LAWS: dict[int, Any] = {
+    0: law00_void,
+    11: law11_fluid_visc,
+    13: law13_fluid_ale,
+    16: law16_gray_ewing,
+    17: law17_orth_elastic,
+    18: law18_plas_iso,
+    20: law20_rigid,
+    23: law23_user_mat,
+    26: law26_honeycomb_sesame,
+    41: law41_jwl_burn,
+    45: law45_orth_fabric,
+    46: law46_kin_hard,
+    51: law51_granular_soil,
+    53: law53_tab_foam,
+    54: law54_hyd_visc,
+    55: law55_shell_orth,
+    56: law56_orth_fail,
+    59: law59_spring_rate,
+    63: law63_composite_shell,
+    64: law64_rate_comp,
+    65: law65_thermo_visc,
+    68: law68_tab_plas,
+    72: law72_hill_mmc,
+    75: law75_thermo_trans,
+    77: law77_visc_poly,
+    78: law78_yoshida,
+    80: law80_ramberg,
+    84: law84_mooney_rivlin,
+    85: law85_void_pinch,
+    86: law86_honeycomb_shell,
+    91: law91_pinch_shell,
+    96: law96_thermo_visc,
+    97: law97_orth_nonlinear,
+    98: law98_loss_optim,
+    108: law108_yield_fit,
+    111: law111_barlat_yld2004,
+    112: law112_xia_damage,
+    113: law113_yield_curve_fit,
+    115: law115_perzyna,
+    116: law116_spotweld,
+    118: law118_reserved,
+    122: law122_chaboche,
+    125: law125_tab_aniso_rate,
+    127: law127_mohr_coulomb,
+    128: law128_hill_rate_shell,
+    129: law129_barlat_yld2000,
+    130: law130_nonlocal_damage,
+    131: law131_modular_elastoplas,
+    132: law132_rate_modifier,
+    133: law133_microplane_concrete,
+    134: law134_fabric_wrinkle,
+    135: law135_modular_user,
+    151: law151_multimat_ale,
+    158: law158_progressive_composite,
+    187: law187_samp1_polymer,
+}
+
+
+def _resolve_law_num(mat: Any) -> Optional[int]:
+    """Resolve integer law number from Material entity, card_dict, law attribute, or law_name."""
+    for attr in ("law", "law_name", "type"):
+        val = getattr(mat, attr, None)
+        if isinstance(val, int):
+            return val
+        if isinstance(val, str):
+            val_clean = val.strip().upper()
+            if val_clean.startswith("/MAT/LAW"):
+                digits = val_clean[8:]
+                if digits.isdigit():
+                    return int(digits)
+            elif val_clean.startswith("LAW"):
+                digits = val_clean[3:]
+                if digits.isdigit():
+                    return int(digits)
+            elif val_clean.startswith("MAT_LAW"):
+                digits = val_clean[7:]
+                if digits.isdigit():
+                    return int(digits)
+            elif val_clean.startswith("MAT_"):
+                digits = val_clean[4:]
+                if digits.isdigit():
+                    return int(digits)
+            elif val_clean.isdigit():
+                return int(val_clean)
+    if hasattr(mat, "card_dict") and isinstance(mat.card_dict, dict):
+        for k in ("law", "LAW", "law_num", "mat_law"):
+            if k in mat.card_dict:
+                try:
+                    return int(mat.card_dict[k])
+                except (ValueError, TypeError):
+                    pass
+    return None
+
 
 _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
     "uv190": (16,),
@@ -2950,6 +3056,14 @@ def extra_shapes(mat, nip=None):
         shapes.update(law121_extra_shapes(mat, nip=nip))
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
         shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
+    _lnum = _resolve_law_num(mat)
+    if _lnum in _NEW_PORTED_LAWS:
+        _fn = getattr(_NEW_PORTED_LAWS[_lnum], "extra_shapes", None)
+        if callable(_fn):
+            try:
+                shapes.update(_fn(mat, nip=nip))
+            except TypeError:
+                shapes.update(_fn(mat))
     return shapes
 
 
@@ -2963,9 +3077,9 @@ def needs_defgrad(mat) -> bool:
             or getattr(mat, "law", None) in _LAW100_KEYS
             or getattr(mat, "law_name", None) in _LAW100_KEYS
             or getattr(mat, "law", None) in _LAW101_KEYS
-            or getattr(mat, "law_name", None) in _LAW101_KEYS
             or getattr(mat, "law", None) in _LAW190_KEYS
-            or getattr(mat, "law_name", None) in _LAW190_KEYS)
+            or getattr(mat, "law_name", None) in _LAW190_KEYS
+            or bool((_resolve_law_num(mat) in _NEW_PORTED_LAWS) and callable(getattr(_NEW_PORTED_LAWS[_resolve_law_num(mat)], "needs_defgrad", None)) and _NEW_PORTED_LAWS[_resolve_law_num(mat)].needs_defgrad(mat)))
 
 
 def needs_env(mat) -> bool:
@@ -3960,6 +4074,33 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
             except Exception:
                 pass
         return sig, epsp_out, c
+    _lnum = _resolve_law_num(mat)
+    if _lnum in _NEW_PORTED_LAWS:
+        _mod = _NEW_PORTED_LAWS[_lnum]
+        _fn = getattr(_mod, "solid_update", None)
+        if callable(_fn):
+            res = _fn(mat, sig, deps, epsp=epsp, dt=dt, extra=extra, return_sound_speed=True)
+            if isinstance(res, tuple):
+                if len(res) == 3:
+                    sign, epsp_out, c = res
+                elif len(res) == 2:
+                    sign, epsp_out = res
+                    c = None
+                else:
+                    sign, epsp_out, c = res[0], epsp, None
+            else:
+                sign, epsp_out, c = res, epsp, None
+            if hasattr(sig, "__setitem__"):
+                try:
+                    sig[:] = sign
+                except Exception:
+                    pass
+            if epsp is not None and hasattr(epsp, "__setitem__"):
+                try:
+                    epsp[:] = epsp_out
+                except Exception:
+                    pass
+            return sig, epsp_out, c
     raise NotImplementedError(f"material LAW{mat.law} not ported for solids")
 
 
@@ -4127,6 +4268,21 @@ def sound_speed(mat, rho=None, extra=None, is_shell: bool = False):
         return mat.sound_speed_solid()
     if hasattr(mat, "sound_speed_shell"):
         return mat.sound_speed_shell()
+    _lnum = _resolve_law_num(mat)
+    if _lnum in _NEW_PORTED_LAWS:
+        _mod = _NEW_PORTED_LAWS[_lnum]
+        _fn = getattr(_mod, "sound_speed", None)
+        if callable(_fn):
+            try:
+                return _fn(mat, eps=None, extra=extra, is_shell=is_shell)
+            except TypeError:
+                try:
+                    return _fn(mat, extra=extra, is_shell=is_shell)
+                except TypeError:
+                    try:
+                        return _fn(mat, extra=extra)
+                    except TypeError:
+                        return _fn(mat)
     raise NotImplementedError(f"material LAW{law} does not implement sound_speed")
 
 
@@ -4444,6 +4600,29 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         return law121_shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
     if getattr(mat, "law", None) in _LAW114_KEYS or getattr(mat, "law_name", None) in _LAW114_KEYS:
         raise NotImplementedError("LAW114 (/MAT/SPR_SEATBELT) is for spring elements only.")
+    _lnum = _resolve_law_num(mat)
+    if _lnum in _NEW_PORTED_LAWS:
+        _mod = _NEW_PORTED_LAWS[_lnum]
+        _fn = getattr(_mod, "shell_update", None)
+        if callable(_fn):
+            res = _fn(mat, sig, deps, epsp=epsp, dt=dt, extra=extra, return_sound_speed=False)
+            if isinstance(res, tuple):
+                s_out = res[0]
+                ep_out = res[1] if len(res) > 1 else epsp
+            else:
+                s_out = res
+                ep_out = epsp
+            if hasattr(sig, "__setitem__"):
+                try:
+                    sig[:] = s_out
+                except Exception:
+                    pass
+            if epsp is not None and hasattr(epsp, "__setitem__"):
+                try:
+                    epsp[:] = ep_out
+                except Exception:
+                    pass
+            return s_out, ep_out
     raise NotImplementedError(f"material LAW{mat.law} not ported for shells")
 
 
@@ -4682,6 +4861,21 @@ def solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
         if c.ndim == 2 and n > 1:
             return np.broadcast_to(c, (n, 6, 6)).copy()
         return c
+    _lnum = _resolve_law_num(mat)
+    if _lnum in _NEW_PORTED_LAWS:
+        _mod = _NEW_PORTED_LAWS[_lnum]
+        _fn = getattr(_mod, "solid_tangent", None) or getattr(_mod, "consistent_solid_tangent", None)
+        if callable(_fn):
+            try:
+                res = _fn(mat, sig=sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
+            except TypeError:
+                try:
+                    res = _fn(mat, sig=sig, epsp=epsp, extra=extra)
+                except TypeError:
+                    res = _fn(mat)
+            if hasattr(res, "ndim") and res.ndim == 2 and n > 1:
+                return np.broadcast_to(res, (n, 6, 6)).copy()
+            return res
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
         f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW34, LAW35, LAW36, LAW38, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
@@ -4928,6 +5122,18 @@ def shell_membrane_tangent(mat):
             [nu * c, c, 0.0],
             [0.0, 0.0, g],
         ])
+    _lnum = _resolve_law_num(mat)
+    if _lnum in _NEW_PORTED_LAWS:
+        _mod = _NEW_PORTED_LAWS[_lnum]
+        _fn = getattr(_mod, "shell_tangent", None) or getattr(_mod, "consistent_shell_tangent", None) or getattr(_mod, "shell_membrane_tangent", None)
+        if callable(_fn):
+            try:
+                res = _fn(mat)
+            except TypeError:
+                res = _fn(mat, sig=None, extra=None)
+            if hasattr(res, "ndim") and res.ndim == 3:
+                return res[0]
+            return res
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic, "
         f"LAW3 plas_bost, LAW19 fabric, LAW34 Boltzmann, LAW32 Hill and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")
@@ -5107,6 +5313,21 @@ def shell_layer_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
         if c.ndim == 2 and n > 1:
             return np.broadcast_to(c, (n, 3, 3)).copy()
         return c
+    _lnum = _resolve_law_num(mat)
+    if _lnum in _NEW_PORTED_LAWS:
+        _mod = _NEW_PORTED_LAWS[_lnum]
+        _fn = getattr(_mod, "shell_tangent", None) or getattr(_mod, "consistent_shell_tangent", None) or getattr(_mod, "shell_membrane_tangent", None)
+        if callable(_fn):
+            try:
+                res = _fn(mat, sig=sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
+            except TypeError:
+                try:
+                    res = _fn(mat, sig=sig, extra=extra)
+                except TypeError:
+                    res = _fn(mat)
+            if hasattr(res, "ndim") and res.ndim == 2 and n > 1:
+                return np.broadcast_to(res, (n, 3, 3)).copy()
+            return res
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 "
         f"elastic, LAW2, LAW3, LAW36 and LAW44 elastoplastic, LAW27 brittle cracking, "

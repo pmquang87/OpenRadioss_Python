@@ -242,7 +242,7 @@ def solid_update(
         qh = np.full(nel, p.hl) * c_e
     else:
         sig_base = p.a + p.b * (ep ** p.n)
-        qh = np.where(ep > 0.0, p.b * p.n * (ep ** (p.n - 1.0)), 0.0) * c_e
+        qh = np.where(ep > 0.0, p.b * p.n * (np.maximum(ep, 1.0e-20) ** (p.n - 1.0)), 0.0) * c_e
 
     sig_y = np.minimum(p.sigm, sig_base) * c_e
 
@@ -316,7 +316,7 @@ def shell_update(
         qh = np.full(nel, p.hl) * c_e
     else:
         sig_base = p.a + p.b * (ep ** p.n)
-        qh = np.where(ep > 0.0, p.b * p.n * (ep ** (p.n - 1.0)), 0.0) * c_e
+        qh = np.where(ep > 0.0, p.b * p.n * (np.maximum(ep, 1.0e-20) ** (p.n - 1.0)), 0.0) * c_e
 
     sig_y = np.minimum(p.sigm, sig_base) * c_e
 
@@ -401,15 +401,3 @@ def shell_tangent(
 
 
 consistent_shell_tangent = shell_tangent
-
-
-def _register() -> None:
-    try:
-        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
-        for k in (23, "23", "LAW23", "USER_MAT", "MAT_LAW23"):
-            MAT_PHYSICS_REGISTRY[k] = build_law23
-    except Exception:
-        pass
-
-
-_register()
