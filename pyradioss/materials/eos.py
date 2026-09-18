@@ -131,12 +131,136 @@ def _coefficients_tillotson(eos, mu: np.ndarray, e: np.ndarray | float | None = 
     return A, B
 
 
+def _coefficients_jwl(eos, mu: np.ndarray):
+    """A(mu), B(mu) for JWL EOS (common_source/eos/jwl.F)."""
+    p = eos.params
+    a = p.get("a", 0.0)
+    b = p.get("b", 0.0)
+    r1 = p.get("r1", 0.0)
+    r2 = p.get("r2", 0.0)
+    omega = p.get("omega", 0.0)
+    psh = p.get("psh", 0.0)
+
+    eta = np.maximum(1.0 + mu, 1e-12)
+    df = 1.0 / eta
+    r1df = r1 * df
+    r2df = r2 * df
+    er1df = np.exp(-r1df)
+    er2df = np.exp(-r2df)
+
+    term1 = a * (1.0 - omega / np.maximum(r1df, 1e-12)) * er1df
+    term2 = b * (1.0 - omega / np.maximum(r2df, 1e-12)) * er2df
+    A = term1 + term2 - psh
+    B = omega * eta
+    return A, B
+
+
+def _coefficients_murnaghan(eos, mu: np.ndarray):
+    """A(mu), B(mu) for Murnaghan EOS (common_source/eos/murnaghan.F)."""
+    p = eos.params
+    k0 = p.get("k0", 0.0)
+    k1 = p.get("k1", 1.0)
+    p0 = p.get("p0", 0.0)
+    psh = p.get("psh", 0.0)
+
+    eta = np.maximum(1.0 + mu, 1e-12)
+    k1_safe = k1 if abs(k1) > 1e-12 else 1.0
+    A = (k0 / k1_safe) * (np.power(eta, k1) - 1.0) + p0 - psh
+    B = np.zeros_like(A)
+    return A, B
+
+
+def _coefficients_noble_abel(eos, mu: np.ndarray):
+    """A(mu), B(mu) for Noble-Abel EOS (common_source/eos/noble_abel.F)."""
+    p = eos.params
+    b = p.get("b", 0.0)
+    gamma = p.get("gamma", 1.4)
+    psh = p.get("psh", 0.0)
+    rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
+
+    eta = 1.0 + mu
+    denom = 1.0 - b * rho0 * eta
+    denom_safe = np.where(np.abs(denom) < 1e-12, 1e-12, denom)
+
+    A = np.full_like(mu, -psh, dtype=float)
+    B = (gamma - 1.0) * eta / denom_safe
+    return A, B
+
+
+def _coefficients_nasg(eos, mu: np.ndarray):
+    """A(mu), B(mu) for NASG EOS (common_source/eos/nasg.F)."""
+    p = eos.params
+    b = p.get("b", 0.0)
+    gamma = p.get("gamma", 1.4)
+    p_star = p.get("p_star", 0.0)
+    q = p.get("q", 0.0)
+    psh = p.get("psh", 0.0)
+    rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
+
+    eta = 1.0 + mu
+    denom = 1.0 - b * rho0 * eta
+    denom_safe = np.where(np.abs(denom) < 1e-12, 1e-12, denom)
+
+    B = (gamma - 1.0) * eta / denom_safe
+    A = -B * (rho0 * q) - gamma * p_star - psh
+    return A, B
+
+
+def _coefficients_puff(eos, mu: np.ndarray, e: np.ndarray | float | None = None):
+    """A(mu), B(mu, e) for PUFF EOS (common_source/eos/puff.F)."""
+    p = eos.params
+    c1 = p.get("c1", 0.0)
+    c2 = p.get("c2", 0.0)
+    c3 = p.get("c3", 0.0)
+    t1 = p.get("t1", 0.0)
+    t2 = p.get("t2", 0.0)
+    esubl = p.get("es", p.get("esubl", 0.0))
+    gamma0 = p.get("gamma0", p.get("g0", 0.0))
+    h = p.get("h", p.get("hh", 0.0))
+    psh = p.get("psh", 0.0)
+
+    if e is None:
+        e = p.get("e0", 0.0)
+    e_arr = np.asarray(e, dtype=float)
+
+    eta = 1.0 + mu
+    xx = np.where(np.abs(eta) > 1e-12, mu / eta, 0.0)
+    gx = 1.0 - 0.5 * gamma0 * xx
+
+    aa_comp = ((c1 + c3 * (mu ** 2)) * mu + c2 * (mu ** 2)) * gx
+    aa_cold = ((t1 + t2 * mu) * mu) * gx
+
+    ee = np.sqrt(np.maximum(eta, 1e-12))
+    bb_hot = (h + (gamma0 - h) * ee) * eta
+    cc = np.where(np.abs(gamma0 * esubl) > 1e-12, c1 / (gamma0 * esubl), 0.0)
+    expa = np.exp(cc * xx)
+    aa_hot = bb_hot * esubl * (expa - 1.0)
+
+    is_comp = (mu >= 0.0)
+    is_cold = (mu < 0.0) & (e_arr < esubl)
+
+    A_unscaled = np.where(is_comp, aa_comp, np.where(is_cold, aa_cold, aa_hot))
+    A = A_unscaled - psh
+    B = np.where(is_comp | is_cold, gamma0, bb_hot)
+    return A, B
+
+
 def coefficients(eos, mu: np.ndarray, e: np.ndarray | float | None = None):
     """A(mu), B(mu) of p = A + B E (see module docstring)."""
     if eos.kind == "GRUNEISEN":
         return _coefficients_gruneisen(eos, mu)
     if eos.kind == "TILLOTSON":
         return _coefficients_tillotson(eos, mu, e)
+    if eos.kind == "JWL":
+        return _coefficients_jwl(eos, mu)
+    if eos.kind == "MURNAGHAN":
+        return _coefficients_murnaghan(eos, mu)
+    if eos.kind == "NOBLE-ABEL":
+        return _coefficients_noble_abel(eos, mu)
+    if eos.kind == "NASG":
+        return _coefficients_nasg(eos, mu)
+    if eos.kind == "PUFF":
+        return _coefficients_puff(eos, mu, e)
     if eos.kind == "STIFF-GAS":
         p = eos.params
         gamma = p["gamma"]
@@ -273,6 +397,160 @@ def update(eos, mu: np.ndarray, dv: np.ndarray, e_old: np.ndarray,
         c2 = dpdm / rho0
         return p_new, e_new, np.maximum(c2, 0.0)
 
+    if eos.kind == "JWL":
+        p = eos.params
+        a = p.get("a", 0.0)
+        b = p.get("b", 0.0)
+        r1 = p.get("r1", 0.0)
+        r2 = p.get("r2", 0.0)
+        omega = p.get("omega", 0.0)
+        psh = p.get("psh", 0.0)
+        pmin = p.get("pmin", -psh)
+        rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
+
+        A, B = _coefficients_jwl(eos, mu)
+        denom = 1.0 + 0.5 * B * dv
+        e_new = (e_old + de_other - 0.5 * dv * (p_old + A)) / np.maximum(denom, 1e-6)
+        p_raw = A + B * e_new
+        p_new = np.maximum(p_raw, pmin)
+
+        eta = np.maximum(1.0 + mu, 1e-12)
+        df = 1.0 / eta
+        r1df = r1 * df
+        r2df = r2 * df
+        er1df = np.exp(-r1df)
+        er2df = np.exp(-r2df)
+
+        dpde = omega * eta
+        dpdmu = (-a * omega * er1df / np.maximum(r1, 1e-12)
+                 + a * (1.0 - omega / np.maximum(r1df, 1e-12)) * (r1df ** 2) * er1df
+                 - b * omega * er2df / np.maximum(r2, 1e-12)
+                 + b * (1.0 - omega / np.maximum(r2df, 1e-12)) * (r2df ** 2) * er2df
+                 + omega * e_new)
+        dpdm = dpdmu + (p_new + psh) * (df ** 2) * dpde
+        c2 = dpdm / rho0
+        return p_new, e_new, np.maximum(c2, 0.0)
+
+    if eos.kind == "MURNAGHAN":
+        p = eos.params
+        k0 = p.get("k0", 0.0)
+        k1 = p.get("k1", 1.0)
+        p0 = p.get("p0", 0.0)
+        psh = p.get("psh", 0.0)
+        pmin = p.get("pmin", -1e30)
+        rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
+
+        A, B = _coefficients_murnaghan(eos, mu)
+        p_tot = np.maximum(A + psh, pmin)
+        p_new = p_tot - psh
+        e_new = e_old + de_other - 0.5 * dv * (p_old + p_new + 2.0 * psh)
+
+        eta = np.maximum(1.0 + mu, 1e-12)
+        dpdm = k0 * np.power(eta, k1 - 1.0)
+        c2 = dpdm / rho0
+        return p_new, e_new, np.maximum(c2, 0.0)
+
+    if eos.kind == "NOBLE-ABEL":
+        p = eos.params
+        b = p.get("b", 0.0)
+        gamma = p.get("gamma", 1.4)
+        psh = p.get("psh", 0.0)
+        rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
+
+        A, B = _coefficients_noble_abel(eos, mu)
+        denom = 1.0 + 0.5 * B * dv
+        e_new = (e_old + de_other - 0.5 * dv * (p_old + A)) / np.maximum(denom, 1e-6)
+        e_new = np.maximum(e_new, 0.0)
+        p_new = A + B * e_new
+
+        eta = 1.0 + mu
+        df = 1.0 / np.maximum(eta, 1e-12)
+        denom_cov = 1.0 - b * rho0 * eta
+        denom_safe = np.where(np.abs(denom_cov) < 1e-12, 1e-12, denom_cov)
+        pp = p_new + psh
+
+        dpde = (gamma - 1.0) * eta / denom_safe
+        dpdm = (gamma - 1.0) * e_new / denom_safe + (pp / denom_safe) * (b * rho0) + pp * (df ** 2) * dpde
+        c2 = dpdm / rho0
+        return p_new, e_new, np.maximum(c2, 0.0)
+
+    if eos.kind == "NASG":
+        p = eos.params
+        b = p.get("b", 0.0)
+        gamma = p.get("gamma", 1.4)
+        p_star = p.get("p_star", 0.0)
+        q = p.get("q", 0.0)
+        psh = p.get("psh", 0.0)
+        pmin = p.get("pmin", -1e30)
+        rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
+
+        A, B = _coefficients_nasg(eos, mu)
+        denom = 1.0 + 0.5 * B * dv
+        e_new = (e_old + de_other - 0.5 * dv * (p_old + A + 2.0 * psh)) / np.maximum(denom, 1e-6)
+        p_raw = A + B * e_new
+        p_lim = np.maximum(p_raw + psh, np.maximum(pmin, -gamma * p_star))
+        p_new = p_lim - psh
+
+        eta = 1.0 + mu
+        denom_cov = 1.0 - b * rho0 * eta
+        denom_safe = np.where(np.abs(denom_cov) < 1e-12, 1e-12, denom_cov)
+        num = e_new - rho0 * q
+
+        dpde = (gamma - 1.0) * eta / denom_safe
+        dpdm = (gamma - 1.0) * num / (denom_safe ** 2) + dpde * (p_new + psh) / (eta ** 2)
+        c2 = dpdm / rho0
+        return p_new, e_new, np.maximum(c2, 0.0)
+
+    if eos.kind == "PUFF":
+        p = eos.params
+        c1 = p.get("c1", 0.0)
+        c2 = p.get("c2", 0.0)
+        c3 = p.get("c3", 0.0)
+        t1 = p.get("t1", 0.0)
+        t2 = p.get("t2", 0.0)
+        esubl = p.get("es", p.get("esubl", 0.0))
+        gamma0 = p.get("gamma0", p.get("g0", 0.0))
+        h = p.get("h", p.get("hh", 0.0))
+        psh = p.get("psh", 0.0)
+        pmin = p.get("pmin", -1e30)
+        rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
+
+        # Predictor step with e_old
+        A0, B0 = _coefficients_puff(eos, mu, e_old)
+        denom0 = 1.0 + 0.5 * B0 * dv
+        e_pred = (e_old + de_other - 0.5 * dv * (p_old + A0)) / np.maximum(denom0, 1e-6)
+
+        # Corrector step with e_pred
+        A1, B1 = _coefficients_puff(eos, mu, e_pred)
+        denom1 = 1.0 + 0.5 * B1 * dv
+        e_new = (e_old + de_other - 0.5 * dv * (p_old + A1)) / np.maximum(denom1, 1e-6)
+        p_raw = A1 + B1 * e_new
+        p_tot = np.maximum(p_raw + psh, pmin)
+        p_new = p_tot - psh
+
+        eta = 1.0 + mu
+        df = 1.0 / np.maximum(eta, 1e-12)
+        xx = np.where(np.abs(eta) > 1e-12, mu / eta, 0.0)
+        gx = 1.0 - 0.5 * gamma0 * xx
+        is_comp = (mu >= 0.0)
+        is_cold = (mu < 0.0) & (e_new < esubl)
+
+        aa_raw_comp = (c1 + c3 * (mu ** 2)) * mu + c2 * (mu ** 2)
+        aa_raw_cold = (t1 + t2 * mu) * mu
+
+        ee = np.sqrt(np.maximum(eta, 1e-12))
+        bb_hot = (h + (gamma0 - h) * ee) * eta
+        cc = np.where(np.abs(gamma0 * esubl) > 1e-12, c1 / (gamma0 * esubl), 0.0)
+        expa = np.exp(cc * xx)
+
+        dpdm_comp = (c1 + 2.0 * c2 * mu + 3.0 * c3 * (mu ** 2)) * gx + gamma0 * (df ** 2) * (p_tot - 0.5 * aa_raw_comp)
+        dpdm_cold = (t1 + 2.0 * t2 * mu) * gx + gamma0 * (df ** 2) * (p_tot - 0.5 * aa_raw_cold)
+        dpdm_hot = bb_hot * (df ** 2) * (p_tot + esubl * expa * cc) + (e_new + esubl * (expa - 1.0)) * (h + 1.5 * ee * (gamma0 - h))
+
+        dpdm = np.where(is_comp, dpdm_comp, np.where(is_cold, dpdm_cold, dpdm_hot))
+        c2 = dpdm / rho0
+        return p_new, e_new, np.maximum(c2, 0.0)
+
     A, B = coefficients(eos, mu)
     denom = 1.0 + 0.5 * B * dv
     # denom <= 0 would need a catastrophic single-cycle expansion of a
@@ -321,6 +599,40 @@ def pressure(eos, mu: np.ndarray | float, e: np.ndarray | float) -> np.ndarray |
         psh = eos.params.get("psh", 0.0)
         pmin = eos.params.get("pmin", -1e30)
         p_val = np.maximum(p_val, pmin) - psh
+        return float(p_val) if is_scalar else p_val
+
+    if eos.kind == "JWL":
+        A, B = _coefficients_jwl(eos, mu_arr)
+        psh = eos.params.get("psh", 0.0)
+        p_val = np.maximum(A + B * e_arr, -psh)
+        return float(p_val) if is_scalar else p_val
+
+    if eos.kind == "MURNAGHAN":
+        A, B = _coefficients_murnaghan(eos, mu_arr)
+        psh = eos.params.get("psh", 0.0)
+        pmin = eos.params.get("pmin", -1e30)
+        p_val = np.maximum(A + psh, pmin) - psh
+        return float(p_val) if is_scalar else p_val
+
+    if eos.kind == "NOBLE-ABEL":
+        A, B = _coefficients_noble_abel(eos, mu_arr)
+        p_val = A + B * e_arr
+        return float(p_val) if is_scalar else p_val
+
+    if eos.kind == "NASG":
+        A, B = _coefficients_nasg(eos, mu_arr)
+        psh = eos.params.get("psh", 0.0)
+        pmin = eos.params.get("pmin", -1e30)
+        gamma = eos.params.get("gamma", 1.4)
+        p_star = eos.params.get("p_star", 0.0)
+        p_val = np.maximum(A + B * e_arr + psh, np.maximum(pmin, -gamma * p_star)) - psh
+        return float(p_val) if is_scalar else p_val
+
+    if eos.kind == "PUFF":
+        A, B = _coefficients_puff(eos, mu_arr, e_arr)
+        psh = eos.params.get("psh", 0.0)
+        pmin = eos.params.get("pmin", -1e30)
+        p_val = np.maximum(A + B * e_arr + psh, pmin) - psh
         return float(p_val) if is_scalar else p_val
 
     A, B = coefficients(eos, mu_arr)
@@ -373,6 +685,44 @@ def initial_state(eos):
         omega = 1.0 + e0 / er if er > 0.0 else 1.0
         psh = p.get("psh", 0.0)
         p0 = (a + b / omega) * e0 - psh
+        return e0, p0
+
+    if eos.kind == "JWL":
+        p = eos.params
+        e0 = p.get("e0", 0.0)
+        p0 = pressure(eos, 0.0, e0)
+        return e0, p0
+
+    if eos.kind == "MURNAGHAN":
+        p = eos.params
+        e0 = 0.0
+        p0 = p.get("p0", 0.0) - p.get("psh", 0.0)
+        return e0, p0
+
+    if eos.kind == "NOBLE-ABEL":
+        p = eos.params
+        e0 = p.get("e0", 0.0)
+        p0 = pressure(eos, 0.0, e0)
+        return e0, p0
+
+    if eos.kind == "NASG":
+        p = eos.params
+        b = p.get("b", 0.0)
+        gamma = p.get("gamma", 1.4)
+        p_star = p.get("p_star", 0.0)
+        q = p.get("q", 0.0)
+        p0_param = p.get("p0", 0.0)
+        rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
+        e0 = p.get("e0", None)
+        if e0 is None or e0 == 0.0:
+            e0 = (p0_param + gamma * p_star) * (1.0 - rho0 * b) / (gamma - 1.0) + rho0 * q
+        p0 = p0_param - p.get("psh", 0.0)
+        return e0, p0
+
+    if eos.kind == "PUFF":
+        p = eos.params
+        e0 = p.get("e0", 0.0)
+        p0 = pressure(eos, 0.0, e0)
         return e0, p0
 
     e0 = eos.params.get("e0", 0.0)

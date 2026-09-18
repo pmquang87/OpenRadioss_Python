@@ -4714,12 +4714,15 @@ def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "COMPACTION2": "COMPACTION",
         "IDEAL_GAS_VT": "IDEAL-GAS-VT",
         "IDEAL-GAS_VT": "IDEAL-GAS-VT",
+        "NASG": "NASG",
+        "NOBLE-ABEL-STIFFENED-GAS": "NASG",
+        "NOBLE_ABEL_STIFFENED_GAS": "NASG",
     }
     kind = aliases.get(kind, kind)
     supported_eos = (
         "POLYNOMIAL", "IDEAL-GAS", "LINEAR", "STIFF-GAS",
         "GRUNEISEN", "PUFF", "TILLOTSON", "MURNAGHAN",
-        "OSBORNE", "LSZK", "NOBLE-ABEL", "JWL", "COMPACT",
+        "OSBORNE", "LSZK", "NOBLE-ABEL", "JWL", "NASG", "COMPACT",
         "COMPACTION", "SESAME", "IGNITION_GROWTH",
         "POWDER-BURN", "EXPONENTIAL", "IDEAL-GAS-VT",
     )
@@ -4970,6 +4973,35 @@ def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             psh = float(t2[1]) if len(t2) > 1 else 0.0
             rho0_card = float(t2[2]) if len(t2) > 2 else 0.0
         params = {"a": a, "b": b, "r1": r1, "r2": r2, "omega": omega, "e0": e0, "psh": psh, "rho0_card": rho0_card}
+    elif kind == "NASG":
+        if block.fixed:
+            c1 = cards[0].cut("EOS_NASG_1")
+            b_cov, gamma, p_star, q = [_fval(x) for x in c1[:4]]
+            c2 = cards[1].cut("EOS_NASG_2") if len(cards) > 1 else []
+            psh = _fval(c2[0]) if len(c2) > 0 else 0.0
+            p0 = _fval(c2[1]) if len(c2) > 1 else 0.0
+            cv = _fval(c2[2]) if len(c2) > 2 else 0.0
+            rho0_card = _fval(c2[3]) if len(c2) > 3 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            b_cov = float(t1[0]) if len(t1) > 0 else 0.0
+            gamma = float(t1[1]) if len(t1) > 1 else 1.4
+            p_star = float(t1[2]) if len(t1) > 2 else 0.0
+            q = float(t1[3]) if len(t1) > 3 else 0.0
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            psh = float(t2[0]) if len(t2) > 0 else 0.0
+            p0 = float(t2[1]) if len(t2) > 1 else 0.0
+            cv = float(t2[2]) if len(t2) > 2 else 0.0
+            rho0_card = float(t2[3]) if len(t2) > 3 else 0.0
+
+        if gamma <= 1.0:
+            log.error(f"/EOS/NASG/{mat_id}: gamma must be > 1.0", block.source)
+            return
+
+        rho0 = rho0_card if rho0_card > 0.0 else 1.0
+        e0 = (p0 + gamma * p_star) * (1.0 - rho0 * b_cov) / (gamma - 1.0) + rho0 * q
+        params = {"b": b_cov, "gamma": gamma, "p_star": p_star, "q": q,
+                  "psh": psh, "p0": p0, "cv": cv, "rho0_card": rho0_card, "e0": e0}
     elif kind == "POWDER-BURN":
         if block.fixed:
             c1 = cards[0].cut("EOS_POWDER_1") if len(cards) > 0 else []

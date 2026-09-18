@@ -171,7 +171,7 @@ class DeckWriterError(ValueError):
 class StarterDeck:
     """Emitter for a ``*_0000.rad`` starter deck in fixed 2022 format."""
 
-    def __init__(self, runname: str, header_comment: str = ""):
+    def __init__(self, runname: str = "MODEL", header_comment: str = ""):
         self.runname = runname
         self.lines: List[str] = ["#RADIOSS STARTER"]
         if header_comment:
@@ -206,6 +206,10 @@ class StarterDeck:
                      else "PORT-DIALECT block")
         self.lines.append(header if header.startswith("/") else "/" + header)
         self.lines.extend(str(c).rstrip("\r\n") for c in cards)
+
+    def card_block(self, b: KeywordBlock, groups: Optional[Dict] = None) -> None:
+        """Convert and emit a parsed KeywordBlock."""
+        _convert_block(self, b, groups or {})
 
     def render(self) -> str:
         if not self._ended:
@@ -10420,6 +10424,32 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
+    def eos_generic(self, kind: str, eid: int, title: str, data_cards) -> None:
+        """``/EOS/<kind>``."""
+        self._header("EOS", kind, eid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def eos_jwl(self, eid: int, title: str, data_cards) -> None:
+        """``/EOS/JWL``."""
+        self.eos_generic("JWL", eid, title, data_cards)
+
+    def eos_murnaghan(self, eid: int, title: str, data_cards) -> None:
+        """``/EOS/MURNAGHAN``."""
+        self.eos_generic("MURNAGHAN", eid, title, data_cards)
+
+    def eos_noble_abel(self, eid: int, title: str, data_cards) -> None:
+        """``/EOS/NOBLE-ABEL``."""
+        self.eos_generic("NOBLE-ABEL", eid, title, data_cards)
+
+    def eos_nasg(self, eid: int, title: str, data_cards) -> None:
+        """``/EOS/NASG``."""
+        self.eos_generic("NASG", eid, title, data_cards)
+
+    def eos_puff(self, eid: int, title: str, data_cards) -> None:
+        """``/EOS/PUFF``."""
+        self.eos_generic("PUFF", eid, title, data_cards)
+
     def euler_mat(self, mid: int, title: str, data_cards) -> None:
         """``/EULER/MAT``."""
         self._header("EULER", "MAT", mid)
@@ -12308,6 +12338,18 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
             d.eos_stiff_gas(b.user_id, title, cards)
         elif key == "/EOS/GRUNEISEN":
             d.eos_gruneisen(b.user_id, title, cards)
+        elif key == "/EOS/JWL":
+            d.eos_jwl(b.user_id, title, cards)
+        elif key == "/EOS/MURNAGHAN":
+            d.eos_murnaghan(b.user_id, title, cards)
+        elif key == "/EOS/NOBLE-ABEL":
+            d.eos_noble_abel(b.user_id, title, cards)
+        elif key == "/EOS/NASG":
+            d.eos_nasg(b.user_id, title, cards)
+        elif key == "/EOS/PUFF":
+            d.eos_puff(b.user_id, title, cards)
+        elif key in ("/EOS/TILLOTSON", "/EOS/OSBORNE", "/EOS/LSZK", "/EOS/COMPACTION", "/EOS/POWDER-BURN"):
+            d.eos_generic(kind, b.user_id, title, cards)
         else:
             d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                         note=f"unknown eos {kind}")
@@ -12730,3 +12772,7 @@ def write_engine_from_port_lines(lines: Sequence[str], path: str,
         e.lines.append(src[i].rstrip())
         i += 1
     e.write(path)
+
+
+DeckWriter = StarterDeck
+

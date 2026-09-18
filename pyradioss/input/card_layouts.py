@@ -1829,6 +1829,23 @@ LAYOUTS: Dict[str, List[int]] = {
     "EOS_POLY_2": [20] * 5,
     # mat_EOS.cfg LINEAR: CARD("%20lg"*4, LAW5_P0, MAT_BULK, LAW5_PSH, Refer_Rho)
     "EOS_LINEAR": [20] * 4,
+    "EOS_GRUN_1": [20] * 4,
+    "EOS_GRUN_2": [20] * 4,
+    "EOS_PUFF_1": [20] * 4,
+    "EOS_PUFF_2": [20] * 3,
+    "EOS_PUFF_3": [20] * 3,
+    "EOS_TILL_1": [20] * 4,
+    "EOS_TILL_2": [20] * 5,
+    "EOS_TILL_3": [20] * 2,
+    "EOS_MURN_1": [20] * 5,
+    "EOS_OSBO_1": [20] * 5,
+    "EOS_OSBO_2": [20] * 4,
+    "EOS_LSZK_1": [20] * 5,
+    "EOS_NOBLE_1": [20] * 5,
+    "EOS_JWL_1": [20] * 5,
+    "EOS_JWL_2": [20] * 3,
+    "EOS_NASG_1": [20] * 4,
+    "EOS_NASG_2": [20] * 4,
 
     # ---- skews / frames (M39) -------------------------------------------------
     # SYSTEM/skew_fix.cfg (radioss120) + SYSTEM/frame_fix.cfg (radioss51):
