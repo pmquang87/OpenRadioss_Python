@@ -206,7 +206,7 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             ec.dt_ams_igrp = int(block.parts[2])
                         except ValueError:
                             pass
-                elif sub in ("BRICK", "BRI", "SHELL", "SH3N", "SHE", "QUAD", "QUA", "TETRA10", "TETRA4", "INTER", "SPRING", "BEAM", "TRUSS", "SPH"):
+                elif sub in ("BRICK", "BRI", "SOLID", "SOLI", "HEXA", "PENTA", "PENTA6", "WEDGE", "TSHELL", "BRIC20", "HEXA20", "SHELL", "SHEL", "SHE", "COQUE", "SH3N", "SH_3N", "SHEL16", "QUAD", "QUA", "TETRA", "TETRA10", "TETRA4", "INTER", "SPRING", "BEAM", "TRUSS", "SPH", "ELEM", "ALL"):
                     action = sub2 if sub2 else "STOP"
                     scale_elem, dt_min_elem = 0.9, 0.0
                     if block.cards:
@@ -215,12 +215,22 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             scale_elem = vals_el[0] if vals_el[0] > 0.0 else 0.9
                         if len(vals_el) > 1:
                             dt_min_elem = vals_el[1]
-                    ec.dt_controls[sub] = {
+                    ctrl = {
                         "action": action,
                         "flag": sub3,
                         "scale": scale_elem,
                         "dt_min": dt_min_elem,
                     }
+                    if len(block.cards) > 1 and (
+                        sub in ("BRICK", "BRI", "SOLID", "SOLI", "HEXA", "PENTA", "PENTA6", "WEDGE",
+                                "TSHELL", "BRIC20", "HEXA20", "TETRA", "TETRA10", "TETRA4", "ELEM", "ALL")
+                    ):
+                        c2 = block.cards[1].floats()
+                        ctrl["col_min"] = c2[0] if len(c2) > 0 else 0.0
+                        ctrl["defv_min"] = c2[1] if len(c2) > 1 else 0.0
+                        ctrl["asp_max"] = c2[2] if len(c2) > 2 else 0.0
+                        ctrl["defv_max"] = c2[3] if len(c2) > 3 else 0.0
+                    ec.dt_controls[sub] = ctrl
                 if sub in ("NODA", "", "CST"):
                     if block.cards:
                         vals = block.cards[0].floats()

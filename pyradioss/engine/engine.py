@@ -107,6 +107,8 @@ class EngineState:
         self.e_damp = 0.0      # /DAMP dissipation (M6)
         self.dt_prev = None    # previous cycle time step for leapfrog dt12
         self.stop_reason = ""
+        self.crit_elem_id = 0  # critical element user ID (NELTST)
+        self.crit_elem_type = ""  # critical element group name (ITYPTST)
 
     @property
     def e_ext(self) -> float:
@@ -129,27 +131,29 @@ def _deleted_count(model: Model) -> int:
 
 
 def _matches_elem_dt_control(name: str, key: str) -> bool:
-    """Check if element group name matches /DT/<elem> keyword specification (M580)."""
+    """Check if element group name matches /DT/<elem> keyword specification (M580, M605)."""
     k = key.upper()
     if k in ("ELEM", "ALL"):
         return True
-    if k in ("BRICK", "BRIC", "SOLID") and ("bric" in name or "hexa" in name or "heph" in name or "penta" in name or "tshell" in name):
+    if k in ("SOLID", "SOLI", "HEXA", "BRIC", "BRICK"):
+        return any(s in name for s in ("bric", "hexa", "heph", "penta", "tshell", "soli", "solid"))
+    if k in ("PENTA", "PENTA6", "WEDGE") and ("penta" in name or "wedge" in name):
         return True
-    if k in ("PENTA", "PENTA6", "WEDGE") and "penta" in name:
+    if k in ("SHELL", "SHEL", "COQUE"):
+        return ("shell" in name and "tshell" not in name) or "coque" in name
+    if k in ("SH3N", "SH_3N", "TRI", "TRIA") and ("sh3n" in name or "tri" in name):
         return True
-    if k in ("SHELL", "SHEL") and ("shel" in name or "sh3n" in name or "coque" in name):
-        return True
-    if k in ("SH3N", "TRI", "TRIA") and "sh3n" in name:
+    if k in ("TSHELL", "TSH", "SHEL16") and ("tshell" in name or "shel16" in name):
         return True
     if k in ("TETRA", "TETRA10", "TETRA4") and "tetra" in name:
         return True
-    if k in ("QUAD",) and "quad" in name:
+    if k in ("QUAD", "QUA") and "quad" in name:
         return True
     if k in ("BEAM",) and "beam" in name:
         return True
     if k in ("TRUSS",) and "truss" in name:
         return True
-    if k in ("SPRING",) and "spring" in name:
+    if k in ("SPRING", "SPRIN") and "spring" in name:
         return True
     return False
 
@@ -644,24 +648,60 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         mint[:] = 0.0
         dt_next = EP30
         claims = []
+        try:
+            from .element_erosion import check_solid_geometric_erosion
+        except ImportError:
+            def check_solid_geometric_erosion(group, x, ctrl):
+                return np.zeros(len(group.conn) if hasattr(group, "conn") else 0, dtype=bool)
+
         for name, group in model.element_groups():
             dt_e = KERNELS[name].forces(group, model.x, model.v, model.vr,
                                         dt, fint, mint)
-            # ---- M580: /DT/<elem>/DEL element time-step erosion (dtchk.F) --
+            # ---- M580/M605: /DT/<elem> element time-step & geometric controls (dtchk.F, sgeodel3.F) --
             if getattr(controls, "dt_controls", None):
+                off = group.state.get("off") if hasattr(group, "state") else None
+                if off is None:
+                    off = np.ones(len(dt_e), dtype=np.float64)
+                    if hasattr(group, "state"):
+                        group.state["off"] = off
                 for ctrl_key, ctrl in controls.dt_controls.items():
-                    if _matches_elem_dt_control(name, ctrl_key) and ctrl.get("action") == "DEL":
-                        dt_min = ctrl.get("dt_min", 0.0)
-                        if dt_min > 0.0 and hasattr(group, "state") and "off" in group.state:
-                            off = group.state["off"]
-                            del_mask = (off > 0.0) & (dt_e < dt_min)
+                    if _matches_elem_dt_control(name, ctrl_key):
+                        action = ctrl.get("action", "")
+                        if action == "DEL":
+                            dt_min = ctrl.get("dt_min", 0.0)
+                            del_mask_dt = (dt_e < dt_min) if dt_min > 0.0 else np.zeros(len(dt_e), dtype=bool)
+                            del_mask_geom = check_solid_geometric_erosion(group, model.x, ctrl)
+                            del_mask = (off > 0.0) & (del_mask_dt | del_mask_geom)
                             if np.any(del_mask):
                                 off[del_mask] = 0.0
                                 dt_e = dt_e.copy()
                                 dt_e[del_mask] = EP30
                                 state.ndel = getattr(state, "ndel", 0) + int(np.sum(del_mask))
+                        elif action in ("STOP", ""):
+                            dt_min = ctrl.get("dt_min", 0.0)
+                            if dt_min > 0.0:
+                                stop_mask = (off > 0.0) & (dt_e < dt_min)
+                                if np.any(stop_mask):
+                                    idx = np.where(stop_mask)[0][0]
+                                    eid = group.ids[idx] if hasattr(group, "ids") else idx
+                                    state.stop_reason = f"/DT/{ctrl_key}/STOP: ELEMENT {eid} TIME STEP BELOW MINIMUM {dt_min:.3E}"
+                                    break
+                        if ctrl.get("scale", 0.9) != 0.9 and ctrl.get("scale", 0.9) > 0.0:
+                            scale_ratio = ctrl["scale"] / 0.9
+                            dt_e = dt_e * scale_ratio
             claims.append(dt_e)
-            dt_next = min(dt_next, float(dt_e.min()))
+            if len(dt_e) > 0:
+                dt_next_prev = dt_next
+                dt_min_val = float(dt_e.min())
+                dt_next = min(dt_next, dt_min_val)
+                if dt_min_val < dt_next_prev:
+                    min_idx = int(np.argmin(dt_e))
+                    state.crit_elem_id = group.ids[min_idx] if hasattr(group, "ids") else min_idx
+                    state.crit_elem_type = name
+            if state.stop_reason:
+                break
+        if state.stop_reason:
+            break
 
         # ---- 2. contact forces -------------------------------------------
         # (into their own array — see the fcont declaration and step 5b;

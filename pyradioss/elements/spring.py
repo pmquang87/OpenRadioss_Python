@@ -89,6 +89,8 @@ def init_group(group, model, log):
     write into the SAME per-(element,node) mass/inertia return."""
     st = group.state
     n = group.n
+    if "off" not in st:
+        st["off"] = np.ones(n, dtype=float)
     if n == 0 or len(group.conn) == 0:
         st.update(
             L0=np.empty(0),
@@ -222,8 +224,11 @@ def _forces_axial(group, x, v, dt, fint, idx):
         Ldot = np.einsum("nb,nb->n",
                          v[conn[:, 1]] - v[conn[:, 0]], a)
 
+    alive = st.get("off", np.ones(group.n, dtype=float))[idx] > 0.0
+
     F_old = st["force"][idx].copy()
     F = st["k"][idx] * (L - st["L0"][idx]) + st["cdamp"][idx] * Ldot
+    F = np.where(alive, F, 0.0)
     st["force"][idx] = F
 
     fvec = F[:, None] * a          # tension pulls the nodes together
@@ -234,7 +239,7 @@ def _forces_axial(group, x, v, dt, fint, idx):
     # elastic part of the work goes to internal energy; damping work too
     # (the original books spring damping into internal energy as well).
     if dt is not None and dt > 0.0:
-        st["eint"][idx] += 0.5 * (F_old + F) * Ldot * dt
+        st["eint"][idx] += np.where(alive, 0.5 * (F_old + F) * Ldot * dt, 0.0)
 
     mass = np.maximum(st["mass"][idx], EM20)
     k = np.maximum(st["k"][idx], 0.0)
@@ -247,7 +252,8 @@ def _forces_axial(group, x, v, dt, fint, idx):
     dt_crit = (2.0 / omega) * (np.sqrt(1.0 + xi ** 2) - xi)
     # OpenRadioss r1len3.F: when K=0 and C>0: dt = 0.5 * M / C
     dt_c = np.where(pure_c, 0.5 * mass / np.maximum(c_damp, EM20), EP30)
-    return np.where(pos_k, dt_crit, dt_c)
+    dt_elem = np.where(pos_k, dt_crit, dt_c)
+    return np.where(alive, dt_elem, EP30)
 
 
 def _forces_axial_type32(group, x, v, dt, fint, idx):
@@ -370,9 +376,12 @@ def _forces_axial_type32(group, x, v, dt, fint, idx):
             F[mask] = cur_F
             uvar3[mask] = cur_uvar3
 
+    alive = st.get("off", np.ones(group.n, dtype=float))[idx] > 0.0
+    F = np.where(alive, F, 0.0)
+
     F_old = st["force"][idx].copy()
     if dt is not None and dt > 0.0:
-        st["eint"][idx] += 0.5 * (F_old + F) * Ldot * dt
+        st["eint"][idx] += np.where(alive, 0.5 * (F_old + F) * Ldot * dt, 0.0)
     st["force"][idx] = F
     st["uvar1"][idx] = uvar1
     st["uvar2"][idx] = uvar2
@@ -388,13 +397,14 @@ def _forces_axial_type32(group, x, v, dt, fint, idx):
     pos_k = (st["k"][idx] > 0.0) & (st["mass"][idx] > 0.0)
     omega = 2.0 * np.sqrt(np.where(pos_k, k_dt / mass, 1.0))
     dt_crit = 2.0 / omega
-    return np.where(pos_k, dt_crit, EP30)
+    return np.where(alive, np.where(pos_k, dt_crit, EP30), EP30)
 
 
 def forces(group, x, v, vr, dt, fint, mint):
     if group.n == 0 or len(group.conn) == 0:
         return np.empty(0)
     st = group.state
+    alive = st.get("off", np.ones(group.n, dtype=float)) > 0.0
     idx6 = st.get("idx6")
     idx4 = st.get("idx4")
     idx32 = st.get("idx32")
@@ -409,7 +419,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         (idx46 is None or len(idx46) == 0) and
         (idx_kj is None or len(idx_kj) == 0)):
         # pure axial TYPE4 group
-        return _forces_axial(group, x, v, dt, fint, slice(None))
+        dtc = _forces_axial(group, x, v, dt, fint, slice(None))
+        if "force" in st:
+            st["force"] = np.where(alive, st["force"], 0.0)
+        return np.where(alive, dtc, EP30)
     dtc = np.full(group.n, EP30)
     if idx4 is not None and len(idx4):
         dtc[idx4] = _forces_axial(group, x, v, dt, fint, idx4)
@@ -423,7 +436,9 @@ def forces(group, x, v, vr, dt, fint, mint):
         dtc[idx44] = spring_advanced.forces_crushing_type44(group, x, v, dt, fint, idx44)
     if idx46 is not None and len(idx46):
         dtc[idx46] = spring_advanced.forces_muscle_type46(group, x, v, dt, fint, idx46)
-    return dtc
+    if "force" in st:
+        st["force"] = np.where(alive, st["force"], 0.0)
+    return np.where(alive, dtc, EP30)
 
 
 # ----------------------------------------------------------------------------
