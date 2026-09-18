@@ -10,11 +10,32 @@ from __future__ import annotations
 import numpy as np
 
 
-def compute_sdlenmax(xe: np.ndarray) -> np.ndarray:
-    """Compute maximum characteristic length for 8-node hexahedra.
+class SdLenMaxArray(np.ndarray):
+    """Result array for compute_sdlenmax with L_max, aspect_ratio, and collapse_ratio."""
+    aspect_ratio: float | np.ndarray
+    collapse_ratio: float | np.ndarray
+    l_max: float | np.ndarray
+    L_max: float | np.ndarray
+
+    def __new__(cls, input_array, aspect_ratio=None, collapse_ratio=None):
+        obj = np.asarray(input_array).view(cls)
+        obj.aspect_ratio = aspect_ratio
+        obj.collapse_ratio = collapse_ratio
+        obj.l_max = float(obj) if obj.ndim == 0 else obj
+        obj.L_max = obj.l_max
+        return obj
+
+
+def compute_sdlenmax(
+    xe: np.ndarray,
+    lc: np.ndarray | float | None = None,
+    vol: np.ndarray | float | None = None,
+) -> SdLenMaxArray:
+    """Compute maximum characteristic length for 8-node hexahedra (sdlenmax.F, sgeodel3.F).
 
     Upstream Fortran reference:
         ``engine/source/elements/solid/solide/sdlenmax.F``
+        ``engine/source/elements/solid/solide/sgeodel3.F``
 
     Vector R = (X1+X2+X5+X6) - (X3+X4+X7+X8)
     Vector S = (X5+X6+X7+X8) - (X1+X2+X3+X4)
@@ -22,14 +43,17 @@ def compute_sdlenmax(xe: np.ndarray) -> np.ndarray:
     where nodes are 0..7 (0-indexed).
     Norms: normR = sum(R^2), normS = sum(S^2), normT = sum(T^2).
     l_max_sq = max(normR, normS, normT)
-    return 0.25 * sqrt(l_max_sq)
+    L_max = 0.25 * sqrt(l_max_sq)
+    aspect_ratio = L_max / lc
+    collapse_ratio = lc / L_max
 
     Args:
         xe: Nodal coordinates of shape (N, 8, 3) or (8, 3).
+        lc: Optional characteristic length. If omitted, computed from volume and face area.
+        vol: Optional volume. If omitted, computed from nodal coordinates.
 
     Returns:
-        1D array of maximum characteristic lengths of shape (N,),
-        or scalar array if 2D input.
+        SdLenMaxArray with L_max (value), aspect_ratio, and collapse_ratio attributes.
     """
     xe = np.asarray(xe, dtype=float)
     is_2d = (xe.ndim == 2)
@@ -49,9 +73,40 @@ def compute_sdlenmax(xe: np.ndarray) -> np.ndarray:
 
     l_max_sq = np.maximum(np.maximum(normR, normS), normT)
     res = 0.25 * np.sqrt(l_max_sq)
+
+    if lc is None:
+        faces = np.array([
+            [0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4],
+            [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7],
+        ])
+        d1 = xe[:, faces[:, 2]] - xe[:, faces[:, 0]]
+        d2 = xe[:, faces[:, 3]] - xe[:, faces[:, 1]]
+        a = 0.5 * np.linalg.norm(np.cross(d1, d2), axis=-1)
+        a_max = np.maximum(a.max(axis=-1), 1e-20)
+        if vol is None:
+            dn_dxi_t = np.array([
+                [-0.125,  0.125,  0.125, -0.125, -0.125,  0.125,  0.125, -0.125],
+                [-0.125, -0.125,  0.125,  0.125, -0.125, -0.125,  0.125,  0.125],
+                [-0.125, -0.125, -0.125, -0.125,  0.125,  0.125,  0.125,  0.125],
+            ])
+            jac = dn_dxi_t @ xe
+            vol_arr = 8.0 * np.abs(np.linalg.det(jac))
+        else:
+            vol_arr = np.asarray(vol, dtype=float)
+            if vol_arr.ndim == 0:
+                vol_arr = np.full(len(xe), float(vol_arr))
+        lc_arr = vol_arr / a_max
+    else:
+        lc_arr = np.asarray(lc, dtype=float)
+        if lc_arr.ndim == 0:
+            lc_arr = np.full(len(xe), float(lc_arr))
+
+    asp = res / np.maximum(lc_arr, 1e-20)
+    col = lc_arr / np.maximum(res, 1e-20)
+
     if is_2d:
-        return np.asarray(res[0])
-    return res
+        return SdLenMaxArray(res[0], aspect_ratio=float(asp[0]), collapse_ratio=float(col[0]))
+    return SdLenMaxArray(res, aspect_ratio=asp, collapse_ratio=col)
 
 
 def check_solid_geometric_erosion(group, x: np.ndarray, dt_ctrl: dict) -> np.ndarray:

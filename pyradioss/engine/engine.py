@@ -78,6 +78,8 @@ from .rlink import build_rlinks
 from .kjoint import build_kjoints
 from .sections import SectionForces
 from .sensors import Sensors
+from .element_erosion import compute_sdlenmax, check_solid_geometric_erosion, SdLenMaxArray  # noqa: F401
+
 
 
 def run_name_from_input(path: str):

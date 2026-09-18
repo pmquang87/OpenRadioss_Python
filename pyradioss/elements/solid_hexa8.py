@@ -1407,3 +1407,17 @@ def static_internal_forces(group, x, u, ur, fint, mint):
 
     if fint is not None:
         scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+
+
+def compute_sdlenmax(xe, lc=None, vol=None):
+    """Compute maximum characteristic length for Hexa8 (sdlenmax.F)."""
+    from ..engine.element_erosion import compute_sdlenmax as _c
+    return _c(xe, lc=lc, vol=vol)
+
+
+def check_solid_geometric_erosion(group, x, dt_ctrl):
+    """Check geometric deletion criteria for solid elements (sgeodel3.F)."""
+    from ..engine.element_erosion import check_solid_geometric_erosion as _c
+    return _c(group, x, dt_ctrl)
+
+
