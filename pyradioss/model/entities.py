@@ -2530,6 +2530,35 @@ GeneralJoint = GJoint
 
 
 @dataclass
+class KJoint:
+    """/PROP/TYPE33, /PROP/TYPE45, /PROP/KJOINT, /PROP/KJOINT2 kinematic mechanism joint (M602)."""
+    id: int
+    node1: int
+    node2: int
+    prop_id: int = 0
+    joint_type: int | str = 1
+    title: str = ""
+    skew_id: int = 0
+    kn: float = 0.0
+    cr: float = 0.0
+    scale: float = 1.0
+    ktx: float = 0.0
+    kty: float = 0.0
+    ktz: float = 0.0
+    krx: float = 0.0
+    kry: float = 0.0
+    krz: float = 0.0
+    ctx: float = 0.0
+    cty: float = 0.0
+    ctz: float = 0.0
+    crx: float = 0.0
+    cry: float = 0.0
+    crz: float = 0.0
+    prop: Any = None
+
+
+
+@dataclass
 class MergeNode:
     """/MERGE/NODE (M102): Merge nodes in node group within tolerance.
 
@@ -7179,6 +7208,22 @@ class MaterialLaw169:
     def e(self, val: float) -> None:
         self.young = val
 
+    @property
+    def rho(self) -> float:
+        return self.rho0
+
+    @rho.setter
+    def rho(self, val: float) -> None:
+        self.rho0 = val
+
+    @property
+    def pr(self) -> float:
+        return self.nu
+
+    @pr.setter
+    def pr(self, val: float) -> None:
+        self.nu = val
+
 
 MatLaw169 = MaterialLaw169
 MatArupAdhesive = MaterialLaw169
@@ -9155,6 +9200,9 @@ class MatLaw190:
     fun_1: int = 0
     xscale_1: float = 1.0
     scale_1: float = 1.0
+    tcut: float = 1.0e20
+    fail: int = 0
+    table: Any = None
     title: str = ""
 
 

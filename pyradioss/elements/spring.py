@@ -129,12 +129,14 @@ def init_group(group, model, log):
     is44 = (kind == 44)
     is46 = (kind == 46)
     is_adv = is19 | is44 | is46
-    idx4 = np.where(~is6 & ~is32 & ~is_adv)[0]
+    is_kj = (kind == 33) | (kind == 45)
+    idx4 = np.where(~is6 & ~is32 & ~is_adv & ~is_kj)[0]
     idx6 = np.where(is6)[0]
     idx32 = np.where(is32)[0]
     idx19 = np.where(is19)[0]
     idx44 = np.where(is44)[0]
     idx46 = np.where(is46)[0]
+    idx_kj = np.where(is_kj)[0]
 
     if len(idx32):
         st["stif0"] = np.zeros(n)
@@ -190,7 +192,7 @@ def init_group(group, model, log):
     st.update(L0=L0, mass=mass, k=k, cdamp=cdamp,
               force=np.zeros(n), eint=np.zeros(n), ehour=np.zeros(n),
               idx4=idx4, idx6=idx6, idx32=idx32,
-              idx19=idx19, idx44=idx44, idx46=idx46, model=model)
+              idx19=idx19, idx44=idx44, idx46=idx46, idx_kj=idx_kj, model=model)
 
     massn = np.repeat(mass / 2.0, 2)       # per (elem, localnode)
     inertn = np.zeros(2 * n)
@@ -399,11 +401,13 @@ def forces(group, x, v, vr, dt, fint, mint):
     idx19 = st.get("idx19")
     idx44 = st.get("idx44")
     idx46 = st.get("idx46")
+    idx_kj = st.get("idx_kj")
     if ((idx6 is None or len(idx6) == 0) and
         (idx32 is None or len(idx32) == 0) and
         (idx19 is None or len(idx19) == 0) and
         (idx44 is None or len(idx44) == 0) and
-        (idx46 is None or len(idx46) == 0)):
+        (idx46 is None or len(idx46) == 0) and
+        (idx_kj is None or len(idx_kj) == 0)):
         # pure axial TYPE4 group
         return _forces_axial(group, x, v, dt, fint, slice(None))
     dtc = np.full(group.n, EP30)
