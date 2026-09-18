@@ -474,6 +474,16 @@ def read_penta6(block, model, log):
     _read_elems(block, model, log, "PENTA6", 6)
 
 
+def read_pyra(block, model, log):
+    """``/PYRA5/part_ID`` or ``/PYRA/part_ID``: 5-node pyramid solid element (elem_ID + 5 node IDs)."""
+    _read_elems(block, model, log, "PYRA5", 5)
+
+
+def read_tria3(block, model, log):
+    """``/TRIA3/part_ID``: 3-node 2D solid element (elem_ID + 3 node IDs)."""
+    _read_elems(block, model, log, "TRIA3", 3)
+
+
 def read_brick(block, model, log):
     """``/BRICK/part_ID``: 8-node solids (elem_ID + 8 node IDs).
     Degenerated bricks with 4 distinct nodes (the classic tetra-in-brick
@@ -87432,6 +87442,9 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PENTA6": read_penta6,
     "PENTA": read_penta6,
     "WEDGE": read_penta6,
+    "PYRA5": read_pyra,
+    "PYRA": read_pyra,
+    "TRIA3": read_tria3,
     "TSHELL": read_tshell,
     "TETRA4": read_tetra4,
     "TRUSS": read_truss,

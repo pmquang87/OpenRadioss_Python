@@ -81,6 +81,7 @@ def init_group(group, model, log):
             area0=np.zeros(0),
             mass=np.zeros(0),
             eint=np.zeros(0),
+            ehour=np.zeros(0),
             off=np.zeros(0),
             dtfac=np.zeros(0),
         )
@@ -107,6 +108,7 @@ def init_group(group, model, log):
         xe0=xe0.copy(),
         mass=mass,
         eint=np.zeros(n),
+        ehour=np.zeros(n),
         off=np.ones(n),
         dtfac=np.ones(n),
     )

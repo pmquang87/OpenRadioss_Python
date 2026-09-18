@@ -382,7 +382,7 @@ def _dispatch_quad_formulations(model: Model, log: MessageLog) -> None:
         return
     masks: Dict[str, np.ndarray] = {}
     for sl, mat, prop in src.state["slices"]:
-        iquad = int(prop.params.get("iquad", 0) or 0)
+        iquad = int(prop.params.get("iquad", 0) or prop.params.get("isolid", 0) or 0)
         gname = QUAD_IQUAD_GROUPS.get(iquad)
         if gname is not None:
             masks.setdefault(gname, np.zeros(src.n, dtype=bool))[sl] = True
