@@ -551,7 +551,7 @@ def _lookup_yield_and_energy(
         sig_dynamic = sig_stat.copy()
         slope = slp * scale
         ener = en * scale
-        return sig_stat, sig_dynamic, slope, ener
+        return _apply_tension_override(e, sig_stat, sig_dynamic, slope, ener, scale=scale, e0=e0)
 
     # 4. Table object with curves: Table(curves=[(rate, xs, ys), ...])
     if hasattr(table, "curves") and table.curves:
@@ -568,7 +568,7 @@ def _lookup_yield_and_energy(
         ener = en0 * scale
 
         if len(rates) == 1:
-            return sig_stat, sig_stat.copy(), slope, ener
+            return _apply_tension_override(e, sig_stat, sig_stat.copy(), slope, ener, scale=scale, e0=e0)
 
         # Dynamic rate interpolation across curves
         scaled_dr = dr / xscale
@@ -587,7 +587,7 @@ def _lookup_yield_and_energy(
             y_high, _, _ = _interp_1d_curve(np.asarray(c_high[1]), np.asarray(c_high[2]), np.array([e_clamped[i]]))
             sig_dynamic[i] = (y_low[0] + weight_r[i] * (y_high[0] - y_low[0])) * scale
 
-        return sig_stat, sig_dynamic, slope, ener
+        return _apply_tension_override(e, sig_stat, sig_dynamic, slope, ener, scale=scale, e0=e0)
 
     # 5. 3-tuple (xg, rates, Y) -> 2D table grid
     if isinstance(table, (tuple, list)) and len(table) == 3:
@@ -603,7 +603,7 @@ def _lookup_yield_and_energy(
         ener = en0 * scale
 
         if len(rates) == 1 or Y.shape[1] == 1:
-            return sig_stat, sig_stat.copy(), slope, ener
+            return _apply_tension_override(e, sig_stat, sig_stat.copy(), slope, ener, scale=scale, e0=e0)
 
         scaled_dr = dr / xscale
         idx_x = np.clip(np.searchsorted(xg, e_clamped, side="right"), 1, len(xg) - 1)
@@ -623,7 +623,7 @@ def _lookup_yield_and_energy(
         val_r1 = y01 + tx * (y11 - y01)
         sig_dynamic = (val_r0 + tr * (val_r1 - val_r0)) * scale
 
-        return sig_stat, sig_dynamic, slope, ener
+        return _apply_tension_override(e, sig_stat, sig_dynamic, slope, ener, scale=scale, e0=e0)
 
     # 6. 4-tuple (xg, rates, vols, Y) -> 3D table grid
     if isinstance(table, (tuple, list)) and len(table) == 4:
@@ -672,7 +672,7 @@ def _lookup_yield_and_energy(
 
             sig_dynamic[i] = (c0 + tv[i] * (c1 - c0)) * scale
 
-        return sig_stat, sig_dynamic, slope, ener
+        return _apply_tension_override(e, sig_stat, sig_dynamic, slope, ener, scale=scale, e0=e0)
 
     # 7. Dict-based table
     if isinstance(table, dict):
@@ -725,12 +725,15 @@ def _lookup_yield_and_energy(
             slope[i] = ((ys_plus - ys) / de) * scale
             ener[i] = 0.5 * ys * ei * scale
 
-        return sig_stat, sig_dynamic, slope, ener
+        return _apply_tension_override(e, sig_stat, sig_dynamic, slope, ener, scale=scale, e0=e0)
 
     # Fallback
     mod = e0 if e0 > 0.0 else 1.0
-    sig_stat = mod * e_clamped * scale
-    return sig_stat, sig_stat.copy(), np.full(n, mod * scale), 0.5 * mod * (e_clamped ** 2) * scale
+    sig_stat = mod * e * scale
+    sig_dynamic = mod * e * scale
+    slope = np.full(n, mod * scale)
+    ener = np.where(e > 0.0, 0.5 * mod * (e ** 2) * scale, 0.0)
+    return sig_stat, sig_dynamic, slope, ener
 
 
 # ---------------------------------------------------------------------------
@@ -930,12 +933,12 @@ def solid_update(
         ], dtype=float)
         E_mid = 0.5 * (E_i + E_old_tens)
 
-        # 2. Spectral decomposition of E_mid (sigeps190.F / conversion.F)
+        # 2. Spectral decomposition of current strain E_i (condamage.F / sigeps190.F)
         # Analytical Cardano formula or eigh:
         try:
-            w, V = np.linalg.eigh(E_mid)
+            w, V = np.linalg.eigh(E_i)
         except Exception:
-            w = np.diag(E_mid)
+            w = np.diag(E_i)
             V = np.eye(3)
 
         # Principal stretches: lambda_k = sqrt(max(2*Z_k + 1, 1e-12))
@@ -1135,8 +1138,7 @@ def shell_tangent(
     dt: float = 0.0,
     extra: dict | None = None,
 ) -> np.ndarray:
-    """LAW190 is formulated for 3D solid elements only."""
-    raise NotImplementedError("material LAW190 (FOAM_DUBOIS) is only supported for solids.")
+    raise NotImplementedError("material LAW190 (FOAM_DUBOIS) is formulated for 3D solid elements only.")
 
 
 consistent_shell_tangent = shell_tangent
