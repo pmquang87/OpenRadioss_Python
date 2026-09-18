@@ -9534,6 +9534,371 @@ class StarterDeck:
         kwargs.setdefault("law_name", "COMPOSITE_PLAS")
         return self.mat_law25(*args, **kwargs)
 
+    def mat_law120(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho: float = 0.0,
+        refer_rho: Optional[float] = None,
+        e: float = 0.0,
+        nu: float = 0.0,
+        iform: int = 0,
+        itrx: int = 0,
+        idam: int = 0,
+        thick: float = 0.0,
+        tab_id: int = 0,
+        xscale: float = 1.0,
+        yscale: float = 1.0,
+        tau0: float = 0.0,
+        q: float = 0.0,
+        beta: float = 0.0,
+        h: float = 0.0,
+        af1: float = 0.0,
+        af2: float = 0.0,
+        ah1: float = 0.0,
+        ah2: float = 0.0,
+        as_: float = 0.0,
+        cc: float = 0.0,
+        gam0: float = 0.0,
+        gamf: float = 0.0,
+        d1c: float = 0.0,
+        d2c: float = 0.0,
+        d1f: float = 0.0,
+        d2f: float = 0.0,
+        dtrx: float = 0.0,
+        djc: float = 0.0,
+        exp_n: float = 0.0,
+        law_name: str = "LAW120",
+        unit_id: Optional[int] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW120`` (/MAT/TAPO, /MAT/TAB_PONT_ORTH) — Tape / Pont-Pack Woven Fabric model."""
+        mat_obj = None
+        if hasattr(mid, "id") or hasattr(mid, "rho0") or hasattr(mid, "tab_id") or hasattr(mid, "tau0"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+        elif len(args) > 0 and not isinstance(args[0], (int, float, str)):
+            mat_obj = args[0]
+        elif "mat_obj" in kwargs:
+            mat_obj = kwargs["mat_obj"]
+        elif "mat" in kwargs:
+            mat_obj = kwargs["mat"]
+        elif "material" in kwargs:
+            mat_obj = kwargs["material"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho0", getattr(mat_obj, "rho", rho))
+            refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", refer_rho))
+            e = getattr(mat_obj, "e", getattr(mat_obj, "E", e))
+            nu = getattr(mat_obj, "nu", getattr(mat_obj, "NU", nu))
+            iform = getattr(mat_obj, "iform", iform)
+            itrx = getattr(mat_obj, "itrx", itrx)
+            idam = getattr(mat_obj, "idam", idam)
+            thick = getattr(mat_obj, "thick", thick)
+            tab_id = getattr(mat_obj, "tab_id", tab_id)
+            xscale = getattr(mat_obj, "xscale", xscale)
+            yscale = getattr(mat_obj, "yscale", yscale)
+            tau0 = getattr(mat_obj, "tau0", getattr(mat_obj, "tau", tau0))
+            q = getattr(mat_obj, "q", q)
+            beta = getattr(mat_obj, "beta", getattr(mat_obj, "b", beta))
+            h = getattr(mat_obj, "h", h)
+            af1 = getattr(mat_obj, "af1", af1)
+            af2 = getattr(mat_obj, "af2", af2)
+            ah1 = getattr(mat_obj, "ah1", ah1)
+            ah2 = getattr(mat_obj, "ah2", ah2)
+            as_ = getattr(mat_obj, "as_", getattr(mat_obj, "as", as_))
+            cc = getattr(mat_obj, "cc", cc)
+            gam0 = getattr(mat_obj, "gam0", gam0)
+            gamf = getattr(mat_obj, "gamf", gamf)
+            d1c = getattr(mat_obj, "d1c", d1c)
+            d2c = getattr(mat_obj, "d2c", d2c)
+            d1f = getattr(mat_obj, "d1f", d1f)
+            d2f = getattr(mat_obj, "d2f", d2f)
+            dtrx = getattr(mat_obj, "dtrx", getattr(mat_obj, "d_trx", dtrx))
+            djc = getattr(mat_obj, "djc", getattr(mat_obj, "d_jc", djc))
+            exp_n = getattr(mat_obj, "exp_n", getattr(mat_obj, "exp", exp_n))
+            if hasattr(mat_obj, "params") and isinstance(mat_obj.params, dict):
+                p = mat_obj.params
+                if rho == 0.0: rho = float(p.get("MAT_RHO", p.get("rho", rho)))
+                if refer_rho is None: refer_rho = p.get("refer_rho", p.get("rhor", None))
+                if e == 0.0: e = float(p.get("E", p.get("e", p.get("MAT_E", e))))
+                if nu == 0.0: nu = float(p.get("NU", p.get("nu", p.get("MAT_NU", nu))))
+                if iform == 0: iform = int(p.get("iform", p.get("MAT_IFORM", iform)))
+                if itrx == 0: itrx = int(p.get("itrx", p.get("MAT_ITRX", itrx)))
+                if idam == 0: idam = int(p.get("idam", p.get("MAT_IDAM", idam)))
+                if thick == 0.0: thick = float(p.get("thick", p.get("THICK", p.get("MAT_THICK", thick))))
+                if tab_id == 0: tab_id = int(p.get("tab_id", p.get("TAB_ID", p.get("MAT_TAB_ID", tab_id))))
+                if xscale == 1.0: xscale = float(p.get("xscale", p.get("XSCALE", p.get("MAT_Xscale", xscale))))
+                if yscale == 1.0: yscale = float(p.get("yscale", p.get("YSCALE", p.get("MAT_Yscale", yscale))))
+                if tau0 == 0.0: tau0 = float(p.get("tau0", p.get("tau", p.get("TAU", p.get("MAT_TAU", tau0)))))
+                if q == 0.0: q = float(p.get("q", p.get("MAT_Q", q)))
+                if beta == 0.0: beta = float(p.get("beta", p.get("b", p.get("MAT_B", beta))))
+                if h == 0.0: h = float(p.get("h", p.get("MAT_H", h)))
+                if af1 == 0.0: af1 = float(p.get("af1", p.get("MAT_AF1", af1)))
+                if af2 == 0.0: af2 = float(p.get("af2", p.get("MAT_AF2", af2)))
+                if ah1 == 0.0: ah1 = float(p.get("ah1", p.get("MAT_AH1", ah1)))
+                if ah2 == 0.0: ah2 = float(p.get("ah2", p.get("MAT_AH2", ah2)))
+                if as_ == 0.0: as_ = float(p.get("as_", p.get("as", p.get("MAT_AS", as_))))
+                if cc == 0.0: cc = float(p.get("cc", p.get("MAT_CC", cc)))
+                if gam0 == 0.0: gam0 = float(p.get("gam0", p.get("MAT_GAM0", gam0)))
+                if gamf == 0.0: gamf = float(p.get("gamf", p.get("MAT_GAMF", gamf)))
+                if d1c == 0.0: d1c = float(p.get("d1c", p.get("MAT_D1C", d1c)))
+                if d2c == 0.0: d2c = float(p.get("d2c", p.get("MAT_D2C", d2c)))
+                if d1f == 0.0: d1f = float(p.get("d1f", p.get("MAT_D1F", d1f)))
+                if d2f == 0.0: d2f = float(p.get("d2f", p.get("MAT_D2F", d2f)))
+                if dtrx == 0.0: dtrx = float(p.get("dtrx", p.get("d_trx", p.get("D_TRX", dtrx))))
+                if djc == 0.0: djc = float(p.get("djc", p.get("d_jc", p.get("D_JC", djc))))
+                if exp_n == 0.0: exp_n = float(p.get("exp_n", p.get("exp", p.get("MAT_EXP", exp_n))))
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("rho", "rho0", "rho_i", "mat_rho"): rho = float(v)
+            elif kl in ("refer_rho", "rhor", "rho_ref"): refer_rho = float(v)
+            elif kl in ("e", "mat_e", "young"): e = float(v)
+            elif kl in ("nu", "mat_nu", "poisson"): nu = float(v)
+            elif kl in ("iform", "mat_iform"): iform = int(v)
+            elif kl in ("itrx", "mat_itrx"): itrx = int(v)
+            elif kl in ("idam", "mat_idam"): idam = int(v)
+            elif kl in ("thick", "mat_thick"): thick = float(v)
+            elif kl in ("tab_id", "tabid", "mat_tab_id"): tab_id = int(v)
+            elif kl in ("xscale", "mat_xscale"): xscale = float(v)
+            elif kl in ("yscale", "mat_yscale"): yscale = float(v)
+            elif kl in ("tau0", "tau", "mat_tau"): tau0 = float(v)
+            elif kl in ("q", "mat_q"): q = float(v)
+            elif kl in ("beta", "b", "mat_b"): beta = float(v)
+            elif kl in ("h", "mat_h"): h = float(v)
+            elif kl in ("af1", "mat_af1"): af1 = float(v)
+            elif kl in ("af2", "mat_af2"): af2 = float(v)
+            elif kl in ("ah1", "mat_ah1"): ah1 = float(v)
+            elif kl in ("ah2", "mat_ah2"): ah2 = float(v)
+            elif kl in ("as_", "as", "mat_as"): as_ = float(v)
+            elif kl in ("cc", "mat_cc"): cc = float(v)
+            elif kl in ("gam0", "mat_gam0"): gam0 = float(v)
+            elif kl in ("gamf", "mat_gamf"): gamf = float(v)
+            elif kl in ("d1c", "mat_d1c"): d1c = float(v)
+            elif kl in ("d2c", "mat_d2c"): d2c = float(v)
+            elif kl in ("d1f", "mat_d1f"): d1f = float(v)
+            elif kl in ("d2f", "mat_d2f"): d2f = float(v)
+            elif kl in ("dtrx", "d_trx", "mat_dtrx"): dtrx = float(v)
+            elif kl in ("djc", "d_jc", "mat_djc"): djc = float(v)
+            elif kl in ("exp_n", "exp", "mat_exp"): exp_n = float(v)
+
+        if data_cards is not None and len(data_cards) > 0:
+            hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+            self.lines.append(hdr)
+            self._title(title)
+            for cd in data_cards:
+                self.lines.append(cd if isinstance(cd, str) else str(cd))
+            return self
+
+        hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+        self.lines.append(hdr)
+        self._title(title)
+
+        # Card 1: RHO_I, Refer_Rho
+        if refer_rho is not None and float(refer_rho) > 0.0:
+            self.lines.append(fmt_float(rho) + fmt_float(refer_rho))
+        else:
+            self.lines.append(fmt_float(rho))
+
+        # Card 2: E, NU, Iform, Itrx, Idam, blank(10), THICK
+        self.lines.append(
+            fmt_float(e) + fmt_float(nu) + fmt_int(iform)
+            + fmt_int(itrx) + fmt_int(idam) + blank(10) + fmt_float(thick)
+        )
+
+        # Card 3: TAB_ID, Xscale, Yscale
+        self.lines.append(fmt_int(tab_id) + fmt_float(xscale) + fmt_float(yscale))
+
+        # Card 4: TAU0, Q, BETA, H
+        self.lines.append(fmt_float(tau0) + fmt_float(q) + fmt_float(beta) + fmt_float(h))
+
+        # Card 5: AF1, AF2, AH1, AH2, AS
+        self.lines.append(fmt_float(af1) + fmt_float(af2) + fmt_float(ah1) + fmt_float(ah2) + fmt_float(as_))
+
+        # Card 6: CC, GAM0, GAMF
+        self.lines.append(fmt_float(cc) + fmt_float(gam0) + fmt_float(gamf))
+
+        # Card 7: D1C, D2C, D1F, D2F
+        self.lines.append(fmt_float(d1c) + fmt_float(d2c) + fmt_float(d1f) + fmt_float(d2f))
+
+        # Card 8: DTRX, DJC, EXP_N
+        self.lines.append(fmt_float(dtrx) + fmt_float(djc) + fmt_float(exp_n))
+
+        return self
+
+    def mat_tapo(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/TAPO`` — synonym for ``/MAT/LAW120``."""
+        kwargs.setdefault("law_name", "TAPO")
+        return self.mat_law120(*args, **kwargs)
+
+    def mat_tab_pont_orth(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/TAB_PONT_ORTH`` — synonym for ``/MAT/LAW120``."""
+        kwargs.setdefault("law_name", "TAB_PONT_ORTH")
+        return self.mat_law120(*args, **kwargs)
+
+    def mat_law121(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        ires: int = 2,
+        ivisc: int = 0,
+        fcut: float = 0.0,
+        dtmin: float = 0.0,
+        fct_sig0: int = 0,
+        xscale_sig0: float = 1.0,
+        yscale_sig0: float = 1.0,
+        fct_youn: int = 0,
+        xscale_youn: float = 1.0,
+        yscale_youn: float = 1.0,
+        fct_tang: int = 0,
+        xscale_tang: float = 1.0,
+        tang: float = 0.0,
+        fct_fail: int = 0,
+        ifail: int = 0,
+        xscale_fail: float = 1.0,
+        yscale_fail: float = 1.0,
+        law_name: str = "LAW121",
+        unit_id: Optional[int] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW121`` (/MAT/PLAS_RATE, /MAT/PLAS_TAB_RATE) — Tabulated rate-dependent elastoplastic material."""
+        mat_obj = None
+        if hasattr(mid, "id") or hasattr(mid, "rho0") or hasattr(mid, "fct_sig0") or hasattr(mid, "sig0_curve"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+        elif len(args) > 0 and not isinstance(args[0], (int, float, str)):
+            mat_obj = args[0]
+        elif "mat_obj" in kwargs:
+            mat_obj = kwargs["mat_obj"]
+        elif "mat" in kwargs:
+            mat_obj = kwargs["mat"]
+        elif "material" in kwargs:
+            mat_obj = kwargs["material"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho0", getattr(mat_obj, "rho", rho))
+            e = getattr(mat_obj, "e", getattr(mat_obj, "E", e))
+            nu = getattr(mat_obj, "nu", getattr(mat_obj, "NU", nu))
+            ires = getattr(mat_obj, "ires", ires)
+            ivisc = getattr(mat_obj, "ivisc", ivisc)
+            fcut = getattr(mat_obj, "fcut", fcut)
+            dtmin = getattr(mat_obj, "dtmin", dtmin)
+            fct_sig0 = getattr(mat_obj, "fct_sig0", fct_sig0)
+            xscale_sig0 = getattr(mat_obj, "xscale_sig0", xscale_sig0)
+            yscale_sig0 = getattr(mat_obj, "yscale_sig0", yscale_sig0)
+            fct_youn = getattr(mat_obj, "fct_youn", fct_youn)
+            xscale_youn = getattr(mat_obj, "xscale_youn", xscale_youn)
+            yscale_youn = getattr(mat_obj, "yscale_youn", yscale_youn)
+            fct_tang = getattr(mat_obj, "fct_tang", fct_tang)
+            xscale_tang = getattr(mat_obj, "xscale_tang", xscale_tang)
+            tang = getattr(mat_obj, "tang", tang)
+            fct_fail = getattr(mat_obj, "fct_fail", fct_fail)
+            ifail = getattr(mat_obj, "ifail", ifail)
+            xscale_fail = getattr(mat_obj, "xscale_fail", xscale_fail)
+            yscale_fail = getattr(mat_obj, "yscale_fail", yscale_fail)
+            if hasattr(mat_obj, "params") and isinstance(mat_obj.params, dict):
+                p = mat_obj.params
+                if rho == 0.0: rho = float(p.get("MAT_RHO", p.get("rho", rho)))
+                if e == 0.0: e = float(p.get("E", p.get("e", p.get("MAT_E", e))))
+                if nu == 0.0: nu = float(p.get("NU", p.get("nu", p.get("MAT_NU", nu))))
+                if ires == 2: ires = int(p.get("ires", p.get("MAT_IRES", ires)))
+                if ivisc == 0: ivisc = int(p.get("ivisc", p.get("MAT_IVISC", ivisc)))
+                if fcut == 0.0: fcut = float(p.get("fcut", p.get("MAT_FCUT", fcut)))
+                if dtmin == 0.0: dtmin = float(p.get("dtmin", p.get("MAT_DTMIN", dtmin)))
+                if fct_sig0 == 0: fct_sig0 = int(p.get("fct_sig0", p.get("MAT_FCT_SIG0", fct_sig0)))
+                if xscale_sig0 == 1.0: xscale_sig0 = float(p.get("xscale_sig0", p.get("MAT_XSCALE_SIG0", xscale_sig0)))
+                if yscale_sig0 == 1.0: yscale_sig0 = float(p.get("yscale_sig0", p.get("MAT_YSCALE_SIG0", yscale_sig0)))
+                if fct_youn == 0: fct_youn = int(p.get("fct_youn", p.get("MAT_FCT_YOUN", fct_youn)))
+                if xscale_youn == 1.0: xscale_youn = float(p.get("xscale_youn", p.get("MAT_XSCALE_YOUN", xscale_youn)))
+                if yscale_youn == 1.0: yscale_youn = float(p.get("yscale_youn", p.get("MAT_YSCALE_YOUN", yscale_youn)))
+                if fct_tang == 0: fct_tang = int(p.get("fct_tang", p.get("MAT_FCT_TANG", fct_tang)))
+                if xscale_tang == 1.0: xscale_tang = float(p.get("xscale_tang", p.get("MAT_XSCALE_TANG", xscale_tang)))
+                if tang == 0.0: tang = float(p.get("tang", p.get("MAT_TANG", tang)))
+                if fct_fail == 0: fct_fail = int(p.get("fct_fail", p.get("MAT_FCT_FAIL", fct_fail)))
+                if ifail == 0: ifail = int(p.get("ifail", p.get("MAT_IFAIL", ifail)))
+                if xscale_fail == 1.0: xscale_fail = float(p.get("xscale_fail", p.get("MAT_XSCALE_FAIL", xscale_fail)))
+                if yscale_fail == 1.0: yscale_fail = float(p.get("yscale_fail", p.get("MAT_YSCALE_FAIL", yscale_fail)))
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("rho", "rho0", "rho_i", "mat_rho"): rho = float(v)
+            elif kl in ("e", "mat_e", "young"): e = float(v)
+            elif kl in ("nu", "mat_nu", "poisson"): nu = float(v)
+            elif kl in ("ires", "mat_ires"): ires = int(v)
+            elif kl in ("ivisc", "mat_ivisc"): ivisc = int(v)
+            elif kl in ("fcut", "mat_fcut"): fcut = float(v)
+            elif kl in ("dtmin", "mat_dtmin"): dtmin = float(v)
+            elif kl in ("fct_sig0", "fct_sig", "fctsig0", "mat_fct_sig0"): fct_sig0 = int(v)
+            elif kl in ("xscale_sig0", "mat_xscale_sig0"): xscale_sig0 = float(v)
+            elif kl in ("yscale_sig0", "mat_yscale_sig0"): yscale_sig0 = float(v)
+            elif kl in ("fct_youn", "fctyoun", "mat_fct_youn"): fct_youn = int(v)
+            elif kl in ("xscale_youn", "mat_xscale_youn"): xscale_youn = float(v)
+            elif kl in ("yscale_youn", "mat_yscale_youn"): yscale_youn = float(v)
+            elif kl in ("fct_tang", "fcttang", "mat_fct_tang"): fct_tang = int(v)
+            elif kl in ("xscale_tang", "mat_xscale_tang"): xscale_tang = float(v)
+            elif kl in ("tang", "mat_tang"): tang = float(v)
+            elif kl in ("fct_fail", "fctfail", "mat_fct_fail"): fct_fail = int(v)
+            elif kl in ("ifail", "mat_ifail"): ifail = int(v)
+            elif kl in ("xscale_fail", "mat_xscale_fail"): xscale_fail = float(v)
+            elif kl in ("yscale_fail", "mat_yscale_fail"): yscale_fail = float(v)
+
+        if data_cards is not None and len(data_cards) > 0:
+            hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+            self.lines.append(hdr)
+            self._title(title)
+            for cd in data_cards:
+                self.lines.append(cd if isinstance(cd, str) else str(cd))
+            return self
+
+        hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+        self.lines.append(hdr)
+        self._title(title)
+
+        # Card 1: RHO_I
+        self.lines.append(fmt_float(rho))
+
+        # Card 2: E, NU, Ires, Ivisc, Fcut, dtmin
+        self.lines.append(
+            fmt_float(e) + fmt_float(nu) + fmt_int(ires)
+            + fmt_int(ivisc) + fmt_float(fcut) + fmt_float(dtmin)
+        )
+
+        # Card 3: Fct_SIG0, blank(10), Xscale_SIG0, Yscale_SIG0
+        self.lines.append(fmt_int(fct_sig0) + blank(10) + fmt_float(xscale_sig0) + fmt_float(yscale_sig0))
+
+        # Card 4: Fct_YOUN, blank(10), Xscale_YOUN, Yscale_YOUN
+        self.lines.append(fmt_int(fct_youn) + blank(10) + fmt_float(xscale_youn) + fmt_float(yscale_youn))
+
+        # Card 5: Fct_TANG, blank(10), Xscale_TANG, TANG
+        self.lines.append(fmt_int(fct_tang) + blank(10) + fmt_float(xscale_tang) + fmt_float(tang))
+
+        # Card 6: Fct_FAIL, Ifail, Xscale_FAIL, Yscale_FAIL
+        self.lines.append(fmt_int(fct_fail) + fmt_int(ifail) + fmt_float(xscale_fail) + fmt_float(yscale_fail))
+
+        return self
+
+    def mat_plas_rate(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/PLAS_RATE`` — synonym for ``/MAT/LAW121``."""
+        kwargs.setdefault("law_name", "PLAS_RATE")
+        return self.mat_law121(*args, **kwargs)
+
+    def mat_plas_tab_rate(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/PLAS_TAB_RATE`` — synonym for ``/MAT/LAW121``."""
+        kwargs.setdefault("law_name", "PLAS_TAB_RATE")
+        return self.mat_law121(*args, **kwargs)
+
     # ---- failure / EOS -----------------------------------------------------------
 
     def fail_johnson(self, mat_id: int, d1, d2, d3, d4, d5=0.0,
@@ -11599,6 +11964,122 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law109(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     elif law in ("110", "LAW110", "VEGTER", "PLAS_VEGTER", "LAW110_VEGTER", "MLAW110", "MAT_LAW110", "MAT_VEGTER", "MAT_PLAS_VEGTER", "MAT_110"):
         d.mat_law110(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
+    elif law in ("120", "LAW120", "TAPO", "MAT_TAPO", "TAB_PONT_ORTH", "MAT_TAB_PONT_ORTH", "LAW120_TAPO", "MLAW120", "MAT_LAW120"):
+        kw: Dict = {}
+        rho_ref = None
+        is_fixed = getattr(b, "fixed", False)
+        vcards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
+        if len(vcards) >= 1:
+            toks = vcards[0].cut("MAT_LAW120_1") if is_fixed and hasattr(vcards[0], "cut") else vcards[0].tokens()
+            if len(toks) >= 1 and toks[0]: kw["rho"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: rho_ref = float(toks[1])
+        if len(vcards) >= 2:
+            if is_fixed and hasattr(vcards[1], "cut"):
+                toks = vcards[1].cut("MAT_LAW120_2")
+                if len(toks) >= 1 and toks[0]: kw["e"] = float(toks[0])
+                if len(toks) >= 2 and toks[1]: kw["nu"] = float(toks[1])
+                if len(toks) >= 3 and toks[2]: kw["iform"] = int(float(toks[2]))
+                if len(toks) >= 4 and toks[3]: kw["itrx"] = int(float(toks[3]))
+                if len(toks) >= 5 and toks[4]: kw["idam"] = int(float(toks[4]))
+                if len(toks) >= 7 and toks[6]: kw["thick"] = float(toks[6])
+            else:
+                toks = vcards[1].tokens()
+                if len(toks) >= 1 and toks[0]: kw["e"] = float(toks[0])
+                if len(toks) >= 2 and toks[1]: kw["nu"] = float(toks[1])
+                if len(toks) >= 3 and toks[2]: kw["iform"] = int(float(toks[2]))
+                if len(toks) >= 4 and toks[3]: kw["itrx"] = int(float(toks[3]))
+                if len(toks) >= 5 and toks[4]: kw["idam"] = int(float(toks[4]))
+                if len(toks) >= 6 and toks[5]: kw["thick"] = float(toks[5])
+        if len(vcards) >= 3:
+            toks = vcards[2].cut("MAT_LAW120_3") if is_fixed and hasattr(vcards[2], "cut") else vcards[2].tokens()
+            if len(toks) >= 1 and toks[0]: kw["tab_id"] = int(float(toks[0]))
+            if len(toks) >= 2 and toks[1]: kw["xscale"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["yscale"] = float(toks[2])
+        if len(vcards) >= 4:
+            toks = vcards[3].cut("MAT_LAW120_4") if is_fixed and hasattr(vcards[3], "cut") else vcards[3].tokens()
+            if len(toks) >= 1 and toks[0]: kw["tau0"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["q"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["beta"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["h"] = float(toks[3])
+        if len(vcards) >= 5:
+            toks = vcards[4].cut("MAT_LAW120_5") if is_fixed and hasattr(vcards[4], "cut") else vcards[4].tokens()
+            if len(toks) >= 1 and toks[0]: kw["af1"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["af2"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["ah1"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["ah2"] = float(toks[3])
+            if len(toks) >= 5 and toks[4]: kw["as_"] = float(toks[4])
+        if len(vcards) >= 6:
+            toks = vcards[5].cut("MAT_LAW120_6") if is_fixed and hasattr(vcards[5], "cut") else vcards[5].tokens()
+            if len(toks) >= 1 and toks[0]: kw["cc"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["gam0"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["gamf"] = float(toks[2])
+        if len(vcards) >= 7:
+            toks = vcards[6].cut("MAT_LAW120_7") if is_fixed and hasattr(vcards[6], "cut") else vcards[6].tokens()
+            if len(toks) >= 1 and toks[0]: kw["d1c"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["d2c"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["d1f"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["d2f"] = float(toks[3])
+        if len(vcards) >= 8:
+            toks = vcards[7].cut("MAT_LAW120_8") if is_fixed and hasattr(vcards[7], "cut") else vcards[7].tokens()
+            if len(toks) >= 1 and toks[0]: kw["dtrx"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["djc"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["exp_n"] = float(toks[2])
+        d.mat_law120(mid, refer_rho=rho_ref, title=title, unit_id=b.unit_id, law_name=law, **kw)
+    elif law in ("121", "LAW121", "PLAS_RATE", "MAT_PLAS_RATE", "PLAS_TAB_RATE", "MAT_PLAS_TAB_RATE", "LAW121_PLAS_RATE", "MLAW121", "MAT_LAW121"):
+        kw: Dict = {}
+        is_fixed = getattr(b, "fixed", False)
+        vcards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
+        if len(vcards) >= 1:
+            toks = vcards[0].cut("MAT_LAW121_1") if is_fixed and hasattr(vcards[0], "cut") else vcards[0].tokens()
+            if len(toks) >= 1 and toks[0]: kw["rho"] = float(toks[0])
+        if len(vcards) >= 2:
+            toks = vcards[1].cut("MAT_LAW121_2") if is_fixed and hasattr(vcards[1], "cut") else vcards[1].tokens()
+            if len(toks) >= 1 and toks[0]: kw["e"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["nu"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["ires"] = int(float(toks[2]))
+            if len(toks) >= 4 and toks[3]: kw["ivisc"] = int(float(toks[3]))
+            if len(toks) >= 5 and toks[4]: kw["fcut"] = float(toks[4])
+            if len(toks) >= 6 and toks[5]: kw["dtmin"] = float(toks[5])
+        if len(vcards) >= 3:
+            if is_fixed and hasattr(vcards[2], "cut"):
+                toks = vcards[2].cut("MAT_LAW121_3")
+                if len(toks) >= 1 and toks[0]: kw["fct_sig0"] = int(float(toks[0]))
+                if len(toks) >= 3 and toks[2]: kw["xscale_sig0"] = float(toks[2])
+                if len(toks) >= 4 and toks[3]: kw["yscale_sig0"] = float(toks[3])
+            else:
+                toks = vcards[2].tokens()
+                if len(toks) >= 1 and toks[0]: kw["fct_sig0"] = int(float(toks[0]))
+                if len(toks) >= 2 and toks[1]: kw["xscale_sig0"] = float(toks[1])
+                if len(toks) >= 3 and toks[2]: kw["yscale_sig0"] = float(toks[2])
+        if len(vcards) >= 4:
+            if is_fixed and hasattr(vcards[3], "cut"):
+                toks = vcards[3].cut("MAT_LAW121_4")
+                if len(toks) >= 1 and toks[0]: kw["fct_youn"] = int(float(toks[0]))
+                if len(toks) >= 3 and toks[2]: kw["xscale_youn"] = float(toks[2])
+                if len(toks) >= 4 and toks[3]: kw["yscale_youn"] = float(toks[3])
+            else:
+                toks = vcards[3].tokens()
+                if len(toks) >= 1 and toks[0]: kw["fct_youn"] = int(float(toks[0]))
+                if len(toks) >= 2 and toks[1]: kw["xscale_youn"] = float(toks[1])
+                if len(toks) >= 3 and toks[2]: kw["yscale_youn"] = float(toks[2])
+        if len(vcards) >= 5:
+            if is_fixed and hasattr(vcards[4], "cut"):
+                toks = vcards[4].cut("MAT_LAW121_5")
+                if len(toks) >= 1 and toks[0]: kw["fct_tang"] = int(float(toks[0]))
+                if len(toks) >= 3 and toks[2]: kw["xscale_tang"] = float(toks[2])
+                if len(toks) >= 4 and toks[3]: kw["tang"] = float(toks[3])
+            else:
+                toks = vcards[4].tokens()
+                if len(toks) >= 1 and toks[0]: kw["fct_tang"] = int(float(toks[0]))
+                if len(toks) >= 2 and toks[1]: kw["xscale_tang"] = float(toks[1])
+                if len(toks) >= 3 and toks[2]: kw["tang"] = float(toks[2])
+        if len(vcards) >= 6:
+            toks = vcards[5].cut("MAT_LAW121_6") if is_fixed and hasattr(vcards[5], "cut") else vcards[5].tokens()
+            if len(toks) >= 1 and toks[0]: kw["fct_fail"] = int(float(toks[0]))
+            if len(toks) >= 2 and toks[1]: kw["ifail"] = int(float(toks[1]))
+            if len(toks) >= 3 and toks[2]: kw["xscale_fail"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["yscale_fail"] = float(toks[3])
+        d.mat_law121(mid, title=title, unit_id=b.unit_id, law_name=law, **kw)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")

@@ -148,7 +148,10 @@ class Law121Params:
     rho0: float = 0.0
     rho: float = 0.0
     young: float = 1.0
+    e: float = 0.0
     nu: float = 0.3
+    sig0: float = 0.0
+    scale_sig0: float = 1.0
     ires: int = 2
     ivisc: int = 0
     fcut: float = _DEFAULT_FCUT
@@ -189,10 +192,21 @@ class Law121Params:
             self.rho0 = self.rho
         if self.rho0 > 0.0 and self.rho <= 0.0:
             self.rho = self.rho0
+        if self.e > 0.0:
+            if self.young <= 1.0:
+                self.young = self.e
+        elif self.young > 0.0 and self.e <= 0.0:
+            self.e = self.young
         if self.young <= 0.0:
             self.young = 1.0
         if not (0.0 <= self.nu < 0.5):
             self.nu = 0.3
+        if self.sig0 > 0.0:
+            if "sig0" not in self.params:
+                self.params["sig0"] = self.sig0
+        if self.scale_sig0 != 1.0:
+            if self.xscale_sig0 == 1.0:
+                self.xscale_sig0 = self.scale_sig0
         if self.ires not in (1, 2):
             self.ires = 2
         self.ivisc = min(max(int(self.ivisc), 0), 1)
@@ -226,10 +240,6 @@ class Law121Params:
         denom_plane = 1.0 - self.nu * self.nu
         self.a11 = self.young / (denom_plane if abs(denom_plane) > _EM20 else 1.0)
         self.a12 = self.a11 * self.nu
-
-    @property
-    def e(self) -> float:
-        return self.young
 
     @property
     def E(self) -> float:
@@ -342,16 +352,17 @@ def eval_dynamic_properties(
     n = len(rate_arr)
 
     # 1. Initial yield stress sig0
+    default_s0 = p.sig0 if p.sig0 > 0.0 else p.yscale_sig0
     if p.sig0_curve is not None or p.fct_sig0 > 0:
         sig0_vals, _ = _eval_curve_1d(
-            p.sig0_curve, rate_arr, xscale=p.xscale_sig0, yscale=p.yscale_sig0, default_val=p.yscale_sig0
+            p.sig0_curve, rate_arr, xscale=p.xscale_sig0, yscale=p.yscale_sig0, default_val=default_s0
         )
     elif p.yield_table is not None:
         sig0_vals, _ = _eval_curve_1d(
-            p.yield_table, rate_arr, xscale=p.xscale_sig0, yscale=p.yscale_sig0, default_val=p.yscale_sig0
+            p.yield_table, rate_arr, xscale=p.xscale_sig0, yscale=p.yscale_sig0, default_val=default_s0
         )
     else:
-        sig0_vals = np.full(n, p.yscale_sig0, dtype=np.float64)
+        sig0_vals = np.full(n, default_s0, dtype=np.float64)
 
     # 2. Young's modulus E
     if p.youn_curve is not None or p.fct_youn > 0:
@@ -838,20 +849,13 @@ def solid_tangent(
     if vm < _EM20:
         return c_el
 
-    # Plastic flow normal n = (3/2) s / vm (Voigt shear factor)
-    n_vec = np.array([
-        1.5 * s[0] / vm,
-        1.5 * s[1] / vm,
-        1.5 * s[2] / vm,
-        3.0 * s[3] / vm,
-        3.0 * s[4] / vm,
-        3.0 * s[5] / vm,
-    ], dtype=np.float64)
-
-    # Tangent plastic reduction factor 4 * G^2 / (3G + H)
+    # Algorithmic continuum elasto-plastic tangent:
+    # C_ep = C_el - (9 * G^2 / (3*G + H)) * (s (x) s) / vm^2
     denom = 3.0 * g + h
     if denom > _EM20:
-        c_ep = c_el - (4.0 * g * g / denom) * np.outer(n_vec, n_vec)
+        factor = 3.0 * g / (math.sqrt(denom) * vm)
+        v = factor * s
+        c_ep = c_el - np.outer(v, v)
         return c_ep
     return c_el
 
@@ -933,22 +937,35 @@ shell_tangent = consistent_shell_tangent
 
 def resolve(mat: Any, model: Any, log: Any = None) -> None:
     """Resolve /FUNCT curve references for /MAT/LAW121 from model."""
-    if hasattr(mat, "fct_sig0") and mat.fct_sig0 > 0:
-        c = model.get_function(mat.fct_sig0)
+    get_fn = getattr(model, "get_function", None)
+    if not callable(get_fn):
+        fn_dict = getattr(model, "functions", getattr(model, "curves", model if isinstance(model, dict) else {}))
+        get_fn = lambda fid: fn_dict.get(fid)
+
+    fct_sig0 = getattr(mat, "fct_sig0", 0) or (mat.params.get("fct_sig0", 0) if hasattr(mat, "params") else 0)
+    if fct_sig0 > 0:
+        c = get_fn(fct_sig0)
         if c is not None:
             mat.sig0_curve = c
-    if hasattr(mat, "fct_youn") and mat.fct_youn > 0:
-        c = model.get_function(mat.fct_youn)
+            if hasattr(mat, "params"): mat.params["sig0_curve"] = c
+    fct_youn = getattr(mat, "fct_youn", 0) or (mat.params.get("fct_youn", 0) if hasattr(mat, "params") else 0)
+    if fct_youn > 0:
+        c = get_fn(fct_youn)
         if c is not None:
             mat.youn_curve = c
-    if hasattr(mat, "fct_tang") and mat.fct_tang > 0:
-        c = model.get_function(mat.fct_tang)
+            if hasattr(mat, "params"): mat.params["youn_curve"] = c
+    fct_tang = getattr(mat, "fct_tang", 0) or (mat.params.get("fct_tang", 0) if hasattr(mat, "params") else 0)
+    if fct_tang > 0:
+        c = get_fn(fct_tang)
         if c is not None:
             mat.tang_curve = c
-    if hasattr(mat, "fct_fail") and mat.fct_fail > 0:
-        c = model.get_function(mat.fct_fail)
+            if hasattr(mat, "params"): mat.params["tang_curve"] = c
+    fct_fail = getattr(mat, "fct_fail", 0) or (mat.params.get("fct_fail", 0) if hasattr(mat, "params") else 0)
+    if fct_fail > 0:
+        c = get_fn(fct_fail)
         if c is not None:
             mat.fail_curve = c
+            if hasattr(mat, "params"): mat.params["fail_curve"] = c
 
 
 def extra_shapes(mat: Any, nip: Optional[int] = None) -> Dict[str, Tuple[int, ...]]:

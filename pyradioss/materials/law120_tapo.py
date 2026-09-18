@@ -142,6 +142,7 @@ class Law120Params:
     refer_rho: float = 0.0
     rho: float = 0.0
     young: float = 1.0
+    e: float = 0.0
     nu: float = 0.3
 
     # Orthotropic elastic constants
@@ -200,6 +201,11 @@ class Law120Params:
             self.rho = self.rho0
         if self.refer_rho > 0.0 and self.rho0 <= 0.0:
             self.rho0 = self.refer_rho
+        if self.e > 0.0:
+            if self.young <= 1.0:
+                self.young = self.e
+        elif self.young > 0.0 and self.e <= 0.0:
+            self.e = self.young
         if self.young <= 0.0:
             self.young = 1.0
 
@@ -246,10 +252,6 @@ class Law120Params:
 
         if self.r_comp <= 0.0:
             self.r_comp = 0.01
-
-    @property
-    def e(self) -> float:
-        return self.young
 
     @property
     def E(self) -> float:
