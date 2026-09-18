@@ -11311,7 +11311,28 @@ class PropType19:
 
 
 PropSprTors = PropType19
-PropTorsion = PropType19
+
+@dataclass
+class PropTorsion:
+    """/PROP/TORSION or /PROP/TYPE35 (M152): Torsion bar spring property."""
+    id: int = 0
+    title: str = ""
+    mass: float = 0.0
+    k_elas: float = 0.0
+    x_lim1: float = 0.0
+    x_lim2: float = 0.0
+    k_post: float = 0.0
+    d1: float = 0.0
+    d2: float = 0.0
+    r_load: float = 0.0
+    f_scal: float = 0.0
+    fct_id1: int = 0
+    fct_id2: int = 0
+    fct_id3: int = 0
+    fct_id4: int = 0
+    inertia: float = 0.0
+    k_theta: float = 0.0
+    c_theta: float = 0.0
 
 
 

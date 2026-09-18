@@ -25,8 +25,13 @@ _ETYPES = {
     "BRICK": ("bricks", 8, 14),
     "PENTA6": ("penta6s", 6, 14),
     "QUAD": ("quads", 4, 14),
+    "QUAD4": ("quads_full", 4, 14),
     "TETRA4": ("tetras", 4, 14),
     "TETRA10": ("tetra10s", 10, 14),
+    "PYRA": ("pyra5s", 5, 14),
+    "PYRA5": ("pyra5s", 5, 14),
+    "TRIA": ("trias", 3, 14),
+    "TRIA3": ("trias", 3, 14),
     "SHELL": ("shells", 4, 1),
     "SH3N": ("sh3n", 3, 1),
     "TRUSS": ("trusses", 2, 2),
@@ -259,9 +264,13 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
         setattr(model, attr, group)
 
     _dispatch_solid_formulations(model, log)
+    _dispatch_tetra_formulations(model, log)
+    _dispatch_penta_formulations(model, log)
+    _dispatch_quad_formulations(model, log)
     _dispatch_shell_formulations(model, log)
     _dispatch_sh3n_formulations(model, log)
     _dispatch_beam_formulations(model, log)
+
 
 
 def _subset_element_group(src: ElementGroup, mask: np.ndarray) -> ElementGroup:
@@ -312,6 +321,82 @@ def _dispatch_solid_formulations(model: Model, log: MessageLog) -> None:
                  f"{kname} FORMULATION KERNEL "
                  f"(Isolid dispatch)")
     model.bricks = _subset_element_group(src, keep) if keep.any() else None
+
+
+def _dispatch_tetra_formulations(model: Model, log: MessageLog) -> None:
+    """Tetrahedral element-technology dispatch: split /TETRA4 parts whose
+    property Itetra4 selects a dedicated formulation kernel (e.g. 3 = SFEM)."""
+    from ..elements import TETRA4_ITETRA4_GROUPS
+    src = model.tetras
+    if src is None or not src.n:
+        return
+    masks: Dict[str, np.ndarray] = {}
+    for sl, mat, prop in src.state["slices"]:
+        itetra4 = int(prop.params.get("itetra4", 0) or 0)
+        gname = TETRA4_ITETRA4_GROUPS.get(itetra4)
+        if gname is not None:
+            masks.setdefault(gname, np.zeros(src.n, dtype=bool))[sl] = True
+    if not masks:
+        return
+    keep = np.ones(src.n, dtype=bool)
+    for gname, mask in masks.items():
+        keep &= ~mask
+        setattr(model, gname, _subset_element_group(src, mask))
+        kname = gname.split('_', 1)[1].upper() if '_' in gname else gname.upper()
+        log.info(f"     {int(mask.sum())} /TETRA4 ELEMENT(S) ROUTED TO THE "
+                 f"{kname} FORMULATION KERNEL (Itetra4 dispatch)")
+    model.tetras = _subset_element_group(src, keep) if keep.any() else None
+
+
+def _dispatch_penta_formulations(model: Model, log: MessageLog) -> None:
+    """Pentahedral element-technology dispatch: split /PENTA6 parts whose
+    property Isolid selects HEPH physical stabilization (Isolid=24)."""
+    from ..elements import PENTA_ISOLID_GROUPS
+    src = model.penta6s
+    if src is None or not src.n:
+        return
+    masks: Dict[str, np.ndarray] = {}
+    for sl, mat, prop in src.state["slices"]:
+        isolid = int(prop.params.get("isolid", 0) or 0)
+        gname = PENTA_ISOLID_GROUPS.get(isolid)
+        if gname is not None:
+            masks.setdefault(gname, np.zeros(src.n, dtype=bool))[sl] = True
+    if not masks:
+        return
+    keep = np.ones(src.n, dtype=bool)
+    for gname, mask in masks.items():
+        keep &= ~mask
+        setattr(model, gname, _subset_element_group(src, mask))
+        kname = gname.split('_', 1)[1].upper() if '_' in gname else gname.upper()
+        log.info(f"     {int(mask.sum())} /PENTA6 ELEMENT(S) ROUTED TO THE "
+                 f"{kname} FORMULATION KERNEL (Isolid dispatch)")
+    model.penta6s = _subset_element_group(src, keep) if keep.any() else None
+
+
+def _dispatch_quad_formulations(model: Model, log: MessageLog) -> None:
+    """Quad 2D element-technology dispatch: split /QUAD parts whose
+    property Iquad selects full 2x2 Gauss integration (Iquad=2)."""
+    from ..elements import QUAD_IQUAD_GROUPS
+    src = model.quads
+    if src is None or not src.n:
+        return
+    masks: Dict[str, np.ndarray] = {}
+    for sl, mat, prop in src.state["slices"]:
+        iquad = int(prop.params.get("iquad", 0) or 0)
+        gname = QUAD_IQUAD_GROUPS.get(iquad)
+        if gname is not None:
+            masks.setdefault(gname, np.zeros(src.n, dtype=bool))[sl] = True
+    if not masks:
+        return
+    keep = np.ones(src.n, dtype=bool)
+    for gname, mask in masks.items():
+        keep &= ~mask
+        setattr(model, gname, _subset_element_group(src, mask))
+        kname = gname.split('_', 1)[1].upper() if '_' in gname else gname.upper()
+        log.info(f"     {int(mask.sum())} /QUAD ELEMENT(S) ROUTED TO THE "
+                 f"{kname} FORMULATION KERNEL (Iquad dispatch)")
+    model.quads = _subset_element_group(src, keep) if keep.any() else None
+
 
 
 def _dispatch_shell_formulations(model: Model, log: MessageLog) -> None:

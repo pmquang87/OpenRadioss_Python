@@ -27,25 +27,49 @@ that  a = (fext + fint) / m  (this matches the Fortran A(3,*) accumulation
 where internal forces enter negated).
 """
 
-from . import (beam_fiber, beam_type3, shell_bt4, shell_dkt18, shell_qbat, shell_qeph,  # noqa: F401
-               shell_thick16, shell_tri3, solid_bric20, solid_heph, solid_hexa8, solid_penta6, solid_quad,
-               solid_tetra10, solid_tetra4, solid_tshell8, spring, spring_advanced, truss)
+from . import (beam_fiber, beam_type3, shell_bt4, shell_dkt18, shell_dkt6, shell_qbat, shell_qeph,  # noqa: F401
+               shell_thick16, shell_tri3, solid_bric20, solid_cohesive, solid_heph, solid_hexa8,
+               solid_hexa8_eas, solid_hexa8_full, solid_penta6, solid_penta6_heph, solid_pyra5,
+               solid_quad, solid_quad4_full, solid_shell_ha8, solid_tetra10, solid_tetra4,
+               solid_tetra4_sfem, solid_tria3, solid_tshell8, spring, spring_advanced,
+               thickshell_composite, thickshell_wedge6, truss)
 
 KERNELS = {
+    # 3D Solids (8-node hexas, 20-node, wedges, tetras, pyramids, cohesive, solid shells)
     "bricks": solid_hexa8,
+    "bricks_full": solid_hexa8_full,
+    "bricks_eas": solid_hexa8_eas,
     "bricks_heph": solid_heph,
+    "solid_shells_ha8": solid_shell_ha8,
+    "cohesives": solid_cohesive,
     "bric20s": solid_bric20,
     "penta6s": solid_penta6,
-    "tshells": solid_tshell8,
-    "quads": solid_quad,
-    "tetra10s": solid_tetra10,
+    "penta6s_heph": solid_penta6_heph,
+    "pyra5s": solid_pyra5,
     "tetras": solid_tetra4,
+    "tetras_sfem": solid_tetra4_sfem,
+    "tetra10s": solid_tetra10,
+
+    # Thick Shells & Composites
+    "tshells": solid_tshell8,
+    "shel16s": shell_thick16,
+    "thickshell_wedges": thickshell_wedge6,
+    "thickshell_composites": thickshell_composite,
+
+    # Thin Shells (4-node & 3-node & rotation-free)
     "shells": shell_bt4,
     "shells_qbat": shell_qbat,
     "shells_qeph": shell_qeph,
     "sh3n": shell_tri3,
     "sh3n_dkt18": shell_dkt18,
-    "shel16s": shell_thick16,
+    "shells_dkt6": shell_dkt6,
+
+    # 2D Continuum Solids (quads & triangles)
+    "quads": solid_quad,
+    "quads_full": solid_quad4_full,
+    "trias": solid_tria3,
+
+    # 1D Elements (beams, trusses, springs)
     "trusses": truss,
     "springs": spring,
     "spring_advanced": spring_advanced,
@@ -59,15 +83,7 @@ BEAM_PROP_GROUPS = {
     18: "beams_fiber",
 }
 
-#: /PROP/SHELL Ishell -> dedicated element-technology group. Parts whose
-#: property carries one of these Ishell values are SPLIT out of the
-#: generic "shells" (Belytschko-Tsay) group by the starter's
-#: shell-formulation dispatch (starter/initialization.py) and routed to
-#: their own kernel; every other Ishell keeps the BT kernel untouched.
-#: 12 = QBAT (fully integrated Batoz — cbaforc3.F, M41). The engine
-#: starter folds nothing into 12 (hm_read_prop01.F keeps 12 distinct).
-#: 22/23/24 = QEPH (physically-stabilized 1-point — czforc3.F, M41); the
-#: starter folds 22/23 into 24 (hm_read_prop01.F lines 185-192).
+#: /PROP/SHELL Ishell -> dedicated element-technology group.
 SHELL_ISHELL_GROUPS = {
     12: "shells_qbat",
     22: "shells_qeph",
@@ -75,19 +91,48 @@ SHELL_ISHELL_GROUPS = {
     24: "shells_qeph",
 }
 
-#: /PROP/SHELL Ish3n -> dedicated element-technology group for 3-node shells.
+#: /PROP/SHELL Ish3n -> dedicated element-technology group for 3-node / 6-node shells.
 #: 2 = DKT18 (Discrete Kirchhoff Triangle — cdkforc3.F).
+#: 3 = DKT6 (Rotation-free 6-node DKT macro-patch — cdk6forc3.F).
 SH3N_ISHELL_GROUPS = {
     2: "sh3n_dkt18",
+    3: "shells_dkt6",
 }
 
 #: /PROP/SOLID Isolid -> dedicated element-technology group.
+#: 2  = FULL (8-node 2x2x2 Gauss fully-integrated hex — s8forc3.F)
 #: 14 = TSHELL (8-node thick shell with through-thickness integration)
 #: 15 = TSHELL (8-node thick shell with through-thickness integration)
+#: 16 = HA8 (8-node solid shell with ANS — s8sforc3.F)
+#: 17 = EAS (8-node enhanced assumed strain — s8eforc3.F)
+#: 21 = COHESIVE (8-node cohesive zone interface — szforc3.F)
 #: 24 = HEPH (physically-stabilized 8-node hexahedral element).
 SOLID_ISOLID_GROUPS = {
+    2: "bricks_full",
     14: "tshells",
     15: "tshells",
+    16: "solid_shells_ha8",
+    17: "bricks_eas",
+    21: "cohesives",
     24: "bricks_heph",
 }
+
+#: /PROP/SOLID Itetra4 -> dedicated tetrahedral formulation group.
+#: 3 = SFEM / NS-FEM (node-based smoothed finite element tetra — s4lagsfem.F)
+TETRA4_ITETRA4_GROUPS = {
+    3: "tetras_sfem",
+}
+
+#: /PROP/SOLID / /PROP/TYPE14 for 6-node wedges:
+#: 24 = HEPH (physically-stabilized 6-node wedge — s6zforc3.F90)
+PENTA_ISOLID_GROUPS = {
+    24: "penta6s_heph",
+}
+
+#: /PROP/QUAD / /PROP/TYPE15 Iquad:
+#: 2 = Full 2x2 Gauss quadrilateral with B-bar (q4forc2.F)
+QUAD_IQUAD_GROUPS = {
+    2: "quads_full",
+}
+
 

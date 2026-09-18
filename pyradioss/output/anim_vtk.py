@@ -52,29 +52,46 @@ from ..model.model import Model
 # their two end nodes (the 3rd is the orientation node, not geometry).
 _VTK_CELL = {
     "bricks": (12, 8),
+    "bricks_full": (12, 8),
+    "bricks_eas": (12, 8),
     "bricks_heph": (12, 8),
+    "solid_shells_ha8": (12, 8),
+    "cohesives": (12, 8),
     "bric20s": (25, 20),
     "penta6s": (13, 6),
+    "penta6s_heph": (13, 6),
+    "pyra5s": (14, 5),
     "shel16s": (12, 8),
+    "thickshell_wedges": (13, 6),
+    "thickshell_composites": (12, 8),
     "tshells": (12, 8),
     "tetras": (10, 4),
+    "tetras_sfem": (10, 4),
     "tetra10s": (24, 10),
     "shells": (9, 4),
     "shells_qbat": (9, 4),
     "shells_qeph": (9, 4),
     "sh3n": (5, 3),
     "sh3n_dkt18": (5, 3),
+    "shells_dkt6": (5, 3),
     "quads": (9, 4),
+    "quads_full": (9, 4),
+    "trias": (5, 3),
     "trusses": (3, 2),
     "springs": (3, 2),
     "beams": (3, 2),
+    "beams_fiber": (3, 2),
 }
 
 # VTK node permutation for 20-node quadratic hexahedrons (VTK_QUADRATIC_HEXAHEDRON).
 _BRIC20_TO_VTK = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 12, 13, 14, 15]
 
-_SOLID_FAMILIES = ("bricks", "bricks_heph", "tshells", "tetras", "tetra10s", "bric20s", "shel16s", "quads", "penta6s")
-_SHELL_FAMILIES = ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18")
+_SOLID_FAMILIES = (
+    "bricks", "bricks_full", "bricks_eas", "bricks_heph", "solid_shells_ha8", "cohesives",
+    "tshells", "tetras", "tetras_sfem", "tetra10s", "bric20s", "shel16s", "thickshell_wedges",
+    "thickshell_composites", "quads", "quads_full", "trias", "penta6s", "penta6s_heph", "pyra5s"
+)
+_SHELL_FAMILIES = ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18", "shells_dkt6")
 
 # anim_to_vtk's symmetric-3x3 fill of the solid Voigt 6 [xx,yy,zz,xy,yz,
 # zx], row-major: [s0 s3 s5 / s3 s1 s4 / s5 s4 s2] — the official tool's,

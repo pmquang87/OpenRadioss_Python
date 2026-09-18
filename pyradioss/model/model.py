@@ -711,10 +711,18 @@ class Model:
         # Elements by type
         # ------------------------------------------------------------------
         self.bricks: Optional[ElementGroup] = None    # /BRICK  (IXS)
+        self.bricks_full: Optional[ElementGroup] = None  # /BRICK (FULL ISOLID=2)
+        self.bricks_eas: Optional[ElementGroup] = None   # /BRICK (EAS ISOLID=17/18)
         self.bricks_heph: Optional[ElementGroup] = None  # /BRICK (HEPH ISOLID=24)
+        self.solid_shells_ha8: Optional[ElementGroup] = None  # /BRICK / HA8 (ISOLID=16)
+        self.cohesives: Optional[ElementGroup] = None    # /BRICK / COHESIVE (ISOLID=21)
         self.quads: Optional[ElementGroup] = None     # /QUAD   (IXQ)
+        self.quads_full: Optional[ElementGroup] = None  # /QUAD (FULL IQUAD=2)
+        self.trias: Optional[ElementGroup] = None     # /TRIA3  (2D CST)
         self.tetras: Optional[ElementGroup] = None    # /TETRA4 (IXS10 kin)
+        self.tetras_sfem: Optional[ElementGroup] = None  # /TETRA4 (SFEM ITETRA4=3)
         self.tetra10s: Optional[ElementGroup] = None  # /TETRA10
+        self.pyra5s: Optional[ElementGroup] = None    # /PYRA5 / degenerate solid
         self.shells: Optional[ElementGroup] = None    # /SHELL  (IXC)
         self.shells_qbat: Optional[ElementGroup] = None  # /SHELL Ishell=12
         #                                       (QBAT split, M41 dispatch)
@@ -722,19 +730,25 @@ class Model:
         #                                       (QEPH split, M41 dispatch)
         self.sh3n: Optional[ElementGroup] = None      # /SH3N   (IXTG)
         self.sh3n_dkt18: Optional[ElementGroup] = None  # /SH3N Ish3n=2
+        self.shells_dkt6: Optional[ElementGroup] = None  # /SH3N Ish3n=3 (DKT6)
         self.trusses: Optional[ElementGroup] = None   # /TRUSS  (IXT)
         self.springs: Optional[ElementGroup] = None   # /SPRING (IXR)
         self.beams: Optional[ElementGroup] = None     # /BEAM   (IXP)
         self.beams_fiber: Optional[ElementGroup] = None  # /BEAM /PROP/TYPE18 (M593)
         self.shel16s: Optional[ElementGroup] = None   # /SHEL16 (IXS16)
+        self.thickshell_wedges: Optional[ElementGroup] = None  # /THICK_SHELL wedge
+        self.thickshell_composites: Optional[ElementGroup] = None  # /THICK_SHELL composite
         self.bric20s: Optional[ElementGroup] = None   # /BRIC20 / /HEXA20 (M122)
         self.penta6s: Optional[ElementGroup] = None   # /PENTA6 6-node wedge (M590)
+        self.penta6s_heph: Optional[ElementGroup] = None  # /PENTA6 (HEPH ISOLID=24)
         self.tshells: Optional[ElementGroup] = None   # /TSHELL / /PROP/TYPE20 (solid shell)
         # raw (id, part_id, node ids...) tuples collected during parsing,
         # converted to ElementGroups in Starter finalization:
         self.raw_elems: Dict[str, list] = {
-            "BRICK": [], "PENTA6": [], "TSHELL": [], "QUAD": [], "TETRA4": [], "TETRA10": [], "SHELL": [], "SH3N": [],
+            "BRICK": [], "PENTA6": [], "TSHELL": [], "QUAD": [], "QUAD4": [], "TETRA4": [], "TETRA10": [],
+            "PYRA": [], "PYRA5": [], "TRIA": [], "TRIA3": [], "SHELL": [], "SH3N": [],
             "TRUSS": [], "SPRING": [], "BEAM": [], "SHEL16": [], "BRIC20": [], "HEXA20": [], "SPH": []}
+
 
         # ------------------------------------------------------------------
         # Definitions keyed by user id
@@ -3809,11 +3823,20 @@ class Model:
     # ----------------------------------------------------------------------
     def element_groups(self):
         """Iterate (name, group) over the non-empty element groups."""
-        for name in ("bricks", "bricks_heph", "tshells", "bric20s", "penta6s", "quads", "tetras", "tetra10s", "shel16s", "shells", "shells_qbat",
-                     "shells_qeph", "sh3n", "sh3n_dkt18", "trusses", "springs", "beams", "beams_fiber"):
-            g = getattr(self, name)
+        for name in (
+            "bricks", "bricks_full", "bricks_eas", "bricks_heph", "solid_shells_ha8", "cohesives",
+            "tshells", "bric20s", "penta6s", "penta6s_heph", "pyra5s",
+            "quads", "quads_full", "trias",
+            "tetras", "tetras_sfem", "tetra10s",
+            "shel16s", "thickshell_wedges", "thickshell_composites",
+            "shells", "shells_qbat", "shells_qeph",
+            "sh3n", "sh3n_dkt18", "shells_dkt6",
+            "trusses", "springs", "beams", "beams_fiber",
+        ):
+            g = getattr(self, name, None)
             if g is not None and g.n:
                 yield name, g
+
 
     @property
     def frames(self) -> dict:

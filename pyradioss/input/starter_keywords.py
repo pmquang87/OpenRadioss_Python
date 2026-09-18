@@ -9236,6 +9236,13 @@ def read_surf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             s.seg_nodes.append(t)
     elif target == "SURF":
         s.surf_ids.extend(_id_list(block, cards))
+        from ..model.entities import SurfSurf
+        ids = s.surf_ids
+        surf1 = ids[0] if len(ids) > 0 else 0
+        surf2 = ids[1] if len(ids) > 1 else 0
+        model.surf_surfs[sid] = SurfSurf(
+            id=sid, title=title, surf_ids=list(ids), surf1_id=surf1, surf2_id=surf2
+        )
     elif target in ("GRSHEL", "GRSH3N", "GRTRIA", "GRBRIC"):
         fam = _GR_FAMILIES.get(target, target[2:])
         s.egroup_refs.extend((fam, i) for i in _id_list(block, cards))
@@ -15249,14 +15256,25 @@ def read_inter_type21(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     sens_id = 0
     c1, c2, c3, c4, c5, c6 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
+    is_20col = False
     if is_fixed:
-        f0 = cards[0].cut("INTER_TYPE21_1")
-        surf_s = _ival(f0[0]) if len(f0) > 0 else 0
-        surf_m = _ival(f0[1]) if len(f0) > 1 else 0
-        istf = _ival(f0[2]) if len(f0) > 2 else 0
-        igap = _ival(f0[4]) if len(f0) > 4 else 0
-        multimp = _ival(f0[5]) if len(f0) > 5 else 4
-        iadm = _ival(f0[8]) if len(f0) > 8 else (_ival(f0[7]) if len(f0) > 7 else 0)
+        is_20col = (len(cards[0].raw) > 80 and cards[0].raw[:10].strip() == "" and len(cards[0].raw) >= 30 and cards[0].raw[20:30].strip() == "")
+        if is_20col:
+            f0 = cards[0].cut([20, 20, 20, 20, 20, 20])
+            surf_s = _ival(f0[0]) if len(f0) > 0 else 0
+            surf_m = _ival(f0[1]) if len(f0) > 1 else 0
+            istf = _ival(f0[2]) if len(f0) > 2 else 0
+            igap = _ival(f0[3]) if len(f0) > 3 else 0
+            multimp = _ival(f0[4]) if len(f0) > 4 else 0
+            iadm = _ival(f0[5]) if len(f0) > 5 else 0
+        else:
+            f0 = cards[0].cut("INTER_TYPE21_1")
+            surf_s = _ival(f0[0]) if len(f0) > 0 else 0
+            surf_m = _ival(f0[1]) if len(f0) > 1 else 0
+            istf = _ival(f0[2]) if len(f0) > 2 else 0
+            igap = _ival(f0[4]) if len(f0) > 4 else 0
+            multimp = _ival(f0[5]) if len(f0) > 5 else 4
+            iadm = _ival(f0[8]) if len(f0) > 8 else (_ival(f0[7]) if len(f0) > 7 else 0)
 
         if len(cards) > 1 and not cards[1].is_blank:
             f1 = cards[1].cut("INTER_TYPE21_2")
@@ -15374,11 +15392,14 @@ def read_inter_type21(block: KeywordBlock, model: Model, log: MessageLog) -> Non
             tc2 = cards[card_idx].tokens()
             c6 = float(tc2[0]) if len(tc2) > 0 else 0.0
 
+    is_sub = any("SUB" in str(p).upper() for p in block.parts)
+    is_surf12 = (is_fixed and is_20col)
+    assign_s_first = is_sub or is_surf12
     model.interfaces.append(Interface(
         id=block.user_id,
         type=21,
-        surf_id=surf_m,
-        surf_id1=surf_s,
+        surf_id=surf_s if assign_s_first else surf_m,
+        surf_id1=surf_m if assign_s_first else surf_s,
         istf=istf,
         igap=igap,
         multimp=multimp,
@@ -15452,13 +15473,23 @@ def read_inter_type23(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     c1, c2, c3, c4, c5, c6 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
     if is_fixed:
-        f0 = cards[0].cut("INTER_TYPE23_1")
-        surf_s = _ival(f0[0]) if len(f0) > 0 else 0
-        surf_m = _ival(f0[1]) if len(f0) > 1 else 0
-        istf = _ival(f0[2]) if len(f0) > 2 else 0
-        igap = _ival(f0[4]) if len(f0) > 4 else 0
-        ibag = _ival(f0[6]) if len(f0) > 6 else 0
-        idel = _ival(f0[7]) if len(f0) > 7 else 0
+        is_20col = (len(cards[0].raw) > 80 and cards[0].raw[:10].strip() == "" and len(cards[0].raw) >= 30 and cards[0].raw[20:30].strip() == "")
+        if is_20col:
+            f0 = cards[0].cut([20, 20, 20, 20, 20, 20])
+            surf_s = _ival(f0[0]) if len(f0) > 0 else 0
+            surf_m = _ival(f0[1]) if len(f0) > 1 else 0
+            istf = _ival(f0[2]) if len(f0) > 2 else 0
+            igap = _ival(f0[3]) if len(f0) > 3 else 0
+            ibag = _ival(f0[4]) if len(f0) > 4 else 0
+            idel = _ival(f0[5]) if len(f0) > 5 else 0
+        else:
+            f0 = cards[0].cut("INTER_TYPE23_1")
+            surf_s = _ival(f0[0]) if len(f0) > 0 else 0
+            surf_m = _ival(f0[1]) if len(f0) > 1 else 0
+            istf = _ival(f0[2]) if len(f0) > 2 else 0
+            igap = _ival(f0[4]) if len(f0) > 4 else 0
+            ibag = _ival(f0[6]) if len(f0) > 6 else 0
+            idel = _ival(f0[7]) if len(f0) > 7 else 0
 
         if len(cards) > 1 and not cards[1].is_blank:
             f1 = cards[1].cut("INTER_TYPE23_2")
@@ -42451,13 +42482,31 @@ def read_prop_type19(block: KeywordBlock, model: Model, log: MessageLog) -> None
                 mass = float(t[0]) if len(t) > 0 else 0.0
                 k = float(t[1]) if len(t) > 1 else 0.0
                 c = float(t[2]) if len(t) > 2 else 0.0
+    fct_id_k = 0
+    fct_id_c = 0
+    fscale_k = 1.0
+    fscale_c = 1.0
+    if len(valid_cards) > 1:
+        if block.fixed:
+            f2 = valid_cards[1].cut("PROP_SPR_TORS_2") if "PROP_SPR_TORS_2" in CARD_LAYOUTS else _fixed_vals(valid_cards[1], [10, 10, 20, 20])
+            fct_id_k = _ival(f2[0]) if len(f2) > 0 else 0
+            fct_id_c = _ival(f2[1]) if len(f2) > 1 else 0
+            fscale_k = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            fscale_c = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+        else:
+            t2 = valid_cards[1].tokens()
+            fct_id_k = int(float(t2[0])) if len(t2) > 0 else 0
+            fct_id_c = int(float(t2[1])) if len(t2) > 1 else 0
+            fscale_k = float(t2[2]) if len(t2) > 2 else 1.0
+            fscale_c = float(t2[3]) if len(t2) > 3 else 1.0
     prop = PropSpringTors(id=prop_id, title=title, mass=mass, stiffness_k=k, damping_c=c, fcut=fcut, inertia=inertia)
     model.props_type19[prop_id] = prop
     model.prop_type19s[prop_id] = prop
     model.properties[prop_id] = Property(
         id=prop_id, type=19, title=title,
         params={"mass": mass, "inertia": inertia, "stiffness_k": k, "damping_c": c, "fcut": fcut,
-                "k_tors": k, "c_tors": c, "k_theta": k, "c_theta": c, "k": k, "c": c}
+                "k_tors": k, "c_tors": c, "k_theta": k, "c_theta": c, "k": k, "c": c,
+                "fct_id_k": fct_id_k, "fct_id_c": fct_id_c, "fscale_k": fscale_k, "fscale_c": fscale_c}
     )
 
 
@@ -46138,70 +46187,134 @@ def read_mat_law71(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             c0 = valid_cards[0].cut("MAT_LAW71_1")
             rho0 = _safe_float(c0[0]) if len(c0) > 0 else 0.0
             rhor = _safe_float(c0[1]) if len(c0) > 1 else 0.0
-        # Card 2: E, nu, E_mart
+        is_5field = False
         if len(valid_cards) > 1:
-            c1 = valid_cards[1].cut("MAT_LAW71_2")
-            e = _safe_float(c1[0]) if len(c1) > 0 else 0.0
-            nu = _safe_float(c1[1]) if len(c1) > 1 else 0.0
-            e_mart = _safe_float(c1[2]) if len(c1) > 2 else 0.0
-        # Card 3: Sig_sas, Sig_fas, Sig_ssa, Sig_fsa, Alpha
-        if len(valid_cards) > 2:
-            c2 = valid_cards[2].cut("MAT_LAW71_3")
-            sig_sas = _safe_float(c2[0]) if len(c2) > 0 else 0.0
-            sig_fas = _safe_float(c2[1]) if len(c2) > 1 else 0.0
-            sig_ssa = _safe_float(c2[2]) if len(c2) > 2 else 0.0
-            sig_fsa = _safe_float(c2[3]) if len(c2) > 3 else 0.0
-            alpha = _safe_float(c2[4]) if len(c2) > 4 else 0.0
-        # Card 4: EpsL, CAS, CSA, TSAS, TFAS
-        if len(valid_cards) > 3:
-            c3 = valid_cards[3].cut("MAT_LAW71_4")
-            epsl = _safe_float(c3[0]) if len(c3) > 0 else 0.0
-            cas = _safe_float(c3[1]) if len(c3) > 1 else 0.0
-            csa = _safe_float(c3[2]) if len(c3) > 2 else 0.0
-            tsas = _safe_float(c3[3]) if len(c3) > 3 else 0.0
-            tfas = _safe_float(c3[4]) if len(c3) > 4 else 0.0
-        # Card 5: TSSA, TFSA, CP, TINI
-        if len(valid_cards) > 4:
-            c4 = valid_cards[4].cut("MAT_LAW71_5")
-            tssa = _safe_float(c4[0]) if len(c4) > 0 else 0.0
-            tfsa = _safe_float(c4[1]) if len(c4) > 1 else 0.0
-            cp = _safe_float(c4[2]) if len(c4) > 2 else 0.0
-            tini = _safe_float(c4[3]) if len(c4) > 3 else 0.0
+            tokens1 = valid_cards[1].tokens()
+            if len(tokens1) >= 5 or len(valid_cards[1].raw.rstrip()) > 60:
+                is_5field = True
+        if is_5field:
+            if len(valid_cards) > 1:
+                c1 = valid_cards[1].cut([20, 20, 20, 20, 20])
+                e = _safe_float(c1[0]) if len(c1) > 0 else 0.0
+                nu = _safe_float(c1[1]) if len(c1) > 1 else 0.0
+                e_mart = _safe_float(c1[2]) if len(c1) > 2 else 0.0
+                sig_sas = _safe_float(c1[3]) if len(c1) > 3 else 0.0
+                sig_fas = _safe_float(c1[4]) if len(c1) > 4 else 0.0
+            if len(valid_cards) > 2:
+                c2 = valid_cards[2].cut([20, 20, 20, 20, 20])
+                sig_ssa = _safe_float(c2[0]) if len(c2) > 0 else 0.0
+                sig_fsa = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+                alpha = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+                epsl = _safe_float(c2[3]) if len(c2) > 3 else 0.0
+                cas = _safe_float(c2[4]) if len(c2) > 4 else 0.0
+            if len(valid_cards) > 3:
+                c3 = valid_cards[3].cut([20, 20, 20, 20, 20])
+                csa = _safe_float(c3[0]) if len(c3) > 0 else 0.0
+                tsas = _safe_float(c3[1]) if len(c3) > 1 else 0.0
+                tfas = _safe_float(c3[2]) if len(c3) > 2 else 0.0
+                tssa = _safe_float(c3[3]) if len(c3) > 3 else 0.0
+                tfsa = _safe_float(c3[4]) if len(c3) > 4 else 0.0
+            if len(valid_cards) > 4:
+                c4 = valid_cards[4].cut([20, 20, 20, 20, 20])
+                cp = _safe_float(c4[0]) if len(c4) > 0 else 0.0
+                tini = _safe_float(c4[1]) if len(c4) > 1 else 0.0
+        else:
+            # Card 2: E, nu, E_mart
+            if len(valid_cards) > 1:
+                c1 = valid_cards[1].cut("MAT_LAW71_2")
+                e = _safe_float(c1[0]) if len(c1) > 0 else 0.0
+                nu = _safe_float(c1[1]) if len(c1) > 1 else 0.0
+                e_mart = _safe_float(c1[2]) if len(c1) > 2 else 0.0
+            # Card 3: Sig_sas, Sig_fas, Sig_ssa, Sig_fsa, Alpha
+            if len(valid_cards) > 2:
+                c2 = valid_cards[2].cut("MAT_LAW71_3")
+                sig_sas = _safe_float(c2[0]) if len(c2) > 0 else 0.0
+                sig_fas = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+                sig_ssa = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+                sig_fsa = _safe_float(c2[3]) if len(c2) > 3 else 0.0
+                alpha = _safe_float(c2[4]) if len(c2) > 4 else 0.0
+            # Card 4: EpsL, CAS, CSA, TSAS, TFAS
+            if len(valid_cards) > 3:
+                c3 = valid_cards[3].cut("MAT_LAW71_4")
+                epsl = _safe_float(c3[0]) if len(c3) > 0 else 0.0
+                cas = _safe_float(c3[1]) if len(c3) > 1 else 0.0
+                csa = _safe_float(c3[2]) if len(c3) > 2 else 0.0
+                tsas = _safe_float(c3[3]) if len(c3) > 3 else 0.0
+                tfas = _safe_float(c3[4]) if len(c3) > 4 else 0.0
+            # Card 5: TSSA, TFSA, CP, TINI
+            if len(valid_cards) > 4:
+                c4 = valid_cards[4].cut("MAT_LAW71_5")
+                tssa = _safe_float(c4[0]) if len(c4) > 0 else 0.0
+                tfsa = _safe_float(c4[1]) if len(c4) > 1 else 0.0
+                cp = _safe_float(c4[2]) if len(c4) > 2 else 0.0
+                tini = _safe_float(c4[3]) if len(c4) > 3 else 0.0
     else:
         # Card 1: RHO_I, Refer_Rho
         if len(valid_cards) > 0:
             t0 = valid_cards[0].tokens()
             rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
             rhor = _safe_float(t0[1]) if len(t0) > 1 else 0.0
-        # Card 2: E, nu, E_mart
+        is_5field = False
         if len(valid_cards) > 1:
             t1 = valid_cards[1].tokens()
-            e = _safe_float(t1[0]) if len(t1) > 0 else 0.0
-            nu = _safe_float(t1[1]) if len(t1) > 1 else 0.0
-            e_mart = _safe_float(t1[2]) if len(t1) > 2 else 0.0
-        # Card 3: Sig_sas, Sig_fas, Sig_ssa, Sig_fsa, Alpha
-        if len(valid_cards) > 2:
-            t2 = valid_cards[2].tokens()
-            sig_sas = _safe_float(t2[0]) if len(t2) > 0 else 0.0
-            sig_fas = _safe_float(t2[1]) if len(t2) > 1 else 0.0
-            sig_ssa = _safe_float(t2[2]) if len(t2) > 2 else 0.0
-            sig_fsa = _safe_float(t2[3]) if len(t2) > 3 else 0.0
-            alpha = _safe_float(t2[4]) if len(t2) > 4 else 0.0
-        # Card 4: EpsL, CAS, CSA, TSAS, TFAS
-        if len(valid_cards) > 3:
-            t3 = valid_cards[3].tokens()
-            epsl = _safe_float(t3[0]) if len(t3) > 0 else 0.0
-            cas = _safe_float(t3[1]) if len(t3) > 1 else 0.0
-            csa = _safe_float(t3[2]) if len(t3) > 2 else 0.0
-            tsas = _safe_float(t3[3]) if len(t3) > 3 else 0.0
-            tfas = _safe_float(t3[4]) if len(t3) > 4 else 0.0
-        # Card 5: TSSA, TFSA, CP, TINI
-        if len(valid_cards) > 4:
-            t4 = valid_cards[4].tokens()
-            tssa = _safe_float(t4[0]) if len(t4) > 0 else 0.0
-            tfsa = _safe_float(t4[1]) if len(t4) > 1 else 0.0
-            cp = _safe_float(t4[2]) if len(t4) > 2 else 0.0
-            tini = _safe_float(t4[3]) if len(t4) > 3 else 0.0
+            if len(t1) >= 5:
+                is_5field = True
+        if is_5field:
+            if len(valid_cards) > 1:
+                t1 = valid_cards[1].tokens()
+                e = _safe_float(t1[0]) if len(t1) > 0 else 0.0
+                nu = _safe_float(t1[1]) if len(t1) > 1 else 0.0
+                e_mart = _safe_float(t1[2]) if len(t1) > 2 else 0.0
+                sig_sas = _safe_float(t1[3]) if len(t1) > 3 else 0.0
+                sig_fas = _safe_float(t1[4]) if len(t1) > 4 else 0.0
+            if len(valid_cards) > 2:
+                t2 = valid_cards[2].tokens()
+                sig_ssa = _safe_float(t2[0]) if len(t2) > 0 else 0.0
+                sig_fsa = _safe_float(t2[1]) if len(t2) > 1 else 0.0
+                alpha = _safe_float(t2[2]) if len(t2) > 2 else 0.0
+                epsl = _safe_float(t2[3]) if len(t2) > 3 else 0.0
+                cas = _safe_float(t2[4]) if len(t2) > 4 else 0.0
+            if len(valid_cards) > 3:
+                t3 = valid_cards[3].tokens()
+                csa = _safe_float(t3[0]) if len(t3) > 0 else 0.0
+                tsas = _safe_float(t3[1]) if len(t3) > 1 else 0.0
+                tfas = _safe_float(t3[2]) if len(t3) > 2 else 0.0
+                tssa = _safe_float(t3[3]) if len(t3) > 3 else 0.0
+                tfsa = _safe_float(t3[4]) if len(t3) > 4 else 0.0
+            if len(valid_cards) > 4:
+                t4 = valid_cards[4].tokens()
+                cp = _safe_float(t4[0]) if len(t4) > 0 else 0.0
+                tini = _safe_float(t4[1]) if len(t4) > 1 else 0.0
+        else:
+            # Card 2: E, nu, E_mart
+            if len(valid_cards) > 1:
+                t1 = valid_cards[1].tokens()
+                e = _safe_float(t1[0]) if len(t1) > 0 else 0.0
+                nu = _safe_float(t1[1]) if len(t1) > 1 else 0.0
+                e_mart = _safe_float(t1[2]) if len(t1) > 2 else 0.0
+            # Card 3: Sig_sas, Sig_fas, Sig_ssa, Sig_fsa, Alpha
+            if len(valid_cards) > 2:
+                t2 = valid_cards[2].tokens()
+                sig_sas = _safe_float(t2[0]) if len(t2) > 0 else 0.0
+                sig_fas = _safe_float(t2[1]) if len(t2) > 1 else 0.0
+                sig_ssa = _safe_float(t2[2]) if len(t2) > 2 else 0.0
+                sig_fsa = _safe_float(t2[3]) if len(t2) > 3 else 0.0
+                alpha = _safe_float(t2[4]) if len(t2) > 4 else 0.0
+            # Card 4: EpsL, CAS, CSA, TSAS, TFAS
+            if len(valid_cards) > 3:
+                t3 = valid_cards[3].tokens()
+                epsl = _safe_float(t3[0]) if len(t3) > 0 else 0.0
+                cas = _safe_float(t3[1]) if len(t3) > 1 else 0.0
+                csa = _safe_float(t3[2]) if len(t3) > 2 else 0.0
+                tsas = _safe_float(t3[3]) if len(t3) > 3 else 0.0
+                tfas = _safe_float(t3[4]) if len(t3) > 4 else 0.0
+            # Card 5: TSSA, TFSA, CP, TINI
+            if len(valid_cards) > 4:
+                t4 = valid_cards[4].tokens()
+                tssa = _safe_float(t4[0]) if len(t4) > 0 else 0.0
+                tfsa = _safe_float(t4[1]) if len(t4) > 1 else 0.0
+                cp = _safe_float(t4[2]) if len(t4) > 2 else 0.0
+                tini = _safe_float(t4[3]) if len(t4) > 3 else 0.0
 
     if rhor == 0.0:
         rhor = rho0
@@ -95985,7 +96098,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "GAUGE_POINT": read_gauge_point,
     "SECT_CIRCLE": read_sect_circle,
     "SECT_PARAL": read_sect_paral,
-    "SURF_SURF": read_surf_surf,
+    "SURF_SURF": read_surf,
 
     # Initial states & conditions
     "INIBRI_EREF": read_inibri_eref,
