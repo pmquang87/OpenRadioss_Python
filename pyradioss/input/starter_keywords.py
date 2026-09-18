@@ -2300,6 +2300,8 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "SYAZWAN"
     elif kind in ("GURSON", "GURSON_MODEL", "GURSON_LAW", "GURSON_TVERGAARD_NEEDLEMAN", "GURSON_DAMAGE"):
         kind = "GURSON"
+    elif kind in ("WINDSHIELD", "WINDSHIELD_ALTER", "ALTER"):
+        kind = "ALTER"
 
     if kind not in ("JOHNSON", "BIQUAD", "ORTHBIQUAD", "TAB1", "SNCONNECT", "FLD", "CONNECT",
                     "TENSSTRAIN", "ORTHSTRAIN", "GURSON", "ALTER", "VISUAL", "MULLINS_OR", "MULLINS",
@@ -10221,6 +10223,8 @@ def read_inivel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       card by its FIRST field: a direction letter, never a number.
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else "TRA"
+    if kind.isdigit():
+        kind = "TRA"
     title, cards = _fixed_data(block) if block.fixed \
         else _title_and_data(block)
     if not cards:
@@ -22969,6 +22973,8 @@ def read_initemp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/INIBRI/{STRESS|EPSP|DENS|ENER|STRA_F|FAIL|AUX}[/id]`` (M96, M142, M195)::"""
     sub = block.parts[1].upper() if len(block.parts) > 1 else "STRESS"
+    if sub.isdigit():
+        sub = "STRESS"
     _, cards = _title_and_data(block)
     if not cards:
         log.error(f"/INIBRI/{sub}: missing data card", block.source)
@@ -23130,6 +23136,8 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
           card 1: shell_ID  epsp_1  epsp_2 ... (per layer)
     """
     sub = block.parts[1].upper() if len(block.parts) > 1 else "STRS_F"
+    if sub.isdigit():
+        sub = "STRS_F"
     _, cards = _title_and_data(block)
     if not cards:
         log.error(f"/INISHE/{sub}: missing data card", block.source)
@@ -23354,6 +23362,8 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 def read_inish3(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/INISH3/{STRS_F|EPSP|THICK|FAIL}[/id]`` (M96, M195):: initial state for 3-node shells."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else "STRS_F"
+    if sub.isdigit():
+        sub = "STRS_F"
     table_key = f"INISH3_{sub}_{block.user_id or 1}"
     read_inishe(block, model, log)
     she_key = f"INISHE_{sub}_{block.user_id or 1}"
@@ -23370,7 +23380,10 @@ def read_initru(block: KeywordBlock, model: Model, log: MessageLog) -> None:
           card 1: truss_ID  value
     """
     sub = block.parts[1].upper() if len(block.parts) > 1 else "FULL"
-    cards = [c for c in block.cards if not c.is_blank]
+    if sub.isdigit():
+        sub = "FULL"
+    title, cards = _title_and_data(block)
+    cards = [c for c in cards if not c.is_blank]
     if not cards:
         log.error(f"/INITRU/{sub}: missing data card", block.source)
         return
@@ -23435,7 +23448,10 @@ def read_inibea(block: KeywordBlock, model: Model, log: MessageLog) -> None:
           card 3: EpsilonP
     """
     sub = block.parts[1].upper() if len(block.parts) > 1 else "FULL"
-    cards = [c for c in block.cards if not c.is_blank]
+    if sub.isdigit():
+        sub = "FULL"
+    title, cards = _title_and_data(block)
+    cards = [c for c in cards if not c.is_blank]
     if not cards:
         log.error(f"/INIBEA/{sub}: missing data card", block.source)
         return
@@ -23544,7 +23560,8 @@ def read_inispr(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     sub = block.parts[1].upper() if len(block.parts) > 1 else "FULL"
     if sub.isdigit():
         sub = "FULL"
-    cards = [c for c in block.cards if not c.is_blank]
+    title, cards = _title_and_data(block)
+    cards = [c for c in cards if not c.is_blank]
     if not cards:
         log.error(f"/INISPR/{sub}: missing data card", block.source)
         return
@@ -23623,7 +23640,14 @@ def read_inispr(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 def read_iniqua(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/INIQUA/{STRS_F|EPSP|DENS|ENER}[/id]`` (M116): Initial state for quadrilateral shell elements."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else "STRS_F"
+    if sub.isdigit():
+        sub = "STRS_F"
+    table_key = f"INIQUA_{sub}_{block.user_id or 1}"
     read_inishe(block, model, log)
+    she_key = f"INISHE_{sub}_{block.user_id or 1}"
+    if she_key in model.ini_state_tables:
+        model.ini_state_tables[table_key] = model.ini_state_tables[she_key]
 
 
 def read_eig(block: KeywordBlock, model: Model, log: MessageLog) -> None:
