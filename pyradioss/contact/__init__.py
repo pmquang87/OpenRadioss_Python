@@ -12,28 +12,31 @@ Fortran origin: ``engine/source/interfaces/`` —
 """
 
 from .inter_type1 import ContactType1   # noqa: F401
-from .inter_type2 import ContactType2   # noqa: F401
+from .inter_type2 import ContactType2, LagmulType2   # noqa: F401
 from .inter_type3 import ContactType3   # noqa: F401
 from .inter_type5 import ContactType5   # noqa: F401
 from .inter_type6 import ContactType6   # noqa: F401
-from .inter_type7 import ContactType7   # noqa: F401
+from .inter_type7 import ContactType7, LagmulType7   # noqa: F401
 from .inter_type8 import ContactType8   # noqa: F401
 from .inter_type9 import ContactType9   # noqa: F401
-from .inter_type11 import ContactType11  # noqa: F401
-from .inter_type18 import ContactType18  # noqa: F401
-from .inter_type24 import ContactType24  # noqa: F401
 from .inter_type10 import ContactType10 # noqa: F401
+from .inter_type11 import ContactType11, LagmulType11  # noqa: F401
 from .inter_type12 import ContactType12 # noqa: F401
 from .inter_type14 import ContactType14 # noqa: F401
 from .inter_type15 import ContactType15 # noqa: F401
+from .inter_type16 import ContactType16, LagmulType16 # noqa: F401
+from .inter_type17 import ContactType17, LagmulType17 # noqa: F401
+from .inter_type18 import ContactType18  # noqa: F401
 from .inter_type20 import ContactType20 # noqa: F401
 from .inter_type21 import ContactType21 # noqa: F401
-from .inter_type23 import ContactType23 # noqa: F401
-from .inter_type16 import ContactType16 # noqa: F401
-from .inter_type17 import ContactType17 # noqa: F401
 from .inter_type22 import ContactType22 # noqa: F401
+from .inter_type23 import ContactType23 # noqa: F401
+from .inter_type24 import ContactType24  # noqa: F401
 from .inter_type25 import ContactType25 # noqa: F401
 from .inter_guided_cable import ContactGuidedCable # noqa: F401
+
+ContactType4 = ContactType7
+ContactType13 = ContactType7
 
 
 def build_contacts(model, log):
@@ -44,7 +47,6 @@ def build_contacts(model, log):
     penalty, tied = [], []
     for itf in model.interfaces:
         if getattr(itf, 'lagmul', False):
-            log.warning(f"Engine logic for /INTER/LAGMUL/TYPE{itf.type} not implemented, ignoring", f"Interface {itf.id}")
             continue
         if itf.type == 1:
             penalty.append(ContactType1(itf, model, log))

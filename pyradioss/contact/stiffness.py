@@ -82,6 +82,10 @@ def _per_element(group, getter) -> np.ndarray:
 def _segment_areas(x0: np.ndarray, segments: np.ndarray) -> np.ndarray:
     """Area of 3/4-node segments (triangles have n4 = n3: the cross
     product formula handles both, the degenerate diagonal halves it)."""
+    if len(segments) == 0:
+        return np.zeros(0, dtype=float)
+    if len(x0) == 0 or np.max(segments) >= len(x0):
+        return np.zeros(len(segments), dtype=float)
     xs = x0[segments]
     d1 = xs[:, 2] - xs[:, 0]
     d2 = xs[:, 3] - xs[:, 1]
@@ -108,7 +112,8 @@ def segment_stiffness_gap(model: Model, segments: np.ndarray,
     n = len(segments)
     K = np.zeros(n)
     gap = np.zeros(n)
-    area = _segment_areas(model.x0, segments)
+    x0 = model.x0 if getattr(model, "x0", None) is not None and len(model.x0) > 0 else getattr(model, "x", np.zeros((0, 3)))
+    area = _segment_areas(x0, segments)
 
     if seg_gtype is None:
         seg_gtype = np.full(n, "", dtype="<U8")
@@ -274,8 +279,12 @@ def edge_stiffness_gap(model: Model, edges: np.ndarray,
     for gname in np.unique(seg_gtype):
         sel = seg_gtype == gname
         if gname == "":
-            L = np.linalg.norm(model.x0[edges[sel, 1]]
-                               - model.x0[edges[sel, 0]], axis=1)
+            x0 = model.x0 if getattr(model, "x0", None) is not None and len(model.x0) > 0 else getattr(model, "x", np.zeros((0, 3)))
+            if len(x0) > 0 and np.max(edges[sel]) < len(x0):
+                L = np.linalg.norm(x0[edges[sel, 1]]
+                                   - x0[edges[sel, 0]], axis=1)
+            else:
+                L = np.ones(np.sum(sel))
             K[sel] = stfac * _fallback_modulus(model) * L
             continue
         group = getattr(model, gname, None)

@@ -165,7 +165,8 @@ class ContactType2:
         # ---- projection search (Starter i2buc1/i2dst3) --------------------
         # closest point of every candidate on every segment, chunked to
         # bound memory; keep the best segment within the search distance
-        area = _segment_areas(model.x0, segs)
+        x0 = model.x0 if getattr(model, "x0", None) is not None and len(model.x0) > 0 else getattr(model, "x", np.zeros((0, 3)))
+        area = _segment_areas(x0, segs)
         lc = float(np.sqrt(area.mean())) if len(area) else 1.0
         dsearch = itf.dsearch if itf.dsearch > 0 else lc
 
@@ -173,7 +174,6 @@ class ContactType2:
         best_d = np.full(nbest, np.inf)
         best_seg = np.full(nbest, -1, dtype=np.int64)
         best_w = np.zeros((nbest, 4))
-        x0 = model.x0
         chunk = max(1, 2 ** 22 // max(nbest, 1))     # ~4M pairs per chunk
         for s0 in range(0, len(segs), chunk):
             sc = segs[s0:s0 + chunk]

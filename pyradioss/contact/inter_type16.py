@@ -489,3 +489,280 @@ class LagmulType16:
             np.asarray(eq_ids, dtype=np.int64),
             n_rows,
         )
+
+
+class ContactType16:
+    """Explicit penalty contact interface /INTER/TYPE16: secondary nodes impacting master brick elements.
+
+    Fortran origin: ``engine/source/interfaces/int16/i16main.F``, ``i8lagm.F``.
+    """
+
+    # 6 faces of an 8-node brick element in OpenRadioss numbering (0-indexed)
+    # 1: s=-1 (0, 1, 2, 3)
+    # 2: s=+1 (4, 5, 6, 7)
+    # 3: t=-1 (0, 3, 7, 4)
+    # 4: t=+1 (1, 2, 6, 5)
+    # 5: r=-1 (0, 4, 5, 1)
+    # 6: r=+1 (3, 2, 6, 7)
+    BRICK_FACES = np.array([
+        [0, 3, 2, 1],  # bottom (s=-1) outward normal pointing down
+        [4, 5, 6, 7],  # top (s=+1) outward normal pointing up
+        [0, 1, 5, 4],  # front (r=-1)
+        [3, 7, 6, 2],  # back (r=+1)
+        [0, 4, 7, 3],  # left (t=-1)
+        [1, 2, 6, 5],  # right (t=+1)
+    ], dtype=np.int64)
+
+    def __init__(self, itf, model: Model, log=None):
+        self.itf = itf
+        self.model = model
+        self.log = log if log is not None else getattr(model, "log", None)
+
+        self.stfac = float(getattr(itf, "stfac", 1.0) or 1.0)
+        self.fric = float(getattr(itf, "fric", 0.0) or 0.0)
+        self.gap = float(getattr(itf, "gap", 0.0) or 0.0)
+        self.visc = float(getattr(itf, "visc", 0.05) or 0.05)
+        self.stmin = float(getattr(itf, "stmin", 0.0) or 0.0)
+        self.stmax = float(getattr(itf, "stmax", np.inf) or np.inf)
+        self.tstart = float(getattr(itf, "tstart", 0.0) or 0.0)
+        self.tstop = float(getattr(itf, "tstop", np.inf) or np.inf)
+        if self.tstop <= 0.0:
+            self.tstop = np.inf
+        self.dt_bound = np.inf
+
+        self._init_empty()
+        self._resolve_entities()
+
+    def _init_empty(self) -> None:
+        self.snode = np.zeros(0, dtype=np.int64)
+        self.brick_idx = np.zeros(0, dtype=np.int64)
+        self.bricks = np.zeros((0, 8), dtype=np.int64)
+
+    def _resolve_entities(self) -> None:
+        """Resolve secondary nodes and master bricks from interface definition."""
+        # 1. Secondary nodes (from itf.surf_id or itf.secondary_nodes or itf.grnod_id)
+        if hasattr(self.itf, "secondary_nodes") and self.itf.secondary_nodes is not None:
+            self.snode = np.asarray(self.itf.secondary_nodes, dtype=np.int64)
+        elif hasattr(self.itf, "snode") and self.itf.snode is not None:
+            self.snode = np.asarray(self.itf.snode, dtype=np.int64)
+        else:
+            grnod_id = getattr(self.itf, "grnod_id", getattr(self.itf, "surf_id", 0))
+            g = None
+            if hasattr(self.model, "node_groups") and self.model.node_groups:
+                g = self.model.node_groups.get(grnod_id)
+            if g is not None:
+                if getattr(g, "node_idx", None) is not None:
+                    self.snode = np.asarray(g.node_idx, dtype=np.int64)
+                elif getattr(g, "node_ids", None) and hasattr(self.model, "node_id_to_idx"):
+                    self.snode = np.array([
+                        self.model.node_id_to_idx[nid]
+                        for nid in g.node_ids
+                        if nid in self.model.node_id_to_idx
+                    ], dtype=np.int64)
+                elif getattr(g, "nodes", None) is not None:
+                    self.snode = np.asarray(g.nodes, dtype=np.int64)
+            elif hasattr(self.model, "surfaces") and grnod_id in self.model.surfaces:
+                surf = self.model.surfaces[grnod_id]
+                if hasattr(surf, "nodes") and surf.nodes is not None:
+                    self.snode = np.asarray(surf.nodes, dtype=np.int64)
+                elif hasattr(surf, "segments") and len(surf.segments) > 0:
+                    self.snode = np.unique(surf.segments.reshape(-1))
+
+        # 2. Master bricks (from itf.surf_id1 or itf.grbric_id1 or model.bricks)
+        if hasattr(self.itf, "bricks") and self.itf.bricks is not None:
+            b = np.asarray(self.itf.bricks, dtype=np.int64)
+            if b.ndim == 2 and b.shape[1] >= 8:
+                self.bricks = b[:, :8]
+                self.brick_idx = np.arange(len(b), dtype=np.int64)
+                return
+        if hasattr(self.itf, "master_bricks") and self.itf.master_bricks is not None:
+            b = np.asarray(self.itf.master_bricks, dtype=np.int64)
+            if b.ndim == 2 and b.shape[1] >= 8:
+                self.bricks = b[:, :8]
+                self.brick_idx = np.arange(len(b), dtype=np.int64)
+                return
+
+        grbric_id = getattr(self.itf, "grbric_id1", getattr(self.itf, "surf_id1", 0))
+        egroups = getattr(self.model, "egroups", {})
+        master_group = None
+        if grbric_id > 0 and egroups:
+            master_group = (
+                egroups.get("GRBRIC", {}).get(grbric_id)
+                or egroups.get("BRIC", {}).get(grbric_id)
+                or egroups.get("PART", {}).get(grbric_id)
+            )
+
+        model_bricks = getattr(self.model, "bricks", None)
+        if model_bricks is None:
+            return
+
+        if hasattr(model_bricks, "conn"):
+            all_conn = model_bricks.conn
+        elif hasattr(model_bricks, "ixs"):
+            all_conn = model_bricks.ixs
+        elif isinstance(model_bricks, np.ndarray):
+            all_conn = model_bricks
+        else:
+            return
+
+        if master_group is not None:
+            if getattr(master_group, "elem_idx", None) is not None:
+                self.brick_idx = np.asarray(master_group.elem_idx, dtype=np.int64)
+            elif getattr(master_group, "members", None):
+                rows = []
+                for attr, r in master_group.members:
+                    if "bric" in attr.lower() or attr in ("bricks", "bric20s"):
+                        rows.append(np.asarray(r, dtype=np.int64))
+                if rows:
+                    self.brick_idx = np.unique(np.concatenate(rows))
+            elif getattr(master_group, "elem_ids", None) and hasattr(self.model, "elem_id_to_idx"):
+                self.brick_idx = np.array([
+                    self.model.elem_id_to_idx[eid]
+                    for eid in master_group.elem_ids
+                    if eid in self.model.elem_id_to_idx
+                ], dtype=np.int64)
+        elif grbric_id == 0:
+            n_bricks = model_bricks.n if hasattr(model_bricks, "n") else len(all_conn)
+            self.brick_idx = np.arange(n_bricks, dtype=np.int64)
+
+        if len(self.brick_idx) > 0 and len(all_conn) > 0:
+            valid = (self.brick_idx >= 0) & (self.brick_idx < len(all_conn))
+            self.brick_idx = self.brick_idx[valid]
+            if len(self.brick_idx) > 0:
+                self.bricks = np.asarray(all_conn[self.brick_idx, :8], dtype=np.int64)
+
+    def forces(self, x: np.ndarray, v: np.ndarray, mass: np.ndarray, dt: float,
+               fcont: np.ndarray, cycle: int = 0, stifn: Optional[np.ndarray] = None,
+               t: Optional[float] = None) -> tuple[float, float]:
+        """Compute explicit penalty contact forces between secondary nodes and master bricks.
+
+        Returns (-work, dt_contact).
+        """
+        if len(self.snode) == 0 or len(self.bricks) == 0 or dt <= 0.0:
+            return 0.0, self.dt_bound
+
+        if t is not None and (t < self.tstart or t > self.tstop):
+            return 0.0, self.dt_bound
+
+        n_coords = len(x)
+        valid_snode = self.snode[(self.snode >= 0) & (self.snode < n_coords)]
+        if len(valid_snode) == 0:
+            return 0.0, self.dt_bound
+
+        valid_bricks_mask = np.all((self.bricks >= 0) & (self.bricks < n_coords), axis=1)
+        if not np.any(valid_bricks_mask):
+            return 0.0, self.dt_bound
+        bricks = self.bricks[valid_bricks_mask]
+
+        # Broad phase AABB
+        b_x = x[bricks]  # (n_bricks, 8, 3)
+        b_min = b_x.min(axis=1) - (self.gap + 1e-4)
+        b_max = b_x.max(axis=1) + (self.gap + 1e-4)
+
+        sn_x = x[valid_snode]
+        cand_n = []
+        cand_b = []
+        for i, pt in enumerate(sn_x):
+            inside = np.all((pt >= b_min) & (pt <= b_max), axis=1)
+            for j in np.where(inside)[0]:
+                cand_n.append(i)
+                cand_b.append(j)
+
+        if not cand_n:
+            return 0.0, self.dt_bound
+
+        cand_n = np.array(cand_n, dtype=np.int64)
+        cand_b = np.array(cand_b, dtype=np.int64)
+
+        total_work = 0.0
+        dt_min = self.dt_bound
+
+        # Narrow phase: evaluate penetration for candidate (node, brick) pairs
+        for ni_loc, bj in zip(cand_n, cand_b):
+            node_idx = valid_snode[ni_loc]
+            pt = sn_x[ni_loc]
+            brick_nodes = bricks[bj]
+            bx = x[brick_nodes]  # (8, 3)
+            brick_center = np.mean(bx, axis=0)
+
+            # Check penetration against the 6 faces of the brick
+            best_pen = -1.0
+            best_n = np.zeros(3, dtype=float)
+            best_N = np.full(8, 0.125, dtype=float)
+            min_abs_dist = np.inf
+
+            for face in self.BRICK_FACES:
+                f_nodes = brick_nodes[face]
+                fx = x[f_nodes]  # (4, 3)
+                v13 = fx[2] - fx[0]
+                v24 = fx[3] - fx[1]
+                n_face = np.cross(v13, v24)
+                n_len = np.linalg.norm(n_face)
+                if n_len <= 1e-20:
+                    continue
+                n_face /= n_len
+                f_center = np.mean(fx, axis=0)
+                # Ensure n_face points outward from the brick center
+                if np.dot(n_face, f_center - brick_center) < 0.0:
+                    n_face = -n_face
+
+                dist_to_face = float(np.dot(pt - f_center, n_face))
+                pen = self.gap - dist_to_face
+                if pen > 0.0 and abs(dist_to_face) < min_abs_dist:
+                    min_abs_dist = abs(dist_to_face)
+                    best_pen = pen
+                    best_n = n_face
+                    best_N = np.zeros(8, dtype=float)
+                    best_N[face] = 0.25
+
+            if best_pen <= 0.0:
+                continue
+
+            # Stiffness calculation
+            m_node = float(mass[node_idx]) if len(mass) > node_idx else 1.0
+            k_base = 0.1 * m_node / (dt * dt) if dt > 0.0 else 1e6
+            K = self.stfac * k_base
+            if self.stmin > 0.0:
+                K = max(K, self.stmin)
+            if self.stmax < np.inf:
+                K = min(K, self.stmax)
+
+            # Normal damping
+            v_node = v[node_idx]
+            v_brick = np.sum(best_N[:, None] * v[brick_nodes], axis=0)
+            v_rel = v_node - v_brick
+            vn = float(np.dot(v_rel, best_n))
+
+            c_damp = 2.0 * self.visc * np.sqrt(max(K * m_node, 1e-20))
+            fn = max(0.0, K * best_pen - c_damp * min(vn, 0.0))
+
+            f_total = fn * best_n
+
+            # Coulomb friction
+            if self.fric > 0.0 and fn > 0.0:
+                vt = v_rel - vn * best_n
+                vt_mag = np.linalg.norm(vt)
+                if vt_mag > 1e-12:
+                    ft_mag = min(self.fric * fn, 0.5 * m_node * vt_mag / dt)
+                    f_total -= (ft_mag / vt_mag) * vt
+
+            # Assemble into fcont: +F on secondary node, -N_i * F on brick nodes
+            fcont[node_idx] += f_total
+            for k in range(8):
+                fcont[brick_nodes[k]] -= best_N[k] * f_total
+
+            # Accumulate stiffness into stifn for /DT/NODA
+            if stifn is not None:
+                stifn[node_idx] += K
+                for k in range(8):
+                    stifn[brick_nodes[k]] += best_N[k] * K
+
+            # Time step bound
+            dt_cand = np.sqrt(2.0 * m_node / max(K, 1e-20))
+            dt_min = min(dt_min, float(dt_cand))
+
+            # Energy work done
+            total_work += float(np.dot(f_total, v_rel)) * dt
+
+        return -total_work, dt_min
+

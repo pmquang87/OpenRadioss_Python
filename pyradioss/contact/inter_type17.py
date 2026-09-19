@@ -548,3 +548,293 @@ class LagmulType17:
             np.asarray(eq_ids, dtype=np.int64),
             n_rows,
         )
+
+
+class ContactType17:
+    """Explicit penalty / Hertz contact interface /INTER/TYPE17: brick-to-brick contact.
+
+    Fortran origin: ``engine/source/interfaces/int17/i17main.F``, ``i17lagm.F``.
+    """
+
+    BRICK_FACES = np.array([
+        [0, 3, 2, 1],  # bottom (s=-1)
+        [4, 5, 6, 7],  # top (s=+1)
+        [0, 1, 5, 4],  # front (r=-1)
+        [3, 7, 6, 2],  # back (r=+1)
+        [0, 4, 7, 3],  # left (t=-1)
+        [1, 2, 6, 5],  # right (t=+1)
+    ], dtype=np.int64)
+
+    def __init__(self, itf, model: Model, log=None):
+        self.itf = itf
+        self.model = model
+        self.log = log if log is not None else getattr(model, "log", None)
+
+        self.stfac = float(getattr(itf, "stfac", 1.0) or 1.0)
+        self.fric = float(getattr(itf, "fric", 0.0) or 0.0)
+        self.gap = float(getattr(itf, "gap", 0.0) or 0.0)
+        self.radius = float(getattr(itf, "radius", 0.0) or 0.0)
+        self.visc = float(getattr(itf, "visc", 0.05) or 0.05)
+        self.stmin = float(getattr(itf, "stmin", 0.0) or 0.0)
+        self.stmax = float(getattr(itf, "stmax", np.inf) or np.inf)
+        self.tstart = float(getattr(itf, "tstart", 0.0) or 0.0)
+        self.tstop = float(getattr(itf, "tstop", np.inf) or np.inf)
+        if self.tstop <= 0.0:
+            self.tstop = np.inf
+        self.dt_bound = np.inf
+
+        self._init_empty()
+        self._resolve_entities()
+
+    def _init_empty(self) -> None:
+        self.sec_brick_idx = np.zeros(0, dtype=np.int64)
+        self.sec_bricks = np.zeros((0, 8), dtype=np.int64)
+        self.mas_brick_idx = np.zeros(0, dtype=np.int64)
+        self.mas_bricks = np.zeros((0, 8), dtype=np.int64)
+
+    def _resolve_brick_group(self, grbric_id: int, direct_bricks: Any = None) -> tuple[np.ndarray, np.ndarray]:
+        """Helper to resolve a brick group into (brick_indices, brick_connectivity)."""
+        if direct_bricks is not None:
+            b = np.asarray(direct_bricks, dtype=np.int64)
+            if b.ndim == 2 and b.shape[1] >= 8:
+                return np.arange(len(b), dtype=np.int64), b[:, :8]
+
+        model_bricks = getattr(self.model, "bricks", None)
+        if model_bricks is None:
+            return np.zeros(0, dtype=np.int64), np.zeros((0, 8), dtype=np.int64)
+
+        if hasattr(model_bricks, "conn"):
+            all_conn = model_bricks.conn
+        elif hasattr(model_bricks, "ixs"):
+            all_conn = model_bricks.ixs
+        elif isinstance(model_bricks, np.ndarray):
+            all_conn = model_bricks
+        else:
+            return np.zeros(0, dtype=np.int64), np.zeros((0, 8), dtype=np.int64)
+
+        egroups = getattr(self.model, "egroups", {})
+        group = None
+        if grbric_id > 0 and egroups:
+            group = (
+                egroups.get("GRBRIC", {}).get(grbric_id)
+                or egroups.get("BRIC", {}).get(grbric_id)
+                or egroups.get("PART", {}).get(grbric_id)
+            )
+
+        brick_idx = np.zeros(0, dtype=np.int64)
+        if group is not None:
+            if getattr(group, "elem_idx", None) is not None:
+                brick_idx = np.asarray(group.elem_idx, dtype=np.int64)
+            elif getattr(group, "members", None):
+                rows = []
+                for attr, r in group.members:
+                    if "bric" in attr.lower() or attr in ("bricks", "bric20s"):
+                        rows.append(np.asarray(r, dtype=np.int64))
+                if rows:
+                    brick_idx = np.unique(np.concatenate(rows))
+            elif getattr(group, "elem_ids", None) and hasattr(self.model, "elem_id_to_idx"):
+                brick_idx = np.array([
+                    self.model.elem_id_to_idx[eid]
+                    for eid in group.elem_ids
+                    if eid in self.model.elem_id_to_idx
+                ], dtype=np.int64)
+        elif grbric_id == 0:
+            n_bricks = model_bricks.n if hasattr(model_bricks, "n") else len(all_conn)
+            brick_idx = np.arange(n_bricks, dtype=np.int64)
+
+        if len(brick_idx) > 0 and len(all_conn) > 0:
+            valid = (brick_idx >= 0) & (brick_idx < len(all_conn))
+            brick_idx = brick_idx[valid]
+            if len(brick_idx) > 0:
+                return brick_idx, np.asarray(all_conn[brick_idx, :8], dtype=np.int64)
+
+        return np.zeros(0, dtype=np.int64), np.zeros((0, 8), dtype=np.int64)
+
+    def _resolve_entities(self) -> None:
+        """Resolve secondary and master brick elements."""
+        direct_sec = getattr(self.itf, "secondary_bricks", getattr(self.itf, "sec_bricks", None))
+        direct_mas = getattr(self.itf, "master_bricks", getattr(self.itf, "mas_bricks", None))
+
+        gr1 = getattr(self.itf, "grbric_id1", getattr(self.itf, "surf_id", 0))
+        gr2 = getattr(self.itf, "grbric_id2", getattr(self.itf, "surf_id1", 0))
+
+        self.sec_brick_idx, self.sec_bricks = self._resolve_brick_group(gr1, direct_sec)
+        self.mas_brick_idx, self.mas_bricks = self._resolve_brick_group(gr2, direct_mas)
+
+    def forces(self, x: np.ndarray, v: np.ndarray, mass: np.ndarray, dt: float,
+               fcont: np.ndarray, cycle: int = 0, stifn: Optional[np.ndarray] = None,
+               t: Optional[float] = None) -> tuple[float, float]:
+        """Compute explicit penalty / Hertz contact forces between brick pairs.
+
+        Returns (-work, dt_contact).
+        """
+        if len(self.sec_bricks) == 0 or len(self.mas_bricks) == 0 or dt <= 0.0:
+            return 0.0, self.dt_bound
+
+        if t is not None and (t < self.tstart or t > self.tstop):
+            return 0.0, self.dt_bound
+
+        n_coords = len(x)
+        valid_s = np.all((self.sec_bricks >= 0) & (self.sec_bricks < n_coords), axis=1)
+        valid_m = np.all((self.mas_bricks >= 0) & (self.mas_bricks < n_coords), axis=1)
+        if not np.any(valid_s) or not np.any(valid_m):
+            return 0.0, self.dt_bound
+
+        s_bricks = self.sec_bricks[valid_s]
+        m_bricks = self.mas_bricks[valid_m]
+
+        total_work = 0.0
+        dt_min = self.dt_bound
+
+        # Case 1: Hertz sphere/ellipsoid contact between brick centroids (radius > 0)
+        if self.radius > 0.0:
+            # Centroid positions
+            s_cen = np.mean(x[s_bricks], axis=1)  # (n_sec, 3)
+            m_cen = np.mean(x[m_bricks], axis=1)  # (n_mas, 3)
+
+            r_contact = 2.0 * self.radius + self.gap
+
+            # Broad phase AABB on centroids
+            for i, p_s in enumerate(s_cen):
+                diff = m_cen - p_s  # (n_mas, 3)
+                dist_sq = np.sum(diff * diff, axis=1)
+                cand_j = np.where(dist_sq < r_contact * r_contact)[0]
+
+                for j in cand_j:
+                    d = float(np.sqrt(dist_sq[j]))
+                    if d <= 1e-20:
+                        n_vec = np.array([0.0, 0.0, 1.0])
+                    else:
+                        n_vec = (p_s - m_cen[j]) / d
+
+                    pen = r_contact - d
+                    if pen <= 0.0:
+                        continue
+
+                    # Hertz contact law: Fn = K * pen^1.5
+                    sb_nodes = s_bricks[i]
+                    mb_nodes = m_bricks[j]
+                    m_eff = float(np.mean(mass[sb_nodes]))
+
+                    k_base = 0.1 * m_eff / (dt * dt) if dt > 0.0 else 1e6
+                    K = self.stfac * k_base
+                    if self.stmin > 0.0:
+                        K = max(K, self.stmin)
+                    if self.stmax < np.inf:
+                        K = min(K, self.stmax)
+
+                    fn = K * (pen ** 1.5)
+
+                    # Damping
+                    vs = np.mean(v[sb_nodes], axis=0)
+                    vm = np.mean(v[mb_nodes], axis=0)
+                    v_rel = vs - vm
+                    vn = float(np.dot(v_rel, n_vec))
+                    c_damp = 2.0 * self.visc * np.sqrt(max(K * m_eff, 1e-20))
+                    fn = max(0.0, fn - c_damp * min(vn, 0.0))
+
+                    f_total = fn * n_vec
+
+                    # Friction
+                    if self.fric > 0.0 and fn > 0.0:
+                        vt = v_rel - vn * n_vec
+                        vt_mag = np.linalg.norm(vt)
+                        if vt_mag > 1e-12:
+                            ft_mag = min(self.fric * fn, 0.5 * m_eff * vt_mag / dt)
+                            f_total -= (ft_mag / vt_mag) * vt
+
+                    # Scatter: +1/8 on secondary brick nodes, -1/8 on master brick nodes
+                    for k in range(8):
+                        fcont[sb_nodes[k]] += 0.125 * f_total
+                        fcont[mb_nodes[k]] -= 0.125 * f_total
+
+                    if stifn is not None:
+                        for k in range(8):
+                            stifn[sb_nodes[k]] += 0.125 * K
+                            stifn[mb_nodes[k]] += 0.125 * K
+
+                    dt_cand = np.sqrt(2.0 * m_eff / max(K, 1e-20))
+                    dt_min = min(dt_min, float(dt_cand))
+                    total_work += float(np.dot(f_total, v_rel)) * dt
+
+            return -total_work, dt_min
+
+        # Case 2: Standard penalty contact between secondary brick nodes and master brick faces
+        sec_nodes_unique = np.unique(s_bricks.reshape(-1))
+        m_x = x[m_bricks]
+        m_min = m_x.min(axis=1) - (self.gap + 1e-4)
+        m_max = m_x.max(axis=1) + (self.gap + 1e-4)
+
+        for snode in sec_nodes_unique:
+            pt = x[snode]
+            inside = np.all((pt >= m_min) & (pt <= m_max), axis=1)
+            cand_mas = np.where(inside)[0]
+
+            for mj in cand_mas:
+                mb_nodes = m_bricks[mj]
+                best_pen = -1.0
+                best_n = np.zeros(3, dtype=float)
+                best_N = np.full(8, 0.125, dtype=float)
+
+                for face in self.BRICK_FACES:
+                    f_nodes = mb_nodes[face]
+                    fx = x[f_nodes]
+                    v13 = fx[2] - fx[0]
+                    v24 = fx[3] - fx[1]
+                    n_face = np.cross(v13, v24)
+                    n_len = np.linalg.norm(n_face)
+                    if n_len <= 1e-20:
+                        continue
+                    n_face /= n_len
+                    f_center = np.mean(fx, axis=0)
+                    dist_to_face = np.dot(pt - f_center, n_face)
+                    pen = self.gap - dist_to_face
+                    if pen > best_pen:
+                        best_pen = pen
+                        best_n = n_face
+                        best_N = np.zeros(8, dtype=float)
+                        best_N[face] = 0.25
+
+                if best_pen <= 0.0:
+                    continue
+
+                m_node = float(mass[snode]) if len(mass) > snode else 1.0
+                k_base = 0.1 * m_node / (dt * dt) if dt > 0.0 else 1e6
+                K = self.stfac * k_base
+                if self.stmin > 0.0:
+                    K = max(K, self.stmin)
+                if self.stmax < np.inf:
+                    K = min(K, self.stmax)
+
+                v_s = v[snode]
+                v_m = np.sum(best_N[:, None] * v[mb_nodes], axis=0)
+                v_rel = v_s - v_m
+                vn = float(np.dot(v_rel, best_n))
+
+                c_damp = 2.0 * self.visc * np.sqrt(max(K * m_node, 1e-20))
+                fn = max(0.0, K * best_pen - c_damp * min(vn, 0.0))
+
+                f_total = fn * best_n
+
+                if self.fric > 0.0 and fn > 0.0:
+                    vt = v_rel - vn * best_n
+                    vt_mag = np.linalg.norm(vt)
+                    if vt_mag > 1e-12:
+                        ft_mag = min(self.fric * fn, 0.5 * m_node * vt_mag / dt)
+                        f_total -= (ft_mag / vt_mag) * vt
+
+                fcont[snode] += f_total
+                for k in range(8):
+                    fcont[mb_nodes[k]] -= best_N[k] * f_total
+
+                if stifn is not None:
+                    stifn[snode] += K
+                    for k in range(8):
+                        stifn[mb_nodes[k]] += best_N[k] * K
+
+                dt_cand = np.sqrt(2.0 * m_node / max(K, 1e-20))
+                dt_min = min(dt_min, float(dt_cand))
+                total_work += float(np.dot(f_total, v_rel)) * dt
+
+        return -total_work, dt_min
+

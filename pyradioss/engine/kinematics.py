@@ -291,6 +291,16 @@ class LoadsAndConstraints:
         self.impacc_engine = ImposedAccelerationEngine(model, log)
         self.impacc = self.impacc_engine.entries
 
+        # BCS subsystems (M612)
+        from .bcs_nrf import NonReflectingBoundaryEngine
+        from .bcs_cyclic import CyclicBoundaryEngine
+        from .bcs_wall import SlidingWallBcsEngine
+        from .nbcs import NonLinearBcsEngine
+        self.nrf_engine = NonReflectingBoundaryEngine(model, log)
+        self.cyclic_engine = CyclicBoundaryEngine(model, log)
+        self.wall_engine = SlidingWallBcsEngine(model, log)
+        self.nbcs_engine = NonLinearBcsEngine(model, log)
+
     # ------------------------------------------------------------------
     def external_forces(self, t: float, fext: np.ndarray,
                         x: np.ndarray, sensors=None) -> None:
@@ -345,6 +355,11 @@ class LoadsAndConstraints:
 
         # Centrifugal body forces (/LOAD/CENTRI and /CENTRI, M595)
         self.centri_engine.compute_forces(t, x, fext, sensors)
+
+        # Non-reflecting boundary absorbing dashpot forces (/BCS/NRF and /EBCS/NRF, M612)
+        vel = getattr(self.model, "v", None)
+        if vel is not None and hasattr(self, "nrf_engine"):
+            self.nrf_engine.compute_forces(t, x, vel, fext)
 
     # ------------------------------------------------------------------
     @property
@@ -561,4 +576,17 @@ class LoadsAndConstraints:
                 if frot[d]:
                     e = axes[d]
                     vr[idx] -= np.outer(vr[idx] @ e, e)
+
+        # Cyclic sector symmetry boundary conditions (/BCS/CYCLIC, M612)
+        if hasattr(self, "cyclic_engine"):
+            self.cyclic_engine.enforce(x, v, getattr(self.model, "a", None))
+
+        # Dynamic non-linear boundary conditions (/NBCS, M612)
+        if hasattr(self, "nbcs_engine"):
+            self.nbcs_engine.apply(v, vr, getattr(self.model, "a", None))
+
+        # Non-reflecting absorbing work accounting (M612)
+        if hasattr(self, "nrf_engine"):
+            w += getattr(self.nrf_engine, "last_work", 0.0)
+
         return w

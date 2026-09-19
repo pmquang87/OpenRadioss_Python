@@ -1468,6 +1468,7 @@ class Interface:
     grnod_id: int = 0     # secondary nodes (7: 0 = self-impact; 2: required; 24: node-to-surface; 16: secondary nodes)
     surf_id: int = 0      # main surface (types 7, 2, 24)
     surf_id1: int = 0     # secondary surface (type 24 surface-to-surface)
+    surf_id2: int = 0     # main/secondary surface 2 (types 3, 20, 24)
     line_id1: int = 0     # secondary edges (type 11)
     line_id2: int = 0     # main edges (type 11)
     grbric_id1: int = 0   # secondary brick group (type 17) or main brick group (type 16)
@@ -1542,6 +1543,7 @@ class Interface:
     pmax: float = 1e30    # type 21: maximum contact pressure / force limit
     itlim: int = 0        # type 21: tangential force limit flag (0=limited, 1=deactivated)
     fpenmax: float = 1.0  # type 23: max fraction of initial penetration
+    params: dict = field(default_factory=dict)  # generic/extended interface parameters
 
 
 @dataclass
@@ -2380,6 +2382,9 @@ class BcsNrf:
     isub: int = 0
     ityp: int = 0
     factor: float = 0.0
+    rho: float = 0.0
+    cp: float = 0.0
+    cs: float = 0.0
 
     def __post_init__(self):
         if not self.grnod_id and self.set_id:
@@ -4358,6 +4363,19 @@ class NbcsNode:
     wz: int = 0
     skew_id: int = 0
     node_id: int = 0
+    tra: Any = None
+    rot: Any = None
+    active: bool = True
+
+    def __post_init__(self):
+        if self.tra is not None and len(self.tra) >= 3:
+            self.tx = int(self.tra[0])
+            self.ty = int(self.tra[1])
+            self.tz = int(self.tra[2])
+        if self.rot is not None and len(self.rot) >= 3:
+            self.wx = int(self.rot[0])
+            self.wy = int(self.rot[1])
+            self.wz = int(self.rot[2])
 
 
 @dataclass
@@ -19114,8 +19132,8 @@ class BcsLagmul:
     """``/BCS/LAGMUL/id`` (M202): Lagrange multiplier constraint on node group."""
     id: int = 0
     title: str = ""
-    tra: str = "111"
-    rot: str = "111"
+    tra: Any = "111"
+    rot: Any = "111"
     skew_id: int = 0
     grnod_id: int = 0
 

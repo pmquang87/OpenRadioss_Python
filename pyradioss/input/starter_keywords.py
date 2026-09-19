@@ -9728,6 +9728,10 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_bcs_wall(block, model, log)
         return
 
+    if sub == "PROPELLANT":
+        read_ebcs_propellant(block, model, log)
+        return
+
     if sub in ("LAGMUL", "LAG"):
         title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
         if not cards or (block.fixed and cards[0].is_blank):
@@ -88096,6 +88100,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "EBCS_NRF": read_ebcs_nrf,
     "EBCS_CYCLIC": read_ebcs_cyclic,
     "EBCS_PROPELLANT": read_ebcs_propellant,
+    "BCS_PROPELLANT": read_ebcs_propellant,
     "LOAD_PCYL": read_load_pcyl,
     "PCYL": read_load_pcyl,
     "EBCS_MONVOL": read_ebcs_monvol,
