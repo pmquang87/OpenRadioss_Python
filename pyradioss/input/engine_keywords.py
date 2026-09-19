@@ -196,9 +196,9 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 sub2 = block.parts[2].upper() if len(block.parts) > 2 else ""
                 sub3 = block.parts[3].upper() if len(block.parts) > 3 else ""
                 if sub == "NODA":
-                    ec.dt_noda = ("CST" if len(block.parts) > 2 and
-                                  block.parts[2].upper() == "CST"
-                                  else "NODA")
+                    ec.dt_noda = sub2 if sub2 else "NODA"
+                    if len(block.parts) > 3 and block.parts[3].isdigit():
+                        ec.dt_noda_grnod = int(block.parts[3])
                 elif sub == "AMS":
                     ec.dt_ams = True
                     if len(block.parts) > 2:
@@ -243,6 +243,13 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             ec.dt_scale = vals[0] if vals[0] > 0.0 else 0.9
                         if len(vals) > 1:
                             ec.dt_min = vals[1]
+                        if sub == "NODA":
+                            if len(vals) > 2:
+                                ec.dt_noda_percent_addmass = vals[2]
+                            if len(block.cards) > 1:
+                                c1 = block.cards[1].ints()
+                                if c1:
+                                    ec.dt_noda_grnod = c1[0]
                 elif sub == "AMS":
                     if block.cards:
                         vals = block.cards[0].floats()
@@ -1202,8 +1209,10 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             emax = vals[0]
                             if emax > 0.0:
                                 ec.energy_error_stop = emax
-                        if len(vals) > 2 and vals[2] > 0.0:
-                            ec.stop_nstep = int(vals[2])
+                        if len(vals) > 1:
+                            ec.mass_error_stop = vals[1]
+                        if len(vals) > 2:
+                            ec.nodal_mass_error_stop = vals[2]
             elif key == "DEBUG":
                 # /DEBUG or /DEBUG/<suboption> (M120): fredebug.F
                 sub = block.parts[1].upper() if len(block.parts) > 1 else ""

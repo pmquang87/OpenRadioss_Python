@@ -130,7 +130,7 @@ def test_kerel_peak_zeroing_unit():
     de3 = relax.apply(0.03, 0.01, v, vr, model.mass, model.inertia)
     # Peak detected: velocities zeroed!
     assert np.allclose(v, 0.0)
-    assert de3 == pytest.approx(15.0)  # dissipated peak KE
+    assert de3 == pytest.approx(12.0)  # dissipated annihilated current KE (static.F:116)
     assert relax.ke_prev == 0.0
 
     # Step 4: Next cycle with v=0

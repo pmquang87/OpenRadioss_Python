@@ -423,7 +423,7 @@ class DynamicRelaxation:
                 v[idx] = 0.0
                 if vr is not None and inertia is not None and np.any(has_in):
                     vr[ir] = 0.0
-                de += self.ke_prev
+                de += ke
                 self.ke_prev = 0.0
             else:
                 self.ke_prev = ke
@@ -444,4 +444,104 @@ class DynamicRelaxation:
                     vr[ir] *= fac
 
         return de
+
+    def apply_acceleration_damping(
+        self,
+        a: np.ndarray,
+        v: np.ndarray,
+        dt: float,
+        dt12: float,
+        ar: Optional[np.ndarray] = None,
+        vr: Optional[np.ndarray] = None,
+    ) -> None:
+        """Apply acceleration damping coupling matching static.F:83-109 / 135-165.
+
+        A <- -2*beta*V + (1 - beta*dt12)*A
+        AR <- -2*beta*VR + (1 - beta*dt12)*AR
+        """
+        if self.dyrel_active:
+            beta = self.betate
+            target_idx = self.dyrel_idx
+        elif self.adyrel_active:
+            beta = self.adyrel_betate
+            target_idx = self.adyrel_idx
+        else:
+            beta = self.betate
+            target_idx = self.dyrel_idx
+
+        if beta <= 0.0:
+            return
+
+        omega = beta * dt12
+        uomega = 1.0 - omega
+        domega = 2.0 * beta
+
+        if a.ndim > 1 and len(target_idx) > 0 and np.max(target_idx) < a.shape[0]:
+            a[target_idx] = -domega * v[target_idx] + uomega * a[target_idx]
+        else:
+            a[:] = -domega * v + uomega * a
+
+        if ar is not None and vr is not None:
+            if ar.ndim > 1 and len(target_idx) > 0 and np.max(target_idx) < ar.shape[0]:
+                ar[target_idx] = -domega * vr[target_idx] + uomega * ar[target_idx]
+            else:
+                ar[:] = -domega * vr + uomega * ar
+
+    def compute_timestep_reduction(
+        self,
+        dt: float,
+        dt12: float,
+        beta: Optional[float] = None,
+    ) -> float:
+        """Compute time-step stability factor matching dtnodarayl.F:168-188.
+
+        Dampa3 = 2 * beta / (1 + beta * dt12)
+        BB = 0.5 * Dampa3 * dt^2
+        dt_reduced = sqrt(BB^2 + dt^2) - BB
+        """
+        if beta is None:
+            if self.adyrel_active and self.adyrel_betate > 0.0:
+                beta = self.adyrel_betate
+            elif self.dyrel_active and self.betate > 0.0:
+                beta = self.betate
+            else:
+                beta = self.betate
+
+        if beta <= 0.0 or dt <= 0.0:
+            return float(dt)
+
+        dampa3 = 2.0 * beta / (1.0 + beta * dt12)
+        bb = 0.5 * dampa3 * (dt * dt)
+        dt_reduced = float(np.sqrt(bb * bb + dt * dt) - bb)
+        return dt_reduced
+
+    def check_convergence(
+        self,
+        e_kin: float,
+        e_int: float,
+        e_kin_max: float,
+        tol: float = 1e-3,
+    ) -> bool:
+        """Check static relaxation convergence."""
+        return check_convergence(e_kin, e_int, e_kin_max, tol=tol)
+
+
+def check_convergence(
+    e_kin: float,
+    e_int: float,
+    e_kin_max: float,
+    tol: float = 1e-3,
+) -> bool:
+    """Check static relaxation convergence.
+
+    Signals that static equilibrium has been reached when either:
+    1. E_kin / E_int < tol (default 1e-3)
+    2. E_kin / E_kin_max < tol
+    """
+    if e_int > 0.0 and (e_kin / e_int) < tol:
+        return True
+    if e_kin_max > 0.0 and (e_kin / e_kin_max) < tol:
+        return True
+    return False
+
 

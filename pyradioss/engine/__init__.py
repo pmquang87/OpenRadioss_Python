@@ -8,4 +8,13 @@ ported as :mod:`pyradioss.engine.engine`.
 
 from .engine import run_engine  # noqa: F401
 from .element_erosion import compute_sdlenmax, check_solid_geometric_erosion, SdLenMaxArray  # noqa: F401
+from .range_damping import (  # noqa: F401
+    damping_range_compute_param,
+    DampingRangeSolid,
+    DampingRangeShell,
+    damping_range_solid_subroutine,
+    damping_range_shell_subroutine,
+    damping_range_shell_mom_subroutine,
+)
+from .noise import compute_filter_coefficients, FilterOutput, NoiseFilter  # noqa: F401
 

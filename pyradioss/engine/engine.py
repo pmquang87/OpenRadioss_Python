@@ -111,6 +111,7 @@ class EngineState:
         self.stop_reason = ""
         self.crit_elem_id = 0  # critical element user ID (NELTST)
         self.crit_elem_type = ""  # critical element group name (ITYPTST)
+        self.ek_ams = 0.0      # dual kinetic energy under AMS (sms_encin_2.F)
 
     @property
     def e_ext(self) -> float:
@@ -784,9 +785,18 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
 
         if noda is not None:
             noda.assemble(claims)
+            if getattr(controls, "damp_alpha", 0.0) > 0.0 or getattr(controls, "damp_beta", 0.0) > 0.0:
+                noda.apply_rayleigh_damping_stiffness(getattr(controls, "damp_alpha", 0.0),
+                                                      getattr(controls, "damp_beta", 0.0))
             dt_next = noda.apply(mass_eff, inv_mass, model.v, state.t,
                                  model.inertia, inv_inertia, ams_nodes)
             state.e_madd = noda.e_madd
+            if getattr(noda, "cst", False) and getattr(noda, "crit_node_id", 0) > 0:
+                state.crit_elem_id = noda.crit_node_id
+                state.crit_elem_type = "NODE"
+            if getattr(noda, "stopped", False):
+                state.stop_reason = f"/DT/NODA/STOP: NODE {noda.stop_node} TIME STEP BELOW MINIMUM {noda.dt_min:.3E}"
+                break
 
         dt_prev = state.dt_prev if state.dt_prev is not None else dt
         dt = controls.dt_scale * dt_next
@@ -794,6 +804,9 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         if controls.stop_tstop > 0 and state.t + dt >= controls.stop_tstop:
             dt = max(controls.stop_tstop - state.t, 0.0)
         dt12 = 0.5 * (dt_prev + dt)
+        if dyn_relax.active and getattr(controls, "adyrel_active", False):
+            dt = dyn_relax.compute_timestep_reduction(dt, dt12)
+            dt12 = 0.5 * (dt_prev + dt)
 
         # ---- 3d. /MPC Lagrange forces (M6): the tiny coupled solve that
         # makes the ordinary update below satisfy G a = 0 (see mpc.py);
@@ -812,10 +825,26 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         if M_offdiag is not None:
             M_diag = mass_eff + diag_added
             acc = f_total * inv_mass[:, None]
-            iters, rel_res = ams.solve(acc, f_total, M_diag, M_offdiag)
+            rb_m_list = []
+            rb_s_list = []
+            for rb in rbodies:
+                for s in rb.nodes:
+                    if s != rb.master:
+                        rb_m_list.append(rb.master)
+                        rb_s_list.append(s)
+            rb_masters_arr = np.array(rb_m_list, dtype=np.int64) if rb_m_list else None
+            rb_slaves_arr = np.array(rb_s_list, dtype=np.int64) if rb_s_list else None
+            fix_tra = getattr(loads, "fix_tra", None)
+            iters, rel_res = ams.solve(acc, f_total, M_diag, M_offdiag,
+                                       fix_tra=fix_tra,
+                                       rb_masters=rb_masters_arr,
+                                       rb_slaves=rb_slaves_arr)
             state.ams_iters = getattr(state, "ams_iters", 0) + iters
+            state.ek_ams = ams.compute_kinetic_energy(model.v, acc, dt12, model.mass, M_diag, M_offdiag)
         else:
             acc = f_total * inv_mass[:, None]
+        if noda is not None and getattr(controls, "dt_noda", "") == "SET":
+            noda.apply_set_acceleration(acc)
         ar = mint * inv_inertia[:, None] if getattr(model, "vr", None) is not None else None
         for rl in rlinks:
             rl.apply_acceleration(acc, mass_eff, ar, getattr(model, "inertia", None))
@@ -884,6 +913,9 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         for rb in rbodies:
             state.wext += rb.advance(fint, fext, fcont, mint, model.v,
                                      model.vr, model.x, dt, state.t + dt)
+            w_sq = float(np.sum(rb.w ** 2))
+            if dt ** 2 * w_sq > 1.0:
+                log.warning(f"** WARNING: RIGID BODY {rb.rb.id} ROTATION ANGLE PER STEP EXCEEDS STABILITY LIMIT (DT^2*OMEGA^2 = {dt**2 * w_sq:.3f} > 1.0)")
         # (mass_eff: an /IMPVEL driving a tied main node reacts against
         # the secondary inertia it carries too. v_old is v^{n-1/2}, the
         # start-of-cycle velocity, so the constraint work is booked at the
@@ -1058,6 +1090,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             # The NAN/INF check stays UNCONDITIONAL — a non-finite state
             # is always fatal.  The 15% / 30% limits are unchanged.
             if e["REF"] > _ENERGY_START_FLOOR:
+                state.epeak = max(state.epeak, e["IE"] + e["KE"])
                 if abs(e["ERR"]) > controls.energy_error_stop:
                     state.stop_reason = (
                         f"ENERGY ERROR {e['ERR']:.1f}% EXCEEDS "
@@ -1078,6 +1111,19 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                         f"LIMIT {2.0 * controls.energy_error_stop}% — "
                         f"RUN UNSTABLE")
                     break
+            if controls.mass_error_stop > 0.0 and noda is not None:
+                frac_m = 100.0 * noda.mass_added / max(noda.mass0, 1e-20)
+                if frac_m > controls.mass_error_stop:
+                    state.stop_reason = f"/STOP: MASS ERROR {frac_m:.2f}% EXCEEDED LIMIT {controls.mass_error_stop:.2f}%"
+                    break
+            if controls.nodal_mass_error_stop > 0.0 and noda is not None:
+                top_nodes = noda.get_top_mass_nodes(1)
+                if top_nodes and top_nodes[0][2] * 100.0 > controls.nodal_mass_error_stop:
+                    state.stop_reason = f"/STOP: NODAL MASS ERROR {top_nodes[0][2]*100.0:.2f}% ON NODE {top_nodes[0][0]} EXCEEDED LIMIT {controls.nodal_mass_error_stop:.2f}%"
+                    break
+            if dyn_relax.active and dyn_relax.check_convergence(e["KE"], e["IE"], max(state.epeak, e["REF"])):
+                state.stop_reason = f"/STOP/STATIC CONVERGENCE REACHED AT TIME {state.t:.5E}"
+                break
             if not all(np.isfinite(v) for v in (e["KE"], e["IE"], e["HE"], e["CE"], e["EW"], e["EN"], e["DE"], e["REF"])):
                 state.stop_reason = "NAN/INF DETECTED — RUN DIVERGED"
                 break

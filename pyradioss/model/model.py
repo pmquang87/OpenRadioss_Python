@@ -160,6 +160,8 @@ class EngineControls:
     dt_scale: float = 0.9         # /DT  scale factor  (dt = k * dt_critical)
     dt_min: float = 0.0           # /DT  minimum dt: below this -> stop
     dt_noda: str = ""             # '' | 'NODA' | 'CST' (/DT/NODA[/CST], M6)
+    dt_noda_percent_addmass: float = 0.0  # /DT/NODA target % added mass (M613)
+    dt_noda_grnod: int = 0        # /DT/NODA node group (M613)
     dt_ams: bool = False          # /DT/AMS present (M61)
     dt_ams_igrp: int = 0          # AMS target part group (0 = all)
     dt_ams_tol: float = 1e-4      # AMS PCG tolerance
@@ -171,6 +173,8 @@ class EngineControls:
     state_tstart: float = 0.0     # /STATE/DT first snapshot time
     print_cycles: int = 100       # /PRINT listing frequency (cycles)
     energy_error_stop: float = 15.0  # %, /STOP-like divergence guard
+    mass_error_stop: float = 0.0  # %, /STOP total mass error criteria (M613)
+    nodal_mass_error_stop: float = 0.0  # %, /STOP nodal mass error criteria (M613)
     anim_vect: List[str] = field(default_factory=lambda: ["VEL", "DIS"])
     anim_elem: List[str] = field(default_factory=lambda: ["VONM", "EPSP"])
     anim_tens: List[str] = field(default_factory=list) # /ANIM/ELEM/TENS, /ANIM/BRICK/TENS, /ANIM/SHELL/TENS (M122)

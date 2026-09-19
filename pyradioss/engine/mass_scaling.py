@@ -110,7 +110,7 @@ unchanged.
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -123,10 +123,26 @@ class NodalTimeStep:
 
     def __init__(self, model: Model, controls, log):
         self.model = model
-        self.cst = controls.dt_noda == "CST"
-        self.dt_sca = controls.dt_scale
-        self.dt_min = controls.dt_min
+        self.mode: str = getattr(controls, "dt_noda", "") if getattr(controls, "dt_noda", "") else "NODA"
+        self.cst = self.mode == "CST" or self.mode.startswith("CST")
+        self.dt_sca = getattr(controls, "dt_scale", 0.9)
+        self.dt_min = getattr(controls, "dt_min", 0.0)
         n = model.numnod
+
+        # per-node added mass tracking (M613)
+        self.node_added_mass: np.ndarray = np.zeros(n, dtype=np.float64)
+        self.initial_nodal_mass: np.ndarray = model.mass.copy()
+
+        # critical entity tracking (M613)
+        self.crit_node_id: int = 0
+        self.crit_elem_type: str = "NODE"
+
+        # /DT/NODA/STOP tracking (M613)
+        self.stopped: bool = False
+        self.stop_node: int = 0
+
+        # /DT/NODA/SET acceleration scaling factors (M613)
+        self._set_factors: Dict[int, float] = {}
 
         # per-group (node-index matrix, nodal mass-share matrix, nodal
         # inertia-share matrix or None): the same lumping the Starter used
@@ -320,10 +336,10 @@ class NodalTimeStep:
                 master = entry[4] if len(entry) > 4 else int(nodes[0])
                 rb = entry[5] if len(entry) > 5 else None
 
-                # Translational mass scaling for rigid body
+                # Translational mass scaling for rigid body (1.00001 factor, M613)
                 k_tra = self.stifn[master]
                 if k_tra > 0.0:
-                    m_req = k_tra * (self.dt_min / self.dt_sca) ** 2 / 2.0
+                    m_req = 1.00001 * k_tra * (self.dt_min / self.dt_sca) ** 2 / 2.0
                     dm = m_req - mass_rb
                     if dm > 0.0:
                         dm = float(dm)
@@ -331,16 +347,17 @@ class NodalTimeStep:
                         mass_eff[master] += dm
                         inv_mass[master] = 1.0 / mass_eff[master]
                         self.mass_added += dm
+                        self.node_added_mass[master] += dm
                         self.e_madd += float(0.5 * dm * (v[master] ** 2).sum())
                         self.mom_added += dm * v[master]
                         entry[2] += dm
                         if rb is not None:
                             rb.M += dm
 
-                # Rotational inertia scaling for rigid body
+                # Rotational inertia scaling for rigid body (1.00001 factor, M613)
                 if self._rot and in_min > 0.0 and self.stifr[master] > 0.0:
                     k_rot = self.stifr[master]
-                    i_req = k_rot * (self.dt_min / self.dt_sca) ** 2 / 2.0
+                    i_req = 1.00001 * k_rot * (self.dt_min / self.dt_sca) ** 2 / 2.0
                     di = i_req - in_min
                     if di > 0.0:
                         di = float(di)
@@ -375,42 +392,43 @@ class NodalTimeStep:
 
         if self.cst and self.dt_min > 0.0 and self.dt_sca > 0.0:
             if np.any(loaded):
-                # mass needed so that dt_sca * sqrt(2 M / K) >= dt_min
-                m_req = self.stifn[loaded] * (self.dt_min / self.dt_sca) ** 2 \
+                # mass needed so that dt_sca * sqrt(2 M / K) >= dt_min (1.00001 factor, M613)
+                m_req = 1.00001 * self.stifn[loaded] * (self.dt_min / self.dt_sca) ** 2 \
                     / 2.0
                 dm = m_req - mass_eff[loaded]
                 add = dm > 0.0
                 if np.any(add):
                     idx = np.where(loaded)[0][add]
-                    dm = dm[add]
+                    dm_vals = dm[add]
                     # physical mass: the KE/momentum ledgers must see the new
                     # inertia (that is the honest part of mass scaling)
-                    model.mass[idx] += dm
-                    mass_eff[idx] += dm
+                    model.mass[idx] += dm_vals
+                    mass_eff[idx] += dm_vals
                     inv_mass[idx] = 1.0 / mass_eff[idx]
-                    self.mass_added += float(dm.sum())
+                    self.mass_added += float(dm_vals.sum())
+                    self.node_added_mass[idx] += dm_vals
                     # the addition creates kinetic energy and momentum at the
                     # node's current velocity — booked and reported
                     self.e_madd += float(
-                        0.5 * (dm[:, None] * v[idx] ** 2).sum())
-                    self.mom_added += (dm[:, None] * v[idx]).sum(axis=0)
+                        0.5 * (dm_vals[:, None] * v[idx] ** 2).sum())
+                    self.mom_added += (dm_vals[:, None] * v[idx]).sum(axis=0)
             if rot is not None and np.any(rot):
                 # rotational CST: inertia needed so that the rotational
                 # nodal dt holds the target too (dtnoda.F 482-516,
                 # IN(N) = MAX(INER, IN(N)) and the DINERT counter — only
                 # ever added; no energy booking, the KE ledger is
                 # translational, matching the original which books none)
-                i_req = self.stifr[rot] * (self.dt_min / self.dt_sca) ** 2 \
+                i_req = 1.00001 * self.stifr[rot] * (self.dt_min / self.dt_sca) ** 2 \
                     / 2.0
                 di = i_req - inertia[rot]
                 addr = di > 0.0
                 if np.any(addr):
                     idx = np.where(rot)[0][addr]
-                    di = di[addr]
-                    inertia[idx] += di          # model.inertia (physical)
+                    di_vals = di[addr]
+                    inertia[idx] += di_vals          # model.inertia (physical)
                     if inv_inertia is not None:
                         inv_inertia[idx] = 1.0 / inertia[idx]
-                    self.iner_added += float(di.sum())
+                    self.iner_added += float(di_vals.sum())
             frac = self.mass_added / max(self.mass0, EM20)
             if frac >= self._reported + 0.01:  # 1%-step announcements
                 self.log.info(
@@ -419,16 +437,47 @@ class NodalTimeStep:
                     f" AT TIME {t:.5E}")
                 self._reported = frac
 
+        # /DT/NODA/SET acceleration scaling factors
+        self._set_factors = {}
+        if self.mode == "SET" and self.dt_min > 0.0 and self.dt_sca > 0.0:
+            if np.any(loaded):
+                m_req_set = self.stifn[loaded] * (self.dt_min / self.dt_sca) ** 2 / 2.0
+                scale_mask = m_req_set > mass_eff[loaded]
+                if np.any(scale_mask):
+                    loaded_indices = np.where(loaded)[0]
+                    scale_idx = loaded_indices[scale_mask]
+                    facs = mass_eff[scale_idx] / m_req_set[scale_mask]
+                    for s_i, fac in zip(scale_idx, facs):
+                        self._set_factors[int(s_i)] = float(fac)
+
         dt_candidates = []
         if np.any(loaded):
             dt_i = np.sqrt(2.0 * mass_eff[loaded] / self.stifn[loaded])
-            dt_candidates.append(float(dt_i.min()))
+            min_pos = int(np.argmin(dt_i))
+            dt_candidates.append(float(dt_i[min_pos]))
+            loaded_indices = np.where(loaded)[0]
+            crit_idx = loaded_indices[min_pos]
+            if hasattr(self.model, "node_ids") and self.model.node_ids is not None and len(self.model.node_ids) > crit_idx:
+                self.crit_node_id = int(self.model.node_ids[crit_idx])
+            else:
+                self.crit_node_id = int(crit_idx + 1)
+            self.crit_elem_type = "NODE"
         if rot is not None and np.any(rot):
             # the rotational nodal dt joins the same minimum (dtnoda.F
             # line 469: DTN = DTFAC*sqrt(2 IN/STIFR); the shared DTFAC —
             # the port's dt_scale — is applied by the caller)
             dt_r = np.sqrt(2.0 * inertia[rot] / self.stifr[rot])
-            dt_candidates.append(float(dt_r.min()))
+            min_pos_r = int(np.argmin(dt_r))
+            min_val_r = float(dt_r[min_pos_r])
+            dt_candidates.append(min_val_r)
+            if not dt_candidates or min_val_r < dt_candidates[0]:
+                rot_indices = np.where(rot)[0]
+                crit_idx = rot_indices[min_pos_r]
+                if hasattr(self.model, "node_ids") and self.model.node_ids is not None and len(self.model.node_ids) > crit_idx:
+                    self.crit_node_id = int(self.model.node_ids[crit_idx])
+                else:
+                    self.crit_node_id = int(crit_idx + 1)
+                self.crit_elem_type = "NODE"
         # the rigid bodies' transported master dts join the free-node min
         # (rgbodfp.F/dtnoda.F — see add_rigid_body); a no-op with no /RBODY
         dt_rb = self._rigid_body_dt()
@@ -436,10 +485,96 @@ class NodalTimeStep:
             dt_candidates.append(dt_rb)
         dt = min(dt_candidates) if dt_candidates else EP30
 
+        # Support /DT/NODA/STOP: if mode == 'STOP' and dt < dt_min, flag stop
+        if self.mode == "STOP" and self.dt_min > 0.0:
+            if dt < self.dt_min or (self.dt_sca > 0.0 and dt * self.dt_sca < self.dt_min):
+                self.stopped = True
+                self.stop_node = self.crit_node_id
+
         self.stifn[:] = 0.0
         if self._rot:
             self.stifr[:] = 0.0
         return dt
+
+    # ------------------------------------------------------------------
+    def _compute_set_factors(self) -> Dict[int, float]:
+        factors: Dict[int, float] = {}
+        if self.dt_min > 0.0 and self.dt_sca > 0.0:
+            loaded = (self.stifn > 0.0) & self.free & (self.model.mass > 0.0)
+            if np.any(loaded):
+                m_req_set = self.stifn[loaded] * (self.dt_min / self.dt_sca) ** 2 / 2.0
+                scale_mask = m_req_set > self.model.mass[loaded]
+                if np.any(scale_mask):
+                    loaded_indices = np.where(loaded)[0]
+                    scale_idx = loaded_indices[scale_mask]
+                    facs = self.model.mass[scale_idx] / m_req_set[scale_mask]
+                    for s_i, fac in zip(scale_idx, facs):
+                        factors[int(s_i)] = float(fac)
+        return factors
+
+    def apply_set_acceleration(self, acc: np.ndarray) -> np.ndarray:
+        """Scale acceleration directly for /DT/NODA/SET: acc[idx] *= (model.mass[idx] / m_req)."""
+        factors = self._set_factors if self._set_factors else self._compute_set_factors()
+        for idx, fac in factors.items():
+            acc[idx] *= fac
+        return acc
+
+    # ------------------------------------------------------------------
+    def apply_rayleigh_damping_stiffness(self, alpha: float, beta: float) -> None:
+        """Apply Rayleigh damping stiffness scaling matching dtnodarayl.F:
+
+        For each loaded node with dt_0 = sqrt(2 M / K):
+            BB = beta / dt_0 + 0.5 * alpha * dt_0
+            FAC = sqrt(BB^2 + 1) - BB
+            COEFF = 1 / FAC^2
+            K = K * COEFF
+        """
+        loaded = (self.stifn > EM20) & (self.model.mass > 0.0)
+        if np.any(loaded):
+            dt0 = np.sqrt(2.0 * self.model.mass[loaded] / self.stifn[loaded])
+            bb = (beta / np.maximum(dt0, EM20)) + 0.5 * alpha * dt0
+            fac = np.sqrt(bb**2 + 1.0) - bb
+            coeff = 1.0 / np.maximum(fac**2, EM20)
+            self.stifn[loaded] *= coeff
+        if self._rot and hasattr(self.model, "inertia") and self.model.inertia is not None:
+            rot_loaded = (self.stifr > EM20) & (self.model.inertia > 0.0)
+            if np.any(rot_loaded):
+                dt0_r = np.sqrt(2.0 * self.model.inertia[rot_loaded] / self.stifr[rot_loaded])
+                bb_r = (beta / np.maximum(dt0_r, EM20)) + 0.5 * alpha * dt0_r
+                fac_r = np.sqrt(bb_r**2 + 1.0) - bb_r
+                coeff_r = 1.0 / np.maximum(fac_r**2, EM20)
+                self.stifr[rot_loaded] *= coeff_r
+
+    # ------------------------------------------------------------------
+    def get_top_mass_nodes(self, n: int = 5) -> List[Tuple[int, float, float]]:
+        """Return top n nodes by cumulative added mass: (node_id, delta_m, delta_m / m0)."""
+        if not hasattr(self, "node_added_mass") or len(self.node_added_mass) == 0:
+            return []
+        active = np.where(self.node_added_mass > 0.0)[0]
+        if len(active) == 0:
+            return []
+        order = active[np.argsort(-self.node_added_mass[active])]
+        top_indices = order[:n]
+        result = []
+        for idx in top_indices:
+            nid = int(self.model.node_ids[idx]) if (hasattr(self.model, "node_ids") and self.model.node_ids is not None and len(self.model.node_ids) > idx) else int(idx + 1)
+            dm = float(self.node_added_mass[idx])
+            m0 = float(self.initial_nodal_mass[idx]) if (hasattr(self, "initial_nodal_mass") and len(self.initial_nodal_mass) > idx) else 0.0
+            rel = dm / max(m0, EM20) if m0 > 0.0 else (dm / max(self.mass0, EM20))
+            result.append((nid, dm, rel))
+        return result
+
+    # ------------------------------------------------------------------
+    def compute_target_dt(self, target_percent_addmass: float,
+                          dt_scale: Optional[float] = None,
+                          total_mass: Optional[float] = None) -> float:
+        """Compute target time step for given added mass percentage matching find_dt_target.F."""
+        dt_sca = dt_scale if dt_scale is not None else self.dt_sca
+        tot_m = total_mass if total_mass is not None else self.mass0
+        loaded = (self.stifn > EM20) & self.free & (self.model.mass > 0.0)
+        return compute_target_dt(target_percent_addmass, dt_scale=dt_sca,
+                                 total_mass=tot_m, ms=self.model.mass[loaded],
+                                 stifn=self.stifn[loaded])
 
     # ------------------------------------------------------------------
     def summary(self, log) -> None:
@@ -457,3 +592,66 @@ class NodalTimeStep:
         log.info(f"     MOMENTUM FROM ADDED MASS  : "
                  f"{self.mom_added[0]:12.5E} {self.mom_added[1]:12.5E} "
                  f"{self.mom_added[2]:12.5E}")
+        top_nodes = self.get_top_mass_nodes(n=5)
+        if top_nodes:
+            log.info("     TOP NODES BY ADDED MASS:")
+            for nid, dm, rel in top_nodes:
+                log.info(f"       NODE {nid:8d} : {dm:14.7E}  ({100.0 * rel:6.2f}%)")
+
+
+# ----------------------------------------------------------------------
+def compute_target_dt(
+    target_percent_addmass: float,
+    dt_scale: float = 0.9,
+    total_mass: float = 0.0,
+    ms: Optional[np.ndarray] = None,
+    stifn: Optional[np.ndarray] = None,
+) -> float:
+    """Compute target time step matching Fortran find_dt_target.F.
+
+    Calculates target dt given requested percentage of added mass.
+    """
+    if ms is None or stifn is None or len(ms) == 0:
+        return 0.0
+
+    threshold = target_percent_addmass if target_percent_addmass <= 1.0 else target_percent_addmass / 100.0
+    if total_mass <= 0.0:
+        total_mass = float(ms.sum())
+
+    valid = (ms > 0.0) & (stifn > EM20)
+    if not np.any(valid):
+        return 0.0
+
+    ms_v = ms[valid]
+    stf_v = stifn[valid]
+
+    # dt2_l = M / K (proportional to 0.5 * dt_i^2)
+    dt2_l = ms_v / stf_v
+    perm = np.argsort(dt2_l)
+    dt_sorted = dt2_l[perm]
+    ms_sorted = ms_v[perm]
+    stf_sorted = stf_v[perm]
+
+    nnod = len(dt_sorted)
+    sumk = 0.0
+    summ = 0.0
+    sumk_old = 0.0
+    summ_old = 0.0
+    target_dt = 0.0
+
+    for i in range(nnod):
+        if i > 0:
+            if dt_sorted[i] > dt_sorted[i - 1]:
+                sumk_old = sumk
+                summ_old = summ
+        per_adm = (dt_sorted[i] * sumk_old - summ_old) / max(EM20, total_mass)
+        if i > 0 and per_adm > threshold:
+            target_dt = dt_scale * np.sqrt(2.0 * (total_mass * threshold + summ_old) / max(EM20, sumk_old))
+            return float(target_dt)
+        sumk += stf_sorted[i]
+        summ += ms_sorted[i]
+        if i == nnod - 1:
+            target_dt = dt_scale * np.sqrt(2.0 * (total_mass * threshold + summ) / max(EM20, sumk))
+            return float(target_dt)
+
+    return float(target_dt)
