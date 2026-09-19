@@ -10376,6 +10376,11 @@ class StarterDeck:
         self._header("FAIL", "CONNECT", fid)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
+    def fail_generic(self, kind: str, fid: int, data_cards) -> None:
+        """Generic pass-through for any ``/FAIL/<kind>/mat_ID``."""
+        self._header("FAIL", kind.upper(), fid)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
     def transform_generic(self, kind: str, tid: int, title: str, data_cards) -> None:
         """Generic pass-through for ``/TRANSFORM/<kind>``."""
         self._header("TRANSFORM", kind, tid)

@@ -124,7 +124,10 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     vm = np.sqrt(1.5 * (s0 ** 2 + s1 ** 2 + s2 ** 2)
                  + 3.0 * (sig[:, 3] ** 2 + sig[:, 4] ** 2 + sig[:, 5] ** 2))
     triax = sm / np.maximum(vm, _TINY)
-    eps_f = (p["D1"] + p["D2"] * np.exp(np.clip(p["D3"] * triax, -100.0, 100.0))) \
+    d1 = float(p.get("D1", p.get("d1", 0.1)))
+    d2 = float(p.get("D2", p.get("d2", 0.5)))
+    d3 = float(p.get("D3", p.get("d3", -1.5)))
+    eps_f = (d1 + d2 * np.exp(np.clip(d3 * triax, -100.0, 100.0))) \
         * _rate_factor(fail, deps, dt, True, d_epsp=d_epsp) \
         * _thermal_factor(fail, tstar)
     _accumulate(fail, dama, d_epsp, eps_f)
@@ -138,7 +141,10 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     vm = np.sqrt(sig[:, 0] ** 2 - sig[:, 0] * sig[:, 1] + sig[:, 1] ** 2
                  + 3.0 * sig[:, 2] ** 2)
     triax = sm / np.maximum(vm, _TINY)
-    eps_f = (p["D1"] + p["D2"] * np.exp(np.clip(p["D3"] * triax, -100.0, 100.0))) \
+    d1 = float(p.get("D1", p.get("d1", 0.1)))
+    d2 = float(p.get("D2", p.get("d2", 0.5)))
+    d3 = float(p.get("D3", p.get("d3", -1.5)))
+    eps_f = (d1 + d2 * np.exp(np.clip(d3 * triax, -100.0, 100.0))) \
         * _rate_factor(fail, deps, dt, False, d_epsp=d_epsp) \
         * _thermal_factor(fail, tstar)
     _accumulate(fail, dama, d_epsp, eps_f)

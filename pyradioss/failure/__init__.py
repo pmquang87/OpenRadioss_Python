@@ -30,32 +30,58 @@ material's threshold directly.
 Dispatch contract (mirrors the material-law dispatch):
 
     solid_step(fail, sig, d_epsp, deps, dt, dama, tstar)  -> broken mask
-    shell_step(fail, sig, d_epsp, deps, dt, dama, tstar)  -> broken mask
+    shell_step(fail, sig, d_epsp, deps, dt, dama, tstar, eps_tot)  -> broken mask
 
 with sig/deps the (m, 6) or (m, 3) slice arrays of the group, d_epsp the
 plastic-strain increment of this cycle, dama the persistent damage
-array (in-place) and tstar the homologous temperature of the points
-(M6, None for materials without the thermal card — only /FAIL/JOHNSON's
-D5 term reads it). All vectorized over the element slice.
+array (in-place) and tstar the homologous temperature of the points.
+All vectorized over the element slice.
 """
 
 from . import (  # noqa: F401
+    alter,
     biquad,
     chang,
     cockcroft,
+    connect,
+    emc,
+    energy,
+    fabric,
+    fail_composite,
     fail_gurson,
     fail_ladeveze,
     fail_rtcl,
     fld,
+    fractal,
+    gene1,
     hashin,
     hc_dsse,
+    hoffman,
+    inievo,
     johnson,
+    lemaitre,
+    max_strain,
     mmc,
+    mullins,
+    nxt,
+    orthbiquad,
+    orthenerg,
+    orthstrain,
     puck,
+    sahraei,
     snconnect,
+    spalling,
+    syazwan,
+    tab,
     tab1,
+    tab2,
     tbutcher,
+    tensstrain,
+    tsaihill,
+    tsaiwu,
     tvergaard,
+    user,
+    visual,
     wilkins,
 )
 
@@ -69,6 +95,10 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
         return biquad.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     if ftype == "TAB1":
         return tab1.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("TAB2", "FAIL_TAB2"):
+        return tab2.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("TAB", "TAB_OLD", "FAIL_TAB"):
+        return tab.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     if ftype == "SNCONNECT":
         return snconnect.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     if ftype == "FLD":
@@ -97,6 +127,56 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
         return fail_ladeveze.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     if ftype in ("RTCL", "RTCL_MODEL", "RTCL_LAW"):
         return fail_rtcl.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype == "HOFFMAN":
+        return hoffman.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("TSAIHILL", "TSAI-HILL", "TSAI_HILL"):
+        return tsaihill.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("TSAIWU", "TSAI-WU", "TSAI_WU"):
+        return tsaiwu.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("MAXSTRAIN", "MAX_STRAIN"):
+        return max_strain.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("COMPOSITE", "COMPOSITE_FAILURE"):
+        return fail_composite.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("ORTHSTRAIN", "ORTH_STRAIN"):
+        return orthstrain.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("ORTHBIQUAD", "ORTH_BIQUAD"):
+        return orthbiquad.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("ORTHENERG", "ORTH_ENERG"):
+        return orthenerg.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype == "ENERGY":
+        return energy.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype == "LEMAITRE":
+        return lemaitre.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("SPALLING", "SPALL"):
+        return spalling.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype == "EMC":
+        return emc.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("TENSSTRAIN", "TENSTRAIN"):
+        return tensstrain.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype == "CONNECT":
+        return connect.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype == "FABRIC":
+        return fabric.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("MULLINS", "MULLINS_OR", "MULLINS-OR"):
+        return mullins.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("ALTER", "WINDSHIELD", "WINDSHIELD_ALTER"):
+        return alter.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("GENE1", "FAIL_GENE1"):
+        return gene1.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("INIEVO", "FAIL_INIEVO"):
+        return inievo.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype == "NXT":
+        return nxt.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype == "SAHRAEI":
+        return sahraei.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype == "SYAZWAN":
+        return syazwan.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype == "VISUAL":
+        return visual.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("FRACTAL", "FRACTAL_DMG"):
+        return fractal.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("USER", "USER1", "USER2", "USER3", "FAIL_USER"):
+        return user.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")
 
 
@@ -109,6 +189,10 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
         return biquad.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     if ftype == "TAB1":
         return tab1.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("TAB2", "FAIL_TAB2"):
+        return tab2.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("TAB", "TAB_OLD", "FAIL_TAB"):
+        return tab.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     if ftype == "SNCONNECT":
         return snconnect.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     if ftype == "FLD":
@@ -137,6 +221,54 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
         return fail_ladeveze.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     if ftype in ("RTCL", "RTCL_MODEL", "RTCL_LAW"):
         return fail_rtcl.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype == "HOFFMAN":
+        return hoffman.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("TSAIHILL", "TSAI-HILL", "TSAI_HILL"):
+        return tsaihill.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("TSAIWU", "TSAI-WU", "TSAI_WU"):
+        return tsaiwu.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("MAXSTRAIN", "MAX_STRAIN"):
+        return max_strain.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("COMPOSITE", "COMPOSITE_FAILURE"):
+        return fail_composite.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("ORTHSTRAIN", "ORTH_STRAIN"):
+        return orthstrain.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("ORTHBIQUAD", "ORTH_BIQUAD"):
+        return orthbiquad.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("ORTHENERG", "ORTH_ENERG"):
+        return orthenerg.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype == "ENERGY":
+        return energy.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype == "LEMAITRE":
+        return lemaitre.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("SPALLING", "SPALL"):
+        return spalling.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype == "EMC":
+        return emc.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("TENSSTRAIN", "TENSTRAIN"):
+        return tensstrain.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype == "CONNECT":
+        return connect.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype == "FABRIC":
+        return fabric.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("MULLINS", "MULLINS_OR", "MULLINS-OR"):
+        return mullins.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("ALTER", "WINDSHIELD", "WINDSHIELD_ALTER"):
+        return alter.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("GENE1", "FAIL_GENE1"):
+        return gene1.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("INIEVO", "FAIL_INIEVO"):
+        return inievo.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype == "NXT":
+        return nxt.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype == "SAHRAEI":
+        return sahraei.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype == "SYAZWAN":
+        return syazwan.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype == "VISUAL":
+        return visual.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("FRACTAL", "FRACTAL_DMG"):
+        return fractal.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("USER", "USER1", "USER2", "USER3", "FAIL_USER"):
+        return user.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")
-
-
