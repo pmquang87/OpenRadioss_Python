@@ -12420,7 +12420,11 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
             d.eos_nasg(b.user_id, title, cards)
         elif key == "/EOS/PUFF":
             d.eos_puff(b.user_id, title, cards)
-        elif key in ("/EOS/TILLOTSON", "/EOS/OSBORNE", "/EOS/LSZK", "/EOS/COMPACTION", "/EOS/POWDER-BURN"):
+        elif key in (
+            "/EOS/TILLOTSON", "/EOS/OSBORNE", "/EOS/LSZK", "/EOS/COMPACTION",
+            "/EOS/COMPACTION2", "/EOS/COMPACTION_TAB", "/EOS/POWDER-BURN",
+            "/EOS/EXPONENTIAL", "/EOS/IDEAL-GAS-VT", "/EOS/TABULATED", "/EOS/SESAME",
+        ):
             d.eos_generic(kind, b.user_id, title, cards)
         else:
             d.raw_block("/".join(b.parts), [c.raw for c in b.cards],

@@ -4728,20 +4728,25 @@ def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "TYPE5": "JWL",
         "POWDERBURN": "POWDER-BURN",
         "POWDER_BURN": "POWDER-BURN",
-        "COMPACTION2": "COMPACTION",
+        "COMPACTION_TAB": "COMPACTION_TAB",
+        "COMPACTION-TAB": "COMPACTION_TAB",
         "IDEAL_GAS_VT": "IDEAL-GAS-VT",
         "IDEAL-GAS_VT": "IDEAL-GAS-VT",
+        "IDEALGAS_VT": "IDEAL-GAS-VT",
+        "IDEAL-GAS-VE": "IDEAL-GAS",
         "NASG": "NASG",
         "NOBLE-ABEL-STIFFENED-GAS": "NASG",
         "NOBLE_ABEL_STIFFENED_GAS": "NASG",
+        "NA": "NOBLE-ABEL",
+        "SG": "STIFF-GAS",
     }
     kind = aliases.get(kind, kind)
     supported_eos = (
         "POLYNOMIAL", "IDEAL-GAS", "LINEAR", "STIFF-GAS",
         "GRUNEISEN", "PUFF", "TILLOTSON", "MURNAGHAN",
-        "OSBORNE", "LSZK", "NOBLE-ABEL", "JWL", "NASG", "COMPACT",
-        "COMPACTION", "SESAME", "IGNITION_GROWTH",
-        "POWDER-BURN", "EXPONENTIAL", "IDEAL-GAS-VT",
+        "OSBORNE", "LSZK", "NOBLE-ABEL", "JWL", "NASG",
+        "COMPACT", "COMPACTION", "COMPACTION2", "COMPACTION_TAB", "SESAME", "IGNITION_GROWTH",
+        "POWDER-BURN", "EXPONENTIAL", "IDEAL-GAS-VT", "TABULATED",
     )
     if kind not in supported_eos:
         log.warning(f"/EOS/{kind} not ported — skipped", block.source)
@@ -4753,6 +4758,9 @@ def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if not cards:
         log.error(f"/EOS/{kind}/{mat_id}: missing data card", block.source)
         return
+    # Legacy M166 compatibility: /EOS/COMPACTION2 used with COMPACTION card layout (card 2 has 3 tokens)
+    if kind == "COMPACTION2" and len(cards) > 1 and len(cards[1].tokens()) == 3:
+        kind = "COMPACTION"
     if kind == "POLYNOMIAL":
         f = cards[0].cut("EOS_POLY_1") if block.fixed else []
         if block.fixed and (not f[4] and not f[5]) and len(cards) > 1:
@@ -5167,7 +5175,118 @@ def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "r_gas": r_gas, "p0": p0, "psh": psh, "t0": t0, "rho0_card": rho0_card,
             "a0": a0, "a1": a1, "a2": a2, "a3": a3, "a4": a4,
         }
-    elif kind in ("COMPACT", "SESAME", "IGNITION_GROWTH"):
+    elif kind == "COMPACTION2":
+        if block.fixed:
+            c1 = cards[0].cut("F20X5") if len(cards) > 0 else []
+            p_func = _ival(c1[0]) if len(c1) > 0 else 0
+            fscale = _fval(c1[1], 1.0) if len(c1) > 1 and c1[1].strip() else 1.0
+            xscale = _fval(c1[2], 1.0) if len(c1) > 2 and c1[2].strip() else 1.0
+            iform = _ival(c1[3], 2) if len(c1) > 3 and c1[3].strip() else 2
+            c2 = cards[1].cut("F20X5") if len(cards) > 1 else []
+            mumin = _fval(c2[0]) if len(c2) > 0 else 0.0
+            mumax = _fval(c2[1], 1e20) if len(c2) > 1 and c2[1].strip() else 1e20
+            bmin = _fval(c2[2], 1.0) if len(c2) > 2 and c2[2].strip() else 1.0
+            bmax = _fval(c2[3], bmin) if len(c2) > 3 and c2[3].strip() else bmin
+            c3 = cards[2].cut("F20X5") if len(cards) > 2 else []
+            psh = _fval(c3[0]) if len(c3) > 0 else 0.0
+            rho0_card = _fval(c3[1]) if len(c3) > 1 else 0.0
+        else:
+            t1 = cards[0].tokens() if len(cards) > 0 else []
+            p_func = int(float(t1[0])) if len(t1) > 0 else 0
+            fscale = float(t1[1]) if len(t1) > 1 and float(t1[1]) != 0.0 else 1.0
+            xscale = float(t1[2]) if len(t1) > 2 and float(t1[2]) != 0.0 else 1.0
+            iform = int(float(t1[3])) if len(t1) > 3 and int(float(t1[3])) != 0 else 2
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            mumin = float(t2[0]) if len(t2) > 0 else 0.0
+            mumax = float(t2[1]) if len(t2) > 1 and float(t2[1]) != 0.0 else 1e20
+            bmin = float(t2[2]) if len(t2) > 2 and float(t2[2]) != 0.0 else 1.0
+            bmax = float(t2[3]) if len(t2) > 3 and float(t2[3]) != 0.0 else bmin
+            t3 = cards[2].tokens() if len(cards) > 2 else []
+            psh = float(t3[0]) if len(t3) > 0 else 0.0
+            rho0_card = float(t3[1]) if len(t3) > 1 else 0.0
+        params = {
+            "p_func": p_func, "fscale": fscale, "xscale": xscale, "iform": iform,
+            "mumin": mumin, "mumax": mumax, "bmin": bmin, "bmax": bmax,
+            "psh": psh, "rho0_card": rho0_card,
+        }
+    elif kind == "COMPACTION_TAB":
+        if block.fixed:
+            c1 = cards[0].cut("F20X5") if len(cards) > 0 else []
+            rho_tmd = _fval(c1[0]) if len(c1) > 0 else 0.0
+            iplas = _ival(c1[1], 0) if len(c1) > 1 else 0
+            c2 = cards[1].cut("F20X5") if len(cards) > 1 else []
+            p_func = _ival(c2[0]) if len(c2) > 0 else 0
+            pscale = _fval(c2[1], 1.0) if len(c2) > 1 and c2[1].strip() else 1.0
+            c3 = cards[2].cut("F20X5") if len(cards) > 2 else []
+            c_func = _ival(c3[0]) if len(c3) > 0 else 0
+            cscale = _fval(c3[1], 1.0) if len(c3) > 1 and c3[1].strip() else 1.0
+            c4 = cards[3].cut("F20X5") if len(cards) > 3 else []
+            g_func = _ival(c4[0]) if len(c4) > 0 else 0
+            gscale = _fval(c4[1], 1.0) if len(c4) > 1 and c4[1].strip() else 1.0
+        else:
+            t1 = cards[0].tokens() if len(cards) > 0 else []
+            rho_tmd = float(t1[0]) if len(t1) > 0 else 0.0
+            iplas = int(float(t1[1])) if len(t1) > 1 else 0
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            p_func = int(float(t2[0])) if len(t2) > 0 else 0
+            pscale = float(t2[1]) if len(t2) > 1 and float(t2[1]) != 0.0 else 1.0
+            t3 = cards[2].tokens() if len(cards) > 2 else []
+            c_func = int(float(t3[0])) if len(t3) > 0 else 0
+            cscale = float(t3[1]) if len(t3) > 1 and float(t3[1]) != 0.0 else 1.0
+            t4 = cards[3].tokens() if len(cards) > 3 else []
+            g_func = int(float(t4[0])) if len(t4) > 0 else 0
+            gscale = float(t4[1]) if len(t4) > 1 and float(t4[1]) != 0.0 else 1.0
+        params = {
+            "rho_tmd": rho_tmd, "iplas": iplas,
+            "p_func": p_func, "pscale": pscale,
+            "c_func": c_func, "cscale": cscale,
+            "g_func": g_func, "gscale": gscale,
+        }
+    elif kind == "TABULATED":
+        if block.fixed:
+            c1 = cards[0].cut("F20X5") if len(cards) > 0 else []
+            a_func = _ival(c1[0]) if len(c1) > 0 else 0
+            xscale_a = _fval(c1[1], 1.0) if len(c1) > 1 and c1[1].strip() else 1.0
+            fscale_a = _fval(c1[2], 1.0) if len(c1) > 2 and c1[2].strip() else 1.0
+            c2 = cards[1].cut("F20X5") if len(cards) > 1 else []
+            b_func = _ival(c2[0]) if len(c2) > 0 else 0
+            xscale_b = _fval(c2[1], 1.0) if len(c2) > 1 and c2[1].strip() else 1.0
+            fscale_b = _fval(c2[2], 1.0) if len(c2) > 2 and c2[2].strip() else 1.0
+            c3 = cards[2].cut("F20X5") if len(cards) > 2 else []
+            e0 = _fval(c3[0]) if len(c3) > 0 else 0.0
+            psh = _fval(c3[1]) if len(c3) > 1 else 0.0
+            rho0_card = _fval(c3[2]) if len(c3) > 2 else 0.0
+        else:
+            t1 = cards[0].tokens() if len(cards) > 0 else []
+            a_func = int(float(t1[0])) if len(t1) > 0 else 0
+            xscale_a = float(t1[1]) if len(t1) > 1 and float(t1[1]) != 0.0 else 1.0
+            fscale_a = float(t1[2]) if len(t1) > 2 and float(t1[2]) != 0.0 else 1.0
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            b_func = int(float(t2[0])) if len(t2) > 0 else 0
+            xscale_b = float(t2[1]) if len(t2) > 1 and float(t2[1]) != 0.0 else 1.0
+            fscale_b = float(t2[2]) if len(t2) > 2 and float(t2[2]) != 0.0 else 1.0
+            t3 = cards[2].tokens() if len(cards) > 2 else []
+            e0 = float(t3[0]) if len(t3) > 0 else 0.0
+            psh = float(t3[1]) if len(t3) > 1 else 0.0
+            rho0_card = float(t3[2]) if len(t3) > 2 else 0.0
+        params = {
+            "func_a": a_func, "xscale_a": xscale_a, "fscale_a": fscale_a,
+            "func_b": b_func, "xscale_b": xscale_b, "fscale_b": fscale_b,
+            "e0": e0, "psh": psh, "rho0_card": rho0_card,
+        }
+    elif kind == "SESAME":
+        if block.fixed:
+            c1 = cards[0].cut("EOS_SESAME_1") if len(cards) > 0 else []
+            e0 = _fval(c1[0]) if len(c1) > 0 else 0.0
+            rho0_card = _fval(c1[1]) if len(c1) > 1 else 0.0
+            filename = cards[1].raw.strip() if len(cards) > 1 else ""
+        else:
+            t1 = cards[0].tokens() if len(cards) > 0 else []
+            e0 = float(t1[0]) if len(t1) > 0 else 0.0
+            rho0_card = float(t1[1]) if len(t1) > 1 else 0.0
+            filename = cards[1].raw.strip() if len(cards) > 1 else ""
+        params = {"e0": e0, "rho0_card": rho0_card, "filename": filename}
+    elif kind in ("COMPACT", "IGNITION_GROWTH"):
         if block.fixed:
             c1 = cards[0].cut("EOS_COMPACT_1")
             c1_vals = [_fval(x) for x in c1]
