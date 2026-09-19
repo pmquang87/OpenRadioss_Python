@@ -13,3 +13,5 @@ arrays. We split the job the same way:
 """
 
 from .deck_reader import parse_fortran_float
+from .deck_writer import write_engine_deck
+from .engine_keywords import parse_engine_deck

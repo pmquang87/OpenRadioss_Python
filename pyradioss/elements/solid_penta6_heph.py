@@ -26,7 +26,7 @@ import numpy as np
 from .. import failure, materials
 from ..common.constants import EM20, EP30
 from ..common.fastmath import cross3, det_inv33, norm3, scatter_add3
-from .solid_penta6 import _DN_DXI, _FACES, _char_length, _geometry
+from .solid_penta6 import _DN_DXI, _FACES, _M_PENTA6, _char_length, _edofs, _geometry
 
 
 def init_group(group, model, log):
@@ -272,3 +272,163 @@ def forces(group, x, v, vr, dt, fint, mint):
         scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
 
     return dt_crit
+
+
+# ----------------------------------------------------------------------------
+# Implicit solver tangent with HEPH stabilization, kgeo, and consistent mass
+# ----------------------------------------------------------------------------
+
+def tangent(group, x_geom=None, epsp_incr=None, x=None):
+    """Element tangent stiffness for 6-node HEPH wedge (s6zforc3.F90 / assem_p.F).
+
+    Includes constitutive tangent K_c from the 2 Gauss points plus physical HEPH
+    hourglass stabilization stiffness K_hg.
+
+    Returns:
+        ke: (n, 18, 18) dense element tangent matrices (translations only)
+        edofs: (n, 18) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=float), np.zeros((0, 18), dtype=np.int64)
+
+    xe = x_geom[conn]
+    dndx, vol_g, vol_tot = _geometry(xe)
+    vol_tot_safe = np.maximum(vol_tot, EM20)
+
+    ke = np.zeros((n, 18, 18), dtype=np.float64)
+    epi = np.zeros((n, 2)) if epsp_incr is None else (
+        epsp_incr if np.ndim(epsp_incr) == 2 else np.repeat(epsp_incr[:, None], 2, axis=1)
+    )
+
+    G_mod = np.zeros(n, dtype=np.float64)
+
+    # 1. Constitutive stiffness K_c from 2 Gauss points
+    for g in range(2):
+        B = np.zeros((n, 6, 18), dtype=np.float64)
+        gx = dndx[:, g, :, 0]
+        gy = dndx[:, g, :, 1]
+        gz = dndx[:, g, :, 2]
+        ix = np.arange(6)
+
+        B[:, 0, 3 * ix + 0] = gx
+        B[:, 1, 3 * ix + 1] = gy
+        B[:, 2, 3 * ix + 2] = gz
+        B[:, 3, 3 * ix + 0] = gy
+        B[:, 3, 3 * ix + 1] = gx
+        B[:, 4, 3 * ix + 1] = gz
+        B[:, 4, 3 * ix + 2] = gy
+        B[:, 5, 3 * ix + 0] = gz
+        B[:, 5, 3 * ix + 2] = gx
+
+        for sl, mat, prop in st.get("slices", []):
+            if getattr(mat, "law", 1) == 0:
+                continue
+            G_sl = getattr(mat, "G", 0.0)
+            G_mod[sl] = G_sl
+            D = materials.solid_tangent(mat, st["sig"][sl, g], st["epsp"][sl, g], epi[sl, g], None)
+            Bs = B[sl]
+            DB = np.einsum("mij,mjk->mik", D, Bs)
+            ke[sl] += vol_g[sl, g][:, None, None] * np.einsum("mji,mjk->mik", Bs, DB)
+
+    # 2. HEPH physical hourglass stabilization stiffness (s6zhourg3.F90)
+    gamma = _wedge_hg_modes(xe, dndx)  # (n, 2, 6)
+    dndx_avg = np.mean(dndx, axis=1)
+    trace_b = np.einsum("nia,nia->n", dndx_avg, dndx_avg)
+    kstiff = 0.05 * G_mod * vol_tot_safe * trace_b  # (n,)
+
+    # K_hg[a, b] = kstiff * sum_m gamma[m, a] * gamma[m, b]
+    Khg_6 = kstiff[:, None, None] * np.einsum("nma,nmb->nab", gamma, gamma)  # (n, 6, 6)
+    ix = np.arange(6)
+    for c in range(3):
+        rows = (3 * ix + c)[:, None]
+        cols = (3 * ix + c)[None, :]
+        ke[:, rows, cols] += Khg_6
+
+    dead = st["off"] <= 0.0
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def kgeo(group, x_geom=None, x=None):
+    """Geometric (initial-stress) element stiffness for 6-node HEPH wedge (assem_p.F).
+
+    Integrates grad(N)^T sigma grad(N) over the 2 Gauss points.
+    Returns:
+        ke: (n, 18, 18) dense geometric stiffness matrices
+        edofs: (n, 18) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=np.float64), np.zeros((0, 18), dtype=np.int64)
+
+    xe = x_geom[conn]
+    dndx, vol_g, vol_tot = _geometry(xe)
+
+    sig = st["sig"]  # (n, 2, 6)
+    S = np.empty((n, 2, 3, 3), dtype=np.float64)
+    S[:, :, 0, 0], S[:, :, 1, 1], S[:, :, 2, 2] = sig[:, :, 0], sig[:, :, 1], sig[:, :, 2]
+    S[:, :, 0, 1] = S[:, :, 1, 0] = sig[:, :, 3]
+    S[:, :, 1, 2] = S[:, :, 2, 1] = sig[:, :, 4]
+    S[:, :, 0, 2] = S[:, :, 2, 0] = sig[:, :, 5]
+
+    g = np.zeros((n, 6, 6), dtype=np.float64)
+    for g_idx in range(2):
+        vg = vol_g[:, g_idx, None, None]
+        dn = dndx[:, g_idx]
+        Sg = S[:, g_idx]
+        g += vg * np.einsum("nac,ncd,nbd->nab", dn, Sg, dn)
+
+    ke = np.zeros((n, 18, 18), dtype=np.float64)
+    ix = np.arange(6)
+    for b in range(3):
+        rows = (3 * ix + b)[:, None]
+        cols = (3 * ix + b)[None, :]
+        ke[:, rows, cols] += g
+
+    dead = st["off"] <= 0.0
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def consistent_mass(group, x_geom=None, x=None):
+    """Consistent element mass matrix for 6-node HEPH wedge (assem_p.F / smass3p.F):
+    M = mass * (M_penta6 (x) I3), where M_penta6 is the analytic wedge moment matrix.
+
+    Returns:
+        me: (n, 18, 18) dense consistent mass matrices
+        edofs: (n, 18) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=np.float64), np.zeros((0, 18), dtype=np.int64)
+
+    mass = st["mass"]  # (n,)
+    me = np.zeros((n, 18, 18), dtype=np.float64)
+    for i in range(6):
+        for j in range(6):
+            mij = _M_PENTA6[i, j]
+            for c in range(3):
+                me[:, 3 * i + c, 3 * j + c] = mass * mij
+
+    dead = st["off"] <= 0.0
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)

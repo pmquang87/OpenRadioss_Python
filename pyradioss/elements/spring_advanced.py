@@ -604,3 +604,276 @@ def forces(group, x, v, vr, dt, fint, mint):
     """Standalone element kernel forces for advanced spring groups."""
     from . import spring
     return spring.forces(group, x, v, vr, dt, fint, mint)
+
+
+# ----------------------------------------------------------------------------
+# Implicit element matrices: tangent, kgeo, consistent_mass (M614 Component 1B)
+# ----------------------------------------------------------------------------
+# Fortran origin:
+#   engine/source/elements/spring/rforc3.F (driver)
+#   engine/source/elements/spring/r1tors.F (torsion)
+#   engine/source/elements/spring/ruser44.F (crushing)
+#   engine/source/elements/spring/ruser46.F (muscle)
+#   starter/source/elements/spring/rmass3.F (mass)
+#   engine/source/implicit/assem_r3.F (implicit assembly for springs)
+# ----------------------------------------------------------------------------
+
+def _spring_axis(group, x):
+    conn = group.conn
+    dx = x[conn[:, 1]] - x[conn[:, 0]]
+    L = norm3(dx)
+    degen = (L < EM20)
+    L = np.where(degen, EM20, L)
+    a = np.where(degen[:, None], np.array([1.0, 0.0, 0.0]), dx / L[:, None])
+    return conn, L, a
+
+
+def _spring_edofs(conn):
+    if len(conn) == 0:
+        return np.empty((0, 6), dtype=np.int64)
+    edofs = np.empty((len(conn), 6), dtype=np.int64)
+    for c in range(3):
+        edofs[:, c] = conn[:, 0] * 6 + c
+        edofs[:, 3 + c] = conn[:, 1] * 6 + c
+    return edofs
+
+
+def _spring_edofs12(conn):
+    if len(conn) == 0:
+        return np.empty((0, 12), dtype=np.int64)
+    edofs = np.empty((len(conn), 12), dtype=np.int64)
+    for c in range(6):
+        edofs[:, c] = conn[:, 0] * 6 + c
+        edofs[:, 6 + c] = conn[:, 1] * 6 + c
+    return edofs
+
+
+def local_stiffness(group, x=None):
+    """Compute local axial and torsional stiffness coefficients for advanced springs."""
+    st = group.state
+    n = group.n
+    k_ax = np.zeros(n, dtype=np.float64)
+    k_tor = np.zeros(n, dtype=np.float64)
+
+    if "k" in st:
+        k_ax[:] = st["k"]
+    if "t19_k_theta" in st:
+        k_tor[:] = st["t19_k_theta"]
+
+    conn = group.conn
+    L0 = st.get("L0")
+    if L0 is None and x is not None and len(conn):
+        dx = x[conn[:, 1]] - x[conn[:, 0]]
+        L0 = np.maximum(norm3(dx), EM20)
+    elif L0 is None:
+        L0 = np.ones(n)
+
+    L = L0
+    if x is not None and len(conn):
+        dx = x[conn[:, 1]] - x[conn[:, 0]]
+        L = np.maximum(norm3(dx), EM20)
+    dl = L - L0
+
+    for sl, mat, prop in st.get("slices", []):
+        ptype = getattr(prop, "type", 0) or getattr(prop, "prop_type", 0)
+        pname = type(prop).__name__.upper()
+        if ptype == 0:
+            if "26" in pname or "SPR_TAB" in pname:
+                ptype = 26
+            elif "27" in pname or "BDAMP" in pname:
+                ptype = 27
+            elif "19" in pname or "TORS" in pname:
+                ptype = 19
+            elif "44" in pname or "CRUS" in pname:
+                ptype = 44
+            elif "46" in pname or "MUSCLE" in pname:
+                ptype = 46
+            elif "MAT" in pname or "23" in pname:
+                ptype = 23
+        p = getattr(prop, "params", {}) or {}
+
+        if ptype == 26:  # /PROP/TYPE26, /PROP/SPR_TAB
+            kmax = float(getattr(prop, "kmax", 0.0) or p.get("kmax", 0.0) or p.get("k", 0.0))
+            curves = getattr(prop, "loading_curves", [])
+            evaluated_k = None
+            if curves and hasattr(curves[0], "eval"):
+                u_curr = dl[sl]
+                eps_u = 1e-5
+                try:
+                    f_plus = curves[0].eval(u_curr + eps_u)
+                    f_minus = curves[0].eval(u_curr - eps_u)
+                    evaluated_k = (f_plus - f_minus) / (2.0 * eps_u)
+                except Exception:
+                    pass
+            k_val = evaluated_k if evaluated_k is not None and np.all(np.isfinite(evaluated_k)) else kmax
+            if k_val == 0.0:
+                k_val = float(p.get("k", 1.0))
+            k_ax[sl] = k_val
+
+        elif ptype == 27:  # /PROP/TYPE27, /PROP/SPR_BDAMP
+            stiff = float(getattr(prop, "stiff", 0.0) or p.get("stiff", 0.0) or p.get("k", 0.0))
+            if stiff == 0.0:
+                stiff = float(p.get("k", 1.0))
+            k_ax[sl] = stiff
+
+        elif ptype == 23 or getattr(prop, "prop_name", "") == "SPR_MAT":  # /PROP/SPR_MAT
+            E = float(getattr(mat, "E", 0.0) or 0.0)
+            area = float(p.get("area", 1.0))
+            L_sl = np.maximum(L0[sl], EM20)
+            k_ax[sl] = E * area / L_sl if E > 0.0 else float(p.get("k", 1.0))
+
+        elif ptype == 19:  # /PROP/TYPE19 (SPR_TORS)
+            kt = float(p.get("k_theta", p.get("k", 0.0)))
+            k_tor[sl] = kt
+
+        elif ptype == 44:  # /PROP/TYPE44 (SPR_CRUS)
+            k_un = float(p.get("k_unload", p.get("k", 0.0)))
+            k_ax[sl] = k_un
+
+        elif ptype == 46:  # /PROP/TYPE46 (SPR_MUSCLE)
+            k_pe = float(p.get("k_pe", 0.0))
+            f_max = float(p.get("f_max", 0.0))
+            k_ax[sl] = max(k_pe, f_max / max(float(L0[sl][0] if len(sl) else 1.0), EM20))
+
+    return k_ax, k_tor
+
+
+def tangent(group, x, epsp_incr=None):
+    """Element tangent stiffness for advanced springs.
+
+    Fortran origin: engine/source/elements/spring/rforc3.F, r1tors.F,
+    ruser44.F, ruser46.F; engine/source/implicit/assem_r3.F.
+
+    Returns (ke, edofs):
+      ke: (n, 6, 6) or (n, 12, 12) global stiffness matrix
+      edofs: (n, 6) or (n, 12)
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 6, 6)), np.empty((0, 6), dtype=np.int64)
+
+    conn, L, a = _spring_axis(group, x)
+    k_ax, k_tor = local_stiffness(group, x)
+
+    has_rot = np.any(k_tor > 0.0)
+
+    if has_rot:
+        edofs = _spring_edofs12(conn)
+        ke = np.zeros((n, 12, 12), dtype=np.float64)
+        kb_ax = k_ax[:, None, None] * np.einsum("ni,nj->nij", a, a)
+        ke[:, 0:3, 0:3] = kb_ax
+        ke[:, 6:9, 6:9] = kb_ax
+        ke[:, 0:3, 6:9] = -kb_ax
+        ke[:, 6:9, 0:3] = -kb_ax
+
+        kb_tor = k_tor[:, None, None] * np.einsum("ni,nj->nij", a, a)
+        ke[:, 3:6, 3:6] = kb_tor
+        ke[:, 9:12, 9:12] = kb_tor
+        ke[:, 3:6, 9:12] = -kb_tor
+        ke[:, 9:12, 3:6] = -kb_tor
+    else:
+        edofs = _spring_edofs(conn)
+        ke = np.zeros((n, 6, 6), dtype=np.float64)
+        kb_ax = k_ax[:, None, None] * np.einsum("ni,nj->nij", a, a)
+        ke[:, :3, :3] = kb_ax
+        ke[:, 3:, 3:] = kb_ax
+        ke[:, :3, 3:] = -kb_ax
+        ke[:, 3:, :3] = -kb_ax
+
+    dead = (st.get("off", np.ones(n)) <= 0.0)
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, edofs
+
+
+def kgeo(group, x):
+    """Geometric (initial-stress) stiffness (F/L)(I - a a^T) from current spring force.
+
+    Fortran origin: engine/source/elements/spring/rforc3.F,
+    engine/source/implicit/assem_r3.F.
+
+    Returns (ke, edofs): ke (n, 6, 6) or (n, 12, 12), edofs (n, 6) or (n, 12).
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 6, 6)), np.empty((0, 6), dtype=np.int64)
+
+    conn, L, a = _spring_axis(group, x)
+    force = st.get("force", np.zeros(n))
+    F_over_L = force / L
+    eye = np.eye(3)
+    kb = F_over_L[:, None, None] * (eye[None, :, :] - np.einsum("ni,nj->nij", a, a))
+
+    k_tor = st.get("t19_k_theta", np.zeros(n))
+    has_rot = np.any(k_tor > 0.0)
+
+    if has_rot:
+        edofs = _spring_edofs12(conn)
+        ke = np.zeros((n, 12, 12), dtype=np.float64)
+        ke[:, 0:3, 0:3] = kb
+        ke[:, 6:9, 6:9] = kb
+        ke[:, 0:3, 6:9] = -kb
+        ke[:, 6:9, 0:3] = -kb
+    else:
+        edofs = _spring_edofs(conn)
+        ke = np.zeros((n, 6, 6), dtype=np.float64)
+        ke[:, :3, :3] = kb
+        ke[:, 3:, 3:] = kb
+        ke[:, :3, 3:] = -kb
+        ke[:, 3:, :3] = -kb
+
+    dead = (st.get("off", np.ones(n)) <= 0.0)
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, edofs
+
+
+def consistent_mass(group, x=None):
+    """Lumped / exact element mass of the advanced spring: M/2 on each node's translations.
+
+    Fortran origin: starter/source/elements/spring/rmass3.F,
+    engine/source/implicit/assem_r3.F.
+
+    Returns (me, edofs): me (n, 6, 6) or (n, 12, 12), edofs (n, 6) or (n, 12).
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 6, 6)), np.empty((0, 6), dtype=np.int64)
+
+    m = st.get("mass", np.zeros(n))
+    half_m = m / 2.0
+
+    k_tor = st.get("t19_k_theta", np.zeros(n))
+    has_rot = np.any(k_tor > 0.0)
+
+    if has_rot:
+        edofs = _spring_edofs12(conn)
+        me = np.zeros((n, 12, 12), dtype=np.float64)
+        for i in range(3):
+            me[:, i, i] = half_m
+            me[:, 6 + i, 6 + i] = half_m
+        iner = st.get("t19_inertia", np.zeros(n))
+        half_iner = iner / 2.0
+        for i in range(3):
+            me[:, 3 + i, 3 + i] = half_iner
+            me[:, 9 + i, 9 + i] = half_iner
+    else:
+        edofs = _spring_edofs(conn)
+        me = np.zeros((n, 6, 6), dtype=np.float64)
+        for i in range(6):
+            me[:, i, i] = half_m
+
+    dead = (st.get("off", np.ones(n)) <= 0.0)
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, edofs
+

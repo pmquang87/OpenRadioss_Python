@@ -215,3 +215,165 @@ def forces(group, x, v, vr, dt, fint, mint):
         scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
 
     return dt_crit
+
+
+# ----------------------------------------------------------------------------
+# Implicit element matrices: tangent, kgeo, consistent_mass (M614 Component 1B)
+# ----------------------------------------------------------------------------
+# Fortran origin:
+#   engine/source/elements/thickshell/solide6c/s6cforc3.F (driver)
+#   engine/source/elements/thickshell/solide6c/s6cderi3.F (derivatives)
+#   engine/source/elements/thickshell/solide6c/s6cfint3.F (internal forces)
+#   engine/source/implicit/assem_s6.F (implicit assembly for 6-node thick shell wedges)
+# ----------------------------------------------------------------------------
+
+def _edofs(conn: np.ndarray) -> np.ndarray:
+    """(n, 18) global scalar translation DOF indices in node-major order."""
+    n = len(conn)
+    if n == 0:
+        return np.zeros((0, 18), dtype=np.int64)
+    ix = np.arange(6)
+    edofs = np.full((n, 18), -1, dtype=np.int64)
+    valid = conn >= 0
+    for c in range(3):
+        edofs[:, 3 * ix + c] = np.where(valid, conn * 6 + c, -1)
+    return edofs
+
+
+def tangent(group, x, epsp_incr=None):
+    """Element tangent stiffness for the 6-node thick shell wedge group (n, 18, 18).
+
+    Fortran origin: engine/source/elements/thickshell/solide6c/s6cforc3.F,
+    s6cderi3.F, s6cfint3.F; engine/source/implicit/assem_s6.F.
+
+    Returns (ke, edofs):
+      ke: (n, 18, 18)
+      edofs: (n, 18)
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=float), np.zeros((0, 18), dtype=np.int64)
+
+    xe = x[conn]
+    dndx, vol_g, vol_tot = _geometry(xe)
+
+    ke = np.zeros((n, 18, 18), dtype=np.float64)
+    epi = np.zeros((n, 2)) if epsp_incr is None else (
+        epsp_incr if np.ndim(epsp_incr) == 2 else np.repeat(epsp_incr[:, None], 2, axis=1)
+    )
+
+    for g in range(2):
+        B = np.zeros((n, 6, 18), dtype=np.float64)
+        gx = dndx[:, g, :, 0]
+        gy = dndx[:, g, :, 1]
+        gz = dndx[:, g, :, 2]
+        ix = np.arange(6)
+
+        B[:, 0, 3 * ix + 0] = gx
+        B[:, 1, 3 * ix + 1] = gy
+        B[:, 2, 3 * ix + 2] = gz
+        B[:, 3, 3 * ix + 0] = gy
+        B[:, 3, 3 * ix + 1] = gx
+        B[:, 4, 3 * ix + 1] = gz
+        B[:, 4, 3 * ix + 2] = gy
+        B[:, 5, 3 * ix + 0] = gz
+        B[:, 5, 3 * ix + 2] = gx
+
+        for sl, mat, prop in st.get("slices", []):
+            if getattr(mat, "law", 1) == 0:
+                continue
+            D = materials.solid_tangent(mat, st["sig"][sl, g], st["epsp"][sl, g], epi[sl, g], None)
+            Bs = B[sl]
+            DB = np.einsum("mij,mjk->mik", D, Bs)
+            ke[sl] += vol_g[sl, g][:, None, None] * np.einsum("mji,mjk->mik", Bs, DB)
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def kgeo(group, x):
+    """Geometric (initial-stress) element stiffness for the 6-node thick shell wedge.
+
+    Fortran origin: engine/source/elements/thickshell/solide6c/s6cfint3.F,
+    engine/source/implicit/assem_s6.F.
+
+    Returns (ke, edofs): ke (n, 18, 18), edofs (n, 18).
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=float), np.zeros((0, 18), dtype=np.int64)
+
+    xe = x[conn]
+    dndx, vol_g, vol_tot = _geometry(xe)
+
+    ke = np.zeros((n, 18, 18), dtype=np.float64)
+    sig = st["sig"]
+
+    for g in range(2):
+        s_g = sig[:, g]
+        S = np.empty((n, 3, 3), dtype=np.float64)
+        S[:, 0, 0], S[:, 1, 1], S[:, 2, 2] = s_g[:, 0], s_g[:, 1], s_g[:, 2]
+        S[:, 0, 1] = S[:, 1, 0] = s_g[:, 3]
+        S[:, 1, 2] = S[:, 2, 1] = s_g[:, 4]
+        S[:, 0, 2] = S[:, 2, 0] = s_g[:, 5]
+
+        g_mat = vol_g[:, g, None, None] * np.einsum("nac,ncd,nbd->nab", dndx[:, g], S, dndx[:, g])
+
+        ix = np.arange(6)
+        for b in range(3):
+            rows = (3 * ix + b)[:, None]
+            cols = (3 * ix + b)[None, :]
+            ke[:, rows, cols] += g_mat
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+_M_WEDGE6 = np.array([
+    [4.0, 2.0, 2.0, 2.0, 1.0, 1.0],
+    [2.0, 4.0, 2.0, 1.0, 2.0, 1.0],
+    [2.0, 2.0, 4.0, 1.0, 1.0, 2.0],
+    [2.0, 1.0, 1.0, 4.0, 2.0, 2.0],
+    [1.0, 2.0, 1.0, 2.0, 4.0, 2.0],
+    [1.0, 1.0, 2.0, 2.0, 2.0, 4.0],
+], dtype=np.float64) / 72.0
+
+
+def consistent_mass(group, x=None):
+    """Consistent element mass matrix for 6-node thick shell wedge (18x18).
+
+    Fortran origin: starter/source/elements/solid/solide/smass3.F,
+    engine/source/implicit/assem_s6.F.
+
+    Returns (me, edofs): me (n, 18, 18), edofs (n, 18).
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=float), np.zeros((0, 18), dtype=np.int64)
+
+    m = st["mass"]
+    me = np.zeros((n, 18, 18), dtype=np.float64)
+    for a in range(6):
+        for b in range(6):
+            val = m * _M_WEDGE6[a, b]
+            for c in range(3):
+                me[:, 3 * a + c, 3 * b + c] = val
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)
+

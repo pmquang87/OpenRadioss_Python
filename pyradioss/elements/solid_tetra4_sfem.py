@@ -27,7 +27,7 @@ import numpy as np
 from .. import failure, materials
 from ..common.constants import EM20, EP30
 from ..common.fastmath import cross3, det_inv33, norm3, scatter_add3
-from .solid_tetra4 import _char_length, _geometry
+from .solid_tetra4 import _M_TET, _char_length, _edofs, _geometry
 
 
 def init_group(group, model, log):
@@ -260,3 +260,155 @@ def forces(group, x, v, vr, dt, fint, mint):
         scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
 
     return dt_crit
+
+
+# ----------------------------------------------------------------------------
+# Implicit solver tangent, geometric stiffness, and consistent mass
+# ----------------------------------------------------------------------------
+
+def tangent(group, x_geom=None, epsp_incr=None, x=None):
+    """Element tangent stiffness for 4-node NS-FEM smoothed cell tetra (s4lagsfem.F).
+
+    Uses smoothed shape function gradients across nodal smoothing domains.
+    Returns:
+        ke: (n, 12, 12) dense element tangent matrices (translations only)
+        edofs: (n, 12) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 12, 12), dtype=float), np.zeros((0, 12), dtype=np.int64)
+
+    xe = x_geom[conn]
+    dndx, vol = _geometry(xe)
+    vol_safe = np.maximum(vol, EM20)
+    num_nodes = len(x_geom)
+
+    # Smoothed shape function gradients over nodal smoothing domains
+    dndx_smooth = _smooth_gradients(dndx, vol, conn, num_nodes)
+
+    # Strain-displacement operator B: (n, 6, 12)
+    B = np.zeros((n, 6, 12), dtype=np.float64)
+    gx = dndx_smooth[:, :, 0]  # (n, 4)
+    gy = dndx_smooth[:, :, 1]
+    gz = dndx_smooth[:, :, 2]
+    ix = np.arange(4)
+
+    B[:, 0, 3 * ix + 0] = gx
+    B[:, 1, 3 * ix + 1] = gy
+    B[:, 2, 3 * ix + 2] = gz
+    B[:, 3, 3 * ix + 0] = gy
+    B[:, 3, 3 * ix + 1] = gx
+    B[:, 4, 3 * ix + 1] = gz
+    B[:, 4, 3 * ix + 2] = gy
+    B[:, 5, 3 * ix + 0] = gz
+    B[:, 5, 3 * ix + 2] = gx
+
+    ke = np.zeros((n, 12, 12), dtype=np.float64)
+    epi = np.zeros(n) if epsp_incr is None else epsp_incr
+
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            continue
+        D = materials.solid_tangent(mat, st["sig"][sl], st["epsp"][sl], epi[sl], None)
+        Bs = B[sl]
+        DB = np.einsum("mij,mjk->mik", D, Bs)
+        ke[sl] = vol_safe[sl][:, None, None] * np.einsum("mji,mjk->mik", Bs, DB)
+
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def kgeo(group, x_geom=None, x=None):
+    """Geometric (initial-stress) element stiffness for 4-node NS-FEM smoothed cell tetra (s4lagsfem.F).
+
+    Integrates grad_smooth(N)^T sigma grad_smooth(N) over element volume.
+    Returns:
+        ke: (n, 12, 12) dense geometric stiffness matrices
+        edofs: (n, 12) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 12, 12), dtype=float), np.zeros((0, 12), dtype=np.int64)
+
+    xe = x_geom[conn]
+    dndx, vol = _geometry(xe)
+    vol_safe = np.maximum(vol, EM20)
+    num_nodes = len(x_geom)
+
+    dndx_smooth = _smooth_gradients(dndx, vol, conn, num_nodes)
+
+    sig = st["sig"]
+    S = np.empty((n, 3, 3), dtype=np.float64)
+    S[:, 0, 0], S[:, 1, 1], S[:, 2, 2] = sig[:, 0], sig[:, 1], sig[:, 2]
+    S[:, 0, 1] = S[:, 1, 0] = sig[:, 3]
+    S[:, 1, 2] = S[:, 2, 1] = sig[:, 4]
+    S[:, 0, 2] = S[:, 2, 0] = sig[:, 5]
+
+    g = vol_safe[:, None, None] * np.einsum("nac,ncd,nbd->nab", dndx_smooth, S, dndx_smooth)
+
+    ke = np.zeros((n, 12, 12), dtype=np.float64)
+    ix = np.arange(4)
+    for b in range(3):
+        rows = (3 * ix + b)[:, None]
+        cols = (3 * ix + b)[None, :]
+        ke[:, rows, cols] += g
+
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def consistent_mass(group, x_geom=None, x=None):
+    """Consistent element mass matrix for 4-node NS-FEM tetra (s4lagsfem.F / s4mass3.F):
+    M = int_V rho N^T N dV = mass * (_M_TET (x) I3).
+
+    Returns:
+        me: (n, 12, 12) dense consistent mass matrices
+        edofs: (n, 12) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 12, 12), dtype=float), np.zeros((0, 12), dtype=np.int64)
+
+    mass = st["mass"]  # (n,)
+    me = np.zeros((n, 12, 12), dtype=np.float64)
+    for a in range(4):
+        for b in range(4):
+            f = mass * _M_TET[a, b]
+            for c in range(3):
+                me[:, a * 3 + c, b * 3 + c] = f
+
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)

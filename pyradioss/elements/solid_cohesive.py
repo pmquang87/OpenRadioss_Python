@@ -214,3 +214,194 @@ def forces(group, x, v, vr, dt, fint, mint):
         scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
 
     return dt_crit
+
+
+# ----------------------------------------------------------------------------
+# Implicit solver tangent, geometric stiffness, and consistent mass
+# ----------------------------------------------------------------------------
+
+def _edofs(conn: np.ndarray) -> np.ndarray:
+    """Global translation DOF indices for 8-node cohesive elements: 3 per node."""
+    n = len(conn)
+    if n == 0:
+        return np.empty((0, 24), dtype=np.int64)
+    ix = np.arange(8)
+    edofs = np.empty((n, 24), dtype=np.int64)
+    edofs[:, 3 * ix + 0] = conn * 6 + 0
+    edofs[:, 3 * ix + 1] = conn * 6 + 1
+    edofs[:, 3 * ix + 2] = conn * 6 + 2
+    return edofs
+
+
+def tangent(group, x_geom=None, epsp_incr=None, x=None):
+    """Element tangent stiffness for 8-node cohesive element (szforc3.F).
+
+    Derivatives of bilinear traction-separation law with respect to opening and shear gaps dT / dDelta.
+
+    Returns:
+        ke: (n, 24, 24) dense element tangent matrices (translations only)
+        edofs: (n, 24) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 24, 24), dtype=np.float64), np.zeros((0, 24), dtype=np.int64)
+
+    xe = x_geom[conn]
+    xe0 = st.get("xe0", xe)
+    x_bot, x_top, n_mid, area = _midsurface_geometry(xe)
+
+    # Relative displacement jump: delta = mean(x_top - x_bot) - mean(x0_top - x0_bot)
+    delta_curr = np.mean(x_top - x_bot, axis=1)
+    delta_init = np.mean(xe0[:, 4:8] - xe0[:, 0:4], axis=1)
+    delta = delta_curr - delta_init  # (n, 3)
+
+    delta_n = np.sum(delta * n_mid, axis=1)
+    delta_t_vec = delta - delta_n[:, None] * n_mid
+    delta_t = np.linalg.norm(delta_t_vec, axis=1)
+
+    Kn = np.zeros(n, dtype=np.float64)
+    Kt = np.zeros(n, dtype=np.float64)
+    sigma_max = np.zeros(n, dtype=np.float64)
+    delta_max = np.zeros(n, dtype=np.float64)
+
+    for sl, mat, prop in st.get("slices", []):
+        Kn[sl] = getattr(prop, "kn", 1.0e6) if prop else 1.0e6
+        Kt[sl] = getattr(prop, "kt", 1.0e6) if prop else 1.0e6
+        sigma_max[sl] = getattr(prop, "sigma_max", 1.0e8) if prop else 1.0e8
+        delta_max[sl] = getattr(prop, "delta_max", 1.0e-3) if prop else 1.0e-3
+
+    delta_0 = sigma_max / np.maximum(Kn, EM20)
+    delta_f = np.maximum(delta_max, delta_0 * 1.01)
+    delta_eq = np.sqrt(np.maximum(delta_n, 0.0)**2 + delta_t**2)
+
+    dama = st.get("dama", np.zeros(n, dtype=np.float64))
+    dama_new = np.where(
+        delta_eq > delta_0,
+        (delta_f / (delta_f - delta_0)) * (1.0 - delta_0 / np.maximum(delta_eq, EM20)),
+        0.0
+    )
+    dama_eff = np.clip(np.maximum(dama, dama_new), 0.0, 1.0)
+
+    # Constitutive traction derivative matrix C = dT / dDelta: shape (n, 3, 3)
+    # C = Kn_eff * (n (x) n) + Kt_eff * (I - n (x) n)
+    Kn_eff = np.where(delta_n >= 0.0, Kn * (1.0 - dama_eff), Kn)
+    Kt_eff = Kt * (1.0 - dama_eff)
+
+    Pn = n_mid[:, :, None] * n_mid[:, None, :]  # (n, 3, 3) normal projector
+    I3 = np.eye(3, dtype=np.float64)[None, :, :]
+    Pt = I3 - Pn                                 # (n, 3, 3) tangential projector
+
+    C = Kn_eff[:, None, None] * Pn + Kt_eff[:, None, None] * Pt  # (n, 3, 3)
+
+    # Element weighting vector w: [-1/4, -1/4, -1/4, -1/4, 1/4, 1/4, 1/4, 1/4]
+    w = np.array([-0.25, -0.25, -0.25, -0.25, 0.25, 0.25, 0.25, 0.25], dtype=np.float64)
+    W = np.outer(w, w)  # (8, 8)
+
+    # ke[3*i+a, 3*j+b] = area * W[i, j] * C[a, b]
+    # W is (8, 8), C is (n, 3, 3) -> ke is (n, 24, 24)
+    ke = np.zeros((n, 24, 24), dtype=np.float64)
+    for i in range(8):
+        for j in range(8):
+            wij = W[i, j]
+            for a in range(3):
+                for b in range(3):
+                    ke[:, 3 * i + a, 3 * j + b] = area * wij * C[:, a, b]
+
+    dead = st["off"] <= 0.0
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def kgeo(group, x_geom=None, x=None):
+    """Geometric (initial-stress) element stiffness for 8-node cohesive element (szforc3.F).
+
+    From current normal traction Tn, provides geometric resistance to transverse shear.
+    Returns:
+        ke: (n, 24, 24) dense geometric stiffness matrices
+        edofs: (n, 24) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 24, 24), dtype=np.float64), np.zeros((0, 24), dtype=np.int64)
+
+    xe = x_geom[conn]
+    _, _, n_mid, area = _midsurface_geometry(xe)
+
+    # Current normal traction
+    sig = st["sig"]  # (n, 3) [Tn, Tt1, Tt2]
+    Tn = sig[:, 0] if sig.ndim == 2 else np.zeros(n)
+
+    h_eff = np.sqrt(np.maximum(area, EM20))
+    geo_fac = (area * Tn) / np.maximum(h_eff, EM20)  # (n,)
+
+    w = np.array([-0.25, -0.25, -0.25, -0.25, 0.25, 0.25, 0.25, 0.25], dtype=np.float64)
+    W = np.outer(w, w)  # (8, 8)
+
+    ke = np.zeros((n, 24, 24), dtype=np.float64)
+    for i in range(8):
+        for j in range(8):
+            wij = W[i, j]
+            for c in range(3):
+                ke[:, 3 * i + c, 3 * j + c] = geo_fac * wij
+
+    dead = st["off"] <= 0.0
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def consistent_mass(group, x_geom=None, x=None):
+    """Consistent element mass matrix for 8-node cohesive element:
+    M = mass * (M_surf (x) I3), where M_surf is the bilinear surface consistent mass on top & bottom faces.
+
+    Returns:
+        me: (n, 24, 24) dense consistent mass matrices
+        edofs: (n, 24) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 24, 24), dtype=np.float64), np.zeros((0, 24), dtype=np.int64)
+
+    # 4-node 2D quad consistent mass normalized to unit area: sum of rows = 1/4 per node
+    # Matrix: [[4, 2, 1, 2], [2, 4, 2, 1], [1, 2, 4, 2], [2, 1, 2, 4]] / 36
+    M4 = np.array([
+        [4.0, 2.0, 1.0, 2.0],
+        [2.0, 4.0, 2.0, 1.0],
+        [1.0, 2.0, 4.0, 2.0],
+        [2.0, 1.0, 2.0, 4.0],
+    ], dtype=np.float64) / 36.0
+
+    # Spread half mass to bottom face (nodes 0..3) and half to top face (nodes 4..7)
+    M8 = np.zeros((8, 8), dtype=np.float64)
+    M8[0:4, 0:4] = 0.5 * M4
+    M8[4:8, 4:8] = 0.5 * M4
+
+    mass = st["mass"]  # (n,)
+    me = np.zeros((n, 24, 24), dtype=np.float64)
+    for i in range(8):
+        for j in range(8):
+            mij = M8[i, j]
+            if mij != 0.0:
+                for c in range(3):
+                    me[:, 3 * i + c, 3 * j + c] = mass * mij
+
+    dead = st["off"] <= 0.0
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)

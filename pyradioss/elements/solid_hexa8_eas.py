@@ -28,7 +28,25 @@ import numpy as np
 from .. import failure, materials
 from ..common.constants import EM20, EP30
 from ..common.fastmath import det_inv33, scatter_add3
-from .solid_hexa8_full import _DN_DXI, _FACES, _GP_COORDS, _GP_WEIGHTS, _char_length, _edofs
+from .solid_hexa8_full import _DN_DXI, _FACES, _GP_COORDS, _GP_WEIGHTS, _N_GP, _char_length, _edofs
+
+# Precomputed EAS strain interpolation matrix M at the 8 Gauss points: (8, 6, 9)
+def _build_eas_m() -> np.ndarray:
+    M = np.zeros((8, 6, 9), dtype=np.float64)
+    for g in range(8):
+        xi, eta, zeta = _GP_COORDS[g]
+        M[g, 0, 0] = xi
+        M[g, 0, 3] = xi * eta
+        M[g, 0, 6] = xi * zeta
+        M[g, 1, 1] = eta
+        M[g, 1, 4] = xi * eta
+        M[g, 1, 7] = eta * zeta
+        M[g, 2, 2] = zeta
+        M[g, 2, 5] = xi * zeta
+        M[g, 2, 8] = eta * zeta
+    return M
+
+_M_EAS = _build_eas_m()
 
 
 def _geometry(xe: np.ndarray):
@@ -293,3 +311,197 @@ def forces(group, x, v, vr, dt, fint, mint):
         scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
 
     return dt_crit
+
+
+# ----------------------------------------------------------------------------
+# Implicit solver tangent with EAS condensation, kgeo, and consistent mass
+# ----------------------------------------------------------------------------
+
+def tangent(group, x_geom=None, epsp_incr=None, x=None):
+    """Element tangent stiffness for 8-node EAS hex (s8eforc3.F).
+
+    Includes static condensation of the 9 Wilson-Taylor EAS bubble modes:
+        K_cond = K_uu - K_ua @ K_aa^-1 @ K_au.
+
+    Returns:
+        ke: (n, 24, 24) condensed element tangent matrices (translations only)
+        edofs: (n, 24) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 24, 24), dtype=np.float64), np.zeros((0, 24), dtype=np.int64)
+
+    xe = x_geom[conn]
+    dndx, vol_g, vol_tot, J0 = _geometry(xe)
+
+    # Compatible strain operator B at 8 Gauss points: (n, 8, 6, 24)
+    B = np.zeros((n, 8, 6, 24), dtype=np.float64)
+    ix = np.arange(8)
+    for g in range(8):
+        gx = dndx[:, g, :, 0]
+        gy = dndx[:, g, :, 1]
+        gz = dndx[:, g, :, 2]
+        B[:, g, 0, 3 * ix + 0] = gx
+        B[:, g, 1, 3 * ix + 1] = gy
+        B[:, g, 2, 3 * ix + 2] = gz
+        B[:, g, 3, 3 * ix + 0] = gy
+        B[:, g, 3, 3 * ix + 1] = gx
+        B[:, g, 4, 3 * ix + 1] = gz
+        B[:, g, 4, 3 * ix + 2] = gy
+        B[:, g, 5, 3 * ix + 0] = gz
+        B[:, g, 5, 3 * ix + 2] = gx
+
+    # EAS mode operator M at 8 Gauss points: _M_EAS is (8, 6, 9)
+    # Assemble un-condensed stiffness blocks:
+    # K_uu: (n, 24, 24), K_ua: (n, 24, 9), K_aa: (n, 9, 9)
+    K_uu = np.zeros((n, 24, 24), dtype=np.float64)
+    K_ua = np.zeros((n, 24, 9), dtype=np.float64)
+    K_aa = np.zeros((n, 9, 9), dtype=np.float64)
+
+    epi = np.zeros((n, 8)) if epsp_incr is None else (
+        epsp_incr if np.ndim(epsp_incr) == 2 else np.repeat(epsp_incr[:, None], 8, axis=1)
+    )
+
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            continue
+        for g in range(8):
+            D = materials.solid_tangent(mat, st["sig"][sl, g], st["epsp"][sl, g], epi[sl, g], None)  # (m, 6, 6)
+            Bg = B[sl, g]          # (m, 6, 24)
+            Mg = _M_EAS[g]         # (6, 9)
+            vg = vol_g[sl, g][:, None, None]
+
+            # D @ Bg: (m, 6, 24)
+            DB = np.einsum("mij,mjk->mik", D, Bg)
+            # D @ Mg: (m, 6, 9)
+            DM = np.einsum("mij,jk->mik", D, Mg)
+
+            K_uu[sl] += vg * np.einsum("mji,mjk->mik", Bg, DB)
+            K_ua[sl] += vg * np.einsum("mji,mjk->mik", Bg, DM)
+            K_aa[sl] += vg * np.einsum("ji,mjk->mik", Mg, DM)
+
+    # Static condensation of EAS modes: K_cond = K_uu - K_ua @ K_aa^-1 @ K_au
+    ke = np.zeros((n, 24, 24), dtype=np.float64)
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    alive = (st["off"] > 0.0) & (~is_void)
+
+    if np.any(alive):
+        idx_alive = np.where(alive)[0]
+        K_aa_alive = K_aa[idx_alive]  # (m, 9, 9)
+        K_ua_alive = K_ua[idx_alive]  # (m, 24, 9)
+        K_au_alive = np.transpose(K_ua_alive, (0, 2, 1))  # (m, 9, 24)
+
+        # Solve K_aa @ X = K_au -> X is K_aa^-1 @ K_au: (m, 9, 24)
+        # Add small regularization to avoid singular solve if unconstrained
+        eye9 = np.eye(9, dtype=np.float64)[None, :, :] * EM20
+        X = np.linalg.solve(K_aa_alive + eye9, K_au_alive)
+        K_cond_alive = K_uu[idx_alive] - np.einsum("mij,mjk->mik", K_ua_alive, X)
+        ke[idx_alive] = K_cond_alive
+
+    return ke, _edofs(conn)
+
+
+def kgeo(group, x_geom=None, x=None):
+    """Geometric (initial-stress) element stiffness for 8-node EAS hex (s8eforc3.F).
+
+    Integrates grad(N)^T sigma grad(N) over 8 Gauss points.
+    Returns:
+        ke: (n, 24, 24) dense geometric stiffness matrices
+        edofs: (n, 24) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 24, 24), dtype=np.float64), np.zeros((0, 24), dtype=np.int64)
+
+    xe = x_geom[conn]
+    dndx, vol_g, vol_tot, _ = _geometry(xe)
+
+    sig = st["sig"]
+    S = np.empty((n, 8, 3, 3), dtype=np.float64)
+    S[:, :, 0, 0], S[:, :, 1, 1], S[:, :, 2, 2] = sig[:, :, 0], sig[:, :, 1], sig[:, :, 2]
+    S[:, :, 0, 1] = S[:, :, 1, 0] = sig[:, :, 3]
+    S[:, :, 1, 2] = S[:, :, 2, 1] = sig[:, :, 4]
+    S[:, :, 0, 2] = S[:, :, 2, 0] = sig[:, :, 5]
+
+    g = np.zeros((n, 8, 8), dtype=np.float64)
+    for g_idx in range(8):
+        vg = vol_g[:, g_idx, None, None]
+        dn = dndx[:, g_idx]
+        Sg = S[:, g_idx]
+        g += vg * np.einsum("nac,ncd,nbd->nab", dn, Sg, dn)
+
+    ke = np.zeros((n, 24, 24), dtype=np.float64)
+    ix = np.arange(8)
+    for b in range(3):
+        rows = (3 * ix + b)[:, None]
+        cols = (3 * ix + b)[None, :]
+        ke[:, rows, cols] += g
+
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def consistent_mass(group, x_geom=None, x=None):
+    """Consistent element mass matrix for 8-node EAS hex (basis8.F / smass3b.F):
+    M = int_V rho N^T N dV = sum_g detJ_g w_g rho (N_g (x) N_g) (x) I3.
+
+    Returns:
+        me: (n, 24, 24) dense consistent mass matrices
+        edofs: (n, 24) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 24, 24), dtype=np.float64), np.zeros((0, 24), dtype=np.int64)
+
+    rho = st["mass"] / np.maximum(st["vol0"], EM20)
+
+    if x_geom is not None:
+        xe = x_geom[conn]
+        _, vol_g, _, _ = _geometry(xe)
+    elif "vol_g0" in st:
+        vol_g = st["vol_g0"]
+    else:
+        vol_g = np.repeat((st["vol0"] / 8.0)[:, None], 8, axis=1)
+
+    N_outer = np.einsum("gi,gj->gij", _N_GP, _N_GP)
+    S = np.einsum("ng,gij->nij", vol_g, N_outer)
+    MS = rho[:, None, None] * S
+
+    me = np.zeros((n, 24, 24), dtype=np.float64)
+    ix = np.arange(8)
+    for c in range(3):
+        rows = (3 * ix + c)[:, None]
+        cols = (3 * ix + c)[None, :]
+        me[:, rows, cols] = MS
+
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)

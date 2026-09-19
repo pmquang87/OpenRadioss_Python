@@ -254,16 +254,19 @@ class ImplicitDynResult(ImplicitResult):
     :class:`ImplicitResult` (``increments[k].load_factor`` holds the step's
     END TIME) plus the scheme actually run and the energy/motion history."""
 
-    def __init__(self, alpha, gamma, beta):
+    def __init__(self, alpha, gamma, beta, alpha_m=0.0, alpha_f=0.0):
         super().__init__()
         self.alpha = alpha
+        self.alpha_m = alpha_m
+        self.alpha_f = alpha_f
         self.gamma = gamma
         self.beta = beta
         #: per-converged-step history: "t", kinetic "ke", internal+hourglass
         #: "ie", external work "wext", Rayleigh dissipation "edamp" (M11 —
-        #: the DY_EDAMP ledger, zero without /IMPL/DYNA/DAMP), balance
-        #: "bal" = ie + ke + edamp - wext - e0 (lists of floats), and "u" —
-        #: displacement snapshots (numnod, 3) for the validations (kept
+        #: the DY_EDAMP ledger, zero without /IMPL/DYNA/DAMP), numerical
+        #: dissipation "enum" (Chung & Hulbert 1993 Generalized-alpha / HHT /
+        #: Wood-Bossak), balance "bal" = ie + ke + edamp + econt + efric - wext - e0,
+        #: and "u" — displacement snapshots (numnod, 3) for the validations (kept
         #: while numnod stays example-sized).
         #: "econt" (M12): stored contact penalty-spring energy 1/2 K p^2
         #: (+ M13 the stick spring's 1/2 |f_t|^2/K_t), zero without /INTER,
@@ -272,7 +275,7 @@ class ImplicitDynResult(ImplicitResult):
         #: TYPE7 return mapping, accumulated per committed step — the
         #: contact analogue of plastic work (zero without friction).
         self.history = {"t": [], "ke": [], "ie": [], "wext": [], "edamp": [],
-                        "econt": [], "efric": [], "bal": [], "u": []}
+                        "enum": [], "econt": [], "efric": [], "bal": [], "u": []}
 
 
 #: stop keeping displacement snapshots beyond this many stored floats —
@@ -357,10 +360,11 @@ def _disable_rate_devices(model, log, nlg=False):
 # ----------------------------------------------------------------------------
 
 def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
-                         run_num=1):
-    """Run an implicit dynamic (Newmark/HHT) analysis on an initialized
+                         run_num=1, alpha_m=None, alpha_f=None, ikt=None,
+                         t_fix=None):
+    """Run an implicit dynamic (Newmark/HHT/Generalized-alpha) analysis on an initialized
     model. ``controls.impl_dyna`` selects the scheme (1 = HHT from alpha,
-    2 = Newmark gamma/beta); /RUN's final time and /IMPL/DTINI are PHYSICAL.
+    2 = Newmark gamma/beta, 3 = Generalized-alpha); /RUN's final time and /IMPL/DTINI are PHYSICAL.
     Returns the model with ``model.implicit_result`` an
     :class:`ImplicitDynResult`."""
     ip = controls
@@ -373,13 +377,40 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
             "unknown), while dynamics marches real time. Drop one of the "
             "two cards.")
 
-    # ---- scheme constants (DYNA_INI) --------------------------------------
-    if ip.impl_dyna == 1:
+    # ---- tangent update policy (IKT: 1=KTANG, 2=KTFUL, 4=KTCON) -----------
+    if ikt is None:
+        ikt = int(getattr(ip, "impl_ikt", getattr(ip, "impl_nonl_ikt", 1)))
+    if ikt not in (1, 2, 3, 4):
+        ikt = 1
+
+    # ---- time step fixpoints (/IMPL/DT/FIXP, imp_dt.F IMP_DTF) -------------
+    if t_fix is None:
+        t_fix = getattr(ip, "impl_dt_fixp", None)
+    t_fix_list = sorted([float(tf) for tf in t_fix if float(tf) > 0.0]) if t_fix else []
+
+    # ---- scheme constants (DYNA_INI / Chung & Hulbert 1993) ---------------
+    if alpha_m is not None or alpha_f is not None:
+        am = float(alpha_m) if alpha_m is not None else 0.0
+        af = float(alpha_f) if alpha_f is not None else 0.0
+        gamma = 0.5 - am + af
+        beta = 0.25 * (1.0 - am + af) ** 2
+        alpha = -af
+    elif getattr(ip, "impl_dyna", 0) == 3:
+        am = float(getattr(ip, "impl_dyna_alpha_m", 0.0))
+        af = float(getattr(ip, "impl_dyna_alpha_f", 0.0))
+        gamma = 0.5 - am + af
+        beta = 0.25 * (1.0 - am + af) ** 2
+        alpha = -af
+    elif ip.impl_dyna == 1:
         alpha = float(ip.impl_dyna_alpha)
-        gamma = 0.5 - alpha                     # DY_G = HALF - D_AL
-        beta = 0.25 * (1.0 - alpha) ** 2        # DY_B = FOURTH*(1-D_AL)^2
+        af = -alpha if alpha <= 0.0 else alpha
+        am = float(getattr(ip, "impl_dyna_alpha_m", 0.0))
+        gamma = 0.5 - am + af
+        beta = 0.25 * (1.0 - am + af) ** 2
     else:
         alpha = 0.0                             # plain Newmark (D_AL = ZERO)
+        am = 0.0
+        af = 0.0
         gamma = float(ip.impl_dyna_gamma)       # DY_G = NM_A
         beta = float(ip.impl_dyna_beta)         # DY_B = NM_B
     if beta <= 0.0:
@@ -416,9 +447,21 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
     da = float(getattr(ip, "impl_dyna_dampa", 0.0)) if damp_on else 0.0
     db = float(getattr(ip, "impl_dyna_dampb", 0.0)) if damp_on else 0.0
 
-    scheme = (f"HHT-ALPHA (ALPHA = {alpha:g})" if ip.impl_dyna == 1
-              else "NEWMARK")
+    if am > 0.0 and af > 0.0:
+        scheme = f"GENERALIZED-ALPHA (alpha_m = {am:g}, alpha_f = {af:g})"
+    elif am > 0.0 and af == 0.0:
+        scheme = f"WOOD-BOSSAK (alpha_m = {am:g})"
+    elif af > 0.0 and am == 0.0:
+        scheme = f"HHT-ALPHA (alpha = {-af:g}, alpha_f = {af:g})"
+    elif ip.impl_dyna == 1:
+        scheme = f"HHT-ALPHA (alpha = {alpha:g})"
+    else:
+        scheme = "NEWMARK"
     log.info(f" TIME INTEGRATION . . . . . . . . . . : {scheme}")
+    ikt_labels = {1: "KTANG (EVERY NEWTON ITERATION)", 2: "KTFUL (START OF EACH TIME STEP)", 4: "KTCON (CONSTANT STIFFNESS)"}
+    log.info(f" TANGENT POLICY (IKT) . . . . . . . . : {ikt_labels.get(ikt, f'IKT={ikt}')}")
+    if t_fix_list:
+        log.info(f" FIXPOINTS (/IMPL/DT/FIXP) . . . . . : {len(t_fix_list)} fixpoints")
     if damp_on:
         log.info(f" RAYLEIGH DAMPING C = a M + b K . . . : a = {da:g}, "
                  f"b = {db:g}  (/IMPL/DYNA/DAMP)")
@@ -476,7 +519,7 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
     log.info(f" NEWTON TOLERANCE (RESIDUAL). . . . . : {ip.impl_tol:12.5E}")
     log.info(f" MAX NEWTON ITERATIONS  . . . . . . . : {ip.impl_max_iter}")
 
-    result = ImplicitDynResult(alpha, gamma, beta)
+    result = ImplicitDynResult(alpha, gamma, beta, alpha_m=am, alpha_f=af)
     # listing cadence: every step for short runs, /PRINT's cycle count for
     # long ones (the explicit-listing convention)
     nsteps_est = int(np.ceil(t_end / dt))
@@ -563,6 +606,10 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
     wext = 0.0
     edamp = 0.0
     efric = 0.0
+    enum = 0.0
+    ke_prev = _kinetic(model, v, vr, real)
+    ie_prev = _elem_energy(model)
+    econt_prev = econt0
     keep_u = True
 
     log.info("\n        STEP        TIME    ITER   RESIDUAL-NORM   STATUS")
@@ -574,17 +621,43 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
 
     t = 0.0
     step_no = 0
+    cached_K = None
+    cached_K_eff = None
+    cached_dt = None
+    saved_dt_ctrl = None
+
     while t < t_end * (1.0 - 1e-12):
-        dt_s = min(ctrl.dt, t_end - t)  # clip the final step onto t_end
+        dt_target = ctrl.dt
+        hit_fixpoint = False
+        dt_s = min(dt_target, t_end - t)
+
+        # /IMPL/DT/FIXP: time step fixpoints array t_fix. When advancing time t,
+        # adjust dt so that the solver hits every fixpoint exactly without overshooting.
+        if t_fix_list:
+            for tf in t_fix_list:
+                if tf > t + 1e-12 * dt_target:
+                    if t + dt_s >= tf - 1e-12 * dt_target:
+                        dt_s = tf - t
+                        hit_fixpoint = True
+                        if saved_dt_ctrl is None:
+                            saved_dt_ctrl = ctrl.dt
+                    break
+
+        dt_s = min(dt_s, t_end - t)
+        if dt_s <= 1e-15:
+            break
         t_new = t + dt_s
         step_no += 1
 
-        inc, u, ur_s, fint, mint, fext_new, fd_new = _solve_step(
+        (inc, u, ur_s, fint, mint, fext_new, fd_new,
+         cached_K, cached_K_eff, cached_dt) = _solve_step(
             model, ip, dof, loads, solver, committed, x_ref, imposed,
             t, t_new, dt_s, alpha, gamma, beta, M_eq, v, vr, a, ar,
             g_prev_f, g_prev_m, nlg,
             (da, db, K_damp, fd_prev) if damp_on else None,
-            constr, contacts)
+            constr, contacts,
+            alpha_m=am, alpha_f=af, ikt=ikt,
+            cached_K=cached_K, cached_K_eff=cached_K_eff, cached_dt=cached_dt)
         result.increments.append(inc)
         if not inc.converged:
             log.info(f" {step_no:11d} {t_new:11.4E} {inc.iterations:6d} "
@@ -592,8 +665,12 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
             # roll back (the failed step touched neither model.x nor the
             # committed buffers' base — IMP_DTN's TT/NCYCLE rollback) and
             # retry at the cut step
+            if hit_fixpoint and saved_dt_ctrl is not None:
+                ctrl.dt = saved_dt_ctrl
+                saved_dt_ctrl = None
             if ctrl.cut():
                 step_no -= 1
+                cached_K_eff = None
                 continue
             result.converged = False
             result.stop_reason = (
@@ -619,7 +696,7 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
         # ---- external-work booking (DYNA_WEX): trapezoidal f.du over the
         # applied loads, plus the /IMPDISP constraint-reaction work on the
         # driven DOFs (reaction = M a - f_ext - f_int, trapezoid too)
-        wext += 0.5 * float(((fext_prev + fext_new)[real] * u[real]).sum())
+        wext_step = 0.5 * float(((fext_prev + fext_new)[real] * u[real]).sum())
         if imposed:
             # constraint reaction on a driven DOF: what the drive must
             # supply beyond the loads, r = M a - (f_ext + f_int)
@@ -631,19 +708,22 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
             g_old_rot = iner_val * ar - (g_prev_m if g_prev_m is not None else np.zeros_like(mint))
             for idx, d, fct, scale in imposed:
                 if d < 3:
-                    wext += 0.5 * float(((g_new_r + g_old_r)[idx, d]
+                    wext_step += 0.5 * float(((g_new_r + g_old_r)[idx, d]
                                          * u[idx, d]).sum())
                 else:
-                    wext += 0.5 * float(((g_new_rot + g_old_rot)[idx, d - 3]
+                    wext_step += 0.5 * float(((g_new_rot + g_old_rot)[idx, d - 3]
                                          * ur_s[idx, d - 3]).sum())
+        wext += wext_step
 
         # ---- Rayleigh dissipation booking (DYNA_WEX's DY_EDAMP): the
         # trapezoid of the damping force over the step displacement
         # increment, free DOFs only (both live in equation space)
+        edamp_step = 0.0
         if damp_on:
             u_eq = dof.gather_residual(u, ur_s)
             fd0 = fd_prev if fd_prev is not None else 0.0
-            edamp += 0.5 * float(u_eq @ (fd_new + fd0))
+            edamp_step = 0.5 * float(u_eq @ (fd_new + fd0))
+            edamp += edamp_step
             fd_prev = fd_new
 
         v, a, vr, ar = v_new, a_new, vr_new, ar_new
@@ -651,11 +731,13 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
         g_prev_m = mint.copy()
         fext_prev = fext_new
         committed = {name: _snapshot(g) for name, g in model.element_groups()}
+        efric_step = 0.0
         if contacts:
             # M13: re-base the friction anchors on the converged step and
             # book the return map's slip work into its own ledger channel
             from .contact import commit_contacts
-            efric += commit_contacts(contacts, model.x)
+            efric_step = commit_contacts(contacts, model.x)
+            efric += efric_step
         if nlg:
             if constr is not None:
                 # exact placement of the dependent nodes before the frame
@@ -669,22 +751,39 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
                 # re-save the damping stiffness at the new committed frame
                 # (the original's per-step IMP_DYKS save)
                 K_damp = assemble(model, dof, x_ref, None, kgeo=False)
-        t = t_new
-        ctrl.converged(inc.iterations)
 
-        # ---- history --------------------------------------------------------
         ke = _kinetic(model, v, vr, real)
         ie = _elem_energy(model)
         # stored contact-spring energy (M12): a state function of the
         # configuration — its own ledger channel, like edamp
         econt = (sum(c.energy(model.x) for c in contacts)
                  if contacts else 0.0)
+
+        # Accurate energy dissipation tracking:
+        # In exact conservation, wext_step = d_ke + d_ie + edamp_step + d_econt + efric_step.
+        # Numerical dissipation d_enum is the deficit absorbed by the integrator.
+        d_enum = wext_step - ((ke - ke_prev) + (ie - ie_prev) + edamp_step + (econt - econt_prev) + efric_step)
+        enum += d_enum
+
+        ke_prev = ke
+        ie_prev = ie
+        econt_prev = econt
+
+        t = t_new
+        if hit_fixpoint and saved_dt_ctrl is not None:
+            ctrl.dt = saved_dt_ctrl
+            saved_dt_ctrl = None
+        else:
+            ctrl.converged(inc.iterations)
+
+        # ---- history --------------------------------------------------------
         h = result.history
         h["t"].append(t)
         h["ke"].append(ke)
         h["ie"].append(ie)
         h["wext"].append(wext)
         h["edamp"].append(edamp)
+        h["enum"].append(enum)
         h["econt"].append(econt)
         h["efric"].append(efric)
         h["bal"].append(ie + ke + edamp + econt + efric - wext - e0)
@@ -731,52 +830,34 @@ def _elem_energy(model):
 def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
                 t_old, t_new, dt, alpha, gamma, beta, M_eq, v, vr, a, ar,
                 g_prev_f, g_prev_m, nlgeom, damp=None, constr=None,
-                contacts=()):
-    """Newton-iterate one time step to the HHT-weighted dynamic balance
+                contacts=(), alpha_m=0.0, alpha_f=0.0, ikt=1,
+                cached_K=None, cached_K_eff=None, cached_dt=None):
+    """Newton-iterate one time step to the Generalized-alpha / HHT-weighted dynamic balance
     (see module docstring). Returns ``(inc, u, ur, fint, mint, fext_new,
-    fd_new)`` with ``u``/``ur`` the converged step displacement increment,
+    fd_new, cached_K, cached_K_eff, cached_dt)`` with ``u``/``ur`` the converged step displacement increment,
     ``fint``/``mint`` the internal force at the converged state (kept by
-    the caller as the next step's HHT previous-level force) and ``fd_new``
+    the caller as the next step's intermediate previous-level force) and ``fd_new``
     the equation-space damping force C v_{n+1} at the converged state
-    (None without damping).
-
-    ``damp`` (M11, /IMPL/DYNA/DAMP) is ``(a, b, K_damp, fd_prev)``: the
-    Rayleigh coefficients, the step-start damping stiffness (CSR or None
-    when b = 0) and the PREVIOUS level's damping force for the HHT blend.
-
-    M12: ``constr`` reduces the assembled system through the condensation
-    transform before the solve (convergence measured on the REDUCED
-    residual — the only one that must vanish); ``contacts`` add the
-    penalty force at the trial configuration model.x + u into the
-    (1+alpha)-weighted force level like f_int (the previous level's
-    contact force rides ``g_prev_f``) and the active-set gap tangent into
-    K_eff. The returned ``fint`` INCLUDES the converged contact force, so
-    the caller's g_n bookkeeping and /IMPDISP reaction booking stay
-    correct with no extra plumbing.
-
-    On entry the element buffers hold the committed state; on a converged
-    return model.x and the element state hold the new configuration —
-    exactly the statics increment contract, plus inertia."""
+    (None without damping)."""
     n = model.numnod
-    c0 = 1.0 / (beta * dt * dt)             # the IMP_DYNAM diagonal factor
-    ap1 = 1.0 + alpha
+    c0 = 1.0 / (beta * dt * dt)             # kinematic acceleration factor
+    c_K = 1.0 - alpha_f
+    c_M = (1.0 - alpha_m) / (beta * dt * dt)
+    c_C = (1.0 - alpha_f) * gamma / (beta * dt)
+
     from . import require_scipy
     sp, _ = require_scipy()
-    M_diag = sp.diags(c0 * M_eq, format="csr")   # the lumped-mass add to K
+    M_diag = sp.diags(c_M * M_eq, format="csr")   # the lumped-mass add to K
 
     # ---- Rayleigh damping pieces (IMP_DYKV / IMP_DYNAM's IDY_DAMP) --------
-    # C = da*M + db*K_damp; the effective-tangent add is
-    # (1+alpha)*gamma/(beta dt) * C (dv/dDu = gamma/(beta dt) — see the
-    # module docstring for the algebra against the original's BDT/S0 form)
     da = db = 0.0
     K_damp = fd_prev = None
     C_eff = None
     if damp is not None:
         da, db, K_damp, fd_prev = damp
-        cv = ap1 * gamma / (beta * dt)
-        C_eff = sp.diags(cv * da * M_eq, format="csr")
+        C_eff = sp.diags(c_C * da * M_eq, format="csr")
         if K_damp is not None:
-            C_eff = C_eff + (cv * db) * K_damp
+            C_eff = C_eff + (c_C * db) * K_damp
 
     def _fd(v_nod, vr_nod):
         """Equation-space damping force C v at a velocity state."""
@@ -786,17 +867,12 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
             fd = fd + db * (K_damp @ v_eq)
         return fd
 
-    # external force at the END time level (the HHT combination weights it
-    # against the stored previous level below)
+    # external force at the END time level
     fext = np.zeros((n, 3))
     loads.external_forces(t_new, fext, x_ref)
-    # load reference from the end-level force alone (the alpha blend only
-    # shifts it by O(alpha dt f_dot), irrelevant to a norm)
     fext_eq = dof.gather_residual(fext, np.zeros((n, 3)))
     ref = max(float(np.linalg.norm(fext_eq)), 1e-30)
-    # M13: follower /PLOAD under NLGEOM — the end-level pressure is
-    # re-evaluated at the TRIAL configuration inside the loop and the
-    # load stiffness joins K (statics._solve_increment mirror)
+
     from .followerload import has_follower, pload_tangent
     follower = nlgeom and has_follower(loads)
     lstiff = follower and bool(getattr(ip, "impl_load_stiff", True))
@@ -812,24 +888,14 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
              for name, _ in model.element_groups()}
 
     # ---- predictor: constant-acceleration extrapolation (a_{n+1} = a_n) ----
-    # Newton converges from any start; this one lands the first residual on
-    # the true force scale of the step (free vibration has f_ext = 0, so a
-    # zero predictor would leave the reference norm empty-handed).
     u = dt * v + 0.5 * dt * dt * a
     ur_s = dt * vr + 0.5 * dt * dt * ar
-    # condensed DOFs must not inherit a predictor drift (their equations
-    # never enter the solve, so Newton could not correct one)...
     u[dof.fix_tra] = 0.0
     ur_s[dof.fix_rot] = 0.0
-    # ...and with constraints the predictor must be PROJECTED onto the
-    # constraint manifold (u = T u_red always — see
-    # constraints.make_consistent for the failure mode this prevents)...
     if constr is not None:
         u, ur_s = constr.make_consistent(dof, u, ur_s)
         u[dof.fix_tra] = 0.0
         ur_s[dof.fix_rot] = 0.0
-    # ...and the /IMPDISP-driven DOFs (part of that mask) are then seeded
-    # EXACTLY: the drive steps from d(t_n) to d(t_{n+1})
     for idx, d, fct, scale in imposed:
         val = scale * (fct.eval(t_new) - fct.eval(t_old))
         if d < 3:
@@ -842,9 +908,6 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
     fd_new = None
     fcont = None
     fext_new = fext
-    # frozen-placeholder masses read as zero in the node-space inertia
-    # term (an unfrozen M12 constraint master carries a 1e30 marker, and
-    # its row IS gathered now — see _lumped_mass_eq)
     massz = np.where(model.mass >= 1e29, 0.0, model.mass)
 
     def _reduce(vec):
@@ -855,31 +918,30 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
         a_new = c0 * u - v / (beta * dt) - (0.5 / beta - 1.0) * a
         ar_new = c0 * ur_s - vr / (beta * dt) - (0.5 / beta - 1.0) * ar
 
+        # Generalized-alpha intermediate acceleration: a_{n+1-alpha_m}
+        a_int = (1.0 - alpha_m) * a_new + alpha_m * a
+        ar_int = (1.0 - alpha_m) * ar_new + alpha_m * ar
+
         fint, mint = _internal_forces(model, x_ref, u, ur_s, committed,
                                       nlgeom)
         if contacts:
-            # penalty force at the TRIAL configuration — a configuration
-            # force weighted with f_int in the HHT balance (M12)
             from .contact import contact_forces
             fcont, _ = contact_forces(contacts, model.x + u, n)
             fint = fint + fcont
-        # M13: follower pressure at the trial configuration (dead loads
-        # unchanged — _fext_trial returns the precomputed fext then)
         fext_new = _fext_trial(u)
-        # R = (1+a)(f_ext + f_int)_{n+1} - a g_n - M a_{n+1}   (node space)
-        Rf = (ap1 * (fext_new + fint) - alpha * g_prev_f
-              - massz[:, None] * a_new)
-        Rm = (ap1 * mint - alpha * g_prev_m
-              - model.inertia[:, None] * ar_new)
+
+        # Equilibrium at intermediate configuration t_{n+1-alpha_f}:
+        # (1 - alpha_f) (f_ext + f_int - C v)_{n+1} + alpha_f (f_ext + f_int - C v)_n - M a_{n+1-alpha_m} = 0
+        Rf = (c_K * (fext_new + fint) + alpha_f * g_prev_f
+              - massz[:, None] * a_int)
+        Rm = (c_K * mint + alpha_f * g_prev_m
+              - model.inertia[:, None] * ar_int)
         R = _reduce(dof.gather_residual(Rf, Rm))
         if damp is not None:
-            # the damping force enters like f_int, negated and HHT-weighted
-            # (IMP_DYNAR: FINT = FINT - DY_DAM): the CURRENT velocity
-            # iterate v_{n+1}(Du) — a kinematic function of the increment
             v_new = v + dt * ((1.0 - gamma) * a + gamma * a_new)
             vr_new = vr + dt * ((1.0 - gamma) * ar + gamma * ar_new)
             fd_new = _fd(v_new, vr_new)
-            R = R - _reduce(ap1 * fd_new - alpha * fd_prev)
+            R = R - _reduce(c_K * fd_new + alpha_f * fd_prev)
         rnorm = float(np.linalg.norm(R))
         inc.residuals.append(rnorm)
         inc.iterations = it + 1
@@ -888,12 +950,9 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
         if it > 0 and rnorm > 1e4 * ref:
             break
         if it == 0:
-            # reference: the largest of the applied load, the inertial
-            # force of the predicted motion (THE force scale of a free
-            # vibration) and the initial out-of-balance
-            ma = _reduce(dof.gather_residual(massz[:, None] * a_new,
+            ma = _reduce(dof.gather_residual(massz[:, None] * a_int,
                                              model.inertia[:, None]
-                                             * ar_new))
+                                             * ar_int))
             ma_norm = float(np.linalg.norm(ma))
             if np.isfinite(ma_norm):
                 ref = max(ref, ma_norm)
@@ -903,24 +962,42 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
             inc.converged = True
             break
 
-        epsp_incr = _epsp_increments(model, epsp0)
-        x_tan = x_ref + u if nlgeom else x_ref
-        K = assemble(model, dof, x_tan, epsp_incr, kgeo=nlgeom)
-        if contacts:
-            # the active-set gap tangent at the trial configuration
-            # joins the (1+alpha)-weighted stiffness like K_T (M12)
-            from .contact import contact_tangent
-            K = K + contact_tangent(contacts, model.x + u, dof)
-        if lstiff:
-            # M13: the follower-pressure load stiffness joins K_T (it is
-            # part of -dR/du and rides the same (1+alpha) HHT weight)
-            K = K + pload_tangent(loads, model, t_new, model.x + u, dof)
-        # K_eff = (1+alpha) K_T + M/(beta dt^2)  (IMP_DYNAM's diagonal add)
-        # + (1+alpha) gamma/(beta dt) C under Rayleigh damping (the
-        # IDY_DAMP branch — see the module docstring for the algebra)
-        K_eff = ap1 * K + M_diag
-        if C_eff is not None:
-            K_eff = K_eff + C_eff
+        # Tangent update policy (IKT: 1=KTANG, 2=KTFUL, 4=KTCON)
+        recompute_K = False
+        if ikt == 1:
+            recompute_K = True
+        elif ikt == 2:
+            recompute_K = (it == 0)
+        elif ikt == 4:
+            recompute_K = (cached_K is None)
+        else:
+            recompute_K = True
+
+        if recompute_K:
+            epsp_incr = _epsp_increments(model, epsp0)
+            x_tan = x_ref + u if nlgeom else x_ref
+            K = assemble(model, dof, x_tan, epsp_incr, kgeo=nlgeom)
+            if contacts:
+                from .contact import contact_tangent
+                K = K + contact_tangent(contacts, model.x + u, dof)
+            if lstiff:
+                K = K + pload_tangent(loads, model, t_new, model.x + u, dof)
+            cached_K = K
+            K_eff = c_K * K + M_diag
+            if C_eff is not None:
+                K_eff = K_eff + C_eff
+            cached_K_eff = K_eff
+            cached_dt = dt
+        else:
+            if cached_K_eff is None or cached_dt != dt:
+                K_eff = c_K * cached_K + M_diag
+                if C_eff is not None:
+                    K_eff = K_eff + C_eff
+                cached_K_eff = K_eff
+                cached_dt = dt
+            else:
+                K_eff = cached_K_eff
+
         try:
             if constr is not None:
                 du_eq = constr.expand(
@@ -934,14 +1011,13 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
         u = u + du
         ur_s = ur_s + dur
 
-        # displacement-correction convergence (the statics second norm):
-        # accept when the correction is negligible against the accumulated
-        # increment, re-evaluating the residual at the corrected state
         unorm = np.linalg.norm(dof.gather_residual(u, ur_s))
         if np.isfinite(unorm) and np.linalg.norm(du_eq) <= ip.impl_tol * max(unorm, 1e-30) \
                 and it > 0:
             a_new = c0 * u - v / (beta * dt) - (0.5 / beta - 1.0) * a
             ar_new = c0 * ur_s - vr / (beta * dt) - (0.5 / beta - 1.0) * ar
+            a_int = (1.0 - alpha_m) * a_new + alpha_m * a
+            ar_int = (1.0 - alpha_m) * ar_new + alpha_m * ar
             fint, mint = _internal_forces(model, x_ref, u, ur_s, committed,
                                           nlgeom)
             if contacts:
@@ -949,16 +1025,16 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
                 fcont, _ = contact_forces(contacts, model.x + u, n)
                 fint = fint + fcont
             fext_new = _fext_trial(u)
-            Rf = (ap1 * (fext_new + fint) - alpha * g_prev_f
-                  - massz[:, None] * a_new)
-            Rm = (ap1 * mint - alpha * g_prev_m
-                  - model.inertia[:, None] * ar_new)
+            Rf = (c_K * (fext_new + fint) + alpha_f * g_prev_f
+                  - massz[:, None] * a_int)
+            Rm = (c_K * mint + alpha_f * g_prev_m
+                  - model.inertia[:, None] * ar_int)
             R = _reduce(dof.gather_residual(Rf, Rm))
             if damp is not None:
                 v_new = v + dt * ((1.0 - gamma) * a + gamma * a_new)
                 vr_new = vr + dt * ((1.0 - gamma) * ar + gamma * ar_new)
                 fd_new = _fd(v_new, vr_new)
-                R = R - _reduce(ap1 * fd_new - alpha * fd_prev)
+                R = R - _reduce(c_K * fd_new + alpha_f * fd_prev)
             inc.residuals.append(float(np.linalg.norm(R)))
             inc.iterations = it + 2
             inc.converged = True
@@ -966,7 +1042,7 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
 
     if inc.converged:
         model.x = model.x + u
-    return inc, u, ur_s, fint, mint, fext_new, fd_new
+    return inc, u, ur_s, fint, mint, fext_new, fd_new, cached_K, cached_K_eff, cached_dt
 
 
 def _dyn_summary(model, result, dof, log, e0):
@@ -995,6 +1071,9 @@ def _dyn_summary(model, result, dof, log, e0):
         if h.get("edamp") and h["edamp"][-1] != 0.0:
             log.info(f"     RAYLEIGH DISSIPATION  . . : "
                      f"{h['edamp'][-1]:14.7E}  (/IMPL/DYNA/DAMP)")
+        if h.get("enum") and abs(h["enum"][-1]) > 1e-12:
+            log.info(f"     NUMERICAL DISSIPATION . . : "
+                     f"{h['enum'][-1]:14.7E}  (GEN-ALPHA/HHT)")
         if h.get("econt") and h["econt"][-1] != 0.0:
             log.info(f"     CONTACT SPRING ENERGY . . : "
                      f"{h['econt'][-1]:14.7E}  (/INTER)")

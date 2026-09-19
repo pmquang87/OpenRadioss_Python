@@ -532,15 +532,17 @@ def forces(group, x, v, vr, dt, fint, mint):
 # Implicit solver tangent
 # ----------------------------------------------------------------------------
 
-def tangent(group, x, epsp_incr=None):
+def tangent(group, x_geom=None, epsp_incr=None, x=None):
     """Element tangent stiffness for the whole PENTA6 group: (n, 18, 18)."""
+    if x_geom is None:
+        x_geom = x
     st = group.state
     conn = group.conn
     n = group.n
     if n == 0 or len(conn) == 0:
         return np.zeros((0, 18, 18), dtype=float), np.zeros((0, 18), dtype=np.int64)
 
-    xe = x[conn]
+    xe = x_geom[conn]
     dndx, vol_g, vol_tot = _geometry(xe)
 
     ke = np.zeros((n, 18, 18), dtype=np.float64)
@@ -576,4 +578,97 @@ def tangent(group, x, epsp_incr=None):
             DB = np.einsum("mij,mjk->mik", D, Bs)
             ke[sl] += vol_g[sl, g][:, None, None] * np.einsum("mji,mjk->mik", Bs, DB)
 
+    dead = st["off"] <= 0.0
+    if np.any(dead):
+        ke[dead] = 0.0
+
     return ke, _edofs(conn)
+
+
+def kgeo(group, x_geom=None, x=None):
+    """Geometric (initial-stress) element stiffness for the 6-node wedge (assem_p.F).
+
+    Integrates grad(N)^T sigma grad(N) over the 2 Gauss points.
+    Returns:
+        ke: (n, 18, 18) dense geometric stiffness matrices
+        edofs: (n, 18) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=np.float64), np.zeros((0, 18), dtype=np.int64)
+
+    xe = x_geom[conn]
+    dndx, vol_g, vol_tot = _geometry(xe)
+
+    sig = st["sig"]  # (n, 2, 6)
+    S = np.empty((n, 2, 3, 3), dtype=np.float64)
+    S[:, :, 0, 0], S[:, :, 1, 1], S[:, :, 2, 2] = sig[:, :, 0], sig[:, :, 1], sig[:, :, 2]
+    S[:, :, 0, 1] = S[:, :, 1, 0] = sig[:, :, 3]
+    S[:, :, 1, 2] = S[:, :, 2, 1] = sig[:, :, 4]
+    S[:, :, 0, 2] = S[:, :, 2, 0] = sig[:, :, 5]
+
+    g = np.zeros((n, 6, 6), dtype=np.float64)
+    for g_idx in range(2):
+        vg = vol_g[:, g_idx, None, None]
+        dn = dndx[:, g_idx]
+        Sg = S[:, g_idx]
+        g += vg * np.einsum("nac,ncd,nbd->nab", dn, Sg, dn)
+
+    ke = np.zeros((n, 18, 18), dtype=np.float64)
+    ix = np.arange(6)
+    for b in range(3):
+        rows = (3 * ix + b)[:, None]
+        cols = (3 * ix + b)[None, :]
+        ke[:, rows, cols] += g
+
+    dead = st["off"] <= 0.0
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+# 6-node wedge reference unit consistent mass matrix (tensor product of linear edge and triangle)
+_M_PENTA6 = np.array([
+    [4.0, 2.0, 2.0, 2.0, 1.0, 1.0],
+    [2.0, 4.0, 2.0, 1.0, 2.0, 1.0],
+    [2.0, 2.0, 4.0, 1.0, 1.0, 2.0],
+    [2.0, 1.0, 1.0, 4.0, 2.0, 2.0],
+    [1.0, 2.0, 1.0, 2.0, 4.0, 2.0],
+    [1.0, 1.0, 2.0, 2.0, 2.0, 4.0],
+], dtype=np.float64) / 72.0
+
+
+def consistent_mass(group, x_geom=None, x=None):
+    """Consistent element mass matrix for 6-node wedge (assem_p.F / smass3p.F):
+    M = mass * (M_penta6 (x) I3), where M_penta6 is the analytic wedge moment matrix.
+
+    Returns:
+        me: (n, 18, 18) dense consistent mass matrices
+        edofs: (n, 18) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=np.float64), np.zeros((0, 18), dtype=np.int64)
+
+    mass = st["mass"]  # (n,)
+    me = np.zeros((n, 18, 18), dtype=np.float64)
+    for i in range(6):
+        for j in range(6):
+            mij = _M_PENTA6[i, j]
+            for c in range(3):
+                me[:, 3 * i + c, 3 * j + c] = mass * mij
+
+    dead = st["off"] <= 0.0
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)

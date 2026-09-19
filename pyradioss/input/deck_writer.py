@@ -12883,5 +12883,398 @@ def write_engine_from_port_lines(lines: Sequence[str], path: str,
     e.write(path)
 
 
+def write_engine_deck(ec: Any, path: Optional[str] = None) -> str:
+    """Serialize an EngineControls instance into an OpenRadioss engine deck (*_0001.rad).
+
+    Supports explicit engine settings as well as the full suite of /IMPL cards from
+    freimpl.F (Component 5 & 6) and extended fatigue options.
+
+    Parameters
+    ----------
+    ec : EngineControls
+        The engine controls configuration to serialize.
+    path : str, optional
+        If provided, writes the rendered deck to this filesystem path.
+
+    Returns
+    -------
+    str
+        The serialized engine deck text.
+    """
+    lines: List[str] = ["#RADIOSS ENGINE"]
+
+    # /RUN
+    run_name = getattr(ec, "run_name", "RUN") or "RUN"
+    t_end = getattr(ec, "t_end", 0.0)
+    lines.append(f"/RUN/{run_name}/1")
+    lines.append(f"{t_end:g}")
+
+    # Timestep
+    dt_scale = getattr(ec, "dt_scale", 0.9)
+    dt_min = getattr(ec, "dt_min", 0.0)
+    dt_noda = getattr(ec, "dt_noda", "")
+    if dt_noda:
+        if dt_noda == "CST":
+            lines.append("/DT/NODA/CST")
+        else:
+            lines.append("/DT/NODA")
+        lines.append(f"{dt_scale:g} {dt_min:g}")
+    else:
+        lines.append("/DT")
+        lines.append(f"{dt_scale:g} {dt_min:g}")
+
+    # Output frequencies
+    th_dt = getattr(ec, "th_dt", 0.0)
+    if th_dt > 0.0:
+        lines.append("/TFILE")
+        lines.append(f"{th_dt:g}")
+
+    anim_dt = getattr(ec, "anim_dt", 0.0)
+    if anim_dt > 0.0:
+        lines.append("/ANIM/DT")
+        lines.append(f"0.0 {anim_dt:g}")
+
+    print_cycles = getattr(ec, "print_cycles", 0)
+    if print_cycles > 0:
+        lines.append(f"/PRINT/-{print_cycles}")
+
+    # Animation variables
+    anim_vect = getattr(ec, "anim_vect", [])
+    for v in anim_vect:
+        lines.append(f"/ANIM/VECT/{v}")
+
+    anim_elem = getattr(ec, "anim_elem", [])
+    for e in anim_elem:
+        lines.append(f"/ANIM/ELEM/{e}")
+
+    # Implicit controls
+    if getattr(ec, "implicit", False):
+        lines.append("/IMPL")
+
+        impl_dt = getattr(ec, "impl_dt", 0.0)
+        if impl_dt > 0.0:
+            lines.append("/IMPL/DTINI")
+            lines.append(f"{impl_dt:g}")
+
+        if getattr(ec, "impl_line", False):
+            ilintf = getattr(ec, "impl_line_ilintf", 0)
+            iscau = getattr(ec, "impl_line_iscau", 0)
+            if ilintf > 0:
+                lines.append(f"/IMPL/LINE/INTER/{ilintf}")
+            elif iscau > 0:
+                lines.append("/IMPL/LINE/SCAUC")
+            else:
+                lines.append("/IMPL/LINE")
+
+        if getattr(ec, "impl_nonl", False):
+            ikt = getattr(ec, "impl_nonl_ikt", 0)
+            if ikt == 1:
+                lines.append("/IMPL/NONL/KTANG")
+            elif ikt == 2:
+                lines.append("/IMPL/NONL/KTFUL")
+            elif ikt == 3:
+                lines.append("/IMPL/NONL/KTFU8")
+            elif ikt == 4:
+                lines.append("/IMPL/NONL/KTCON")
+
+            if getattr(ec, "impl_nonl_smdisp", 0) == 1:
+                lines.append("/IMPL/NONL/SMDIS")
+            if getattr(ec, "impl_nonl_solvnfo", 0) == 1:
+                lines.append("/IMPL/NONL/SOLVI")
+
+            ipupd = getattr(ec, "impl_nonl_ipupd", 0)
+            if ipupd > 0:
+                lines.append(f"/IMPL/NONL/PITER/{ipupd}")
+
+            insolv = getattr(ec, "impl_nonl_insolv", 0)
+            nitol = getattr(ec, "impl_nonl_nitol", 0)
+            n_lim = getattr(ec, "impl_nonl_n_lim", 0)
+            if insolv > 0 or nitol > 0 or n_lim > 0:
+                lines.append(f"/IMPL/NONL/{insolv}")
+                max_it = n_lim if n_lim > 0 else getattr(ec, "impl_max_iter", 25)
+                if nitol == 12:
+                    tole = getattr(ec, "impl_nonl_n_tole", 1e-4)
+                    tolf = getattr(ec, "impl_nonl_n_tolf", 1e-3)
+                    lines.append(f"{max_it} {nitol} {tole:g} {tolf:g}")
+                elif nitol == 13:
+                    tole = getattr(ec, "impl_nonl_n_tole", 1e-4)
+                    tolu = getattr(ec, "impl_nonl_n_tolu", 1e-3)
+                    lines.append(f"{max_it} {nitol} {tole:g} {tolu:g}")
+                elif nitol == 23:
+                    tolf = getattr(ec, "impl_nonl_n_tolf", 1e-3)
+                    tolu = getattr(ec, "impl_nonl_n_tolu", 1e-3)
+                    lines.append(f"{max_it} {nitol} {tolf:g} {tolu:g}")
+                elif nitol == 123:
+                    tole = getattr(ec, "impl_nonl_n_tole", 1e-4)
+                    tolf = getattr(ec, "impl_nonl_n_tolf", 1e-3)
+                    tolu = getattr(ec, "impl_nonl_n_tolu", 1e-3)
+                    lines.append(f"{max_it} {nitol} {tole:g} {tolf:g} {tolu:g}")
+                else:
+                    tol = getattr(ec, "impl_nonl_n_tol", 0.0)
+                    if tol <= 0.0:
+                        tol = getattr(ec, "impl_tol", 1e-6)
+                    lines.append(f"{max_it} {nitol} {tol:g}")
+        elif getattr(ec, "impl_nlgeom", False):
+            lines.append("/IMPL/NONLIN")
+
+        if getattr(ec, "impl_arc", False):
+            dl = getattr(ec, "impl_arc_dl", 0.0)
+            maxinc = getattr(ec, "impl_arc_maxinc", 200)
+            itdes = getattr(ec, "impl_arc_itdes", 5)
+            lines.append("/IMPL/ARCL")
+            lines.append(f"{dl:g} {maxinc} {itdes}")
+
+        if getattr(ec, "impl_solv", False):
+            isolv = getattr(ec, "impl_solv_isolv", 0)
+            iprec = getattr(ec, "impl_solv_iprec", 0)
+            l_lim = getattr(ec, "impl_solv_l_lim", 0)
+            itol = getattr(ec, "impl_solv_itol", 0)
+            l_tol = getattr(ec, "impl_solv_l_tol", 0.0)
+            lines.append(f"/IMPL/SOLV/{isolv}")
+            lines.append(f"{iprec} {l_lim} {itol} {l_tol:g}")
+        elif getattr(ec, "impl_linsolve", ""):
+            lines.append(f"/IMPL/LSOLVER/{ec.impl_linsolve}")
+
+        if getattr(ec, "impl_sbcs", False):
+            msg_lvl = getattr(ec, "impl_sbcs_msg_lvl", 0)
+            b_order = getattr(ec, "impl_sbcs_b_order", 0)
+            b_mcore = getattr(ec, "impl_sbcs_b_mcore", 0)
+            if msg_lvl != 0:
+                lines.append(f"/IMPL/SBCS/MSGLV/{msg_lvl}")
+            if b_order != 0:
+                lines.append(f"/IMPL/SBCS/ORDER/{b_order}")
+            if b_mcore != 0:
+                lines.append("/IMPL/SBCS/OUTCO")
+
+        if getattr(ec, "impl_mumps", False):
+            m_msg = getattr(ec, "impl_mumps_m_msg", 0)
+            m_order = getattr(ec, "impl_mumps_m_order", 0)
+            m_ocore = getattr(ec, "impl_mumps_m_ocore", 0)
+            if m_msg != 0:
+                lines.append(f"/IMPL/MUMPS/MSGLV/{m_msg}")
+            if m_order == 5:
+                lines.append("/IMPL/MUMPS/ORDER/METIS")
+            elif m_order == 4:
+                lines.append("/IMPL/MUMPS/ORDER/PORD")
+            elif m_order != 0:
+                lines.append(f"/IMPL/MUMPS/ORDER/{m_order}")
+            if m_ocore == 1:
+                lines.append("/IMPL/MUMPS/OUTCO")
+            elif m_ocore == -1:
+                lines.append("/IMPL/MUMPS/AUTOC")
+
+        ncycl_stop = getattr(ec, "impl_ncycl_stop", 0)
+        if ncycl_stop > 0:
+            lines.append("/IMPL/NCYCL/STOP")
+            lines.append(f"{ncycl_stop}")
+
+        rref = getattr(ec, "impl_rref", 1)
+        if rref != 1:
+            if rref == 0:
+                lines.append("/IMPL/RREF/OFF")
+            else:
+                irefi = getattr(ec, "impl_rref_irefi", 0)
+                rf_min = getattr(ec, "impl_rref_rf_min", 0.0)
+                rf_max = getattr(ec, "impl_rref_rf_max", 0.0)
+                if irefi > 0:
+                    lines.append(f"/IMPL/RREF/INTER/{irefi}")
+                elif rf_min != 0.0 or rf_max != 0.0:
+                    lines.append("/IMPL/RREF/LIMIT")
+                    lines.append(f"{rf_min:g} {rf_max:g}")
+                elif rref == 2:
+                    lines.append("/IMPL/RREF")
+
+        if getattr(ec, "impl_diver", False):
+            tol_div = getattr(ec, "impl_tol_div", 0.0)
+            ndiver = getattr(ec, "impl_ndiver", 0)
+            if tol_div > 0.0:
+                lines.append("/IMPL/DIVER/TOL")
+                lines.append(f"{tol_div:g}")
+            if ndiver != 0:
+                lines.append(f"/IMPL/DIVER/{ndiver}")
+
+        if getattr(ec, "impl_gstif", False):
+            if getattr(ec, "impl_gstif_ikg", 1) == 0:
+                lines.append("/IMPL/GSTIF/OFF")
+            else:
+                lines.append("/IMPL/GSTIF")
+
+        if getattr(ec, "impl_pstif", False):
+            if getattr(ec, "impl_pstif_ikpres", 1) == 0:
+                lines.append("/IMPL/PSTIF/OFF")
+            else:
+                lines.append("/IMPL/PSTIF")
+
+        ikproj = getattr(ec, "impl_shpproj_ikproj", 0)
+        if ikproj == -1:
+            lines.append("/IMPL/SHPOF")
+        elif ikproj == 1:
+            lines.append("/IMPL/SHPON")
+
+        isprn = getattr(ec, "impl_sprin_isprn", 1)
+        if isprn == 0:
+            lines.append("/IMPL/SPRIN/LINE")
+        elif isprn == 1:
+            lines.append("/IMPL/SPRIN/NONL")
+
+        if getattr(ec, "impl_monvo_impmv", 1) == 0:
+            lines.append("/IMPL/MONVO/OFF")
+
+        if getattr(ec, "impl_contr", False):
+            dt_stop = getattr(ec, "impl_contr_dt_stop", (0.0, 0.0))
+            if dt_stop != (0.0, 0.0):
+                lines.append("/IMPL/CONTR/DT/STOP")
+                lines.append(f"{dt_stop[0]:g} {dt_stop[1]:g}")
+            kz_tol = getattr(ec, "impl_contr_kz_tol", 0.0)
+            if kz_tol != 0.0:
+                lines.append("/IMPL/CONTR/SHEL")
+                lines.append(f"{kz_tol:g}")
+            sk_int = getattr(ec, "impl_contr_sk_int", 0.0)
+            if sk_int != 0.0:
+                lines.append("/IMPL/CONTR/INTER")
+                lines.append(f"{sk_int:g}")
+
+        if getattr(ec, "impl_print", False):
+            p_line = getattr(ec, "impl_print_line", 0)
+            p_nonl = getattr(ec, "impl_print_nonl", 0)
+            stif_tol = getattr(ec, "impl_print_stif_tol", 0.0)
+            stif_nc = getattr(ec, "impl_print_stif_nc", 0)
+            stif_it = getattr(ec, "impl_print_stif_it", 0)
+            if p_line > 0:
+                lines.append(f"/IMPL/PRINT/LINE/{p_line}")
+            if p_nonl > 0:
+                lines.append(f"/IMPL/PRINT/NONL/{p_nonl}")
+            if stif_tol != 0.0 or stif_nc > 0:
+                lines.append("/IMPL/PRINT/STIF")
+                lines.append(f"{stif_tol:g} {stif_nc} {stif_it}")
+
+        if getattr(ec, "impl_check", 0) > 0:
+            lines.append("/IMPL/CHECK")
+
+        if getattr(ec, "impl_bfgs", False):
+            lbfgs = getattr(ec, "impl_lbfgs", 10)
+            if lbfgs > 0:
+                lines.append(f"/IMPL/LBFGS/{lbfgs}")
+            else:
+                lines.append("/IMPL/BFGS")
+
+        if getattr(ec, "impl_line_search", False):
+            iline_s = getattr(ec, "impl_iline_s", 3)
+            nls_lim = getattr(ec, "impl_nls_lim", 4)
+            ls_tol = getattr(ec, "impl_ls_tol", 0.5)
+            lines.append(f"/IMPL/LSEAR/{iline_s}")
+            lines.append(f"{nls_lim} {ls_tol:g}")
+
+        qstat = getattr(ec, "impl_qstat", 0)
+        if qstat > 0:
+            scal_dtq = getattr(ec, "impl_qstat_scal_dtq", 1.0)
+            irig_m = getattr(ec, "impl_qstat_irig_m", 0)
+            e_ref = getattr(ec, "impl_qstat_e_ref", (0.0, 0.0, 0.0))
+            if scal_dtq != 1.0:
+                lines.append("/IMPL/QSTAT/DTSCA")
+                lines.append(f"{scal_dtq:g}")
+            elif irig_m > 0:
+                lines.append("/IMPL/QSTAT/MRIGM")
+                lines.append(f"{e_ref[0]:g} {e_ref[1]:g} {e_ref[2]:g}")
+            else:
+                lines.append(f"/IMPL/QSTAT/{qstat}")
+
+        autos = getattr(ec, "impl_autos", 1)
+        if autos == 0:
+            lines.append("/IMPL/AUTOS/OFF")
+        elif autos == 2:
+            lines.append("/IMPL/AUTOS/ALL")
+
+        if getattr(ec, "impl_sprb", False):
+            lines.append("/IMPL/SPRB")
+
+        dyna = getattr(ec, "impl_dyna", 0)
+        if dyna > 0:
+            if dyna == 1:
+                alpha = getattr(ec, "impl_dyna_alpha", 0.0)
+                lines.append("/IMPL/DYNA/1")
+                lines.append(f"{alpha:g}")
+            elif dyna == 2:
+                gamma = getattr(ec, "impl_dyna_gamma", 0.5)
+                beta = getattr(ec, "impl_dyna_beta", 0.25)
+                lines.append("/IMPL/DYNA/2")
+                lines.append(f"{gamma:g} {beta:g}")
+            elif dyna == 3:
+                am = getattr(ec, "impl_dyna_alpha_m", 0.0)
+                af = getattr(ec, "impl_dyna_alpha_f", 0.0)
+                lines.append("/IMPL/DYNA/3")
+                lines.append(f"{am:g} {af:g}")
+            if getattr(ec, "impl_dyna_damp", False):
+                dampa = getattr(ec, "impl_dyna_dampa", 0.0)
+                dampb = getattr(ec, "impl_dyna_dampb", 0.0)
+                lines.append("/IMPL/DYNA/DAMP")
+                lines.append(f"{dampa:g} {dampb:g}")
+
+        dt_min_imp = getattr(ec, "impl_dt_min", 0.0)
+        dt_max_imp = getattr(ec, "impl_dt_max", 0.0)
+        if dt_min_imp > 0.0 or dt_max_imp > 0.0:
+            lines.append("/IMPL/DT/STOP")
+            lines.append(f"{dt_min_imp:g} {dt_max_imp:g}")
+
+        itw = getattr(ec, "impl_dt_itw", 6)
+        sc_up = getattr(ec, "impl_dt_scaleup", 1.1)
+        sc_dn = getattr(ec, "impl_dt_scaledn", 0.5)
+        if itw != 6 or sc_up != 1.1 or sc_dn != 0.5:
+            lines.append("/IMPL/DT/1")
+            lines.append(f"{itw} {sc_up:g} 0 {sc_dn:g}")
+
+        dt_fixp = getattr(ec, "impl_dt_fixp", [])
+        if dt_fixp:
+            lines.append("/IMPL/DT/FIXP")
+            lines.append(" ".join(f"{x:g}" for x in dt_fixp))
+
+        buckl = getattr(ec, "impl_buckl", 0)
+        if buckl > 0:
+            nmode = getattr(ec, "impl_buckl_nmode", 4)
+            lines.append(f"/IMPL/BUCKL/{buckl}")
+            lines.append(f"0.0 0.0 {nmode} 0 8 0.01")
+
+        if getattr(ec, "impl_fatig_steinberg", False):
+            lines.append("/IMPL/FATIG/STEINBERG")
+
+        if getattr(ec, "impl_fatig_zhao_baker", False):
+            lines.append("/IMPL/FATIG/ZHAO_BAKER")
+
+        mean_meth = getattr(ec, "impl_fatig_mean_method", "")
+        if mean_meth:
+            lines.append(f"/IMPL/FATIG/MEAN/{mean_meth.upper()}")
+            ult = getattr(ec, "impl_fatig_mean_ult", 0.0)
+            yld = getattr(ec, "impl_fatig_mean_yield", 0.0)
+            sigf = getattr(ec, "impl_fatig_mean_sigf", 0.0)
+            gamma = getattr(ec, "impl_fatig_mean_gamma", 0.5)
+            lines.append(f"{ult:g} {yld:g} {sigf:g} {gamma:g}")
+
+        if getattr(ec, "impl_fatig_en", False):
+            lines.append("/IMPL/FATIG/EN")
+            e = getattr(ec, "impl_fatig_en_e", 0.0)
+            sigf = getattr(ec, "impl_fatig_en_sigf", 0.0)
+            b = getattr(ec, "impl_fatig_en_b", 0.0)
+            epsf = getattr(ec, "impl_fatig_en_epsf", 0.0)
+            c = getattr(ec, "impl_fatig_en_c", 0.0)
+            kp = getattr(ec, "impl_fatig_en_kp", 0.0)
+            np = getattr(ec, "impl_fatig_en_np", 0.0)
+            lines.append(f"{e:g} {sigf:g} {b:g} {epsf:g} {c:g} {kp:g} {np:g}")
+
+        if getattr(ec, "impl_fatig_notch", False):
+            notch_meth = getattr(ec, "impl_fatig_notch_method", "")
+            lines.append(f"/IMPL/FATIG/NOTCH/{notch_meth.upper()}")
+            kt = getattr(ec, "impl_fatig_notch_kt", 1.0)
+            e = getattr(ec, "impl_fatig_notch_e", 0.0)
+            kp = getattr(ec, "impl_fatig_notch_kp", 0.0)
+            np = getattr(ec, "impl_fatig_notch_np", 0.0)
+            lines.append(f"{kt:g} {e:g} {kp:g} {np:g}")
+
+    deck_str = "\n".join(lines) + "\n"
+    if path is not None:
+        with open(path, "w", newline="\n", encoding="utf-8") as fh:
+            fh.write(deck_str)
+    return deck_str
+
+
 DeckWriter = StarterDeck
 

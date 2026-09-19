@@ -53,6 +53,9 @@ _GP_COORDS = np.array([
 
 _GP_WEIGHTS = np.ones(8, dtype=np.float64)  # w_g = 1.0 * 1.0 * 1.0 = 1.0
 
+# Trilinear shape values N_i at the 8 Gauss points: shape (8, 8) where [g, i] is N_i(xi_g)
+_N_GP = 0.125 * np.prod(1.0 + _XI_NODES[None, :, :] * _GP_COORDS[:, None, :], axis=-1)
+
 
 def _build_dn_dxi() -> np.ndarray:
     """Precompute dN_i / d(xi, eta, zeta) at the 8 Gauss points.
@@ -385,3 +388,191 @@ def forces(group, x, v, vr, dt, fint, mint):
         scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
 
     return dt_crit
+
+
+# ----------------------------------------------------------------------------
+# Implicit solver tangent, geometric stiffness, and consistent mass
+# ----------------------------------------------------------------------------
+
+def tangent(group, x_geom=None, epsp_incr=None, x=None):
+    """Element tangent stiffness for fully-integrated 8-node hex with B-bar dilution (s8forc3.F).
+
+    Returns:
+        ke: (n, 24, 24) dense element tangent matrices (translations only)
+        edofs: (n, 24) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 24, 24), dtype=np.float64), np.zeros((0, 24), dtype=np.int64)
+
+    xe = x_geom[conn]  # (n, 8, 3)
+    dndx, vol_g, vol_tot = _geometry(xe)
+    vol_tot_safe = np.maximum(vol_tot, EM20)
+
+    # Construct compatible B at 8 Gauss points: (n, 8, 6, 24)
+    B = np.zeros((n, 8, 6, 24), dtype=np.float64)
+    ix = np.arange(8)
+    for g in range(8):
+        gx = dndx[:, g, :, 0]  # (n, 8)
+        gy = dndx[:, g, :, 1]
+        gz = dndx[:, g, :, 2]
+        B[:, g, 0, 3 * ix + 0] = gx
+        B[:, g, 1, 3 * ix + 1] = gy
+        B[:, g, 2, 3 * ix + 2] = gz
+        B[:, g, 3, 3 * ix + 0] = gy
+        B[:, g, 3, 3 * ix + 1] = gx
+        B[:, g, 4, 3 * ix + 1] = gz
+        B[:, g, 4, 3 * ix + 2] = gy
+        B[:, g, 5, 3 * ix + 0] = gz
+        B[:, g, 5, 3 * ix + 2] = gx
+
+    # Volumetric B operator at each GP: B_vol = B_xx + B_yy + B_zz: (n, 8, 24)
+    B_vol = B[:, :, 0, :] + B[:, :, 1, :] + B[:, :, 2, :]
+
+    # Dilatational part B_dil at each GP: (1/3) * m * B_vol: (n, 8, 6, 24)
+    B_dil = np.zeros((n, 8, 6, 24), dtype=np.float64)
+    B_dil[:, :, 0:3, :] = (1.0 / 3.0) * B_vol[:, :, None, :]
+
+    # Deviatoric part B_dev: (n, 8, 6, 24)
+    B_dev = B - B_dil
+
+    # B-bar mean dilatation: B_bar_vol = (1 / V_tot) * sum_g vol_g * B_vol: (n, 24)
+    B_bar_vol = np.sum(vol_g[:, :, None] * B_vol, axis=1) / vol_tot_safe[:, None]
+
+    # Diluted dilatational operator B_bar_dil: (n, 6, 24)
+    B_bar_dil = np.zeros((n, 6, 24), dtype=np.float64)
+    B_bar_dil[:, 0:3, :] = (1.0 / 3.0) * B_bar_vol[:, None, :]
+
+    # Modified B-bar operator at each Gauss point: (n, 8, 6, 24)
+    B_bar = B_dev + B_bar_dil[:, None, :, :]
+
+    # Integrate K = sum_g vol_g * B_bar_g^T D_g B_bar_g
+    ke = np.zeros((n, 24, 24), dtype=np.float64)
+    epi = np.zeros((n, 8)) if epsp_incr is None else (
+        epsp_incr if np.ndim(epsp_incr) == 2 else np.repeat(epsp_incr[:, None], 8, axis=1)
+    )
+
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            continue
+        for g in range(8):
+            D = materials.solid_tangent(mat, st["sig"][sl, g], st["epsp"][sl, g], epi[sl, g], None)
+            Bg = B_bar[sl, g]
+            DB = np.einsum("mij,mjk->mik", D, Bg)
+            ke[sl] += vol_g[sl, g][:, None, None] * np.einsum("mji,mjk->mik", Bg, DB)
+
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def kgeo(group, x_geom=None, x=None):
+    """Geometric (initial-stress) element stiffness for fully-integrated 8-node hex (s8forc3.F).
+
+    Integrates grad(N)^T sigma grad(N) over 8 Gauss points.
+    Returns:
+        ke: (n, 24, 24) dense geometric stiffness matrices
+        edofs: (n, 24) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 24, 24), dtype=np.float64), np.zeros((0, 24), dtype=np.int64)
+
+    xe = x_geom[conn]
+    dndx, vol_g, vol_tot = _geometry(xe)
+
+    # Reconstruct 3x3 Cauchy stress tensor per Gauss point: (n, 8, 3, 3)
+    sig = st["sig"]
+    S = np.empty((n, 8, 3, 3), dtype=np.float64)
+    S[:, :, 0, 0], S[:, :, 1, 1], S[:, :, 2, 2] = sig[:, :, 0], sig[:, :, 1], sig[:, :, 2]
+    S[:, :, 0, 1] = S[:, :, 1, 0] = sig[:, :, 3]
+    S[:, :, 1, 2] = S[:, :, 2, 1] = sig[:, :, 4]
+    S[:, :, 0, 2] = S[:, :, 2, 0] = sig[:, :, 5]
+
+    # g_ab = sum_g vol_g * (gradN_a^T S_g gradN_b): (n, 8, 8)
+    g = np.zeros((n, 8, 8), dtype=np.float64)
+    for g_idx in range(8):
+        vg = vol_g[:, g_idx, None, None]
+        dn = dndx[:, g_idx]  # (n, 8, 3)
+        Sg = S[:, g_idx]     # (n, 3, 3)
+        g += vg * np.einsum("nac,ncd,nbd->nab", dn, Sg, dn)
+
+    ke = np.zeros((n, 24, 24), dtype=np.float64)
+    ix = np.arange(8)
+    for b in range(3):
+        rows = (3 * ix + b)[:, None]
+        cols = (3 * ix + b)[None, :]
+        ke[:, rows, cols] += g
+
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def consistent_mass(group, x_geom=None, x=None):
+    """Consistent element mass matrix for 8-node hex by 2x2x2 Gauss integration (smass3b.F):
+    M = int_V rho N^T N dV = sum_g detJ_g w_g rho (N_g (x) N_g) (x) I3.
+
+    Returns:
+        me: (n, 24, 24) dense consistent mass matrices
+        edofs: (n, 24) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 24, 24), dtype=np.float64), np.zeros((0, 24), dtype=np.int64)
+
+    rho = st["mass"] / np.maximum(st["vol0"], EM20)  # (n,)
+
+    if x_geom is not None:
+        xe = x_geom[conn]
+        _, vol_g, _ = _geometry(xe)
+    elif "vol_g0" in st:
+        vol_g = st["vol_g0"]
+    else:
+        vol_g = np.repeat((st["vol0"] / 8.0)[:, None], 8, axis=1)
+
+    # N at 8 Gauss points: _N_GP is (8, 8)
+    N_outer = np.einsum("gi,gj->gij", _N_GP, _N_GP)  # (8, 8, 8)
+    S = np.einsum("ng,gij->nij", vol_g, N_outer)
+    MS = rho[:, None, None] * S
+
+    me = np.zeros((n, 24, 24), dtype=np.float64)
+    ix = np.arange(8)
+    for c in range(3):
+        rows = (3 * ix + c)[:, None]
+        cols = (3 * ix + c)[None, :]
+        me[:, rows, cols] = MS
+
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)

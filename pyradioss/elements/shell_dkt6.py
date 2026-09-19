@@ -263,3 +263,197 @@ def forces(group, x, v, vr, dt, fint, mint):
         scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
 
     return dt_crit
+
+
+# ----------------------------------------------------------------------------
+# Implicit element matrices: tangent, kgeo, consistent_mass (M614 Component 1B)
+# ----------------------------------------------------------------------------
+# Fortran origin:
+#   engine/source/elements/sh3n/coquedk6/cdk6forc3.F (driver)
+#   engine/source/elements/sh3n/coquedk6/cdk6deri3.F (patch curvature & kinematics)
+#   engine/source/elements/sh3n/coquedk6/cdk6fint3.F (internal force assembly)
+# ----------------------------------------------------------------------------
+
+def _edofs(conn: np.ndarray) -> np.ndarray:
+    """(n, 18) global scalar translation DOF indices in node-major order."""
+    n = len(conn)
+    if n == 0:
+        return np.zeros((0, 18), dtype=np.int64)
+    ix = np.arange(min(conn.shape[1], 6))
+    edofs = np.full((n, 18), -1, dtype=np.int64)
+    valid = conn[:, :len(ix)] >= 0
+    for c in range(3):
+        edofs[:, 3 * ix + c] = np.where(valid, conn[:, :len(ix)] * 6 + c, -1)
+    return edofs
+
+
+def tangent(group, x, epsp_incr=None):
+    """Element tangent stiffness for 6-node rotation-free DKT shell group (n, 18, 18).
+
+    Fortran origin: engine/source/elements/sh3n/coquedk6/cdk6forc3.F,
+    cdk6deri3.F, cdk6fint3.F.
+
+    Returns (ke, edofs):
+      ke: (n, 18, 18) translational element stiffness matrix
+      edofs: (n, 18) global translational DOF indices
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=float), np.zeros((0, 18), dtype=np.int64)
+
+    xe = x[conn]
+    r, area, dndx_tri, lc = _patch_geometry(xe)
+    thick = st["thick"]
+    vol = np.maximum(area * thick, EM20)
+
+    ke = np.zeros((n, 18, 18), dtype=np.float64)
+
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            continue
+        E_sl = getattr(mat, "E", 1.0e10) or 1.0e10
+        nu_sl = getattr(mat, "nu", 0.3) or 0.3
+
+        # 1. Membrane stiffness on primary triangle nodes 0, 1, 2 (9x9 local)
+        fac = E_sl / max(1.0 - nu_sl**2, 1e-12)
+        Cm = np.array([
+            [fac, fac * nu_sl, 0.0],
+            [fac * nu_sl, fac, 0.0],
+            [0.0, 0.0, fac * 0.5 * (1.0 - nu_sl)],
+        ], dtype=np.float64)
+
+        Bm = np.zeros((n, 3, 9), dtype=np.float64)
+        for i in range(3):
+            b1 = dndx_tri[:, i, 0]
+            b2 = dndx_tri[:, i, 1]
+            Bm[:, 0, 3 * i + 0] = b1
+            Bm[:, 1, 3 * i + 1] = b2
+            Bm[:, 2, 3 * i + 0] = b2
+            Bm[:, 2, 3 * i + 1] = b1
+
+        Km_loc = vol[sl, None, None] * np.einsum("nai,ab,nbj->nij", Bm[sl], Cm, Bm[sl])
+
+        T_m = np.zeros((len(Km_loc), 9, 9), dtype=np.float64)
+        for i in range(3):
+            T_m[:, 3 * i:3 * i + 3, 3 * i:3 * i + 3] = r[sl]
+
+        Km_glob = np.einsum("nki,nkl,nlj->nij", T_m, Km_loc, T_m)
+        ke[sl, 0:9, 0:9] += Km_glob
+
+        # 2. Bending stiffness on all 6 nodes via Discrete Kirchhoff edge curvature
+        if conn.shape[1] >= 6:
+            h2 = np.maximum(lc[sl]**2, EM20)[:, None]
+            B_b = np.zeros((len(h2), 3, 6), dtype=np.float64)
+            B_b[:, 0, 3] = 1.0 / h2[:, 0]
+            B_b[:, 0, 1] = -0.5 / h2[:, 0]
+            B_b[:, 0, 2] = -0.5 / h2[:, 0]
+
+            B_b[:, 1, 4] = 1.0 / h2[:, 0]
+            B_b[:, 1, 2] = -0.5 / h2[:, 0]
+            B_b[:, 1, 0] = -0.5 / h2[:, 0]
+
+            B_b[:, 2] = 0.5 * (B_b[:, 0] + B_b[:, 1])
+            B_b[:, 2, 5] -= 0.5 / h2[:, 0]
+            B_b[:, 2, 0] += 0.25 / h2[:, 0]
+            B_b[:, 2, 1] += 0.25 / h2[:, 0]
+
+            Db = (fac * (thick[sl]**3) / 12.0)[:, None, None] * np.array([
+                [1.0, nu_sl, 0.0],
+                [nu_sl, 1.0, 0.0],
+                [0.0, 0.0, 0.5 * (1.0 - nu_sl)],
+            ], dtype=np.float64)
+
+            Kb_w = area[sl, None, None] * np.einsum("nai,nab,nbj->nij", B_b, Db, B_b)
+
+            n_vec = r[sl, 2]
+            nn = np.einsum("ni,nj->nij", n_vec, n_vec)
+
+            for a in range(6):
+                for b in range(6):
+                    ke[sl, 3 * a:3 * a + 3, 3 * b:3 * b + 3] += Kb_w[:, a, b, None, None] * nn
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def kgeo(group, x):
+    """Geometric (initial-stress) element stiffness for 6-node rotation-free DKT shells.
+
+    Fortran origin: engine/source/elements/sh3n/coquedk6/cdk6fint3.F.
+
+    Returns (ke, edofs): ke (n, 18, 18), edofs (n, 18).
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=float), np.zeros((0, 18), dtype=np.int64)
+
+    xe = x[conn]
+    r, area, dndx_tri, lc = _patch_geometry(xe)
+    thick = st["thick"]
+    vol = np.maximum(area * thick, EM20)
+
+    ke = np.zeros((n, 18, 18), dtype=np.float64)
+    sig = st["sig"]
+
+    S = np.empty((n, 2, 2), dtype=np.float64)
+    S[:, 0, 0] = sig[:, 0]
+    S[:, 1, 1] = sig[:, 1]
+    S[:, 0, 1] = S[:, 1, 0] = sig[:, 2]
+
+    g = vol[:, None, None] * np.einsum("nac,ncd,nbd->nab", dndx_tri, S, dndx_tri)
+
+    for a in range(3):
+        for b in range(3):
+            for c in range(3):
+                ke[:, 3 * a + c, 3 * b + c] += g[:, a, b]
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+_M_TRIA3 = np.array([
+    [2.0, 1.0, 1.0],
+    [1.0, 2.0, 1.0],
+    [1.0, 1.0, 2.0],
+], dtype=np.float64) / 12.0
+
+
+def consistent_mass(group, x=None):
+    """Consistent element mass matrix for 6-node rotation-free DKT shells (18x18).
+    Mass is distributed over the primary 3 triangle vertices.
+
+    Fortran origin: starter/source/elements/sh3n/coquedk6/cdk6mass3.F.
+
+    Returns (me, edofs): me (n, 18, 18), edofs (n, 18).
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=float), np.zeros((0, 18), dtype=np.int64)
+
+    m = st["mass"]
+    me = np.zeros((n, 18, 18), dtype=np.float64)
+
+    for a in range(3):
+        for b in range(3):
+            val = m * _M_TRIA3[a, b]
+            for c in range(3):
+                me[:, 3 * a + c, 3 * b + c] = val
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)
+

@@ -215,3 +215,171 @@ def forces(group, x, v, vr, dt, fint, mint):
         scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
 
     return dt_crit
+
+
+# ----------------------------------------------------------------------------
+# Implicit element matrices: tangent, kgeo, consistent_mass (M614 Component 1B)
+# ----------------------------------------------------------------------------
+# Fortran origin:
+#   engine/source/elements/thickshell/solidec/scforc3.F (driver)
+#   engine/source/elements/thickshell/solidec/scderi3.F (derivatives)
+#   engine/source/elements/thickshell/solidec/scdefc3.F (ply deformation)
+#   engine/source/elements/thickshell/solidec/scfint3.F (internal forces)
+#   starter/source/properties/thickshell/hm_read_prop20.F (property)
+#   engine/source/implicit/assem_s8.F (implicit assembly for composite thick shells)
+# ----------------------------------------------------------------------------
+
+def tangent(group, x, epsp_incr=None):
+    """Element tangent stiffness for 8-node composite thick shell group (n, 24, 24).
+    Integrates through thickness across composite plies / 8 Gauss points.
+
+    Fortran origin: engine/source/elements/thickshell/solidec/scforc3.F,
+    scderi3.F, scfint3.F; engine/source/implicit/assem_s8.F.
+
+    Returns (ke, edofs):
+      ke: (n, 24, 24)
+      edofs: (n, 24)
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 24, 24), dtype=float), np.zeros((0, 24), dtype=np.int64)
+
+    xe = x[conn]
+    dndx, vol_g, vol_tot = _geometry(xe)
+
+    ke = np.zeros((n, 24, 24), dtype=np.float64)
+    epi = np.zeros((n, 8)) if epsp_incr is None else (
+        epsp_incr if np.ndim(epsp_incr) == 2 else np.repeat(epsp_incr[:, None], 8, axis=1)
+    )
+
+    for g in range(8):
+        B = np.zeros((n, 6, 24), dtype=np.float64)
+        gx = dndx[:, g, :, 0]
+        gy = dndx[:, g, :, 1]
+        gz = dndx[:, g, :, 2]
+        ix = np.arange(8)
+
+        B[:, 0, 3 * ix + 0] = gx
+        B[:, 1, 3 * ix + 1] = gy
+        B[:, 2, 3 * ix + 2] = gz
+        B[:, 3, 3 * ix + 0] = gy
+        B[:, 3, 3 * ix + 1] = gx
+        B[:, 4, 3 * ix + 1] = gz
+        B[:, 4, 3 * ix + 2] = gy
+        B[:, 5, 3 * ix + 0] = gz
+        B[:, 5, 3 * ix + 2] = gx
+
+        for sl, mat, prop in st.get("slices", []):
+            if getattr(mat, "law", 1) == 0:
+                continue
+            D = materials.solid_tangent(mat, st["sig"][sl, g], st["epsp"][sl, g], epi[sl, g], None)
+            Bs = B[sl]
+            DB = np.einsum("mij,mjk->mik", D, Bs)
+            ke[sl] += vol_g[sl, g][:, None, None] * np.einsum("mji,mjk->mik", Bs, DB)
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def kgeo(group, x):
+    """Geometric (initial-stress) element stiffness for 8-node composite thick shells.
+
+    Fortran origin: engine/source/elements/thickshell/solidec/scfint3.F,
+    engine/source/implicit/assem_s8.F.
+
+    Returns (ke, edofs): ke (n, 24, 24), edofs (n, 24).
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 24, 24), dtype=float), np.zeros((0, 24), dtype=np.int64)
+
+    xe = x[conn]
+    dndx, vol_g, vol_tot = _geometry(xe)
+
+    ke = np.zeros((n, 24, 24), dtype=np.float64)
+    sig = st["sig"]  # (n, 8, 6)
+
+    for g in range(8):
+        s_g = sig[:, g]
+        S = np.empty((n, 3, 3), dtype=np.float64)
+        S[:, 0, 0], S[:, 1, 1], S[:, 2, 2] = s_g[:, 0], s_g[:, 1], s_g[:, 2]
+        S[:, 0, 1] = S[:, 1, 0] = s_g[:, 3]
+        S[:, 1, 2] = S[:, 2, 1] = s_g[:, 4]
+        S[:, 0, 2] = S[:, 2, 0] = s_g[:, 5]
+
+        g_mat = vol_g[:, g, None, None] * np.einsum("nac,ncd,nbd->nab", dndx[:, g], S, dndx[:, g])
+
+        ix = np.arange(8)
+        for b in range(3):
+            rows = (3 * ix + b)[:, None]
+            cols = (3 * ix + b)[None, :]
+            ke[:, rows, cols] += g_mat
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+_XI_NODES_FULL = np.array([
+    [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+    [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1],
+], dtype=np.float64)
+
+_M_BRICK_FULL = np.zeros((8, 8), dtype=np.float64)
+for _a in range(8):
+    for _b in range(8):
+        _M_BRICK_FULL[_a, _b] = np.prod(np.where(_XI_NODES_FULL[_a] == _XI_NODES_FULL[_b], 2.0, 1.0)) / 216.0
+
+
+def consistent_mass(group, x=None):
+    """Consistent element mass matrix for 8-node composite thick shells (24x24).
+
+    Fortran origin: starter/source/elements/solid/solide/smass3.F,
+    engine/source/implicit/assem_s8.F.
+
+    Returns (me, edofs): me (n, 24, 24), edofs (n, 24).
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 24, 24), dtype=float), np.zeros((0, 24), dtype=np.int64)
+
+    vol0 = np.maximum(st.get("vol0", st.get("vol", np.ones(n))), EM20)
+    rho = st["mass"] / vol0
+
+    x_ref = x if x is not None else st.get("x0")
+    if x_ref is not None:
+        xe = x_ref[conn]
+        _, vol_g, _ = _geometry(xe)
+        S = np.zeros((n, 8, 8), dtype=np.float64)
+        for g in range(8):
+            gp = _GP_COORDS[g]
+            N_g = 0.125 * np.prod(1.0 + _XI_NODES_FULL * gp[None, :], axis=1)
+            S += vol_g[:, g, None, None] * np.outer(N_g, N_g)[None, :, :]
+    else:
+        S = vol0[:, None, None] * _M_BRICK_FULL[None, :, :]
+
+    me = np.zeros((n, 24, 24), dtype=np.float64)
+    MS = rho[:, None, None] * S
+    ix = np.arange(8)
+    for c in range(3):
+        rows = (3 * ix + c)[:, None]
+        cols = (3 * ix + c)[None, :]
+        me[:, rows, cols] = MS
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)
+

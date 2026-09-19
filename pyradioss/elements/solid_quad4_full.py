@@ -348,3 +348,180 @@ def forces(group, x, v, vr, dt, fint, mint):
         scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
 
     return dt_crit
+
+
+# ----------------------------------------------------------------------------
+# Implicit element matrices: tangent, kgeo, consistent_mass (M614 Component 1B)
+# ----------------------------------------------------------------------------
+# Fortran origin:
+#   engine/source/elements/solid_2d/quad4/q4forc2.F (driver & B-bar)
+#   engine/source/elements/solid_2d/quad4/q4deri2.F (derivatives)
+#   engine/source/elements/solid_2d/quad4/q4fint2.F (internal forces)
+#   engine/source/implicit/assem_q4.F (implicit assembly for 2D quads)
+# ----------------------------------------------------------------------------
+
+def _edofs(conn: np.ndarray) -> np.ndarray:
+    """(n, 8) global scalar DOF slot ids, node-major [uy, uz] * 4."""
+    n = len(conn)
+    if n == 0:
+        return np.zeros((0, 8), dtype=np.int64)
+    edofs = np.empty((n, 8), dtype=np.int64)
+    for i in range(4):
+        edofs[:, 2 * i + 0] = conn[:, i] * 6 + 1
+        edofs[:, 2 * i + 1] = conn[:, i] * 6 + 2
+    return edofs
+
+
+def tangent(group, x, epsp_incr=None):
+    """Element tangent stiffness for 4-node 2D quad with 2x2 Gauss and B-bar (n, 8, 8).
+
+    Fortran origin: engine/source/elements/solid_2d/quad4/q4forc2.F,
+    q4deri2.F, q4fint2.F; engine/source/implicit/assem_q4.F.
+
+    Returns (ke, edofs):
+      ke: (n, 8, 8) in-plane element stiffness matrix (uy, uz)
+      edofs: (n, 8)
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 8, 8), dtype=float), np.zeros((0, 8), dtype=np.int64)
+
+    xe = x[conn]
+    n2d = int(np.asarray(st.get("n2d", 2)).flat[0])
+    dndx, vol_g, vol_tot, rg = _geometry_2d(xe, n2d)
+
+    ke = np.zeros((n, 8, 8), dtype=np.float64)
+
+    # Precompute centroid / mean volumetric strain-displacement B_vol_bar (n, 8)
+    B_vol = np.zeros((n, 4, 8), dtype=np.float64)
+    for g in range(4):
+        for i in range(4):
+            B_vol[:, g, 2 * i + 0] = dndx[:, g, i, 0]
+            B_vol[:, g, 2 * i + 1] = dndx[:, g, i, 1]
+    B_vol_bar = np.mean(B_vol, axis=1)
+
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            continue
+        E = float(getattr(mat, "E", 1.0e10) or 1.0e10)
+        nu = float(getattr(mat, "nu", 0.3) or 0.3)
+
+        denom = (1.0 + nu) * (1.0 - 2.0 * nu)
+        if abs(denom) < 1e-12:
+            denom = 1e-12
+        C11 = E * (1.0 - nu) / denom
+        C12 = E * nu / denom
+        G = E / (2.0 * (1.0 + nu))
+
+        D2d = np.array([
+            [C11, C12, 0.0],
+            [C12, C11, 0.0],
+            [0.0, 0.0, G],
+        ], dtype=np.float64)
+
+        for g in range(4):
+            B = np.zeros((n, 3, 8), dtype=np.float64)
+            for i in range(4):
+                B[:, 0, 2 * i + 0] = dndx[:, g, i, 0]
+                B[:, 1, 2 * i + 1] = dndx[:, g, i, 1]
+                B[:, 2, 2 * i + 0] = dndx[:, g, i, 1]
+                B[:, 2, 2 * i + 1] = dndx[:, g, i, 0]
+
+            # B-bar volumetric projection
+            eps_vol = B[:, 0, :] + B[:, 1, :]
+            dil_diff = 0.5 * (B_vol_bar - eps_vol)
+            B[:, 0, :] += dil_diff
+            B[:, 1, :] += dil_diff
+
+            Bs = B[sl]
+            DB = np.einsum("ab,nbj->naj", D2d, Bs)
+            ke[sl] += vol_g[sl, g, None, None] * np.einsum("nai,naj->nij", Bs, DB)
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def kgeo(group, x):
+    """Geometric (initial-stress) element stiffness for 2D quad (n, 8, 8).
+
+    Fortran origin: engine/source/elements/solid_2d/quad4/q4forc2.F,
+    engine/source/implicit/assem_q4.F.
+
+    Returns (ke, edofs): ke (n, 8, 8), edofs (n, 8).
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 8, 8), dtype=float), np.zeros((0, 8), dtype=np.int64)
+
+    xe = x[conn]
+    n2d = int(np.asarray(st.get("n2d", 2)).flat[0])
+    dndx, vol_g, _, _ = _geometry_2d(xe, n2d)
+
+    ke = np.zeros((n, 8, 8), dtype=np.float64)
+    sig = st["sig"]
+
+    for g in range(4):
+        s_g = sig[:, g] if sig.ndim == 3 else sig
+        S = np.empty((n, 2, 2), dtype=np.float64)
+        S[:, 0, 0] = s_g[:, 1]
+        S[:, 1, 1] = s_g[:, 2]
+        S[:, 0, 1] = S[:, 1, 0] = s_g[:, 4]
+
+        g_mat = vol_g[:, g, None, None] * np.einsum("nac,ncd,nbd->nab", dndx[:, g], S, dndx[:, g])
+
+        for a in range(4):
+            for b in range(4):
+                val = g_mat[:, a, b]
+                ke[:, 2 * a + 0, 2 * b + 0] += val
+                ke[:, 2 * a + 1, 2 * b + 1] += val
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+_M_QUAD4 = np.array([
+    [4.0, 2.0, 1.0, 2.0],
+    [2.0, 4.0, 2.0, 1.0],
+    [1.0, 2.0, 4.0, 2.0],
+    [2.0, 1.0, 2.0, 4.0],
+], dtype=np.float64) / 36.0
+
+
+def consistent_mass(group, x=None):
+    """Analytical 2D quad consistent mass matrix (8x8 in plane).
+
+    Fortran origin: starter/source/elements/solid_2d/quad4/q4mass2.F,
+    engine/source/implicit/assem_q4.F.
+
+    Returns (me, edofs): me (n, 8, 8), edofs (n, 8).
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 8, 8), dtype=float), np.zeros((0, 8), dtype=np.int64)
+
+    m = st["mass"]
+    me = np.zeros((n, 8, 8), dtype=np.float64)
+    for a in range(4):
+        for b in range(4):
+            val = m * _M_QUAD4[a, b]
+            me[:, 2 * a + 0, 2 * b + 0] = val
+            me[:, 2 * a + 1, 2 * b + 1] = val
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)
+

@@ -236,20 +236,157 @@ def spectral_bandwidth_params(moments):
 # S-N helpers: from a damage RATE to the reported (life, equivalent stress)
 # ============================================================================
 
-def _goodman_C(C, m, mean_stress, ultimate):
-    """Goodman mean-stress correction of the S-N intercept: a static mean
-    stress sigma_m knocks the allowable range down by (1 - sigma_m/S_u), so
-    the effective coefficient is C_eff = C (1 - sigma_m/S_u)**m (the amplitude
-    axis is scaled, and N = C S^-m scales as C). ``ultimate`` = S_u the
-    ultimate tensile strength; a zero/None mean or ultimate leaves C
-    unchanged. Basic option only — Gerber/Soderberg/Walker are deferred."""
-    if not mean_stress or not ultimate or ultimate <= 0.0:
-        return C
-    fac = 1.0 - float(mean_stress) / float(ultimate)
+# ============================================================================
+# Mean stress corrections (Goodman, Gerber, Soderberg, Morrow, SWT, Walker)
+# ============================================================================
+
+def goodman_correction(s_a, sigma_m, ultimate, ignore_compressive=True):
+    """Goodman mean-stress correction of stress amplitude:
+        S_eq = S_a / (1 - sigma_m / S_u)
+    """
+    if not ultimate or ultimate <= 0.0 or not sigma_m:
+        return float(s_a)
+    if ignore_compressive and float(sigma_m) <= 0.0:
+        return float(s_a)
+    denom = 1.0 - float(sigma_m) / float(ultimate)
+    if denom <= 0.0:
+        return math.inf
+    return float(s_a) / denom
+
+
+def gerber_correction(s_a, sigma_m, ultimate, ignore_compressive=True):
+    """Gerber mean-stress correction of stress amplitude:
+        S_eq = S_a / (1 - (sigma_m / S_u)^2)
+    """
+    if not ultimate or ultimate <= 0.0 or not sigma_m:
+        return float(s_a)
+    if ignore_compressive and float(sigma_m) <= 0.0:
+        return float(s_a)
+    ratio = float(sigma_m) / float(ultimate)
+    denom = 1.0 - ratio ** 2
+    if denom <= 0.0:
+        return math.inf
+    return float(s_a) / denom
+
+
+def soderberg_correction(s_a, sigma_m, yield_strength, ignore_compressive=True):
+    """Soderberg mean-stress correction of stress amplitude:
+        S_eq = S_a / (1 - sigma_m / S_y)
+    """
+    if not yield_strength or yield_strength <= 0.0 or not sigma_m:
+        return float(s_a)
+    if ignore_compressive and float(sigma_m) <= 0.0:
+        return float(s_a)
+    denom = 1.0 - float(sigma_m) / float(yield_strength)
+    if denom <= 0.0:
+        return math.inf
+    return float(s_a) / denom
+
+
+def morrow_correction(s_a, sigma_m, sigma_f_prime, ignore_compressive=True):
+    """Morrow mean-stress correction of stress amplitude:
+        S_eq = S_a / (1 - sigma_m / sigma_f')
+    """
+    if not sigma_f_prime or sigma_f_prime <= 0.0 or not sigma_m:
+        return float(s_a)
+    if ignore_compressive and float(sigma_m) <= 0.0:
+        return float(s_a)
+    denom = 1.0 - float(sigma_m) / float(sigma_f_prime)
+    if denom <= 0.0:
+        return math.inf
+    return float(s_a) / denom
+
+
+def swt_correction(s_a, sigma_m):
+    """Smith-Watson-Topper (SWT) equivalent stress amplitude:
+        S_eq = sqrt(sigma_max * S_a) = sqrt((sigma_m + S_a) * S_a)
+    """
+    sigma_max = float(sigma_m) + float(s_a)
+    if sigma_max <= 0.0 or s_a <= 0.0:
+        return 0.0
+    return math.sqrt(sigma_max * float(s_a))
+
+
+def walker_correction(s_a, sigma_m, gamma=0.5):
+    """Walker equivalent stress amplitude:
+        S_eq = sigma_max^(1 - gamma) * S_a^gamma = (sigma_m + S_a)^(1 - gamma) * S_a^gamma
+    When gamma = 0.5, Walker collapses to Smith-Watson-Topper (SWT).
+    """
+    sigma_max = float(sigma_m) + float(s_a)
+    if sigma_max <= 0.0 or s_a <= 0.0:
+        return 0.0
+    return (sigma_max ** (1.0 - float(gamma))) * (float(s_a) ** float(gamma))
+
+
+def mean_stress_correction(s_a, sigma_m, method="goodman", ultimate=0.0,
+                           su=None, yield_strength=0.0, sigma_f_prime=0.0,
+                           walker_gamma=0.5, ignore_compressive=True):
+    """Evaluate mean stress correction on stress amplitude `s_a` using `method`:
+    'goodman', 'gerber', 'soderberg', 'morrow', 'swt', 'walker'.
+    """
+    ult = su if su is not None else ultimate
+    m_lower = str(method).lower().strip()
+    if m_lower in ("goodman", "good"):
+        return goodman_correction(s_a, sigma_m, ult, ignore_compressive=ignore_compressive)
+    elif m_lower in ("gerber", "gerb"):
+        return gerber_correction(s_a, sigma_m, ult, ignore_compressive=ignore_compressive)
+    elif m_lower in ("soderberg", "soder"):
+        return soderberg_correction(s_a, sigma_m, yield_strength, ignore_compressive=ignore_compressive)
+    elif m_lower in ("morrow", "morr"):
+        return morrow_correction(s_a, sigma_m, sigma_f_prime, ignore_compressive=ignore_compressive)
+    elif m_lower in ("swt", "smith_watson_topper"):
+        return swt_correction(s_a, sigma_m)
+    elif m_lower in ("walker", "walk"):
+        return walker_correction(s_a, sigma_m, walker_gamma)
+    else:
+        return goodman_correction(s_a, sigma_m, ult, ignore_compressive=ignore_compressive)
+
+
+def effective_sn_coefficient(C, m, mean_stress=0.0, method="goodman",
+                             ultimate=0.0, su=None, yield_strength=0.0,
+                             sigma_f_prime=0.0, walker_gamma=0.5,
+                             ignore_compressive=True):
+    """Effective S-N intercept coefficient C_eff = C * fac^m for mean stress
+    corrections (scaling the allowable stress range by 1/fac).
+    """
+    if not mean_stress:
+        return float(C)
+    sm = float(mean_stress)
+    if ignore_compressive and sm <= 0.0:
+        return float(C)
+    ult = su if su is not None else ultimate
+    meth = str(method).lower().strip()
+    if meth in ("goodman", "good"):
+        if not ult or ult <= 0.0:
+            return float(C)
+        fac = 1.0 - sm / float(ult)
+    elif meth in ("gerber", "gerb"):
+        if not ult or ult <= 0.0:
+            return float(C)
+        fac = 1.0 - (sm / float(ult)) ** 2
+    elif meth in ("soderberg", "soder"):
+        if not yield_strength or yield_strength <= 0.0:
+            return float(C)
+        fac = 1.0 - sm / float(yield_strength)
+    elif meth in ("morrow", "morr"):
+        if not sigma_f_prime or sigma_f_prime <= 0.0:
+            return float(C)
+        fac = 1.0 - sm / float(sigma_f_prime)
+    else:
+        # Fall back to Goodman if ultimate is provided
+        if ult and ult > 0.0:
+            fac = 1.0 - sm / float(ult)
+        else:
+            return float(C)
     if fac <= 0.0:
-        # the mean stress alone exceeds the ultimate -> immediate failure
         return 1e-300
-    return C * fac ** m
+    return float(C) * (fac ** float(m))
+
+
+def _goodman_C(C, m, mean_stress, ultimate):
+    """Backward compatibility helper for Goodman mean-stress correction."""
+    return effective_sn_coefficient(C, m, mean_stress=mean_stress,
+                                    method="goodman", ultimate=ultimate)
 
 
 def life_and_equivalent(damage_rate, nu, m, C):
@@ -428,6 +565,238 @@ def tovo_benasciutti_damage(moments, m, C, mean_stress=0.0, ultimate=0.0):
             "sigma": sigma, "alpha1": a1, "alpha2": a2, "params": p}
 
 
+class SteinbergResult(dict):
+    """Result dictionary for Steinberg 3-band fatigue damage."""
+    def __iter__(self):
+        d_tot = self.get("damage")
+        if d_tot is None:
+            dur = self.get("duration") or 1.0
+            d_tot = self["damage_rate"] * dur
+        bands_val = self.get("bands_list")
+        if bands_val is None:
+            bands_val = list(self.get("bands", {}).values())
+        return iter((d_tot, self["damage_rate"], bands_val))
+
+
+class ZhaoBakerCoeffs(dict):
+    """Result dictionary for Zhao-Baker PDF parameters."""
+    def __iter__(self):
+        return iter((self["a"], self["beta"], self["w"]))
+
+
+class ZhaoBakerResult(dict):
+    """Result dictionary for Zhao-Baker spectral fatigue damage."""
+    def __iter__(self):
+        d_tot = self.get("damage")
+        if d_tot is None:
+            dur = self.get("duration") or 1.0
+            d_tot = self["damage_rate"] * dur
+        e_sm = self.get("e_sm", self.get("E_Sm", 0.0))
+        return iter((d_tot, self["damage_rate"], e_sm))
+
+
+def steinberg_damage(*args, **kwargs):
+    """The STEINBERG (1988) 3-band random vibration fatigue damage:
+    Gaussian cycle partitioning across 3 stress bands:
+        - 1*sigma: 68.3% of time, S = 1*sigma
+        - 2*sigma: 27.1% of time, S = 2*sigma
+        - 3*sigma: 4.33% of time, S = 3*sigma
+    Total damage rate:
+        E[D]/T = (nu_p / C_eff) * [0.683 (1*sigma)^m + 0.271 (2*sigma)^m + 0.0433 (3*sigma)^m]
+    Total damage for duration T:
+        D = sum_{i=1}^3 (n_i / N_i) = (nu_p * T / C_eff) * [...]
+    Can be called as:
+        steinberg_damage(sigma, nu_p, duration, C, m, ...) -> SteinbergResult (iter yields (D, dr, bands))
+        steinberg_damage(moments, m, C, ...) -> SteinbergResult
+    """
+    if len(args) >= 5 and isinstance(args[0], (int, float)):
+        sigma = float(args[0])
+        nup = float(args[1])
+        duration = float(args[2])
+        C = float(args[3])
+        m = float(args[4])
+        mean_stress = kwargs.get("mean_stress", 0.0)
+        ultimate = kwargs.get("ultimate", kwargs.get("su", 0.0))
+        mean_correction = kwargs.get("mean_correction", "goodman")
+        p = {"sigma": sigma, "nup": nup}
+    else:
+        moments = args[0]
+        m = float(args[1])
+        C = float(args[2])
+        mean_stress = kwargs.get("mean_stress", 0.0)
+        ultimate = kwargs.get("ultimate", kwargs.get("su", 0.0))
+        duration = kwargs.get("duration", None)
+        mean_correction = kwargs.get("mean_correction", "goodman")
+        p = spectral_bandwidth_params(moments)
+        sigma, nup = p["sigma"], p["nup"]
+
+    yield_strength = kwargs.get("yield_strength", 0.0)
+    sigma_f_prime = kwargs.get("sigma_f_prime", 0.0)
+    walker_gamma = kwargs.get("walker_gamma", 0.5)
+    Ceff = effective_sn_coefficient(C, m, mean_stress=mean_stress,
+                                    method=mean_correction, ultimate=ultimate,
+                                    yield_strength=yield_strength,
+                                    sigma_f_prime=sigma_f_prime,
+                                    walker_gamma=walker_gamma)
+    term = (0.683 * (1.0 * sigma) ** m
+            + 0.271 * (2.0 * sigma) ** m
+            + 0.0433 * (3.0 * sigma) ** m)
+    dr = nup * term / Ceff if Ceff > 0.0 else 0.0
+    tf, s_eq = life_and_equivalent(dr, nup, m, Ceff)
+    dur = float(duration) if duration is not None else 1.0
+    dmg = dr * dur if duration is not None else None
+    bands_dict = {
+        "1sigma": {"fraction": 0.683, "stress": 1.0 * sigma, "rate": 0.683 * nup, "damage": (0.683 * nup * dur * ((1.0 * sigma) ** m) / Ceff)},
+        "2sigma": {"fraction": 0.271, "stress": 2.0 * sigma, "rate": 0.271 * nup, "damage": (0.271 * nup * dur * ((2.0 * sigma) ** m) / Ceff)},
+        "3sigma": {"fraction": 0.0433, "stress": 3.0 * sigma, "rate": 0.0433 * nup, "damage": (0.0433 * nup * dur * ((3.0 * sigma) ** m) / Ceff)},
+    }
+    bands_list = list(bands_dict.values())
+    return SteinbergResult({
+        "method": "steinberg",
+        "damage_rate": dr,
+        "life": tf,
+        "s_eq": s_eq,
+        "nu": nup,
+        "sigma": sigma,
+        "damage": dmg if dmg is not None else dr,
+        "duration": duration,
+        "term": term,
+        "bands": bands_dict,
+        "bands_list": bands_list,
+        "params": p,
+    })
+
+
+def zhao_baker_coefficients(moments_or_alpha2):
+    """The Zhao & Baker (1992) Weibull-Rayleigh mixture PDF parameters:
+        alpha_2 = m_2 / sqrt(m_0 * m_4)
+        a = 8 - 7 * alpha_2
+        beta = 1.1 if alpha_2 < 0.9 else 1.1 + 9 * (alpha_2 - 0.9)
+        w = (1 - alpha_2) / (1 - sqrt(2/pi) * Gamma(1 + 1/beta) * a^(-1/beta))
+    Guards numerical limits and clamps w to [0, 1].
+    Accepts either moments array or scalar alpha_2.
+    """
+    if isinstance(moments_or_alpha2, (int, float)):
+        a2 = float(moments_or_alpha2)
+    else:
+        p = spectral_bandwidth_params(moments_or_alpha2)
+        a2 = p["alpha2"]
+    a = 8.0 - 7.0 * a2
+    a = max(a, 1e-6)
+    if a2 < 0.9:
+        beta = 1.1
+    else:
+        beta = 1.1 + 9.0 * (a2 - 0.9)
+    gamma_term = math.gamma(1.0 + 1.0 / beta) * (a ** (-1.0 / beta))
+    denom = 1.0 - math.sqrt(2.0 / math.pi) * gamma_term
+    if abs(denom) < 1e-12:
+        w = 0.0
+    else:
+        w = (1.0 - a2) / denom
+    w = min(max(w, 0.0), 1.0)
+    return ZhaoBakerCoeffs({"a": a, "beta": beta, "w": w, "alpha2": a2})
+
+
+def zhao_baker_range_pdf(S, *args):
+    """The Zhao-Baker rainflow stress range PDF p(S) on the range grid S:
+        p(Z) = w * a * beta * Z^(beta - 1) * exp(-a * Z^beta)
+             + (1 - w) * Z * exp(-Z^2 / 2)
+    with Z = S / (2 * sigma) and p(S) = p(Z) / (2 * sigma).
+    Can be called as:
+        zhao_baker_range_pdf(S, moments)
+        zhao_baker_range_pdf(S, sigma, alpha2)
+    """
+    if len(args) == 1:
+        moments = args[0]
+        p = spectral_bandwidth_params(moments)
+        sigma = p["sigma"]
+        c = zhao_baker_coefficients(moments)
+    elif len(args) >= 2:
+        sigma = float(args[0])
+        alpha2 = float(args[1])
+        c = zhao_baker_coefficients(alpha2)
+    else:
+        raise ValueError("zhao_baker_range_pdf requires moments or (sigma, alpha2)")
+    a, beta, w = c["a"], c["beta"], c["w"]
+    S = np.asarray(S, dtype=float)
+    if sigma <= 0.0:
+        return np.zeros_like(S)
+    Z = S / (2.0 * sigma)
+    Z_safe = np.maximum(Z, 1e-15)
+    weibull = a * beta * (Z_safe ** (beta - 1.0)) * np.exp(-a * (Z_safe ** beta))
+    rayleigh = Z * np.exp(-0.5 * (Z ** 2))
+    pdf_Z = w * weibull + (1.0 - w) * rayleigh
+    return pdf_Z / (2.0 * sigma)
+
+
+def zhao_baker_damage(*args, **kwargs):
+    """The ZHAO-BAKER (1992) Weibull-Rayleigh spectral damage model:
+    Closed-form m-th moment of rainflow stress range:
+        E[S^m] = (2 sigma)^m [ w a^(-m/beta) Gamma(1 + m/beta)
+                             + (1 - w) (sqrt(2))^m Gamma(1 + m/2) ]
+        E[D]/T = (nu_p / C_eff) * E[S^m]
+    Collapses to narrow-band damage when alpha_2 -> 1 (w -> 0).
+    Can be called as:
+        zhao_baker_damage(sigma, alpha2, nu_p, duration, C, m, ...)
+        zhao_baker_damage(moments, m, C, ...)
+    """
+    if len(args) >= 6 and isinstance(args[0], (int, float)):
+        sigma = float(args[0])
+        a2 = float(args[1])
+        nup = float(args[2])
+        duration = float(args[3])
+        C = float(args[4])
+        m = float(args[5])
+        mean_stress = kwargs.get("mean_stress", 0.0)
+        ultimate = kwargs.get("ultimate", kwargs.get("su", 0.0))
+        mean_correction = kwargs.get("mean_correction", "goodman")
+        p = {"sigma": sigma, "nup": nup, "alpha2": a2}
+        c = zhao_baker_coefficients(a2)
+    else:
+        moments = args[0]
+        m = float(args[1])
+        C = float(args[2])
+        mean_stress = kwargs.get("mean_stress", 0.0)
+        ultimate = kwargs.get("ultimate", kwargs.get("su", 0.0))
+        duration = kwargs.get("duration", None)
+        mean_correction = kwargs.get("mean_correction", "goodman")
+        p = spectral_bandwidth_params(moments)
+        sigma, nup = p["sigma"], p["nup"]
+        c = zhao_baker_coefficients(moments)
+
+    yield_strength = kwargs.get("yield_strength", 0.0)
+    sigma_f_prime = kwargs.get("sigma_f_prime", 0.0)
+    walker_gamma = kwargs.get("walker_gamma", 0.5)
+    Ceff = effective_sn_coefficient(C, m, mean_stress=mean_stress,
+                                    method=mean_correction, ultimate=ultimate,
+                                    yield_strength=yield_strength,
+                                    sigma_f_prime=sigma_f_prime,
+                                    walker_gamma=walker_gamma)
+    a, beta, w = c["a"], c["beta"], c["w"]
+    term_weibull = (a ** (-float(m) / beta)) * math.gamma(1.0 + float(m) / beta)
+    term_rayleigh = (math.sqrt(2.0) ** float(m)) * math.gamma(1.0 + float(m) / 2.0)
+    E_Sm = ((2.0 * sigma) ** float(m)) * (w * term_weibull + (1.0 - w) * term_rayleigh)
+    dr = nup * E_Sm / Ceff if Ceff > 0.0 else 0.0
+    tf, s_eq = life_and_equivalent(dr, nup, m, Ceff)
+    dur = float(duration) if duration is not None else 1.0
+    dmg = dr * dur if duration is not None else None
+    return ZhaoBakerResult({
+        "method": "zhao_baker",
+        "damage_rate": dr,
+        "life": tf,
+        "s_eq": s_eq,
+        "nu": nup,
+        "E_Sm": E_Sm,
+        "e_sm": E_Sm,
+        "sigma": sigma,
+        "alpha2": p.get("alpha2", 0.0),
+        "damage": dmg if dmg is not None else dr,
+        "duration": duration,
+        "coeffs": c,
+        "params": p,
+    })
+
+
 # ============================================================================
 # Monte-Carlo rainflow cross-check (build-order item 2, validation)
 # ============================================================================
@@ -550,22 +919,494 @@ def monte_carlo_damage(freqs_hz, psd, m, C, duration, seed, fs=None,
 
 
 # ============================================================================
+# Strain-Life (epsilon-N) & Notch Plasticity Models (M614)
+# ============================================================================
+
+def ramberg_osgood_strain(sigma, E, K_prime, n_prime):
+    """Monotonic Ramberg-Osgood stress-strain relation:
+        epsilon = sigma / E + (abs(sigma) / K')^(1 / n') * sign(sigma)
+    """
+    s = float(sigma)
+    if s == 0.0:
+        return 0.0
+    sgn = 1.0 if s > 0.0 else -1.0
+    return s / float(E) + sgn * ((abs(s) / float(K_prime)) ** (1.0 / float(n_prime)))
+
+
+def ramberg_osgood_stress(epsilon, E, K_prime, n_prime, tol=1e-9, max_iter=100):
+    """Invert monotonic Ramberg-Osgood curve to find stress sigma for a given strain epsilon."""
+    eps = float(epsilon)
+    if abs(eps) < 1e-15:
+        return 0.0
+    # Initial linear elastic guess
+    sigma = float(E) * eps
+    for _ in range(max_iter):
+        e_cur = ramberg_osgood_strain(sigma, E, K_prime, n_prime)
+        res = e_cur - eps
+        if abs(res) < tol:
+            break
+        s_abs = max(abs(sigma), 1e-15)
+        de_ds = 1.0 / float(E) + (1.0 / (float(n_prime) * float(K_prime))) * ((s_abs / float(K_prime)) ** (1.0 / float(n_prime) - 1.0))
+        d_sigma = res / de_ds
+        sigma -= d_sigma
+        if abs(d_sigma) < tol:
+            break
+    return sigma
+
+
+def ramberg_osgood_cyclic_strain(delta_sigma, E, K_prime, n_prime):
+    """Cyclic Ramberg-Osgood hysteresis curve (Masing hypothesis):
+        Delta epsilon = Delta sigma / E + 2 * (Delta sigma / (2 * K'))^(1 / n')
+    """
+    ds = float(delta_sigma)
+    if ds <= 0.0:
+        return 0.0
+    return ds / float(E) + 2.0 * ((ds / (2.0 * float(K_prime))) ** (1.0 / float(n_prime)))
+
+
+def ramberg_osgood_cyclic_stress(delta_epsilon, E, K_prime, n_prime, tol=1e-9, max_iter=100):
+    """Invert cyclic Ramberg-Osgood curve to find stress range Delta sigma for a given strain range Delta epsilon."""
+    de = float(delta_epsilon)
+    if de <= 0.0:
+        return 0.0
+    ds = float(E) * de
+    for _ in range(max_iter):
+        de_cur = ramberg_osgood_cyclic_strain(ds, E, K_prime, n_prime)
+        res = de_cur - de
+        if abs(res) < tol:
+            break
+        ds_abs = max(ds, 1e-15)
+        dde_dds = 1.0 / float(E) + (1.0 / (float(n_prime) * float(K_prime))) * ((ds_abs / (2.0 * float(K_prime))) ** (1.0 / float(n_prime) - 1.0))
+        delta = res / dde_dds
+        ds = max(ds - delta, 1e-12)
+        if abs(delta) < tol:
+            break
+    return ds
+
+
+class CoffinMansonResult(float):
+    """Result object that acts as a float (cycles Nf) and a dict with details."""
+    def __new__(cls, val, data):
+        obj = super().__new__(cls, float(val))
+        obj._data = data
+        return obj
+
+    def __getitem__(self, item):
+        return self._data[item]
+
+    def __contains__(self, item):
+        return item in self._data
+
+    def get(self, item, default=None):
+        return self._data.get(item, default)
+
+    def update(self, d):
+        self._data.update(d)
+
+    def __repr__(self):
+        return repr(self._data)
+
+
+def coffin_manson_strain(reversals_2Nf, *args, **kwargs):
+    """Coffin-Manson relation for total strain amplitude Delta epsilon / 2:
+        Delta epsilon / 2 = ((sigma_f' - sigma_m) / E) * (2N_f)^b + eps_f' * (2N_f)^c
+    """
+    rev = float(reversals_2Nf)
+    if rev <= 0.0:
+        return math.inf
+    if len(args) >= 5:
+        a0, a1 = float(args[0]), float(args[1])
+        if a0 > a1:  # a0 is E, a1 is sigf
+            E, sigf = a0, a1
+        else:
+            sigf, E = a0, a1
+        b, epsf, c = float(args[2]), float(args[3]), float(args[4])
+    else:
+        sigf = float(kwargs.get("sigma_f_prime", args[0] if len(args) > 0 else 0.0))
+        E = float(kwargs.get("E", args[1] if len(args) > 1 else 0.0))
+        b = float(kwargs.get("b", args[2] if len(args) > 2 else 0.0))
+        epsf = float(kwargs.get("eps_f_prime", args[3] if len(args) > 3 else 0.0))
+        c = float(kwargs.get("c", args[4] if len(args) > 4 else 0.0))
+    sigma_m = float(kwargs.get("sigma_m", (args[5] if len(args) > 5 else 0.0)))
+    sig_term = (sigf - sigma_m) / E
+    return sig_term * (rev ** b) + epsf * (rev ** c)
+
+
+def coffin_manson_life(strain_input, *args, **kwargs):
+    """Solve Coffin-Manson relation for fatigue life (N_f cycles, 2N_f reversals)
+    given strain amplitude (eps_a) or range (Delta epsilon).
+    Supports Morrow mean stress (via sigma_m/mean_stress) or Smith-Watson-Topper (SWT, via method='swt').
+    """
+    s_in = float(strain_input)
+    if s_in <= 0.0:
+        res = {"Nf": math.inf, "reversals_2Nf": math.inf, "delta_eps": s_in, "eps_a": s_in}
+        return CoffinMansonResult(math.inf, res)
+
+    if len(args) >= 5:
+        a0, a1 = float(args[0]), float(args[1])
+        if a0 > a1:  # a0 is E, a1 is sigf
+            E, sigf = a0, a1
+        else:
+            sigf, E = a0, a1
+        b, epsf, c = float(args[2]), float(args[3]), float(args[4])
+    else:
+        sigf = float(kwargs.get("sigma_f_prime", args[0] if len(args) > 0 else 0.0))
+        E = float(kwargs.get("E", args[1] if len(args) > 1 else 0.0))
+        b = float(kwargs.get("b", args[2] if len(args) > 2 else 0.0))
+        epsf = float(kwargs.get("eps_f_prime", args[3] if len(args) > 3 else 0.0))
+        c = float(kwargs.get("c", args[4] if len(args) > 4 else 0.0))
+
+    sigma_m = float(kwargs.get("sigma_m", kwargs.get("mean_stress", (args[5] if len(args) > 5 else 0.0))))
+    method = kwargs.get("method", (args[6] if len(args) > 6 else None))
+    sigma_max = kwargs.get("sigma_max", None)
+    tol = kwargs.get("tol", 1e-8)
+    max_iter = kwargs.get("max_iter", 100)
+
+    eps_a = s_in
+    use_swt = (str(method).lower().strip() == "swt")
+    if use_swt and sigma_max is None:
+        sigma_max = sigf if sigma_m == 0.0 else (sigf * (1.0 - sigma_m / sigf) if sigf > 0 else 1000.0)
+
+    # Solve in log-space: x = ln(2N_f)
+    x = math.log(1e5)  # initial guess 10^5 reversals
+    for _ in range(max_iter):
+        rev = math.exp(x)
+        if use_swt and (sigma_max is not None):
+            s_max = float(sigma_max)
+            lhs = s_max * eps_a
+            t1 = ((sigf ** 2) / E) * (rev ** (2.0 * b))
+            t2 = sigf * epsf * (rev ** (b + c))
+            f_val = t1 + t2 - lhs
+            df_dx = (2.0 * b * t1) + ((b + c) * t2)
+        else:
+            sig_eff = sigf - sigma_m
+            t1 = (sig_eff / E) * (rev ** b)
+            t2 = epsf * (rev ** c)
+            f_val = t1 + t2 - eps_a
+            df_dx = b * t1 + c * t2
+
+        if abs(df_dx) < 1e-20:
+            break
+        dx = f_val / df_dx
+        x = max(min(x - dx, 45.0), 0.0)  # clamp between 1 reversal and ~10^19
+        if abs(dx) < tol:
+            break
+
+    rev_final = math.exp(x)
+    nf_final = rev_final / 2.0
+    res = {
+        "Nf": nf_final,
+        "reversals_2Nf": rev_final,
+        "delta_eps": 2.0 * eps_a,
+        "eps_a": eps_a,
+        "sigma_m": sigma_m,
+    }
+    return CoffinMansonResult(nf_final, res)
+
+
+def neuber_notch_analysis(delta_sigma_e, Kt, E, K_prime, n_prime, tol=1e-8, max_iter=100):
+    """Neuber's rule for notch plasticity:
+        K_t^2 * Delta sigma_e * Delta epsilon_e = Delta sigma * Delta epsilon
+    where Delta epsilon_e = Delta sigma_e / E.
+    Equivalently:
+        Delta sigma * [Delta sigma / E + 2 * (Delta sigma / (2*K'))^(1/n')] = (K_t * Delta sigma_e)^2 / E
+    Returns:
+        (delta_sigma, delta_epsilon) local elasto-plastic stress and strain ranges.
+    """
+    dse = float(delta_sigma_e)
+    kt = float(Kt)
+    if dse <= 0.0 or kt <= 0.0:
+        return 0.0, 0.0
+    target_energy = ((kt * dse) ** 2) / float(E)
+    # Solve for local stress range ds
+    ds = kt * dse
+    for _ in range(max_iter):
+        eps = ramberg_osgood_cyclic_strain(ds, E, K_prime, n_prime)
+        f_val = ds * eps - target_energy
+        if abs(f_val) < tol * target_energy:
+            break
+        # df/dds = eps + ds * d(eps)/dds
+        ds_abs = max(ds, 1e-15)
+        deps_dds = 1.0 / float(E) + (1.0 / (float(n_prime) * float(K_prime))) * ((ds_abs / (2.0 * float(K_prime))) ** (1.0 / float(n_prime) - 1.0))
+        df_dds = eps + ds * deps_dds
+        if df_dds <= 0.0:
+            break
+        delta = f_val / df_dds
+        ds = max(ds - delta, 1e-12)
+        if abs(delta) < tol:
+            break
+    delta_eps = ramberg_osgood_cyclic_strain(ds, E, K_prime, n_prime)
+    return ds, delta_eps
+
+
+def neuber_strain_life(delta_sigma_e, Kt, E, K_prime, n_prime, sigma_f_prime, b,
+                       eps_f_prime, c, sigma_m=0.0, method=None):
+    """Notch strain-life analysis combining Neuber's rule with Coffin-Manson equation."""
+    ds, de = neuber_notch_analysis(delta_sigma_e, Kt, E, K_prime, n_prime)
+    res = coffin_manson_life(de, sigma_f_prime, E, b, eps_f_prime, c,
+                             sigma_m=sigma_m, method=method)
+    res.update({
+        "delta_sigma_local": ds,
+        "delta_epsilon_local": de,
+        "delta_sigma_elastic": delta_sigma_e,
+        "Kt": Kt,
+        "rule": "neuber",
+    })
+    return res
+
+
+def glinka_notch_analysis(delta_sigma_e, Kt, E, K_prime, n_prime, tol=1e-8, max_iter=100):
+    """Glinka's Equivalent Strain Energy Density (ESED) notch plasticity rule:
+        W_elastic = W_el-pl
+        (K_t * Delta sigma_e)^2 / (4 * E) = Delta sigma^2 / (4 * E) + (Delta sigma / (1 + n')) * (Delta sigma / (2*K'))^(1/n')
+    Returns:
+        (delta_sigma, delta_epsilon) local elasto-plastic stress and strain ranges.
+    """
+    dse = float(delta_sigma_e)
+    kt = float(Kt)
+    if dse <= 0.0 or kt <= 0.0:
+        return 0.0, 0.0
+    w_elastic = ((kt * dse) ** 2) / (4.0 * float(E))
+    ds = kt * dse
+    np_val = float(n_prime)
+    for _ in range(max_iter):
+        ds_abs = max(ds, 1e-15)
+        w_plastic = (ds / (1.0 + np_val)) * ((ds_abs / (2.0 * float(K_prime))) ** (1.0 / np_val))
+        w_elpl = (ds ** 2) / (4.0 * float(E)) + w_plastic
+        f_val = w_elpl - w_elastic
+        if abs(f_val) < tol * w_elastic:
+            break
+        # Derivative dw/dds = ds / (2*E) + (ds/(2K'))^(1/np)
+        df_dds = ds / (2.0 * float(E)) + ((ds_abs / (2.0 * float(K_prime))) ** (1.0 / np_val))
+        if df_dds <= 0.0:
+            break
+        delta = f_val / df_dds
+        ds = max(ds - delta, 1e-12)
+        if abs(delta) < tol:
+            break
+    delta_eps = ramberg_osgood_cyclic_strain(ds, E, K_prime, n_prime)
+    return ds, delta_eps
+
+
+def glinka_strain_life(delta_sigma_e, Kt, E, K_prime, n_prime, sigma_f_prime, b,
+                       eps_f_prime, c, sigma_m=0.0, method=None):
+    """Notch strain-life analysis combining Glinka's ESED rule with Coffin-Manson equation."""
+    ds, de = glinka_notch_analysis(delta_sigma_e, Kt, E, K_prime, n_prime)
+    res = coffin_manson_life(de, sigma_f_prime, E, b, eps_f_prime, c,
+                             sigma_m=sigma_m, method=method)
+    res.update({
+        "delta_sigma_local": ds,
+        "delta_epsilon_local": de,
+        "delta_sigma_elastic": delta_sigma_e,
+        "Kt": Kt,
+        "rule": "glinka",
+    })
+    return res
+
+
+# ============================================================================
+# Multi-slope S-N curve (bi-linear Wöhler with knee point N_k, endurance limit S_e)
+# ============================================================================
+
+class SpectralDamageResult(float):
+    """Result object that acts as a float (damage or damage rate) and a dict."""
+    def __new__(cls, val, data):
+        obj = super().__new__(cls, float(val))
+        obj._data = data
+        return obj
+
+    def __getitem__(self, item):
+        return self._data[item]
+
+    def __contains__(self, item):
+        return item in self._data
+
+    def get(self, item, default=None):
+        return self._data.get(item, default)
+
+    def update(self, d):
+        self._data.update(d)
+
+    def __repr__(self):
+        return repr(self._data)
+
+
+class MultiSlopeSN:
+    """Bi-linear / multi-slope Wöhler S-N curve with knee point (S_k, N_k),
+    slopes m1 (high-stress / low-cycle regime S >= S_k) and m2 (low-stress / high-cycle regime
+    S_e <= S < S_k), and endurance limit S_e below which N -> inf.
+    """
+
+    def __init__(self, s_knee: float, n_knee: float, m1: float, m2: float,
+                 s_endurance: float = 0.0):
+        self.s_knee = float(s_knee)
+        self.n_knee = float(n_knee)
+        self.m1 = float(m1)
+        self.m2 = float(m2)
+        self.s_endurance = float(s_endurance)
+        self.c1 = self.n_knee * (self.s_knee ** self.m1)
+        self.c2 = self.n_knee * (self.s_knee ** self.m2)
+
+    def life(self, S: float) -> float:
+        """Cycles to failure N at constant stress range S."""
+        s = float(S)
+        if s <= 0.0:
+            return math.inf
+        if self.s_endurance > 0.0 and s < self.s_endurance:
+            return math.inf
+        if s >= self.s_knee:
+            return self.c1 * (s ** (-self.m1))
+        else:
+            return self.c2 * (s ** (-self.m2))
+
+    def damage_per_cycle(self, S: float) -> float:
+        """Damage 1/N caused by one cycle of stress range S."""
+        n = self.life(S)
+        return 0.0 if math.isinf(n) or n <= 0.0 else 1.0 / n
+
+    def damage_spectrum(self, ranges, counts) -> float:
+        """Total Miner damage from cycle-counted stress ranges and counts."""
+        r = np.asarray(ranges, dtype=float)
+        c = np.asarray(counts, dtype=float)
+        d = 0.0
+        for s_val, count in zip(r, c):
+            d += count * self.damage_per_cycle(s_val)
+        return d
+
+    def spectral_damage(self, *args, **kwargs):
+        """Estimate damage rate by integrating damage_per_cycle over the spectral PDF:
+            E[D]/T = nu * integral_0^inf p(S) / N(S) dS
+        Can be called as:
+            spectral_damage(sigma, nu_p, duration=1.0, method="narrow_band", ...)
+            spectral_damage(moments, method="narrow_band", ...)
+        """
+        method = kwargs.get("method", "narrow_band")
+        n_points = kwargs.get("n_points", 1000)
+        if len(args) >= 2 and isinstance(args[0], (int, float)):
+            sigma = float(args[0])
+            nu = float(args[1])
+            duration = float(args[2]) if len(args) > 2 else kwargs.get("duration", 1.0)
+            moments = None
+        else:
+            moments = args[0]
+            p = spectral_bandwidth_params(moments)
+            sigma = p["sigma"]
+            nu = p["nu0"] if method == "narrow_band" else p["nup"]
+            duration = kwargs.get("duration", 1.0)
+
+        if sigma <= 0.0 or nu <= 0.0:
+            res = {"damage": 0.0, "damage_rate": 0.0, "life": math.inf, "nu": nu}
+            return SpectralDamageResult(0.0, res)
+
+        s_max = 8.0 * sigma
+        s_grid = np.linspace(1e-6 * sigma, s_max, n_points)
+        ds = s_grid[1] - s_grid[0]
+        if method == "narrow_band" or moments is None:
+            # Rayleigh PDF for range S = 2A
+            pdf = (s_grid / (4.0 * (sigma ** 2))) * np.exp(- (s_grid ** 2) / (8.0 * (sigma ** 2)))
+        elif method == "zhao_baker":
+            pdf = zhao_baker_range_pdf(s_grid, moments)
+        else:
+            pdf = dirlik_range_pdf(s_grid, moments)
+
+        dmg_per_s = np.array([self.damage_per_cycle(s_val) for s_val in s_grid])
+        dr = nu * float(np.sum(pdf * dmg_per_s * ds))
+        life_est = 1.0 / dr if dr > 0.0 else math.inf
+        total_dmg = dr * duration
+        res = {
+            "damage": total_dmg,
+            "damage_rate": dr,
+            "life": life_est,
+            "nu": nu,
+            "method": method,
+            "duration": duration,
+        }
+        return SpectralDamageResult(total_dmg, res)
+
+
+# ============================================================================
 # The full fatigue summary (all methods on one channel)
 # ============================================================================
 
-def fatigue_summary(moments, m, C, mean_stress=0.0, ultimate=0.0):
-    """Evaluate ALL closed-form spectral estimators on one channel's moment
-    array and return a dict of per-method results plus the shared spectral
-    descriptors (RMS, rates, width factors). The Monte-Carlo cross-check is a
-    separate call (it needs the PSD, a duration and a seed)."""
+def fatigue_summary(*args, **kwargs):
+    """Evaluate ALL closed-form spectral estimators on one channel and return
+    a dict of per-method results plus the shared spectral descriptors (RMS,
+    rates, width factors).
+
+    Can be called with either:
+      1) Spectral moments:
+         fatigue_summary(moments, m, C, mean_stress=0.0, ultimate=0.0, ...)
+      2) Frequency and PSD arrays:
+         fatigue_summary(freqs, psd, m=..., C=..., duration=..., ...)
+         fatigue_summary(freqs, psd, m, C, mean_stress=0.0, ultimate=0.0, ...)
+    """
+    if len(args) >= 2 and (isinstance(args[1], (np.ndarray, list, tuple)) or hasattr(args[1], "__len__")):
+        freqs = np.asarray(args[0], dtype=float)
+        psd = np.clip(np.asarray(args[1], dtype=float), 0.0, None)
+        omega = 2.0 * np.pi * freqs
+        from .random_response import spectral_moments
+        moments = spectral_moments(omega, psd, nmax=4)
+        if len(args) > 2:
+            m = float(args[2])
+        else:
+            m = float(kwargs.get("m", 3.0))
+        if len(args) > 3:
+            C = float(args[3])
+        else:
+            C = float(kwargs.get("C", kwargs.get("c", 1.0)))
+        mean_stress = float(args[4]) if len(args) > 4 else float(kwargs.get("mean_stress", 0.0))
+        ultimate = float(args[5]) if len(args) > 5 else float(kwargs.get("ultimate", kwargs.get("su", 0.0)))
+    elif len(args) >= 1:
+        moments = args[0]
+        if len(args) > 1:
+            m = float(args[1])
+        else:
+            m = float(kwargs.get("m", 3.0))
+        if len(args) > 2:
+            C = float(args[2])
+        else:
+            C = float(kwargs.get("C", kwargs.get("c", 1.0)))
+        mean_stress = float(args[3]) if len(args) > 3 else float(kwargs.get("mean_stress", 0.0))
+        ultimate = float(args[4]) if len(args) > 4 else float(kwargs.get("ultimate", kwargs.get("su", 0.0)))
+    else:
+        raise TypeError("fatigue_summary() requires at least moments or (freqs, psd)")
+
+    duration = kwargs.get("duration", kwargs.get("t_dur", None))
+    if duration is not None:
+        duration = float(duration)
+
+    mean_correction = kwargs.get("mean_correction", "goodman")
+    yield_strength = kwargs.get("yield_strength", 0.0)
+    sigma_f_prime = kwargs.get("sigma_f_prime", 0.0)
+    walker_gamma = kwargs.get("walker_gamma", 0.5)
+
     p = spectral_bandwidth_params(moments)
+    nb = narrow_band_damage(moments, m, C, mean_stress=mean_stress, ultimate=ultimate)
+    dl = dirlik_damage(moments, m, C, mean_stress=mean_stress, ultimate=ultimate)
+    wl = wirsching_light_damage(moments, m, C, mean_stress=mean_stress, ultimate=ultimate)
+    tb = tovo_benasciutti_damage(moments, m, C, mean_stress=mean_stress, ultimate=ultimate)
+    sb = steinberg_damage(moments, m, C, duration=duration, mean_stress=mean_stress,
+                          ultimate=ultimate, mean_correction=mean_correction,
+                          yield_strength=yield_strength, sigma_f_prime=sigma_f_prime,
+                          walker_gamma=walker_gamma)
+    zb = zhao_baker_damage(moments, m, C, duration=duration, mean_stress=mean_stress,
+                           ultimate=ultimate, mean_correction=mean_correction,
+                           yield_strength=yield_strength, sigma_f_prime=sigma_f_prime,
+                           walker_gamma=walker_gamma)
+
+    if duration is not None:
+        for model in (nb, dl, wl, tb):
+            if "damage_rate" in model and "damage" not in model:
+                model["damage"] = model["damage_rate"] * duration
+                model["duration"] = duration
+
     return {
         "params": p,
-        "narrow_band": narrow_band_damage(moments, m, C, mean_stress,
-                                          ultimate),
-        "dirlik": dirlik_damage(moments, m, C, mean_stress, ultimate),
-        "wirsching_light": wirsching_light_damage(moments, m, C, mean_stress,
-                                                  ultimate),
-        "tovo_benasciutti": tovo_benasciutti_damage(moments, m, C,
-                                                    mean_stress, ultimate),
+        "narrow_band": nb,
+        "dirlik": dl,
+        "wirsching_light": wl,
+        "tovo_benasciutti": tb,
+        "steinberg": sb,
+        "zhao_baker": zb,
     }
+

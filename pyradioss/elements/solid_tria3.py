@@ -299,3 +299,160 @@ def forces(group, x, v, vr, dt, fint, mint):
         scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
 
     return dt_crit
+
+
+# ----------------------------------------------------------------------------
+# Implicit element matrices: tangent, kgeo, consistent_mass (M614 Component 1B)
+# ----------------------------------------------------------------------------
+# Fortran origin:
+#   engine/source/elements/solid_2d/tria/t3forc2.F (driver)
+#   engine/source/elements/solid_2d/tria/t3deri2.F (derivatives)
+#   starter/source/elements/solid_2d/tria/t3mass2.F (mass)
+# ----------------------------------------------------------------------------
+
+def _edofs(conn: np.ndarray) -> np.ndarray:
+    """(n, 6) global scalar DOF slot ids, node-major [uy, uz] * 3."""
+    n = len(conn)
+    if n == 0:
+        return np.zeros((0, 6), dtype=np.int64)
+    edofs = np.empty((n, 6), dtype=np.int64)
+    for i in range(3):
+        edofs[:, 2 * i + 0] = conn[:, i] * 6 + 1
+        edofs[:, 2 * i + 1] = conn[:, i] * 6 + 2
+    return edofs
+
+
+def tangent(group, x, epsp_incr=None):
+    """Element tangent stiffness for 3-node 2D CST triangle (n, 6, 6).
+
+    Fortran origin: engine/source/elements/solid_2d/tria/t3forc2.F,
+    t3deri2.F.
+
+    Returns (ke, edofs):
+      ke: (n, 6, 6) in-plane element stiffness matrix (uy, uz)
+      edofs: (n, 6)
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 6, 6), dtype=float), np.zeros((0, 6), dtype=np.int64)
+
+    xe = x[conn]
+    n2d = int(np.asarray(st.get("n2d", 2)).flat[0])
+    dndx, area, vol, rc = _geometry_tria(xe, n2d)
+
+    ke = np.zeros((n, 6, 6), dtype=np.float64)
+
+    # Constant B-matrix (n, 3, 6): [eps_yy, eps_zz, gamma_yz]
+    B = np.zeros((n, 3, 6), dtype=np.float64)
+    for i in range(3):
+        B[:, 0, 2 * i + 0] = dndx[:, i, 0]  # dN_i/dy
+        B[:, 1, 2 * i + 1] = dndx[:, i, 1]  # dN_i/dz
+        B[:, 2, 2 * i + 0] = dndx[:, i, 1]
+        B[:, 2, 2 * i + 1] = dndx[:, i, 0]
+
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            continue
+        E = float(getattr(mat, "E", 1.0e10) or 1.0e10)
+        nu = float(getattr(mat, "nu", 0.3) or 0.3)
+
+        denom = (1.0 + nu) * (1.0 - 2.0 * nu)
+        if abs(denom) < 1e-12:
+            denom = 1e-12
+        C11 = E * (1.0 - nu) / denom
+        C12 = E * nu / denom
+        G = E / (2.0 * (1.0 + nu))
+
+        D2d = np.array([
+            [C11, C12, 0.0],
+            [C12, C11, 0.0],
+            [0.0, 0.0, G],
+        ], dtype=np.float64)
+
+        Bs = B[sl]
+        DB = np.einsum("ab,nbj->naj", D2d, Bs)
+        ke[sl] += vol[sl, None, None] * np.einsum("nai,naj->nij", Bs, DB)
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def kgeo(group, x):
+    """Geometric (initial-stress) element stiffness for 2D triangle (n, 6, 6).
+
+    Fortran origin: engine/source/elements/solid_2d/tria/t3forc2.F.
+
+    Returns (ke, edofs): ke (n, 6, 6), edofs (n, 6).
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 6, 6), dtype=float), np.zeros((0, 6), dtype=np.int64)
+
+    xe = x[conn]
+    n2d = int(np.asarray(st.get("n2d", 2)).flat[0])
+    dndx, _, vol, _ = _geometry_tria(xe, n2d)
+
+    ke = np.zeros((n, 6, 6), dtype=np.float64)
+    sig = st["sig"]  # (n, 6)
+
+    S = np.empty((n, 2, 2), dtype=np.float64)
+    S[:, 0, 0] = sig[:, 1]
+    S[:, 1, 1] = sig[:, 2]
+    S[:, 0, 1] = S[:, 1, 0] = sig[:, 4]
+
+    g = vol[:, None, None] * np.einsum("nac,ncd,nbd->nab", dndx, S, dndx)
+
+    for a in range(3):
+        for b in range(3):
+            val = g[:, a, b]
+            ke[:, 2 * a + 0, 2 * b + 0] += val
+            ke[:, 2 * a + 1, 2 * b + 1] += val
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+_M_TRIA3_2D = np.array([
+    [2.0, 1.0, 1.0],
+    [1.0, 2.0, 1.0],
+    [1.0, 1.0, 2.0],
+], dtype=np.float64) / 12.0
+
+
+def consistent_mass(group, x=None):
+    """Analytical 2D triangle consistent mass matrix (6x6 in plane).
+
+    Fortran origin: starter/source/elements/solid_2d/tria/t3mass2.F.
+
+    Returns (me, edofs): me (n, 6, 6), edofs (n, 6).
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 6, 6), dtype=float), np.zeros((0, 6), dtype=np.int64)
+
+    m = st["mass"]
+    me = np.zeros((n, 6, 6), dtype=np.float64)
+    for a in range(3):
+        for b in range(3):
+            val = m * _M_TRIA3_2D[a, b]
+            me[:, 2 * a + 0, 2 * b + 0] = val
+            me[:, 2 * a + 1, 2 * b + 1] = val
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)
+

@@ -624,3 +624,230 @@ def forces(group, x: np.ndarray, v: np.ndarray, vr: np.ndarray, dt: float,
     scatter_add3(fint, flat_nodes, flat_forces)
 
     return dt_crit
+
+
+# ----------------------------------------------------------------------------
+# Implicit element matrices: tangent, kgeo, consistent_mass (M614 Component 1B)
+# ----------------------------------------------------------------------------
+# Fortran origin:
+#   engine/source/elements/thickshell/solidec/scforc3.F (driver)
+#   engine/source/elements/thickshell/solidec/scderi3.F (derivatives)
+#   engine/source/elements/thickshell/solidec/scfint3.F (internal forces)
+#   engine/source/elements/thickshell/solidec/schour3_1.F (hourglass stabilization)
+#   starter/source/elements/solid/solide/smass3.F (mass)
+#   engine/source/implicit/assem_s8.F (implicit assembly for 8-node thick shells)
+# ----------------------------------------------------------------------------
+
+def _edofs(conn: np.ndarray) -> np.ndarray:
+    """Global translation DOF indices for 8-node thick shell: 3 per node in node-major order."""
+    n = len(conn)
+    if n == 0:
+        return np.empty((0, 24), dtype=np.int64)
+    ix = np.arange(8)
+    edofs = np.empty((n, 24), dtype=np.int64)
+    for c in range(3):
+        edofs[:, 3 * ix + c] = conn * 6 + c
+    return edofs
+
+
+def tangent(group, x, epsp_incr=None):
+    """Element tangent stiffness for the 8-node thick shell group.
+
+    Fortran origin: engine/source/elements/thickshell/solidec/scforc3.F,
+    scderi3.F, scfint3.F, schour3_1.F; engine/source/implicit/assem_s8.F.
+
+    Returns (ke, edofs):
+      ke: (n, 24, 24) dense element tangents (translational DOFs)
+      edofs: (n, 24) global scalar DOF slot ids (node*6 + component)
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24)), np.empty((0, 24), dtype=np.int64)
+    xe = x[conn]  # (n, 8, 3)
+
+    dndx0_loc, vol0, R, thick, area = _geometry(xe)
+    vol = np.maximum(vol0, EM20)
+
+    # Global Cartesian shape gradients dndx
+    J0 = np.einsum("ia,nib->nab", _DN_DXI, xe)
+    detJ, invJ0 = det_inv33(J0)
+    dndx = np.einsum("ia,nab->nib", _DN_DXI, invJ0)  # (n, 8, 3)
+
+    # Strain-displacement operator B (n, 6, 24), Voigt: xx, yy, zz, xy, yz, zx
+    B = np.zeros((n, 6, 24), dtype=np.float64)
+    gx, gy, gz = dndx[:, :, 0], dndx[:, :, 1], dndx[:, :, 2]
+    ix = np.arange(8)
+    B[:, 0, 3 * ix + 0] = gx
+    B[:, 1, 3 * ix + 1] = gy
+    B[:, 2, 3 * ix + 2] = gz
+    B[:, 3, 3 * ix + 0] = gy
+    B[:, 3, 3 * ix + 1] = gx
+    B[:, 4, 3 * ix + 1] = gz
+    B[:, 4, 3 * ix + 2] = gy
+    B[:, 5, 3 * ix + 0] = gz
+    B[:, 5, 3 * ix + 2] = gx
+
+    ke = np.zeros((n, 24, 24), dtype=np.float64)
+    epi = np.zeros(n) if epsp_incr is None else epsp_incr
+
+    slices = st.get("slices", [])
+    zw_list = st.get("zw", [])
+    sig = st["sig"]
+    epsp = st["epsp"]
+
+    for isl, (sl, mat, prop) in enumerate(slices):
+        if getattr(mat, "law", 1) == 0:
+            continue
+        n_sl = int(np.sum(sl)) if isinstance(sl, np.ndarray) else (sl.stop - (sl.start or 0))
+        if n_sl == 0:
+            continue
+        pts, wts = zw_list[isl] if isl < len(zw_list) else ([0.0], [2.0])
+        nip = len(pts)
+        tot_wt = float(np.sum(wts))
+        safe_wt = tot_wt if tot_wt > 0.0 else 1.0
+
+        for k in range(nip):
+            wt_k = float(wts[k]) / safe_wt
+            sig_k = sig[sl, k] if sig.ndim == 3 else sig[sl]
+            epsp_k = epsp[sl, k] if epsp.ndim == 2 else epsp[sl]
+            epi_sl = epi[sl]
+            D = materials.solid_tangent(mat, sig_k, epsp_k, epi_sl, None)
+            Bs = B[sl]
+            DB = np.einsum("mij,mjk->mik", D, Bs)
+            ke[sl] += (vol[sl] * wt_k)[:, None, None] * np.einsum("mji,mjk->mik", Bs, DB)
+
+        # Hourglass physical stabilization stiffness (schour3_1.F)
+        E_mod = float(getattr(mat, "E", 2.1e11) or 2.1e11)
+        nu_mod = float(getattr(mat, "nu", 0.3) or 0.3)
+        G_mod = E_mod / (2.0 * (1.0 + nu_mod))
+        qa_hg = float(prop.params.get("qa", 1.1) or 1.1) if hasattr(prop, "params") else 1.1
+        L_ch = np.sqrt(np.maximum(area[sl], EM20))
+        Kh = qa_hg * 0.1 * G_mod * vol[sl] / (L_ch ** 2)
+
+        for a_idx in range(4):
+            h_vec = _H[a_idx]
+            H_mat = np.outer(h_vec, h_vec)
+            for c in range(3):
+                rows = (3 * ix + c)[:, None]
+                cols = (3 * ix + c)[None, :]
+                ke[sl, rows, cols] += Kh[:, None, None] * H_mat[None, :, :]
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def kgeo(group, x):
+    """Geometric (initial-stress) element stiffness for the 8-node thick shell.
+
+    Fortran origin: engine/source/elements/thickshell/solidec/scfint3.F,
+    engine/source/implicit/assem_s8.F.
+
+    Linearizes internal virtual work with Cauchy stress:
+      K_geo[a i, b j] = delta_ij int (gradN_a . sigma . gradN_b) dV
+
+    Returns (ke, edofs): ke (n, 24, 24), edofs (n, 24).
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24)), np.empty((0, 24), dtype=np.int64)
+    xe = x[conn]
+
+    J0 = np.einsum("ia,nib->nab", _DN_DXI, xe)
+    detJ, invJ0 = det_inv33(J0)
+    dndx = np.einsum("ia,nab->nib", _DN_DXI, invJ0)  # (n, 8, 3)
+    vol = np.maximum(8.0 * detJ, EM20)
+
+    sig = st["sig"]
+    if sig.ndim == 3:
+        s = np.mean(sig, axis=1)
+    else:
+        s = sig
+
+    S = np.empty((n, 3, 3), dtype=np.float64)
+    S[:, 0, 0], S[:, 1, 1], S[:, 2, 2] = s[:, 0], s[:, 1], s[:, 2]
+    S[:, 0, 1] = S[:, 1, 0] = s[:, 3]
+    S[:, 1, 2] = S[:, 2, 1] = s[:, 4]
+    S[:, 0, 2] = S[:, 2, 0] = s[:, 5]
+
+    # g_ab = V * sum_{c, d} dN_{a, c} S_{cd} dN_{b, d}  (n, 8, 8)
+    g = vol[:, None, None] * np.einsum("nac,ncd,nbd->nab", dndx, S, dndx)
+    ke = np.zeros((n, 24, 24), dtype=np.float64)
+    ix = np.arange(8)
+    for b in range(3):
+        rows = (3 * ix + b)[:, None]
+        cols = (3 * ix + b)[None, :]
+        ke[:, rows, cols] += g
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+_GAUSS3 = _XI / np.sqrt(3.0)
+
+# Analytical unit-cube consistent mass matrix: (1/216) * prod_{k=0..2} (2 if xi_a == xi_b else 1)
+_M_BRICK8 = np.zeros((8, 8), dtype=np.float64)
+for _a in range(8):
+    for _b in range(8):
+        _M_BRICK8[_a, _b] = np.prod(np.where(_XI[_a] == _XI[_b], 2.0, 1.0)) / 216.0
+
+
+def consistent_mass(group, x=None):
+    """Consistent element mass integral rho int N^T N dV of 8-node thick shell
+    by 2x2x2 Gauss integration.
+
+    Fortran origin: starter/source/elements/solid/solide/smass3.F,
+    engine/source/implicit/assem_s8.F.
+
+    Returns (me, edofs): me (n, 24, 24), edofs (n, 24).
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24)), np.empty((0, 24), dtype=np.int64)
+
+    vol0 = np.maximum(st.get("vol0", st.get("vol", np.ones(n))), EM20)
+    rho = st["mass"] / vol0
+
+    x_ref = x if x is not None else st.get("x0")
+    if x_ref is not None:
+        xe = x_ref[conn]
+        S = np.zeros((n, 8, 8), dtype=np.float64)
+        for g in range(8):
+            xi = _GAUSS3[g]
+            N = 0.125 * np.prod(1.0 + _XI * xi[None, :], axis=1)
+            dN = np.empty((8, 3))
+            for a in range(3):
+                other = [c for c in range(3) if c != a]
+                dN[:, a] = 0.125 * _XI[:, a] * np.prod(
+                    1.0 + _XI[:, other] * xi[None, other], axis=1)
+            J = np.einsum("ia,nib->nab", dN, xe)
+            detJ, _ = det_inv33(J)
+            S += detJ[:, None, None] * np.outer(N, N)[None, :, :]
+    else:
+        S = vol0[:, None, None] * _M_BRICK8[None, :, :]
+
+    me = np.zeros((n, 24, 24), dtype=np.float64)
+    MS = rho[:, None, None] * S
+    ix = np.arange(8)
+    for c in range(3):
+        rows = (3 * ix + c)[:, None]
+        cols = (3 * ix + c)[None, :]
+        me[:, rows, cols] = MS
+
+    dead = (st["off"] <= 0.0)
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)
+

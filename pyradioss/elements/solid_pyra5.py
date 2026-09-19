@@ -305,3 +305,170 @@ def forces(group, x, v, vr, dt, fint, mint):
             scatter_add3(fint, conn.reshape(-1), fe8.reshape(-1, 3))
 
     return dt_crit
+
+
+# ----------------------------------------------------------------------------
+# Implicit solver tangent, geometric stiffness, and consistent mass
+# ----------------------------------------------------------------------------
+
+def _build_pyra5_mass() -> np.ndarray:
+    """Degenerate 8-node brick mass condensation to 5-node pyramid (degenes8.F)."""
+    m1 = np.array([[2.0, 1.0], [1.0, 2.0]], dtype=np.float64) / 6.0
+    m3 = np.kron(np.kron(m1, m1), m1)  # (8, 8)
+    T = np.zeros((8, 5), dtype=np.float64)
+    T[0:4, 0:4] = np.eye(4)
+    T[4:8, 4] = 1.0
+    return T.T @ m3 @ T
+
+_M_PYRA5 = _build_pyra5_mass()
+
+
+def _edofs(conn: np.ndarray) -> np.ndarray:
+    """Global translation DOF indices for 5-node pyramid: 3 per node in node-major order (n, 15)."""
+    n = len(conn)
+    if n == 0:
+        return np.empty((0, 15), dtype=np.int64)
+    conn5 = conn[:, 0:5]
+    ix = np.arange(5)
+    edofs = np.empty((n, 15), dtype=np.int64)
+    edofs[:, 3 * ix + 0] = conn5 * 6 + 0
+    edofs[:, 3 * ix + 1] = conn5 * 6 + 1
+    edofs[:, 3 * ix + 2] = conn5 * 6 + 2
+    return edofs
+
+
+def tangent(group, x_geom=None, epsp_incr=None, x=None):
+    """Element tangent stiffness for 5-node pyramid (degenes8.F / sforc3.F).
+
+    Returns:
+        ke: (n, 15, 15) dense element tangent matrices (translations only)
+        edofs: (n, 15) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 15, 15), dtype=np.float64), np.zeros((0, 15), dtype=np.int64)
+
+    xe5 = x_geom[conn[:, 0:5]]  # (n, 5, 3)
+    dndx, vol, lc = _pyramid_geometry(xe5)
+    vol_safe = np.maximum(vol, EM20)
+
+    # Strain-displacement operator B: (n, 6, 15)
+    B = np.zeros((n, 6, 15), dtype=np.float64)
+    gx, gy, gz = dndx[:, :, 0], dndx[:, :, 1], dndx[:, :, 2]  # (n, 5)
+    ix = np.arange(5)
+    B[:, 0, 3 * ix + 0] = gx
+    B[:, 1, 3 * ix + 1] = gy
+    B[:, 2, 3 * ix + 2] = gz
+    B[:, 3, 3 * ix + 0] = gy
+    B[:, 3, 3 * ix + 1] = gx
+    B[:, 4, 3 * ix + 1] = gz
+    B[:, 4, 3 * ix + 2] = gy
+    B[:, 5, 3 * ix + 0] = gz
+    B[:, 5, 3 * ix + 2] = gx
+
+    ke = np.zeros((n, 15, 15), dtype=np.float64)
+    epi = np.zeros(n) if epsp_incr is None else epsp_incr
+
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            continue
+        D = materials.solid_tangent(mat, st["sig"][sl], st["epsp"][sl], epi[sl], None)
+        Bs = B[sl]
+        DB = np.einsum("mij,mjk->mik", D, Bs)
+        ke[sl] = vol_safe[sl][:, None, None] * np.einsum("mji,mjk->mik", Bs, DB)
+
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def kgeo(group, x_geom=None, x=None):
+    """Geometric (initial-stress) element stiffness for 5-node pyramid (degenes8.F).
+
+    Integrates grad(N)^T sigma grad(N) over element volume.
+    Returns:
+        ke: (n, 15, 15) dense geometric stiffness matrices
+        edofs: (n, 15) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 15, 15), dtype=np.float64), np.zeros((0, 15), dtype=np.int64)
+
+    xe5 = x_geom[conn[:, 0:5]]
+    dndx, vol, lc = _pyramid_geometry(xe5)
+    vol_safe = np.maximum(vol, EM20)
+
+    sig = st["sig"]
+    S = np.empty((n, 3, 3), dtype=np.float64)
+    S[:, 0, 0], S[:, 1, 1], S[:, 2, 2] = sig[:, 0], sig[:, 1], sig[:, 2]
+    S[:, 0, 1] = S[:, 1, 0] = sig[:, 3]
+    S[:, 1, 2] = S[:, 2, 1] = sig[:, 4]
+    S[:, 0, 2] = S[:, 2, 0] = sig[:, 5]
+
+    g = vol_safe[:, None, None] * np.einsum("nac,ncd,nbd->nab", dndx, S, dndx)
+
+    ke = np.zeros((n, 15, 15), dtype=np.float64)
+    ix = np.arange(5)
+    for b in range(3):
+        rows = (3 * ix + b)[:, None]
+        cols = (3 * ix + b)[None, :]
+        ke[:, rows, cols] += g
+
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+def consistent_mass(group, x_geom=None, x=None):
+    """Consistent element mass matrix for 5-node pyramid (degenes8.F):
+    M = mass * (M_pyra5 (x) I3), where M_pyra5 is the degenerate brick condensation.
+
+    Returns:
+        me: (n, 15, 15) dense consistent mass matrices
+        edofs: (n, 15) global scalar translation DOF indices
+    """
+    if x_geom is None:
+        x_geom = x
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 15, 15), dtype=np.float64), np.zeros((0, 15), dtype=np.int64)
+
+    mass = st["mass"]  # (n,)
+    me = np.zeros((n, 15, 15), dtype=np.float64)
+    for i in range(5):
+        for j in range(5):
+            mij = _M_PYRA5[i, j]
+            for c in range(3):
+                me[:, 3 * i + c, 3 * j + c] = mass * mij
+
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)

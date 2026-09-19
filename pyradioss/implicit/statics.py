@@ -203,6 +203,71 @@ from ..engine.kinematics import LoadsAndConstraints
 from .assembly import assemble
 from .dofmap import DofMap
 from .linsolve import LinearSolver
+from .bfgs import BFGSSolver
+from .linesearch import LineSearch
+from .convergence import ConvergenceChecker, crit_ite
+
+
+def _apply_autos(K, R=None, mode=1, tol_pivot=1e-10):
+    """Automatic single point constraint (/IMPL/AUTOS).
+    Port of Fortran UPD_ASPC / AUTSPC (bc_imp0.F:2160-2230).
+    Identifies DOFs with zero or near-zero diagonal stiffness (unconstrained
+    rotational or rigid-body modes) and constrains them with a stabilization
+    penalty to prevent singular matrix errors.
+    """
+    import scipy.sparse as sp
+    diag = np.asarray(K.diagonal(), dtype=float)
+    max_diag = float(np.max(np.abs(diag))) if diag.size > 0 else 1.0
+    if max_diag < 1e-30:
+        max_diag = 1.0
+    thresh = tol_pivot * max_diag
+    zero_dofs = np.where(np.abs(diag) <= thresh)[0]
+    if len(zero_dofs) > 0:
+        diag_fix = np.zeros(K.shape[0], dtype=float)
+        diag_fix[zero_dofs] = max_diag
+        K = K + sp.diags(diag_fix, format="csr")
+        if R is not None:
+            R = np.asarray(R, dtype=float).copy()
+            if len(zero_dofs) <= len(R):
+                R[zero_dofs] = 0.0
+    return K, R
+
+
+def _apply_qstat(K, model, dof, mode=1, dt=1.0):
+    """Quasi-static damping/mass regularization (/IMPL/QSTAT).
+    Port of Fortran QSTAT_INI / QSTAT_IT (imp_dyna.F:546-678).
+    Regularizes near-singular stiffness states by adding diagonal
+    inertia / damping terms M / (beta * dt^2) or proportional stabilization.
+    """
+    import scipy.sparse as sp
+    dt_eff = max(float(dt), 1e-6)
+    bdt = 4.0 / (dt_eff * dt_eff)
+
+    n = model.numnod
+    diag = np.asarray(K.diagonal(), dtype=float)
+    k_scale = float(np.max(np.abs(diag))) if diag.size > 0 else 1.0
+    if k_scale < 1e-30:
+        k_scale = 1.0
+
+    has_mass = hasattr(model, "mass") and model.mass is not None and np.any(model.mass > 0)
+    if has_mass:
+        mass = np.where((model.mass >= 1e29) | (model.mass < 0), 0.0, model.mass)
+        M = np.zeros(dof.ndof, dtype=float)
+        node = np.arange(n)
+        for c in range(3):
+            e = dof.eq[node * 6 + c]
+            act = e >= 0
+            M[e[act]] = mass[act]
+            if hasattr(model, "inertia") and model.inertia is not None:
+                e_r = dof.eq[node * 6 + 3 + c]
+                act_r = e_r >= 0
+                M[e_r[act_r]] = model.inertia[act_r]
+        qs_diag = M * bdt * float(mode)
+    else:
+        qs_diag = np.full(K.shape[0], 1e-4 * k_scale * float(mode), dtype=float)
+
+    return K + sp.diags(qs_diag, format="csr")
+
 
 
 class StepControl:
@@ -634,6 +699,52 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
         _final_summary(model, result, dof, log)
         return model
 
+    if getattr(ip, "impl_sprb", False):
+        if hasattr(model, "v") and model.v is not None:
+            model.v.fill(0.0)
+        if hasattr(model, "vr") and model.vr is not None:
+            model.vr.fill(0.0)
+
+    if getattr(ip, "impl_line", False):
+        log.info(" /IMPL/LINE . . . . . . . . . . . . . : LINEAR STATIC DIRECT SOLVE (SINGLE STEP)")
+        _reduce = lambda v: (constr.reduce_vector(v) if constr is not None else v)
+        fext = np.zeros((n, 3))
+        if not getattr(ip, "impl_sprb", False):
+            loads.external_forces(lam_end, fext, x_ref)
+        fext_eq = _reduce(dof.gather_residual(fext, np.zeros((n, 3))))
+
+        K = assemble(model, dof, x_ref, None, kgeo=False)
+        if getattr(ip, "impl_autos", 0) > 0:
+            K, fext_eq = _apply_autos(K, fext_eq, getattr(ip, "impl_autos", 1))
+        if getattr(ip, "impl_qstat", 0) > 0:
+            K = _apply_qstat(K, model, dof, getattr(ip, "impl_qstat", 1), lam_end)
+
+        if constr is not None:
+            K_red = constr.reduce_matrix(K)
+            u_red = solver.solve(K_red, fext_eq)
+            u_eq = constr.expand(u_red)
+        else:
+            u_eq = solver.solve(K, fext_eq)
+
+        u, ur = dof.scatter_solution(u_eq)
+        for idx, d, fct, scale in imposed:
+            val = scale * fct.eval(lam_end)
+            if d < 3:
+                u[idx, d] = val
+            else:
+                ur[idx, d - 3] = val
+
+        model.x = model.x + u
+        _internal_forces(model, x_ref, u, ur, committed, nlgeom=False)
+
+        inc = IncrementResult(load_factor=lam_end, converged=True, iterations=1)
+        inc.residuals = [0.0]
+        result.increments.append(inc)
+        result.converged = True
+        model.implicit_result = result
+        _final_summary(model, result, dof, log)
+        return model
+
     # automatic increment control (M11, imp_dt.F): cut-and-retry on a failed
     # increment, grow back toward the /IMPL/DTINI size on easy ones
     ctrl = StepControl(ip, dlam, log, what="LOAD INCREMENT")
@@ -975,7 +1086,8 @@ def _solve_increment(model, controls, log, dof, loads, solver,
     # external force at this load factor (the loads machinery evaluates the
     # curves at t = lam — the load factor plays the role of the pseudo-time)
     fext = np.zeros((n, 3))
-    loads.external_forces(lam, fext, x_ref)
+    if not getattr(controls, "impl_sprb", False):
+        loads.external_forces(lam, fext, x_ref)
     fext_eq = _reduce(dof.gather_residual(fext, np.zeros((n, 3))))
     ref = max(np.linalg.norm(fext_eq), 1e-30)
 
@@ -1023,9 +1135,44 @@ def _solve_increment(model, controls, log, dof, loads, solver,
             loads.external_forces(lam, fx, model.x + ut)
         return fint, mint, _reduce(dof.gather_residual(fx + fint, mint))
 
+    # Initialize multi-criterion convergence checker (CRIT_ITE in nl_solv.F)
+    conv_checker = ConvergenceChecker(
+        tol=ip.impl_tol,
+        nitol=getattr(ip, "impl_nitol", 2),
+        n_tole=getattr(ip, "impl_tole", 1e-4),
+        n_tolf=getattr(ip, "impl_tolf", 1e-3),
+        n_tolu=getattr(ip, "impl_tolu", 1e-3),
+        tol_div=getattr(ip, "impl_tol_div", 1e4),
+        ndiver=getattr(ip, "impl_ndiver", 3),
+    )
+
+    # Initialize BFGS solver if enabled (imp_bfgs.F)
+    bfgs_active = bool(
+        getattr(controls, "impl_bfgs", False)
+        or getattr(controls, "impl_insolv", 0) in (2, 3, 5)
+    )
+    max_bfgs = getattr(controls, "impl_lbfgs", 10)
+    bfgs = BFGSSolver(max_bfgs=max_bfgs) if bfgs_active else None
+
+    # Initialize Line Search if enabled (nl_solv.F:LINE_S / LINE_S1)
+    ls_active = bool(getattr(controls, "impl_line_search", False))
+    line_searcher = (
+        LineSearch(
+            method=getattr(controls, "impl_iline_s", 3),
+            tol=getattr(controls, "impl_ls_tol", 0.5),
+            max_iter=getattr(controls, "impl_nls_lim", 4),
+        )
+        if ls_active
+        else None
+    )
+
     # first residual R = f_ext + f_int(u) (+ contact), reduced eqn space
     fint, mint, R = _residual(u, ur)
     rnorm = float(np.linalg.norm(R))
+    r0_norm = max(rnorm, 1e-30)
+    du_eq = np.zeros_like(R)
+    base_solve_fn = None
+
     for it in range(ip.impl_max_iter):
         inc.residuals.append(rnorm)
         inc.iterations = it + 1
@@ -1043,37 +1190,73 @@ def _solve_increment(model, controls, log, dof, loads, solver,
             # INITIAL out-of-balance (the latter carries the reaction scale of
             # a displacement-controlled increment, where the load is zero)
             ref = max(ref, rnorm)
+            r0_norm = max(rnorm, 1e-30)
 
-        # convergence: residual small relative to the load / reaction scale
+        # Multi-criterion convergence and divergence check (nl_solv.F:crit_ite)
+        du_norm = float(np.linalg.norm(du_eq)) if it > 0 else 0.0
+        unorm = float(np.linalg.norm(dof.gather_residual(u, ur)))
+        dE = float(np.dot(du_eq, R)) if (it > 0 and du_eq.size == R.size) else 0.0
+
+        status = conv_checker.check(
+            it=it,
+            du_norm=du_norm,
+            u_norm=unorm,
+            r_norm=rnorm,
+            r0_norm=r0_norm,
+            dE=dE,
+        )
+
+        if status.converged:
+            inc.converged = True
+            break
+
+        if status.diverged:
+            break
+
+        # Standard relative residual check (NITOL = 2 default / fallback)
         if rnorm <= ip.impl_tol * ref:
             inc.converged = True
             break
 
-        # tangent: plastic-strain increment of this step (solids, shell
-        # layers, trusses), used by the LAW2 consistent tangents; elastic
-        # groups ignore it
-        epsp_incr = _epsp_increments(model, epsp0)
-        # linearize where the residual lives: the committed frame for the
-        # small-strain path, the TRIAL configuration (with the geometric
-        # stiffness added) for the nonlinear-geometry path
-        x_tan = x_ref + u if nlgeom else x_ref
-        K = assemble(model, dof, x_tan, epsp_incr, kgeo=nlgeom)
-        if contacts:
-            # active-set gap tangent at the trial configuration (M12 —
-            # the IMP_INT_K assembly step)
-            from .contact import contact_tangent
-            K = K + contact_tangent(contacts, model.x + u, dof)
-        if lstiff:
-            # M13: follower-pressure load stiffness -d f_ext/d x at the
-            # trial configuration (imp_glob_k.F IMP_KPRES analogue — see
-            # followerload.py for the documented deviation)
-            K = K + pload_tangent(loads, model, lam, model.x + u, dof)
-        try:
+        # Linear solve: assemble K if not reusing BFGS base solve
+        need_assemble = (not bfgs_active) or (it == 0) or (base_solve_fn is None)
+        if need_assemble:
+            # tangent: plastic-strain increment of this step (solids, shell
+            # layers, trusses), used by the LAW2 consistent tangents; elastic
+            # groups ignore it
+            epsp_incr = _epsp_increments(model, epsp0)
+            # linearize where the residual lives: the committed frame for the
+            # small-strain path, the TRIAL configuration (with the geometric
+            # stiffness added) for the nonlinear-geometry path
+            x_tan = x_ref + u if nlgeom else x_ref
+            K = assemble(model, dof, x_tan, epsp_incr, kgeo=nlgeom)
+            if contacts:
+                # active-set gap tangent at the trial configuration (M12 —
+                # the IMP_INT_K assembly step)
+                from .contact import contact_tangent
+                K = K + contact_tangent(contacts, model.x + u, dof)
+            if lstiff:
+                # M13: follower-pressure load stiffness -d f_ext/d x at the
+                # trial configuration (imp_glob_k.F IMP_KPRES analogue — see
+                # followerload.py for the documented deviation)
+                K = K + pload_tangent(loads, model, lam, model.x + u, dof)
+            if getattr(controls, "impl_autos", 0) > 0:
+                K, _ = _apply_autos(K, R, getattr(controls, "impl_autos", 1))
+            if getattr(controls, "impl_qstat", 0) > 0:
+                K = _apply_qstat(K, model, dof, getattr(controls, "impl_qstat", 1), lam - lam_prev)
+
             if constr is not None:
-                du_eq = constr.expand(
-                    solver.solve(constr.reduce_matrix(K), R))
+                K_mat = constr.reduce_matrix(K)
+                base_solve_fn = lambda rhs, _k=K_mat: solver.solve(_k, rhs)
             else:
-                du_eq = solver.solve(K, R)
+                base_solve_fn = lambda rhs, _k=K: solver.solve(_k, rhs)
+
+        try:
+            if bfgs is not None and it > 0 and bfgs.num_updates > 0:
+                du_red = bfgs.solve(base_solve_fn, R)
+            else:
+                du_red = base_solve_fn(R)
+            du_eq = constr.expand(du_red) if constr is not None else du_red
         except (RuntimeError, ValueError):
             # an EXACTLY singular trial tangent (e.g. a perfectly-plastic
             # H = 0 state where a too-large increment spuriously yields
@@ -1083,36 +1266,56 @@ def _solve_increment(model, controls, log, dof, loads, solver,
             break
         du, dur = dof.scatter_solution(du_eq)
 
-        # ---- backtracking line search (M13 — the ILINE branch of
-        # imp_solv.F, IMCONV = -1): the FULL Newton step is accepted
-        # whenever it does not grow the residual norm, so every monotone
-        # (smooth) run is bit-identical to the plain Newton path. A step
-        # that GROWS the residual — the signature of the non-smooth
-        # assignment cycles a contact active set or a friction stick/slip
-        # boundary can fall into (a mixed stick-slip state with pairs
-        # parked exactly on the Coulomb cone cycled with period 2 before
-        # this) — is backtracked by halving, keeping the best trial.
-        alpha, best, alpha_last = 1.0, None, 1.0
-        for ls in range(4):
-            alpha_last = alpha
-            fint_t, mint_t, R_t = _residual(u + alpha * du,
-                                            ur + alpha * dur)
-            rn_t = float(np.linalg.norm(R_t))
-            if np.isfinite(rn_t) and (best is None or rn_t < best[0]):
+        # Line search & step update
+        R_prev = R.copy()
+        u_prev_red = constr.reduce_vector(dof.gather_residual(u, ur)) if constr is not None else dof.gather_residual(u, ur)
+
+        if line_searcher is not None:
+            de0_val = float(np.dot(du_red, R_prev)) if du_red.size == R_prev.size else rnorm
+            alpha, u, ur, fint, mint, R, n_ls = line_searcher.search(
+                _residual, u, ur, du, dur, R_prev, de0=de0_val
+            )
+            rnorm = float(np.linalg.norm(R))
+            if bfgs is not None:
+                bfgs.set_step_scale(alpha)
+        else:
+            # ---- backtracking line search (M13 — the ILINE branch of
+            # imp_solv.F, IMCONV = -1): the FULL Newton step is accepted
+            # whenever it does not grow the residual norm, so every monotone
+            # (smooth) run is bit-identical to the plain Newton path. A step
+            # that GROWS the residual — the signature of the non-smooth
+            # assignment cycles a contact active set or a friction stick/slip
+            # boundary can fall into (a mixed stick-slip state with pairs
+            # parked exactly on the Coulomb cone cycled with period 2 before
+            # this) — is backtracked by halving, keeping the best trial.
+            alpha, best, alpha_last = 1.0, None, 1.0
+            for ls in range(4):
+                alpha_last = alpha
+                fint_t, mint_t, R_t = _residual(u + alpha * du,
+                                                ur + alpha * dur)
+                rn_t = float(np.linalg.norm(R_t))
+                if np.isfinite(rn_t) and (best is None or rn_t < best[0]):
+                    best = (rn_t, alpha, fint_t, mint_t, R_t)
+                if rn_t <= rnorm or ls == 3:
+                    break
+                alpha *= 0.5
+            if best is None:
                 best = (rn_t, alpha, fint_t, mint_t, R_t)
-            if rn_t <= rnorm or ls == 3:
-                break
-            alpha *= 0.5
-        if best is None:
-            best = (rn_t, alpha, fint_t, mint_t, R_t)
-        rnorm, alpha, fint, mint, R = best
-        u = u + alpha * du
-        ur = ur + alpha * dur
-        if alpha != alpha_last:
-            # the element buffers must hold the ACCEPTED trial state: the
-            # kept trial was not the last one evaluated — re-evaluate there
-            # (a rare path: only when every backtrack failed to improve)
-            fint, mint, R = _residual(u, ur)
+            rnorm, alpha, fint, mint, R = best
+            u = u + alpha * du
+            ur = ur + alpha * dur
+            if alpha != alpha_last:
+                # the element buffers must hold the ACCEPTED trial state: the
+                # kept trial was not the last one evaluated — re-evaluate there
+                # (a rare path: only when every backtrack failed to improve)
+                fint, mint, R = _residual(u, ur)
+
+        # BFGS update: record displacement step s_k and gradient step y_k
+        if bfgs is not None:
+            u_curr_red = constr.reduce_vector(dof.gather_residual(u, ur)) if constr is not None else dof.gather_residual(u, ur)
+            s_k = u_curr_red - u_prev_red
+            y_k = R_prev - R
+            bfgs.add_update(s_k, y_k)
 
         # displacement convergence: negligible correction relative to the
         # accumulated increment (catches a converged step whose residual

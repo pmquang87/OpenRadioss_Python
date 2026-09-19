@@ -288,6 +288,103 @@ class EngineControls:
     impl_tol: float = 1.0e-6      # Newton residual tolerance (relative)
     impl_max_iter: int = 25       # Newton iteration cap per increment
     impl_linsolve: str = ""       # '', 'superlu', 'cholmod', 'mumps'
+    # -- Component 2 (M614): BFGS, Line Search, Multi-Criterion & Controls --
+    impl_line: bool = False       # /IMPL/LINE linear static direct solve
+    impl_bfgs: bool = False       # /IMPL/BFGS or /IMPL/LBFGS quasi-Newton
+    impl_lbfgs: int = 10          # L_BFGS max stored updates
+    impl_insolv: int = 0          # solver strategy (5 = BFGS, 2/3 = BFGS variants)
+    impl_line_search: bool = False# /IMPL/LSEAR line search active
+    impl_iline_s: int = 3         # ILINE_S (1: energy, 2: force, 3: auto)
+    impl_ls_tol: float = 0.5      # LS_TOL line search tolerance
+    impl_nls_lim: int = 4         # NLS_LIM max line search iterations
+    impl_nitol: int = 2           # NITOL convergence check (1, 2, 3, 12, 13, 23, 123)
+    impl_tole: float = 1e-4       # N_TOLE energy convergence tolerance
+    impl_tolf: float = 1e-3       # N_TOLF force convergence tolerance
+    impl_tolu: float = 1e-3       # N_TOLU displacement convergence tolerance
+    impl_tol_div: float = 1e4     # TOL_DIV divergence ratio threshold
+    impl_ndiver: int = 3          # NDIVER max consecutive divergence iterations
+    impl_qstat: int = 0           # /IMPL/QSTAT quasi-static regularization (0: off, 1+: on)
+    impl_autos: int = 1           # /IMPL/AUTOS automatic single point constraint (0: off, 1: on, 2: all)
+    impl_sprb: bool = False       # /IMPL/SPRB spring-back analysis
+    # -- Component 5 & 6 (M614): freimpl.F Full Port & Extended Fatigue --
+    impl_qstat_scal_dtq: float = 1.0
+    impl_qstat_irig_m: int = 0
+    impl_qstat_e_ref: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+    impl_line_ilintf: int = 0
+    impl_line_iscau: int = 0
+    impl_solv: bool = False
+    impl_solv_isolv: int = 0
+    impl_solv_iprec: int = 0
+    impl_solv_l_lim: int = 0
+    impl_solv_itol: int = 0
+    impl_solv_l_tol: float = 0.0
+    impl_solv_mumpsd: int = 0
+    impl_sbcs: bool = False
+    impl_sbcs_msg_lvl: int = 0
+    impl_sbcs_b_order: int = 0
+    impl_sbcs_b_mcore: int = 0
+    impl_mumps: bool = False
+    impl_mumps_m_msg: int = 0
+    impl_mumps_m_order: int = 0
+    impl_mumps_m_ocore: int = 0
+    impl_nonl: bool = False
+    impl_nonl_ikt: int = 0
+    impl_nonl_ipupd: int = 0
+    impl_nonl_smdisp: int = 0
+    impl_nonl_solvnfo: int = 0
+    impl_nonl_insolv: int = 0
+    impl_nonl_n_lim: int = 0
+    impl_nonl_nitol: int = 0
+    impl_nonl_n_tol: float = 0.0
+    impl_nonl_n_tole: float = 0.0
+    impl_nonl_n_tolf: float = 0.0
+    impl_nonl_n_tolu: float = 0.0
+    impl_ncycl_stop: int = 0
+    impl_rref: int = 1
+    impl_rref_irefi: int = 0
+    impl_rref_rf_min: float = 0.0
+    impl_rref_rf_max: float = 0.0
+    impl_diver: bool = False
+    impl_gstif: bool = False
+    impl_gstif_ikg: int = 1
+    impl_pstif: bool = False
+    impl_pstif_ikpres: int = 1
+    impl_shpproj_ikproj: int = 0
+    impl_sprin_isprn: int = 1
+    impl_monvo_impmv: int = 1
+    impl_contr: bool = False
+    impl_contr_dt_stop: Tuple[float, float] = (0.0, 0.0)
+    impl_contr_dt_params: Dict[str, Any] = field(default_factory=dict)
+    impl_contr_kz_tol: float = 0.0
+    impl_contr_sk_int: float = 0.0
+    impl_print: bool = False
+    impl_print_line: int = 0
+    impl_print_nonl: int = 0
+    impl_print_stif_tol: float = 0.0
+    impl_print_stif_nc: int = 0
+    impl_print_stif_it: int = 0
+    impl_check: int = 0
+    impl_fatig_steinberg: bool = False
+    impl_fatig_zhao_baker: bool = False
+    impl_fatig_mean_method: str = ""
+    impl_fatig_mean_ult: float = 0.0
+    impl_fatig_mean_yield: float = 0.0
+    impl_fatig_mean_sigf: float = 0.0
+    impl_fatig_mean_gamma: float = 0.5
+    impl_fatig_en: bool = False
+    impl_fatig_en_e: float = 0.0
+    impl_fatig_en_sigf: float = 0.0
+    impl_fatig_en_b: float = 0.0
+    impl_fatig_en_epsf: float = 0.0
+    impl_fatig_en_c: float = 0.0
+    impl_fatig_en_kp: float = 0.0
+    impl_fatig_en_np: float = 0.0
+    impl_fatig_notch: bool = False
+    impl_fatig_notch_method: str = ""
+    impl_fatig_notch_kt: float = 1.0
+    impl_fatig_notch_e: float = 0.0
+    impl_fatig_notch_kp: float = 0.0
+    impl_fatig_notch_np: float = 0.0
     # -- M9 nonlinear geometry (/IMPL/NONLIN) and arc-length (/IMPL/ARCL) --
     impl_nlgeom: bool = False     # updated-Lagrangian frame + K_geo tangent
     impl_arc: bool = False        # Crisfield arc-length continuation
@@ -302,10 +399,13 @@ class EngineControls:
     # gamma and beta read directly, in that order: DY_G = NM_A,
     # DY_B = NM_B). With /IMPL/DYNA the /RUN "time" is PHYSICAL time again
     # and /IMPL/DTINI the physical time step.
-    impl_dyna: int = 0            # 0 = static, 1 = HHT-alpha, 2 = Newmark
+    impl_dyna: int = 0            # 0 = static, 1 = HHT-alpha, 2 = Newmark, 3 = Generalized-alpha
     impl_dyna_alpha: float = 0.0  # HHT alpha (0 = trapezoidal; -1/3 <= a <= 0)
+    impl_dyna_alpha_m: float = 0.0 # Generalized-alpha alpha_m in [0, 1)
+    impl_dyna_alpha_f: float = 0.0 # Generalized-alpha alpha_f in [0, 1)
     impl_dyna_gamma: float = 0.5  # Newmark gamma (/IMPL/DYNA/2 field 1)
     impl_dyna_beta: float = 0.25  # Newmark beta  (/IMPL/DYNA/2 field 2)
+    impl_ikt: int = 1             # Tangent policy: 1=KTANG, 2=KTFUL, 4=KTCON
     # -- M11 Rayleigh damping in the implicit system (/IMPL/DYNA/DAMP,
     # freimpl.F IDY_DAMP: card reads DAMPA_IMP then DAMPB_IMP). The damping
     # matrix is C = a*M + b*K with M the lumped mass and K the tangent at
