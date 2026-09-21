@@ -83,14 +83,16 @@ def test_bug_eng_02_mass_scaling_rbody_slave_stiffness_and_cst_update():
     inv_mass = 1.0 / mass_eff
     inv_inertia = 1.0 / model.inertia
 
-    # Target dt = 0.1 / 1.0 = 0.1 -> m_req = K * dt^2 / 2 = 1000 * 0.01 / 2 = 5.0
-    # rb.M is 2.0 -> dm = 3.0 added to rb.M and master node
+    # Target dt = 0.1 / 1.0 = 0.1 -> m_req = 1.00001 * K * dt^2 / 2
+    # = 1.00001 * 1000 * 0.01 / 2 = 5.00005 (Fortran dtnoda.F uses 1.00001 factor)
+    # rb.M is 2.0 -> dm = 3.00005 added to rb.M and master node
     dt = noda.apply(mass_eff, inv_mass, model.v, t=0.0,
                     inertia=model.inertia, inv_inertia=inv_inertia)
 
-    assert rb.M == pytest.approx(5.0, rel=1e-12)
-    assert model.mass[0] == pytest.approx(4.0, rel=1e-12)  # 1.0 + 3.0
-    assert noda.mass_added == pytest.approx(3.0, rel=1e-12)
+    # 1.00001 safety factor from dtnoda.F matches reference Fortran (added M613)
+    assert rb.M == pytest.approx(5.00005, rel=1e-5)
+    assert model.mass[0] == pytest.approx(4.00005, rel=1e-5)  # 1.0 + 3.00005
+    assert noda.mass_added == pytest.approx(3.00005, rel=1e-5)
     # Check that rb.J0 was also updated
     assert rb.J0[0, 0] > 2.0
 

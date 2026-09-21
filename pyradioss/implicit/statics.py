@@ -228,8 +228,10 @@ def _apply_autos(K, R=None, mode=1, tol_pivot=1e-10):
         K = K + sp.diags(diag_fix, format="csr")
         if R is not None:
             R = np.asarray(R, dtype=float).copy()
-            if len(zero_dofs) <= len(R):
-                R[zero_dofs] = 0.0
+            # Filter zero_dofs to only those within bounds of R
+            valid_dofs = zero_dofs[zero_dofs < len(R)]
+            if len(valid_dofs) > 0:
+                R[valid_dofs] = 0.0
     return K, R
 
 

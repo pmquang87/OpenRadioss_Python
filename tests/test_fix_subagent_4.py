@@ -176,7 +176,7 @@ def test_dynamics_solver_exception_handling():
     a = np.zeros((2, 3))
     ar = np.zeros((2, 3))
 
-    inc, u, ur, fint, mint, fext, fd = _solve_step(
+    inc, u, ur, fint, mint, fext, fd, *_cached = _solve_step(
         model, ip, dof, DummyLoads(), FailingSolver(), committed, x_ref, imposed,
         t_old=0.0, t_new=0.01, dt=0.01, alpha=0.0, gamma=0.5, beta=0.25,
         M_eq=np.ones(dof.ndof), v=v, vr=vr, a=a, ar=ar,

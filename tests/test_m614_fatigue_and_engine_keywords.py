@@ -14,6 +14,8 @@ import math
 import numpy as np
 import pytest
 
+from pyradioss.common.npcompat import trapezoid as np_trapezoid
+
 from pyradioss.implicit.spectral_fatigue import (
     # Mean stress
     goodman_correction,
@@ -192,7 +194,7 @@ class TestZhaoBakerModel:
         sigma = 10.0
         s_vals = np.linspace(0.001, 100.0, 5000)
         pdf_vals = zhao_baker_range_pdf(s_vals, sigma, alpha2)
-        integral = np.trapezoid(pdf_vals, s_vals)
+        integral = np_trapezoid(pdf_vals, s_vals)
         assert pytest.approx(integral, rel=1e-3) == 1.0
 
     def test_zhao_baker_in_fatigue_summary(self):
