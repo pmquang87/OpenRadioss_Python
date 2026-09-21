@@ -321,6 +321,16 @@ def build_law38(rec: Any) -> Material:
         "unload_curve": p.get("unload_curve") or getattr(rec, "unload_curve", None),
     }
 
+    for k in (
+        "yield_curves", "curves", "rates", "edots", "alphas", "fun_temp", "f_temp",
+        "viscoplastic", "model_type", "sigy0", "sigy", "yield_stress", "h0",
+        "tref", "na", "yield_table", "fct_id_yield",
+    ):
+        if k in p:
+            params[k] = p[k]
+        elif hasattr(rec, k):
+            params[k] = getattr(rec, k)
+
     return Material(id=mat_id, law=38, rho0=rho0, title=title, params=params, law_name="LAW38")
 
 
@@ -440,6 +450,230 @@ def sound_speed(mat: Material, rho: Optional[Union[float, np.ndarray]] = None,
 
 
 # ----------------------------------------------------------------------------
+# Tabulated Viscoplastic Yield & Radial Return Mapping
+# ----------------------------------------------------------------------------
+
+def calc_yield_stress(
+    mat: Any,
+    eps_p: Union[float, np.ndarray],
+    eps_p_dot: Union[float, np.ndarray] = 0.0,
+    temp: Union[float, np.ndarray] = 0.0,
+) -> Tuple[Union[float, np.ndarray], Union[float, np.ndarray]]:
+    """Compute tabulated viscoplastic yield stress Y(eps_p, eps_p_dot, T) and hardening slope H = dY/deps_p.
+
+    Parameters:
+      mat : Material or dict containing yield curves, rates, and parameters.
+      eps_p : Equivalent plastic strain.
+      eps_p_dot : Equivalent plastic strain rate.
+      temp : Temperature.
+
+    Returns:
+      (sigma_y, H) : Yield stress and hardening modulus d(sigma_y)/d(eps_p).
+    """
+    p = mat.params if hasattr(mat, "params") else (mat if isinstance(mat, dict) else getattr(mat, "__dict__", {}))
+
+    is_scalar = np.isscalar(eps_p)
+    ep = np.atleast_1d(np.asarray(eps_p, dtype=float))
+    ep_dot = np.atleast_1d(np.asarray(eps_p_dot, dtype=float))
+    if len(ep_dot) == 1 and len(ep) > 1:
+        ep_dot = np.full_like(ep, ep_dot[0])
+    t_val = np.atleast_1d(np.asarray(temp, dtype=float))
+    if len(t_val) == 1 and len(ep) > 1:
+        t_val = np.full_like(ep, t_val[0])
+
+    curves = p.get("yield_curves", p.get("curves", getattr(mat, "yield_curves", None)))
+    rates = p.get("rates", p.get("edots", getattr(mat, "rates", None)))
+    alphas = p.get("alphas", getattr(mat, "alphas", None))
+    fun_temp = p.get("fun_temp", p.get("f_temp", getattr(mat, "fun_temp", None)))
+    exponas = float(p.get("exponas", 1.0))
+    exponbs = float(p.get("exponbs", 1.0))
+    sigy0 = float(p.get("sigy0", p.get("sigy", p.get("yield_stress", 100.0))))
+    h0 = float(p.get("h0", p.get("hardening_modulus", 0.0)))
+
+    n = len(ep)
+    y_out = np.zeros(n, dtype=float)
+    h_out = np.zeros(n, dtype=float)
+
+    if curves is not None and len(curves) > 0:
+        n_curves = len(curves)
+        r_arr = np.asarray(rates if rates is not None else [0.0] * n_curves, dtype=float)
+        a_arr = np.asarray(alphas if alphas is not None else [1.0] * n_curves, dtype=float)
+        if len(a_arr) < n_curves:
+            a_arr = np.pad(a_arr, (0, n_curves - len(a_arr)), constant_values=1.0)
+        if len(r_arr) < n_curves:
+            r_arr = np.pad(r_arr, (0, n_curves - len(r_arr)), constant_values=0.0)
+
+        if n_curves == 1:
+            # Single curve
+            for i in range(n):
+                y_val, dy_val = _eval_curve(curves[0], ep[i])
+                y_out[i] = a_arr[0] * float(y_val)
+                h_out[i] = a_arr[0] * float(dy_val)
+        else:
+            # Multi-curve strain-rate interpolation
+            sort_idx = np.argsort(r_arr)
+            r_sorted = r_arr[sort_idx]
+            curves_sorted = [curves[idx] for idx in sort_idx]
+            a_sorted = a_arr[sort_idx]
+
+            for i in range(n):
+                r_i = max(0.0, float(ep_dot[i]))
+                if r_i <= r_sorted[0]:
+                    y_val, dy_val = _eval_curve(curves_sorted[0], ep[i])
+                    y_out[i] = a_sorted[0] * float(y_val)
+                    h_out[i] = a_sorted[0] * float(dy_val)
+                elif r_i >= r_sorted[-1]:
+                    y_val, dy_val = _eval_curve(curves_sorted[-1], ep[i])
+                    y_out[i] = a_sorted[-1] * float(y_val)
+                    h_out[i] = a_sorted[-1] * float(dy_val)
+                else:
+                    k = int(np.searchsorted(r_sorted, r_i, side="right"))
+                    k0 = k - 1
+                    k1 = k
+                    r0, r1 = r_sorted[k0], r_sorted[k1]
+                    ratio = (r_i - r0) / max(_TINY, r1 - r0)
+                    ratio = min(1.0, max(0.0, ratio))
+
+                    y0, dy0 = _eval_curve(curves_sorted[k0], ep[i])
+                    y1, dy1 = _eval_curve(curves_sorted[k1], ep[i])
+                    val0 = a_sorted[k0] * float(y0)
+                    val1 = a_sorted[k1] * float(y1)
+                    slope0 = a_sorted[k0] * float(dy0)
+                    slope1 = a_sorted[k1] * float(dy1)
+
+                    if exponas != 1.0 or exponbs != 1.0:
+                        pui = (ratio ** exponas) if ratio > 0.0 else 0.0
+                        if pui < 1.0:
+                            interp_y = val1 + (val0 - val1) * ((1.0 - pui) ** exponbs)
+                            interp_h = slope1 + (slope0 - slope1) * ((1.0 - pui) ** exponbs)
+                        else:
+                            interp_y = val1
+                            interp_h = slope1
+                    else:
+                        interp_y = val0 + ratio * (val1 - val0)
+                        interp_h = slope0 + ratio * (slope1 - slope0)
+
+                    y_out[i] = interp_y
+                    h_out[i] = interp_h
+    else:
+        # Fallback linear hardening
+        y_out = sigy0 + h0 * ep
+        h_out.fill(h0)
+
+    # Temperature coupling
+    if fun_temp is not None:
+        for i in range(n):
+            fac_t, _ = _eval_curve(fun_temp, t_val[i])
+            fac_t = max(0.0, float(fac_t))
+            y_out[i] *= fac_t
+            h_out[i] *= fac_t
+    elif p.get("tref", 0.0) > 0.0 and p.get("na", 0.0) != 0.0:
+        tref = float(p["tref"])
+        na = float(p["na"])
+        for i in range(n):
+            if t_val[i] > 0.0:
+                fac_t = (t_val[i] / tref) ** na
+                y_out[i] *= fac_t
+                h_out[i] *= fac_t
+
+    y_out = np.maximum(y_out, 0.0)
+    if is_scalar:
+        return float(y_out[0]), float(h_out[0])
+    return y_out, h_out
+
+
+interpolate_yield_table = calc_yield_stress
+
+
+def radial_return_mapping(
+    mat: Any,
+    sig_trial: np.ndarray,
+    deps: np.ndarray,
+    epsp_old: Union[float, np.ndarray],
+    dt: float = 0.0,
+    temp: Union[float, np.ndarray] = 0.0,
+    tol: float = 1e-8,
+    max_iter: int = 25,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Radial return mapping algorithm for J2 tabulated viscoplasticity.
+
+    Solves the plastic consistency condition:
+        Phi(d_epsp) = q_trial - 3*G*d_epsp - Y(epsp_old + d_epsp, d_epsp/dt, T) = 0
+    via Newton-Raphson iteration.
+    """
+    p = mat.params if hasattr(mat, "params") else (mat if isinstance(mat, dict) else getattr(mat, "__dict__", {}))
+
+    is_1d = (sig_trial.ndim == 1)
+    sig_arr = np.atleast_2d(sig_trial).astype(float)
+    n = len(sig_arr)
+
+    epsp_arr = np.atleast_1d(epsp_old).astype(float)
+    if len(epsp_arr) == 1 and n > 1:
+        epsp_arr = np.full(n, epsp_arr[0], dtype=float)
+
+    t_arr = np.atleast_1d(temp).astype(float)
+    if len(t_arr) == 1 and n > 1:
+        t_arr = np.full(n, t_arr[0], dtype=float)
+
+    e0 = float(p.get("e0", p.get("e", 1000.0)))
+    nu = float(p.get("nu", p.get("nu_t", 0.3)))
+    nu = max(0.0, min(0.49999, nu))
+    g = e0 / (2.0 * (1.0 + nu))
+
+    sig_out = np.empty_like(sig_arr)
+    epsp_out = epsp_arr.copy()
+    q_out = np.empty(n, dtype=float)
+
+    for i in range(n):
+        s_i = sig_arr[i].copy()
+        p_mean = (s_i[0] + s_i[1] + s_i[2]) / 3.0
+        s_dev = s_i.copy()
+        s_dev[:3] -= p_mean
+
+        j2 = 0.5 * (s_dev[0]**2 + s_dev[1]**2 + s_dev[2]**2) + (s_dev[3]**2 + s_dev[4]**2 + s_dev[5]**2)
+        q_tr = math.sqrt(max(0.0, 3.0 * j2))
+
+        ep0 = epsp_arr[i]
+        t_i = t_arr[i]
+
+        y0, h0 = calc_yield_stress(mat, ep0, eps_p_dot=0.0, temp=t_i)
+        f_yield = q_tr - y0
+
+        if f_yield <= 1e-10 * (q_tr + 1.0) or q_tr < _EM20:
+            sig_out[i] = s_i
+            q_out[i] = q_tr
+        else:
+            d_ep = max(0.0, f_yield / (3.0 * g + max(0.0, h0)))
+            for _ in range(max_iter):
+                r_dot = (d_ep / max(dt, 1e-20)) if dt > 0.0 else 0.0
+                y_val, h_val = calc_yield_stress(mat, ep0 + d_ep, eps_p_dot=r_dot, temp=t_i)
+                res = q_tr - 3.0 * g * d_ep - y_val
+                if abs(res) <= tol * (q_tr + 1.0):
+                    break
+                denom = 3.0 * g + max(0.0, h_val)
+                d_ep = max(0.0, d_ep + res / denom)
+
+            d_ep = max(0.0, d_ep)
+            r_dot = (d_ep / max(dt, 1e-20)) if dt > 0.0 else 0.0
+            y_final, _ = calc_yield_stress(mat, ep0 + d_ep, eps_p_dot=r_dot, temp=t_i)
+            scale = max(0.0, y_final) / max(q_tr, _EM20)
+
+            s_dev_scaled = s_dev * scale
+            s_final = s_dev_scaled
+            s_final[:3] += p_mean
+
+            sig_out[i] = s_final
+            epsp_out[i] = ep0 + d_ep
+            q_out[i] = y_final
+
+    res_sig = sig_out[0] if is_1d else sig_out
+    res_ep = epsp_out[0] if is_1d else epsp_out
+    res_q = q_out[0] if is_1d else q_out
+
+    return res_sig, res_ep, res_q
+
+
+# ----------------------------------------------------------------------------
 # Constitutive Stress Update (sigeps38.F)
 # ----------------------------------------------------------------------------
 
@@ -477,6 +711,57 @@ def solid_update(
         return empty6, (epsp if epsp is not None else empty1), empty1
 
     p = mat.params
+
+    is_viscoplastic = bool(
+        p.get("viscoplastic", False)
+        or p.get("model_type") == "viscoplastic"
+        or "yield_curves" in p
+        or "yield_table" in p
+        or "fct_id_yield" in p
+        or getattr(mat, "is_viscoplastic", False)
+        or hasattr(mat, "yield_curves")
+    )
+    if is_viscoplastic:
+        is_1d = (sig.ndim == 1)
+        sig_arr = np.atleast_2d(sig).astype(float)
+        deps_arr = np.atleast_2d(deps).astype(float)
+        nel = len(sig_arr)
+
+        rho0 = mat.rho0 if mat.rho0 > 0.0 else p.get("rho0", 1.0)
+        e0_val = float(p.get("e0", p.get("e", 1000.0)))
+        nu_val = float(p.get("nu", p.get("nu_t", 0.3)))
+        nu_val = max(0.0, min(0.49999, nu_val))
+        g_val = e0_val / (2.0 * (1.0 + nu_val))
+        k_val = e0_val / (3.0 * (1.0 - 2.0 * nu_val))
+
+        tr_deps = deps_arr[:, 0] + deps_arr[:, 1] + deps_arr[:, 2]
+        deps_dev = deps_arr.copy()
+        deps_dev[:, :3] -= (tr_deps[:, None] / 3.0)
+
+        p_old = (sig_arr[:, 0] + sig_arr[:, 1] + sig_arr[:, 2]) / 3.0
+        p_trial = p_old + k_val * tr_deps
+        s_old = sig_arr.copy()
+        s_old[:, :3] -= p_old[:, None]
+
+        s_trial = np.empty_like(sig_arr)
+        s_trial[:, :3] = s_old[:, :3] + 2.0 * g_val * deps_dev[:, :3]
+        s_trial[:, 3:] = s_old[:, 3:] + g_val * deps_arr[:, 3:]
+
+        sig_trial = s_trial.copy()
+        sig_trial[:, :3] += p_trial[:, None]
+
+        epsp_in = epsp if epsp is not None else np.zeros(nel, dtype=sig.dtype)
+        temp_val = extra.get("temp", 0.0) if (extra is not None and isinstance(extra, dict)) else 0.0
+
+        sig_out, epsp_out, _ = radial_return_mapping(
+            mat, sig_trial, deps_arr, epsp_in, dt=dt, temp=temp_val
+        )
+        c_sound = np.full(nel, math.sqrt((k_val + _FOUR_OVER_3 * g_val) / rho0), dtype=sig.dtype)
+
+        res_sig = sig_out[0] if is_1d else sig_out
+        res_ep = epsp_out[0] if is_1d else epsp_out
+        res_c = c_sound[0] if is_1d else c_sound
+        return res_sig, res_ep, res_c
 
     # 1. Unpack material parameters
     rho0 = mat.rho0 if mat.rho0 > 0.0 else p.get("rho0", 1.0)
@@ -1358,10 +1643,19 @@ def consistent_solid_tangent(
             deps = epsp_incr
 
     n = None
-    for arr in (deps, sig, eps, epsp, epsp_incr):
-        if arr is not None and isinstance(arr, np.ndarray) and arr.ndim >= 1:
-            n = arr.shape[0]
-            break
+    for arr in (deps, sig, eps):
+        if arr is not None and isinstance(arr, np.ndarray):
+            if arr.ndim >= 2:
+                n = arr.shape[0]
+                break
+            elif arr.ndim == 1 and arr.shape[0] == 6:
+                n = 1
+                break
+    if n is None:
+        for arr in (epsp, epsp_incr):
+            if arr is not None and isinstance(arr, np.ndarray) and arr.ndim >= 1:
+                n = arr.shape[0]
+                break
 
     if n is None and extra is not None:
         for k in ("uv38", "eps38", "off38", "rho"):
