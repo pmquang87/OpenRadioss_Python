@@ -3169,7 +3169,16 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
     if getattr(mat, "law", None) in (73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL") or getattr(mat, "law_name", None) in ("73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL"):
         raise NotImplementedError("LAW73 (/MAT/LAW73 /MAT/HILL_THERM) is implemented for shell elements only.")
     if getattr(mat, "law", None) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
-        raise NotImplementedError("LAW57 (/MAT/BARLAT3) is implemented for shell elements only.")
+        if not getattr(mat, "is_3d", False) and not (isinstance(mat, dict) and mat.get("is_3d")):
+            raise NotImplementedError("LAW57 (/MAT/BARLAT3) is implemented for shell elements only.")
+        sign, epsp_out, c = law57_barlat.solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra, return_sound_speed=True)
+        sig[:] = sign
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
     if getattr(mat, "law", None) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A"):
         raise NotImplementedError("LAW58 (/MAT/FABR_A) is implemented for shell elements only.")
     if getattr(mat, "law", None) in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG") or getattr(mat, "law_name", None) in ("15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG"):

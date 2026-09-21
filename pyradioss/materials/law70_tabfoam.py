@@ -300,6 +300,28 @@ def _tab2d(xg, rates, Y, x, r):
     return y0 + u * (y1 - y0)
 
 
+def _eval_curve_or_table(curve_spec, strain, rate=0.0, tab2d_fn=None):
+    """Evaluate stress magnitude from a curve, 2D table, or callable."""
+    if callable(curve_spec):
+        return curve_spec(strain)
+    if hasattr(curve_spec, "eval"):
+        return curve_spec.eval(strain)
+    if isinstance(curve_spec, (tuple, list)):
+        if len(curve_spec) == 2:
+            xg, yg = curve_spec
+            return np.interp(strain, xg, yg)
+        elif len(curve_spec) == 3:
+            xg, rates, y = curve_spec
+            fn = tab2d_fn or _tab2d
+            n = len(strain) if hasattr(strain, "__len__") else 1
+            if np.isscalar(rate):
+                r_arr = np.full(n, rate)
+            else:
+                r_arr = rate
+            return fn(xg, rates, y, strain, r_arr)
+    return np.asarray(strain, dtype=float)
+
+
 def _enorm(v):
     """Tensor norm of a Voigt STRAIN (engineering shears gamma):
     sqrt(e11^2+e22^2+e33^2 + 2*(e12^2+e23^2+e31^2)) with e1j =
@@ -463,69 +485,110 @@ def solid_update(mat, sig, deps, dt, extra=None):
     # ---- sound speed for the dt claim (P-wave modulus, current E) ----------
     c = np.sqrt(aa1 / mat.rho0)
 
-    # ---- spherical projection of the total-strain stress -------------------
-    signew = elastic_stress(aa1, aa2, g, eps)
-    svm_t = snorm(signew)
-    r_sc = yld / np.maximum(svm_t, _EM20)
-    signew *= r_sc[:, None]
+    # ---- Directional / orthotropic response (separate curves or uncoupled Poisson response)
+    # Fortran origin: sigeps70.F:460-465 with uncoupled Poisson AA2=0, or directional curves
+    dir_curves = (p.get("directional_curves") or p.get("directional_tables")
+                  or p.get("curves_dir") or p.get("curves_xyz"))
+    if dir_curves is None and p.get("directional", False):
+        if "curve_x" in p and "curve_y" in p and "curve_z" in p:
+            dir_curves = [p["curve_x"], p["curve_y"], p["curve_z"]]
+        elif "curves" in p and len(p["curves"]) >= 3:
+            dir_curves = p["curves"][:3]
 
-    if iflag == 0:
-        flip = ie_cst & (iload0 != iload)
-        iload = np.where(flip, iload0, iload)
-        uv[:, 0] = np.where(flip, eps0_entry, uv[:, 0])
-        uv[:, 1] = svm_t * r_sc
-    elif iflag in (1, 2):
-        m = iload == -1.0
-        r2 = yldmin / np.maximum(yldelas, _EM20)
-        if iflag == 1:                            # deviator only
-            pm = (signew[:, 0] + signew[:, 1] + signew[:, 2]) / 3.0
-            for k in range(3):
-                signew[:, k] = np.where(
-                    m, (signew[:, k] - pm) * r2 + pm, signew[:, k])
+    if dir_curves is not None and len(dir_curves) >= 3:
+        signew = elastic_stress(aa1, aa2, g, eps)
+        for k in range(3):
+            str_k = np.abs(eps[:, k])
+            yk = _eval_curve_or_table(dir_curves[k], str_k, rate=epsd, tab2d_fn=tab2d)
+            if abs(nu) < 1e-12:
+                # Uncoupled Poisson response: normal stresses along principal axes
+                signew[:, k] = np.sign(eps[:, k]) * yk
+            else:
+                s_trial_k = signew[:, k]
+                scale_k = yk / np.maximum(np.abs(s_trial_k), _EM20)
+                signew[:, k] = s_trial_k * scale_k
+        if abs(nu) < 1e-12:
             for k in range(3, 6):
-                signew[:, k] = np.where(m, signew[:, k] * r2,
-                                        signew[:, k])
-        else:                                     # whole tensor
-            signew = np.where(m[:, None], signew * r2[:, None], signew)
-    elif iflag in (3, 4):
-        m = (iload == -1.0) & (uv[:, 1] != 0.0)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            frac = np.where(uv[:, 1] > 0.0, uv[:, 7] / uv[:, 1], 0.0)
-        r2 = 1.0 - (1.0 - p["hys"]) * (1.0 - frac ** p["shape"])
-        if iflag == 3:                            # deviator only
-            pm = (signew[:, 0] + signew[:, 1] + signew[:, 2]) / 3.0
-            for k in range(3):
-                signew[:, k] = np.where(
-                    m, (signew[:, k] - pm) * r2 + pm, signew[:, k])
-            for k in range(3, 6):
-                signew[:, k] = np.where(m, signew[:, k] * r2,
-                                        signew[:, k])
-        else:                                     # whole tensor
-            signew = np.where(m[:, None], signew * r2[:, None], signew)
+                signew[:, k] = g * eps[:, k]
+        uv[:, 1] = snorm(signew)
+    else:
+        # ---- spherical projection of the total-strain stress -------------------
+        # Fortran origin: sigeps70.F:456-478 (spherical radial projection onto YLD)
+        signew = elastic_stress(aa1, aa2, g, eps)
+        svm_t = snorm(signew)
+        r_sc = yld / np.maximum(svm_t, _EM20)
+        signew *= r_sc[:, None]
+
+        if iflag == 0:
+            flip = ie_cst & (iload0 != iload)
+            iload = np.where(flip, iload0, iload)
+            uv[:, 0] = np.where(flip, eps0_entry, uv[:, 0])
+            uv[:, 1] = svm_t * r_sc
+        elif iflag in (1, 2):
+            m = iload == -1.0
+            r2 = yldmin / np.maximum(yldelas, _EM20)
+            if iflag == 1:                            # deviator only
+                pm = (signew[:, 0] + signew[:, 1] + signew[:, 2]) / 3.0
+                for k in range(3):
+                    signew[:, k] = np.where(
+                        m, (signew[:, k] - pm) * r2 + pm, signew[:, k])
+                for k in range(3, 6):
+                    signew[:, k] = np.where(m, signew[:, k] * r2,
+                                            signew[:, k])
+            else:                                     # whole tensor
+                signew = np.where(m[:, None], signew * r2[:, None], signew)
+        elif iflag in (3, 4):
+            m = (iload == -1.0) & (uv[:, 1] != 0.0)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                frac = np.where(uv[:, 1] > 0.0, uv[:, 7] / uv[:, 1], 0.0)
+            r2 = 1.0 - (1.0 - p["hys"]) * (1.0 - frac ** p["shape"])
+            if iflag == 3:                            # deviator only
+                pm = (signew[:, 0] + signew[:, 1] + signew[:, 2]) / 3.0
+                for k in range(3):
+                    signew[:, k] = np.where(
+                        m, (signew[:, k] - pm) * r2 + pm, signew[:, k])
+                for k in range(3, 6):
+                    signew[:, k] = np.where(m, signew[:, k] * r2,
+                                            signew[:, k])
+            else:                                     # whole tensor
+                signew = np.where(m[:, None], signew * r2[:, None], signew)
 
     uv[:, 3] = epst
     uv[:, 4] = iload
     uv[:, 5] = yld
     uv[:, 6] = epsd
 
-    # ---- Itens: tension scaling --------------------------------------------
+    # ---- Itens: tension scaling (optional EOS / tensile response) ----------
+    # Fortran origin: sigeps70.F:665-703 (tensile scaling with mu = 1 - rho/rho0)
     if p["itens"] > 0:
-        mu = 1.0 - extra["rho"] / mat.rho0
+        if "mu" in extra:
+            mu = extra["mu"]
+        else:
+            mu = 1.0 - extra["rho"] / mat.rho0
         alpha1 = np.ones(n)
         msk = mu > 0.0
         if np.any(msk):
-            fy = np.interp(mu[msk], p["tens_x"], p["tens_y"])
-            # FINTER extrapolates with the end slopes
-            tx, ty = p["tens_x"], p["tens_y"]
-            lo = mu[msk] < tx[0]
-            hi = mu[msk] > tx[-1]
-            if lo.any():
-                s0 = (ty[1] - ty[0]) / (tx[1] - tx[0])
-                fy = np.where(lo, ty[0] + s0 * (mu[msk] - tx[0]), fy)
-            if hi.any():
-                s1 = (ty[-1] - ty[-2]) / (tx[-1] - tx[-2])
-                fy = np.where(hi, ty[-1] + s1 * (mu[msk] - tx[-1]), fy)
-            alpha1[msk] = np.maximum(0.0, p["tens_scale"] * fy)
+            if "tens_x" in p and "tens_y" in p:
+                fy = np.interp(mu[msk], p["tens_x"], p["tens_y"])
+                # FINTER extrapolates with the end slopes
+                tx, ty = p["tens_x"], p["tens_y"]
+                lo = mu[msk] < tx[0]
+                hi = mu[msk] > tx[-1]
+                if lo.any():
+                    s0 = (ty[1] - ty[0]) / (tx[1] - tx[0])
+                    fy = np.where(lo, ty[0] + s0 * (mu[msk] - tx[0]), fy)
+                if hi.any():
+                    s1 = (ty[-1] - ty[-2]) / (tx[-1] - tx[-2])
+                    fy = np.where(hi, ty[-1] + s1 * (mu[msk] - tx[-1]), fy)
+                alpha1[msk] = np.maximum(0.0, p["tens_scale"] * fy)
+            elif "tens_func" in p and callable(p["tens_func"]):
+                alpha1[msk] = np.maximum(0.0, p["tens_scale"] * p["tens_func"](mu[msk]))
+            elif "eos" in p:
+                eos_fn = p["eos"]
+                if callable(eos_fn):
+                    alpha1[msk] = np.maximum(0.0, eos_fn(mu[msk]))
+                elif hasattr(eos_fn, "eval"):
+                    alpha1[msk] = np.maximum(0.0, eos_fn.eval(mu[msk]))
         signew *= alpha1[:, None]
         uv[:, 9] = alpha1
 
@@ -584,6 +647,62 @@ def consistent_solid_tangent(mat, extra=None):
     D[:, 4, 4] = g
     D[:, 5, 5] = g
     return D
+
+
+def solid_tangent(
+    mat_or_group=None,
+    sig=None,
+    deps=None,
+    dt=0.0,
+    extra=None,
+    **kwargs,
+) -> np.ndarray:
+    """(n, 6, 6) or (6, 6) consistent elastic/tangent stiffness tensor for LAW70 solids.
+
+    Conforms to the pyradioss material dispatcher convention.
+    - If extra contains uv70/eps70, evaluates (n, 6, 6) tangent using current evolving modulus.
+    - Otherwise returns (6, 6) analytical elastic tangent matrix based on E0 and nu.
+    """
+    mat = getattr(mat_or_group, "mat", mat_or_group)
+    if mat is None:
+        mat = kwargs.get("mat")
+    if extra is None:
+        extra = kwargs.get("extra")
+
+    p = getattr(mat, "params", {}) if mat is not None else {}
+    e0 = p.get("E0", p.get("E", 1.0))
+    nu = p.get("nu", 0.0)
+
+    if extra is not None and ("uv70" in extra or "eps70" in extra):
+        return consistent_solid_tangent(mat, extra)
+
+    denom = (1.0 + nu) * (1.0 - 2.0 * nu)
+    if abs(denom) > 1e-12:
+        aa1 = e0 * (1.0 - nu) / denom
+        aa2 = e0 * nu / denom
+        g = 0.5 * e0 / (1.0 + nu)
+    else:
+        aa1 = e0
+        aa2 = 0.0
+        g = 0.5 * e0
+
+    D = np.zeros((6, 6), dtype=float)
+    D[0, 0] = aa1
+    D[1, 1] = aa1
+    D[2, 2] = aa1
+    D[0, 1] = aa2
+    D[0, 2] = aa2
+    D[1, 0] = aa2
+    D[1, 2] = aa2
+    D[2, 0] = aa2
+    D[2, 1] = aa2
+    D[3, 3] = g
+    D[4, 4] = g
+    D[5, 5] = g
+    return D
+
+
+tangent = solid_tangent
 
 
 def _register():

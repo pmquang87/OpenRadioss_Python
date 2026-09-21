@@ -523,8 +523,8 @@ def test_consistent_tangent_vs_central_finite_differences():
 # ============================================================================
 
 def test_solids_rejection():
-    """Verify that solid elements are explicitly rejected with NotImplementedError."""
-    assert law57_barlat.LAW_DISPATCH_METADATA["solid"] is False
+    """Verify that solid elements are supported in metadata and solid_update_law57 rejects 0-arg calls."""
+    assert law57_barlat.LAW_DISPATCH_METADATA["solid"] is True
     assert law57_barlat.LAW_DISPATCH_METADATA["plane_stress"] is True
     assert law57_barlat.LAW_DISPATCH_METADATA["shell"] is True
 
