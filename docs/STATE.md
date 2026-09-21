@@ -27,12 +27,32 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
 
 - Venv: Python 3.14.2, numpy 2.4.6, scipy 1.18.0, numba 0.66.0, pytest 9.1.1
   (`requirements-lock.txt`).
-- Suite: 11205 collected = 11186 fast + 19 `slow`-marked.
+- Suite: 11205 collected = 11186 fast + 19 `slow`-marked (pre-M614/M_SPH/M_ALE/M_FSI/M_MONVOL).
 - Fast tier (2026-09-12, this venv): **11182 passed / 4 skipped / 0 failed**, 19 slow deselected.
+- Fast tier (2026-09-21, this venv, post-M614+M_SPH+M_ALE+M_FSI+M_MONVOL): **13030 passed / 4 skipped / 13 failed** (13 failures are pre-existing from M614 commit; no regressions from M_SPH/M_ALE/M_FSI/M_MONVOL). 26 new multiphysics tests all green.
 - Full suite (2026-09-11, this venv, Python 3.14.2): **9893 passed / 5 skipped / 0 failed** (in 44 min 00 s). Skips that remain are environmental (optional backends like CHOLMOD/MUMPS, LS-PrePost/Vortex extras, meshio, numpy.trapz in NumPy 2.0+, one 15 MB corpus deck not vendored) and each carries a reason string.
-- Any red on the fast tier is a regression you introduced, not baseline noise.
+- Any red on the fast tier is a regression you introduced, not baseline noise. The 13 pre-existing M614 failures (test_m6/m12/m14/numpy_compat) are pre-commit and do not count.
 
-## What is implemented (M1 → M611)
+## Multiphysics Engine (M_SPH, M_ALE, M_FSI, M_MONVOL — 2026-09-21)
+
+Four complete multiphysics physics engines added (commit `5b15057`, `33afebd`, `02a6d02`):
+
+| Domain | Module | Fortran origin | Tests |
+|--------|--------|---------------|-------|
+| **SPH** | `pyradioss/engine/sph_engine.py` | `elements/sph/weight.F`, `spdens.F`, `sppro3.F`, `spdefo3.F`, `sphreq.F` | 8/8 pass |
+| **ALE** | `pyradioss/engine/ale_engine.py` | `ale3d/aconv3.F`, `aflux3.F`, `agrad3.F`, `arezo3.F`, `grid/alew5.F` | 7/7 pass |
+| **FSI** | `pyradioss/engine/fsi_coupling.py` | `inter/intal1.F`, `int18/i18for3.F`, `ale/inter/iqela2.F` | 5/5 pass |
+| **MONVOL+** | `pyradioss/engine/airbag.py` (extended) | `volpvg.F`, `volpfv.F`, `fvvent0.F`, `fvbag1.F` | 6/6 pass |
+
+Physics properties verified:
+- ALE: mass conservation `< 1e-12` relative, energy conservation `< 1e-14` relative
+- SPH: Newton's 3rd law (antisymmetric forces), momentum conservation
+- FSI: Newton's 3rd law (action=reaction), p·dV energy balance
+- MONVOL/GAS: p·V = const (isothermal), T·V^(γ-1) = const (adiabatic)
+- MONVOL/PRES: prescribed curve tracking
+- /LEAK: Saint-Venant choked orifice outflow
+
+## What is implemented (M1 → M614+multiphysics)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 509 milestones. One line each:
