@@ -1,23 +1,61 @@
 """
-LAW15 — Chang-Chang Composite Model with Tsai-Wu Plasticity
-(/MAT/LAW15, /MAT/CHANG, /MAT/PLAS_ANISO, /MAT/COMP_CHANG).
+OpenRadioss /MAT/LAW15 (CHANG) — Chang-Chang Orthotropic Composite Model with Tsai-Wu Plasticity.
 
-Fortran origin:
-  - starter/source/materials/mat/mat015/hm_read_mat15.F
-  - engine/source/materials/mat/mat015/sigeps15c.F
-  - engine/source/materials/mat/mat015/m15cplrc.F
-  - engine/source/materials/mat/mat015/m15crak.F
-  - hm_cfg_files/config/CFG/radioss110/MAT/matl15_chang.cfg
+Upstream OpenRadioss Fortran source references:
+- Engine shell constitutive kernel:
+  C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat015\sigeps15c.F
+  Subroutine: SIGEPS15C (shell constitutive update, also referenced as sigeps15.F)
+- Chang-Chang failure criteria and degradation:
+  C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat015\m15crak.F
+  Subroutine: M15CRAK
+- Tsai-Wu anisotropic yield surface and plasticity:
+  C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat015\m15cplrc.F
+  Subroutine: M15CPLRC
+- Starter card reader and property initialization:
+  C:\OpenRadioss\source\OpenRadioss-latest-20260520\starter\source\materials\mat\mat015\hm_read_mat15.F
+  Subroutine: HM_READ_MAT15
+- HyperMesh configuration:
+  hm_cfg_files/config/CFG/radioss110/MAT/matl15_chang.cfg
 
-Constitutive model features:
-  1. Orthotropic linear elasticity in shell plane stress: E1, E2, nu12, G12, G23, G31
-  2. Tsai-Wu anisotropic yield surface W(sig) with isotropic power hardening (b, n)
-     and Cowper-Symonds / logarithmic strain rate enhancement (c, epdr)
-  3. Chang-Chang failure criteria for fiber breakage and matrix cracking:
-     - Fiber failure (tensile/compressive)
-     - Matrix cracking (tensile/compressive)
-     - Post-failure exponential stress relaxation with relaxation time Tmax
-  4. Total element / layer deletion (itype / ioff flag)
+Constitutive Model & Failure Mechanics:
+---------------------------------------
+LAW15 models orthotropic composite laminates under shell plane-stress conditions:
+1. Orthotropic Linear Elasticity:
+   - In-plane Young's moduli E1, E2, Poisson's ratio nu12 (nu21 = nu12 * E2 / E1)
+   - Shear moduli G12, transverse shear G23, G31
+   - Plane-stress compliance and acoustic sound speed:
+     c = sqrt(max(C1, G12, G23, G31) / rho0)
+     where C1 = max(E1, E2) / (1 - nu12 * nu21)
+
+2. Tsai-Wu Anisotropic Plasticity:
+   - Yield surface:
+     W = F1*s1 + F2*s2 + F11*s1^2 + F22*s2^2 + F33*s12^2 + 2*F12*s1*s2 <= f_yld
+   - Power hardening: f_yld = min(fmax, (1 + b * wpla^n) * epspfac)
+   - Logarithmic strain rate enhancement: epspfac = 1 + c * ln(eps_dot / epdr)
+
+3. Chang-Chang Failure Criteria (m15crak.F):
+   - Fiber Breakage Mode (tension, s1 > 0):
+       e_f^2 = (s1 / Xt)^2 + beta * (s12 / S12)^2 >= 1.0
+   - Fiber Compressive Mode (compression, s1 <= 0):
+       e_fc^2 = (s1 / Xc)^2 >= 1.0
+   - Matrix Cracking Mode (tension, s2 >= 0):
+       e_m^2 = (s2 / Yt)^2 + (s12 / S12)^2 >= 1.0
+   - Matrix Compressive Mode (compression, s2 < 0):
+       e_mc^2 = (s2 / (2*S12))^2 + (s12 / S12)^2 + (s2 / Yc) * [ (Yc / (2*S12))^2 - 1 ] >= 1.0
+
+4. Post-Failure Softening & Exponential Stress Relaxation:
+   - Damage evolution: DAMT(t) = exp(-(t - t_fail) / Tmax)
+   - When DAMT < 0.01: complete failure (DAMT = 0.0)
+   - Fiber failure relaxes all 5 shell stress components (s1, s2, s12, s23, s31)
+   - Matrix cracking relaxes transverse and shear stresses (s2, s12, s23, s31)
+
+5. Total Element / Layer Deletion (IOFF / Itype flags):
+   - itype = 0, 1: deletion if wpla >= wpmax
+   - itype = 2: deletion if fiber failure occurs or wpla >= wpmax
+   - itype = 3: deletion if matrix cracking occurs or wpla >= wpmax
+   - itype = 4: deletion if both fiber and matrix fail
+   - itype = 5, 6: deletion if either fiber or matrix fails
+   - When failed: off = 0.0 and all stresses drop to zero permanently.
 """
 
 from __future__ import annotations
@@ -848,6 +886,18 @@ def solid_update(*args: Any, **kwargs: Any) -> Any:
     (starter/source/materials/mat/mat015/hm_read_mat15.F:395).
     """
     raise NotImplementedError("LAW15 is for shell elements only")
+
+
+def tangent(group: Any = None, **kwargs: Any) -> Optional[np.ndarray]:
+    """Elemental / group tangent interface compliance."""
+    if group is None:
+        return None
+    if hasattr(group, "mat"):
+        return shell_membrane_tangent(group.mat)
+    try:
+        return shell_membrane_tangent(group)
+    except Exception:
+        return None
 
 
 def shell_update(
