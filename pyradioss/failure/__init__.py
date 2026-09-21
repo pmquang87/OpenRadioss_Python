@@ -41,6 +41,7 @@ All vectorized over the element slice.
 from . import (  # noqa: F401
     alter,
     biquad,
+    brokmann,
     chang,
     cockcroft,
     connect,
@@ -161,6 +162,8 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
         return mullins.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     if ftype in ("ALTER", "WINDSHIELD", "WINDSHIELD_ALTER"):
         return alter.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
+    if ftype in ("BROKMANN", "FAIL_BROKMANN", "ALTER_BROKMANN"):
+        return brokmann.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     if ftype in ("GENE1", "FAIL_GENE1"):
         return gene1.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar)
     if ftype in ("INIEVO", "FAIL_INIEVO"):
@@ -255,6 +258,8 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
         return mullins.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     if ftype in ("ALTER", "WINDSHIELD", "WINDSHIELD_ALTER"):
         return alter.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+    if ftype in ("BROKMANN", "FAIL_BROKMANN", "ALTER_BROKMANN"):
+        return brokmann.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     if ftype in ("GENE1", "FAIL_GENE1"):
         return gene1.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     if ftype in ("INIEVO", "FAIL_INIEVO"):
@@ -272,3 +277,69 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     if ftype in ("USER", "USER1", "USER2", "USER3", "FAIL_USER"):
         return user.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")
+
+
+FAILURE_MODELS: dict[str, object] = {
+    "ALTER": alter,
+    "WINDSHIELD": alter,
+    "WINDSHIELD_ALTER": alter,
+    "BIQUAD": biquad,
+    "BROKMANN": brokmann,
+    "FAIL_BROKMANN": brokmann,
+    "ALTER_BROKMANN": brokmann,
+    "CHANG": chang,
+    "CHANGCHANG": chang,
+    "COCKCROFT": cockcroft,
+    "COCKCROFT_LATHAM": cockcroft,
+    "CONNECT": connect,
+    "EMC": emc,
+    "ENERGY": energy,
+    "FABRIC": fabric,
+    "COMPOSITE": fail_composite,
+    "COMPOSITE_FAILURE": fail_composite,
+    "GURSON": fail_gurson,
+    "GURSON_MODEL": fail_gurson,
+    "LADEVEZE": fail_ladeveze,
+    "LAD_DAMA": fail_ladeveze,
+    "RTCL": fail_rtcl,
+    "RTCL_MODEL": fail_rtcl,
+    "FLD": fld,
+    "FRACTAL": fractal,
+    "GENE1": gene1,
+    "HASHIN": hashin,
+    "HC_DSSE": hc_dsse,
+    "HC-DSSE": hc_dsse,
+    "HOFFMAN": hoffman,
+    "INIEVO": inievo,
+    "JOHNSON": johnson,
+    "LEMAITRE": lemaitre,
+    "MAXSTRAIN": max_strain,
+    "MAX_STRAIN": max_strain,
+    "MMC": mmc,
+    "MULLINS": mullins,
+    "NXT": nxt,
+    "ORTHBIQUAD": orthbiquad,
+    "ORTHENERG": orthenerg,
+    "ORTHSTRAIN": orthstrain,
+    "PUCK": puck,
+    "SAHRAEI": sahraei,
+    "SNCONNECT": snconnect,
+    "SPALLING": spalling,
+    "SYAZWAN": syazwan,
+    "TAB": tab,
+    "TAB1": tab1,
+    "TAB2": tab2,
+    "TBUTCHER": tbutcher,
+    "TENSSTRAIN": tensstrain,
+    "TSAIHILL": tsaihill,
+    "TSAIWU": tsaiwu,
+    "TVERGAARD": tvergaard,
+    "USER": user,
+    "VISUAL": visual,
+    "WILKINS": wilkins,
+}
+
+
+def register_failure_model(name: str, module: object) -> None:
+    """Register a failure model module in the dispatcher table."""
+    FAILURE_MODELS[name.upper()] = module
