@@ -1,3 +1,7 @@
+# C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat062\sigeps62.F
+# Function: SIGEPS62 (lines 33-517)
+# C:\OpenRadioss\source\OpenRadioss-latest-20260520\starter\source\materials\mat\mat062\hm_read_mat62.F
+# Function: HM_READ_MAT62 (lines 38-339)
 """
 LAW62 — hyper-visco-elastic foam (/MAT/LAW62, /MAT/VISC_HYP).  Solids
 only: an Ogden series with PER-TERM compressibility exponents beta_i
@@ -155,13 +159,25 @@ def _ensure_params(mat: Material) -> dict:
     return p
 
 
-def solid_update(mat, sig, deps, epsp, dt, extra=None):
-    """sigeps62.F — total-form update from extra['F'].  Returns
-    (sig, epsp, c)."""
+def solid_update(mat, sig, deps=None, epsp=None, dt=0.0, extra=None):
+    """sigeps62.F (lines 33-517) — total-form update from extra['F'].
+    
+    Returns (sig, epsp, c).
+    """
+    is_1d = (sig.ndim == 1)
+    if is_1d:
+        sig = sig[np.newaxis, :]
+        if deps is not None and deps.ndim == 1:
+            deps = deps[np.newaxis, :]
+        if epsp is not None and hasattr(epsp, "ndim") and epsp.ndim == 1:
+            epsp = epsp[np.newaxis]
+
     n = sig.shape[0]
     if n == 0:
         c_empty = np.empty(0, dtype=sig.dtype if hasattr(sig, "dtype") else float)
-        return sig, (epsp if epsp is not None else np.empty(0, dtype=sig.dtype)), c_empty
+        res_sig = sig[0] if is_1d else sig
+        res_epsp = epsp[0] if (is_1d and epsp is not None and hasattr(epsp, "__len__")) else (epsp if epsp is not None else np.empty(0, dtype=sig.dtype))
+        return res_sig, res_epsp, c_empty
 
     p = _ensure_params(mat)
     mu = p["MU62"]
@@ -175,14 +191,17 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     nprony = len(gama)
 
     if extra is None or "F" not in extra or extra["F"] is None:
-        # Small-strain fallback when F is not supplied: F = I + deps
+        # Small-strain fallback when F is not supplied: F = I + eps (or deps)
+        eps_in = extra.get("eps") if (extra and "eps" in extra) else deps
+        if eps_in is not None and is_1d and eps_in.ndim == 1:
+            eps_in = eps_in[np.newaxis, :]
         F = np.zeros((n, 3, 3), dtype=sig.dtype if hasattr(sig, "dtype") else float)
         for i in range(3):
-            F[:, i, i] = 1.0 + (deps[:, i] if deps is not None else 0.0)
-        if deps is not None:
-            F[:, 0, 1] = F[:, 1, 0] = 0.5 * deps[:, 3]
-            F[:, 1, 2] = F[:, 2, 1] = 0.5 * deps[:, 4]
-            F[:, 0, 2] = F[:, 2, 0] = 0.5 * deps[:, 5]
+            F[:, i, i] = 1.0 + (eps_in[:, i] if eps_in is not None else 0.0)
+        if eps_in is not None:
+            F[:, 0, 1] = F[:, 1, 0] = 0.5 * eps_in[:, 3]
+            F[:, 1, 2] = F[:, 2, 1] = 0.5 * eps_in[:, 4]
+            F[:, 0, 2] = F[:, 2, 0] = 0.5 * eps_in[:, 5]
     else:
         F = extra["F"]
         if F.ndim == 2:
@@ -193,7 +212,7 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     ec = np.maximum(ev ** 2, _EM20)
     rv_m = np.maximum(rv, _EM20)
 
-    # ---- pressure term and principal PK2 stress -----------------------------
+    # ---- pressure term and principal PK2 stress (sigeps62.F: 239-288) -------
     pres = np.zeros(len(ev))
     S = np.zeros_like(ev)
     for i in range(len(mu)):
@@ -204,12 +223,34 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
         pres += fac1 * (lam_al.sum(axis=1) / 3.0 - jvol)
         S += (fac / ec) * (lam_al - jvol[:, None])
 
-    # ---- viscoelastic overstress (Prony) ------------------------------------
+    # ---- viscoelastic overstress (Prony) (sigeps62.F: 310-450) --------------
     # (skipped when the caller passes no history views — the implicit
     # statics re-evaluation path calls total-form laws with a bare
     # {"F"} extra; re-advancing the Prony history there would double
     # the relaxation step)
-    if ivisc > 0 and nprony > 0 and extra is not None and "sdg62" in extra and extra["sdg62"] is not None:
+    has_history = False
+    sdg0 = None
+    h = None
+    uvar = None
+    if ivisc > 0 and nprony > 0 and extra is not None:
+        if "sdg62" in extra and extra["sdg62"] is not None:
+            sdg0 = extra["sdg62"]
+            h = extra.get("h62")
+            if is_1d and sdg0.ndim == 1:
+                sdg0 = sdg0[np.newaxis, :]
+            if is_1d and h is not None and h.ndim == 2:
+                h = h[np.newaxis, :, :]
+            if h is not None:
+                has_history = True
+        elif "uvar" in extra and extra["uvar"] is not None:
+            uvar = extra["uvar"]
+            if is_1d and uvar.ndim == 1:
+                uvar = uvar[np.newaxis, :]
+            sdg0 = uvar[:, :6]
+            h = uvar[:, 6:6 + nprony * 6].reshape(n, nprony, 6)
+            has_history = True
+
+    if has_history and sdg0 is not None and h is not None:
         rv23 = rv_m ** (2.0 / 3.0)
         ssp = pres[:, None] / ec                          # pressure part
         sd = (S - ssp * rv[:, None]) * rv23[:, None]      # scaled deviator
@@ -219,8 +260,6 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
         sdg = np.einsum("naj,nj,nbj->nab", dirp, sd, dirp)
         sdg6 = np.stack([sdg[:, 0, 0], sdg[:, 1, 1], sdg[:, 2, 2],
                          sdg[:, 0, 1], sdg[:, 1, 2], sdg[:, 0, 2]], axis=1)
-        sdg0 = extra["sdg62"]
-        h = extra["h62"]                                  # (n, nprony, 6)
         hp = np.zeros((len(ev), nprony, 3))
         for ii in range(nprony):
             fac = -dt / taux[ii]
@@ -234,6 +273,10 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
             HM[:, 0, 2] = HM[:, 2, 0] = h[:, ii, 5]
             hp[:, ii] = np.einsum("nai,nab,nbi->ni", dirp, HM, dirp)
         sdg0[:] = sdg6
+        if uvar is not None:
+            uvar[:, :6] = sdg6
+            uvar[:, 6:6 + nprony * 6] = h.reshape(n, nprony * 6)
+
         if ivisc == 1:
             # deviatoric projection in the strain metric
             hd = hp - (np.einsum("nij,nj->ni", hp, ec) / 3.0
@@ -279,7 +322,11 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     elif np.isscalar(rho):
         rho = np.full(n, rho)
     c = np.sqrt(np.maximum(cimax, _EM20) / np.maximum(rho, _EM20))
-    return sig, epsp, c
+
+    res_sig = sig[0] if is_1d else sig
+    res_epsp = epsp[0] if (is_1d and epsp is not None and hasattr(epsp, "__len__")) else epsp
+    res_c = c[0] if is_1d else c
+    return res_sig, res_epsp, res_c
 
 
 def shell_update(mat, sig, deps, epsp, dt, extra=None):
@@ -410,7 +457,18 @@ def consistent_solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=Non
     return D
 
 
-# ----------------------------------------------------------------------------
+def solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None, F=None, dt=None):
+    """(m, 6, 6) spatial tangent modulus tensor in Voigt form."""
+    return consistent_solid_tangent(mat, sig=sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra, F=F, dt=dt)
+
+
+def tangent(mat_or_group=None, **kwargs):
+    """Material tangent interface matching pyradioss material dispatcher convention."""
+    if mat_or_group is None:
+        return None
+    mat = getattr(mat_or_group, "material", mat_or_group)
+    return consistent_solid_tangent(mat, **kwargs)
+
 # cfg-record constructor (mat_reader physics registry)
 # ----------------------------------------------------------------------------
 
