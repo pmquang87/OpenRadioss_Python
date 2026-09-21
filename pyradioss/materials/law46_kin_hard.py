@@ -1,3 +1,8 @@
+# Ported from OpenRadioss Fortran:
+# Source: engine/source/materials/mat/mat046/sigeps46.F
+# Function: SIGEPS46 (lines 30-250)
+# Subroutine: M46LAW (engine/source/materials/mat/mat046/m46law.F, lines 35-238)
+# Starter: starter/source/materials/mat/mat046/hm_read_mat46.F (lines 37-200)
 """
 LAW46 — Combined Isotropic & Kinematic Hardening Plasticity (/MAT/LAW46, /MAT/KIN_HARD).
 
@@ -123,6 +128,8 @@ def _get_params(mat: Any, **kwargs: Any) -> Law46Params:
         p = dict(mat.get("params", mat))
     elif hasattr(mat, "params") and isinstance(mat.params, dict):
         p = dict(mat.params)
+    elif hasattr(mat, "__dict__"):
+        p = {k: v for k, v in mat.__dict__.items() if not k.startswith("_")}
     p.update(kwargs)
 
     rho0 = float(p.get("MAT_RHO", p.get("rho0", p.get("rho", p.get("density", 1.0)))))
@@ -417,3 +424,16 @@ def shell_tangent(
 
 
 consistent_shell_tangent = shell_tangent
+
+
+def tangent(mat: Any = None, **kwargs: Any) -> np.ndarray:
+    """Algorithmic elastoplastic tangent stiffness matrix.
+
+    Alias for solid_tangent matching the material law template.
+    """
+    return solid_tangent(mat, **kwargs)
+
+
+tangent_law46_solid = solid_tangent
+tangent_law46_shell = shell_tangent
+
