@@ -716,13 +716,18 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
         fext_eq = _reduce(dof.gather_residual(fext, np.zeros((n, 3))))
 
         K = assemble(model, dof, x_ref, None, kgeo=False)
-        if getattr(ip, "impl_autos", 0) > 0:
+        if getattr(ip, "impl_autos", 0) > 0 and constr is None:
+            # apply stabilization to the full K only when there's no constraint
+            # condensation (same fix as the Newton loop — see _solve_increment)
             K, fext_eq = _apply_autos(K, fext_eq, getattr(ip, "impl_autos", 1))
         if getattr(ip, "impl_qstat", 0) > 0:
             K = _apply_qstat(K, model, dof, getattr(ip, "impl_qstat", 1), lam_end)
 
         if constr is not None:
             K_red = constr.reduce_matrix(K)
+            if getattr(ip, "impl_autos", 0) > 0:
+                K_red, fext_eq = _apply_autos(K_red, fext_eq,
+                                              getattr(ip, "impl_autos", 1))
             u_red = solver.solve(K_red, fext_eq)
             u_eq = constr.expand(u_red)
         else:
@@ -1242,13 +1247,23 @@ def _solve_increment(model, controls, log, dof, loads, solver,
                 # trial configuration (imp_glob_k.F IMP_KPRES analogue — see
                 # followerload.py for the documented deviation)
                 K = K + pload_tangent(loads, model, lam, model.x + u, dof)
-            if getattr(controls, "impl_autos", 0) > 0:
+            if getattr(controls, "impl_autos", 0) > 0 and constr is None:
+                # No constraint condensation: apply stabilization to the full K.
+                # When constr IS active, we apply _apply_autos on K_red below
+                # (after reduction) — applying on the full K would corrupt the
+                # condensation: slave/RBE2 DOFs have zero diagonal by design and
+                # should NOT be stabilized; the spurious T^T * diag_fix * T term
+                # changes the reduced system incorrectly (M12 bug fix).
                 K, _ = _apply_autos(K, R, getattr(controls, "impl_autos", 1))
             if getattr(controls, "impl_qstat", 0) > 0:
                 K = _apply_qstat(K, model, dof, getattr(controls, "impl_qstat", 1), lam - lam_prev)
 
             if constr is not None:
                 K_mat = constr.reduce_matrix(K)
+                # Apply AUTOS on the REDUCED matrix — slave DOFs are already
+                # gone, so only genuine zero-stiffness master DOFs are stabilized
+                if getattr(controls, "impl_autos", 0) > 0:
+                    K_mat, R = _apply_autos(K_mat, R, getattr(controls, "impl_autos", 1))
                 base_solve_fn = lambda rhs, _k=K_mat: solver.solve(_k, rhs)
             else:
                 base_solve_fn = lambda rhs, _k=K: solver.solve(_k, rhs)
