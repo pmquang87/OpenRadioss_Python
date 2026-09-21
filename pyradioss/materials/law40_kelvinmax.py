@@ -1,6 +1,8 @@
 r"""
 LAW40 — generalized Kelvin–Maxwell visco-elasticity (/MAT/KELVINMAX).
 
+OpenRadioss /MAT/KELVINMAX (LAW40) Python implementation.
+
 Upstream Fortran Reference:
   - ``engine/source/materials/mat/mat040/sigeps40.F`` (SUBROUTINE SIGEPS40, lines 32–538)
   - ``starter/source/materials/mat/mat040/hm_read_mat40.F`` (SUBROUTINE HM_READ_MAT40, lines 38–226)
