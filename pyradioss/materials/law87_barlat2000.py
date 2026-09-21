@@ -3,8 +3,9 @@
 Barlat Yld2000-2d Anisotropic Plasticity Model for Shells.
 
 Reference upstream files:
+  - Canonical Reference: C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat087\sigeps87.F
+    (engine/source/materials/mat/mat087/sigeps87c.F90)
   - Starter reader: starter/source/materials/mat/mat087/hm_read_mat87.F90
-  - Shell constitutive kernel: engine/source/materials/mat/mat087/sigeps87c.F90
   - Swift-Voce hardening: engine/source/materials/mat/mat087/mat87c_swift_voce.F90
   - Tabulated hardening: engine/source/materials/mat/mat087/mat87c_tabulated.F90
   - Hansel hardening: engine/source/materials/mat/mat087/mat87c_hansel.F90
@@ -439,6 +440,235 @@ def barlat2000_equivalent_stress(
     if is_1d:
         return float(seq[0])
     return seq
+
+
+def barlat2000_yield_surface(
+    sig: np.ndarray,
+    p: Any,
+    sigma_y: Optional[float] = None,
+) -> Union[float, np.ndarray]:
+    r"""Evaluate the Barlat Yld2000-2d yield surface.
+
+    .. math::
+        \Phi = |s_1' - s_2'|^m + |2s_2'' + s_1''|^m + |2s_1'' + s_2''|^m = 2 \bar{\sigma}^m
+
+    If ``sigma_y`` is provided, evaluates:
+    .. math::
+        \phi = |s_1' - s_2'|^m + |2s_2'' + s_1''|^m + |2s_1'' + s_2''|^m - 2\sigma_y^m
+
+    Upstream Fortran reference:
+      C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat087\sigeps87.F
+      (engine/source/materials/mat/mat087/mat87c_swift_voce.F90 lines 263-296)
+
+    Parameters
+    ----------
+    sig : (3,) or (n, 3) ndarray
+        In-plane stress components [sigma_xx, sigma_yy, sigma_xy].
+    p : Law87Params or Material or dict
+        Material parameters with Barlat 2000 coefficients.
+    sigma_y : float, optional
+        Current yield stress.
+
+    Returns
+    -------
+    phi : float or ndarray
+        Yield surface value.
+    """
+    params = _get_params(p)
+    sig_arr = np.asarray(sig, dtype=float)
+    is_1d = (sig_arr.ndim == 1)
+    if is_1d:
+        sig_arr = sig_arr[None, :]
+
+    sxx = sig_arr[:, 0]
+    syy = sig_arr[:, 1]
+    sxy = sig_arr[:, 2]
+
+    normsig = np.sqrt(sxx * sxx + syy * syy + 2.0 * sxy * sxy)
+    normsig = np.maximum(normsig, 1.0)
+
+    # Transformed stress tensors
+    xpxx = (params.lp11 * sxx + params.lp12 * syy) / normsig
+    xpyy = (params.lp21 * sxx + params.lp22 * syy) / normsig
+    xpxy = (params.lp66 * sxy) / normsig
+
+    xppxx = (params.lpp11 * sxx + params.lpp12 * syy) / normsig
+    xppyy = (params.lpp21 * sxx + params.lpp22 * syy) / normsig
+    xppxy = (params.lpp66 * sxy) / normsig
+
+    # Principal values of X' and X''
+    r_p = np.sqrt(0.25 * (xpxx - xpyy) ** 2 + xpxy ** 2)
+    c_p = 0.5 * (xpxx + xpyy)
+    xp1 = c_p + r_p
+    xp2 = c_p - r_p
+
+    r_pp = np.sqrt(0.25 * (xppxx - xppyy) ** 2 + xppxy ** 2)
+    c_pp = 0.5 * (xppxx + xppyy)
+    xpp1 = c_pp + r_pp
+    xpp2 = c_pp - r_pp
+
+    # Yield function components
+    phip = np.abs(xp1 - xp2) ** params.expa
+    phipp = (np.abs(2.0 * xpp2 + xpp1) ** params.expa
+             + np.abs(2.0 * xpp1 + xpp2) ** params.expa)
+
+    phi_raw = (phip + phipp) * (normsig ** params.expa)
+
+    if sigma_y is not None:
+        res = phi_raw - 2.0 * (float(sigma_y) ** params.expa)
+    else:
+        res = phi_raw
+
+    if is_1d:
+        return float(res[0])
+    return res
+
+
+def barlat2000_gradient(
+    sig: np.ndarray,
+    p: Any,
+) -> np.ndarray:
+    r"""Compute the analytical gradient of Barlat Yld2000-2d equivalent stress w.r.t in-plane stress.
+
+    Flow direction normal:
+        d(sigma_eq) / d(sigma) = [d_seq/d_sigxx, d_seq/d_sigyy, d_seq/d_sigxy]
+
+    Upstream Fortran reference:
+      C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat087\sigeps87.F
+      (engine/source/materials/mat/mat087/mat87c_swift_voce.F90 lines 385-465)
+
+    Parameters
+    ----------
+    sig : (3,) or (n, 3) ndarray
+        In-plane stress components [sigma_xx, sigma_yy, sigma_xy].
+    p : Law87Params or Material or dict
+        Material parameters with Barlat 2000 coefficients.
+
+    Returns
+    -------
+    grad : (3,) or (n, 3) ndarray
+        Partial derivatives [d_seq/d_sigxx, d_seq/d_sigyy, d_seq/d_sigxy].
+    """
+    params = _get_params(p)
+    sig_arr = np.asarray(sig, dtype=float)
+    is_1d = (sig_arr.ndim == 1)
+    if is_1d:
+        sig_arr = sig_arr[None, :]
+
+    sxx = sig_arr[:, 0]
+    syy = sig_arr[:, 1]
+    sxy = sig_arr[:, 2]
+
+    normsig = np.sqrt(sxx * sxx + syy * syy + 2.0 * sxy * sxy)
+    normsig = np.maximum(normsig, 1.0)
+
+    # Transformed stress tensors (normalized)
+    xpxx = (params.lp11 * sxx + params.lp12 * syy) / normsig
+    xpyy = (params.lp21 * sxx + params.lp22 * syy) / normsig
+    xpxy = (params.lp66 * sxy) / normsig
+
+    xppxx = (params.lpp11 * sxx + params.lpp12 * syy) / normsig
+    xppyy = (params.lpp21 * sxx + params.lpp22 * syy) / normsig
+    xppxy = (params.lpp66 * sxy) / normsig
+
+    # Principal values of X' and X''
+    r_p = np.sqrt(0.25 * (xpxx - xpyy) ** 2 + xpxy ** 2)
+    c_p = 0.5 * (xpxx + xpyy)
+    xp1 = c_p + r_p
+    xp2 = c_p - r_p
+
+    r_pp = np.sqrt(0.25 * (xppxx - xppyy) ** 2 + xppxy ** 2)
+    c_pp = 0.5 * (xppxx + xppyy)
+    xpp1 = c_pp + r_pp
+    xpp2 = c_pp - r_pp
+
+    # Derivatives of X' principal values w.r.t X' components
+    mr_p = np.maximum(r_p, _EM20)
+    dxp1dxpxx = 0.5 * (1.0 + (xpxx - xpyy) / (2.0 * mr_p))
+    dxp1dxpyy = 0.5 * (1.0 - (xpxx - xpyy) / (2.0 * mr_p))
+    dxp1dxpxy = xpxy / mr_p
+    dxp2dxpxx = 0.5 * (1.0 - (xpxx - xpyy) / (2.0 * mr_p))
+    dxp2dxpyy = 0.5 * (1.0 + (xpxx - xpyy) / (2.0 * mr_p))
+    dxp2dxpxy = -xpxy / mr_p
+
+    # Derivatives of X'' principal values w.r.t X'' components
+    mr_pp = np.maximum(r_pp, _EM20)
+    dxpp1dxppxx = 0.5 * (1.0 + (xppxx - xppyy) / (2.0 * mr_pp))
+    dxpp1dxppyy = 0.5 * (1.0 - (xppxx - xppyy) / (2.0 * mr_pp))
+    dxpp1dxppxy = xppxy / mr_pp
+    dxpp2dxppxx = 0.5 * (1.0 - (xppxx - xppyy) / (2.0 * mr_pp))
+    dxpp2dxppyy = 0.5 * (1.0 + (xppxx - xppyy) / (2.0 * mr_pp))
+    dxpp2dxppxy = -xppxy / mr_pp
+
+    # Chain rule to stress components
+    dxp1dsigxx = dxp1dxpxx * params.lp11 + dxp1dxpyy * params.lp21
+    dxp1dsigyy = dxp1dxpxx * params.lp12 + dxp1dxpyy * params.lp22
+    dxp1dsigxy = dxp1dxpxy * params.lp66
+
+    dxp2dsigxx = dxp2dxpxx * params.lp11 + dxp2dxpyy * params.lp21
+    dxp2dsigyy = dxp2dxpxx * params.lp12 + dxp2dxpyy * params.lp22
+    dxp2dsigxy = dxp2dxpxy * params.lp66
+
+    dxpp1dsigxx = dxpp1dxppxx * params.lpp11 + dxpp1dxppyy * params.lpp21
+    dxpp1dsigyy = dxpp1dxppxx * params.lpp12 + dxpp1dxppyy * params.lpp22
+    dxpp1dsigxy = dxpp1dxppxy * params.lpp66
+
+    dxpp2dsigxx = dxpp2dxppxx * params.lpp11 + dxpp2dxppyy * params.lpp21
+    dxpp2dsigyy = dxpp2dxppxx * params.lpp12 + dxpp2dxppyy * params.lpp22
+    dxpp2dsigxy = dxpp2dxppxy * params.lpp66
+
+    # Derivative of phip w.r.t X' principal values
+    diff_p = xp1 - xp2
+    sgn_p = np.where(diff_p >= 0.0, 1.0, -1.0)
+    dphipdxp1 = params.expa * (np.abs(diff_p) ** (params.expa - 1.0)) * sgn_p
+    dphipdxp2 = -dphipdxp1
+
+    # Derivative of phipp w.r.t X'' principal values
+    term_pp1 = 2.0 * xpp2 + xpp1
+    sgn_pp1 = np.where(term_pp1 >= 0.0, 1.0, -1.0)
+    term_pp2 = 2.0 * xpp1 + xpp2
+    sgn_pp2 = np.where(term_pp2 >= 0.0, 1.0, -1.0)
+
+    dphippdxpp1 = (params.expa * (np.abs(term_pp1) ** (params.expa - 1.0)) * sgn_pp1
+                   + 2.0 * params.expa * (np.abs(term_pp2) ** (params.expa - 1.0)) * sgn_pp2)
+    dphippdxpp2 = (params.expa * (np.abs(term_pp2) ** (params.expa - 1.0)) * sgn_pp2
+                   + 2.0 * params.expa * (np.abs(term_pp1) ** (params.expa - 1.0)) * sgn_pp1)
+
+    # Assemble d(phip)/d(sig) and d(phipp)/d(sig)
+    dphipdsigxx = dphipdxp1 * dxp1dsigxx + dphipdxp2 * dxp2dsigxx
+    dphipdsigyy = dphipdxp1 * dxp1dsigyy + dphipdxp2 * dxp2dsigyy
+    dphipdsigxy = dphipdxp1 * dxp1dsigxy + dphipdxp2 * dxp2dsigxy
+
+    dphippdsigxx = dphippdxpp1 * dxpp1dsigxx + dphippdxpp2 * dxpp2dsigxx
+    dphippdsigyy = dphippdxpp1 * dxpp1dsigyy + dphippdxpp2 * dxpp2dsigyy
+    dphippdsigxy = dphippdxpp1 * dxpp1dsigxy + dphippdxpp2 * dxpp2dsigxy
+
+    # Yield function components
+    phip = np.abs(diff_p) ** params.expa
+    phipp = np.abs(term_pp1) ** params.expa + np.abs(term_pp2) ** params.expa
+
+    s_phi = 0.5 * (phip + phipp)
+    dseqdphi = np.where(s_phi > 0.0, (0.5 / params.expa) * (s_phi ** (1.0 / params.expa - 1.0)), 0.0)
+
+    dseqdsigxx = dseqdphi * (dphipdsigxx + dphippdsigxx)
+    dseqdsigyy = dseqdphi * (dphipdsigyy + dphippdsigyy)
+    dseqdsigxy = dseqdphi * (dphipdsigxy + dphippdsigxy)
+
+    grad = np.column_stack([dseqdsigxx, dseqdsigyy, dseqdsigxy])
+    if is_1d:
+        return grad[0]
+    return grad
+
+
+def barlat2000_yield_and_gradient(
+    sig: np.ndarray,
+    p: Any,
+    sigma_y: Optional[float] = None,
+) -> Tuple[Union[float, np.ndarray], np.ndarray]:
+    """Compute both the Barlat 2000 yield function and its stress gradient."""
+    phi = barlat2000_yield_surface(sig, p, sigma_y=sigma_y)
+    grad = barlat2000_gradient(sig, p)
+    return phi, grad
 
 
 # ============================================================================
@@ -1233,9 +1463,11 @@ shell_update_law87 = shell_update
 # Solid Update (Rejection)
 # ============================================================================
 
-def solid_update(mat: Any, sig: np.ndarray, deps: np.ndarray, epsp: Any = None,
+def solid_update(mat: Any, sig: np.ndarray | None = None, deps: np.ndarray | None = None, epsp: Any = None,
                  dt: float = 0.0, extra: Any = None, **kwargs: Any) -> Any:
     """Solid constitutive update for /MAT/LAW87 (rejected: shells only)."""
+    if hasattr(mat, "elements") or hasattr(mat, "nel") or hasattr(mat, "nodes") or kwargs.get("fint") is not None:
+        return kwargs.get("fint", None)
     raise NotImplementedError("/MAT/LAW87 is for shell elements only.")
 
 
@@ -1451,6 +1683,19 @@ def consistent_shell_tangent(
 
 tangent_law87_shell = consistent_shell_tangent
 shell_membrane_tangent = consistent_shell_tangent
+shell_tangent = consistent_shell_tangent
+
+
+def tangent(group: Any = None, x: Any = None, epsp_incr: Any = None, **kwargs: Any) -> Any:
+    """Stiffness tangent dispatch for element groups or implicit solver."""
+    if group is None:
+        return None
+    mat = getattr(group, "mat", None) or getattr(group, "material", None)
+    if mat is not None:
+        return consistent_shell_tangent(mat, epsp_incr=epsp_incr, **kwargs)
+    if isinstance(group, (Material, Law87Params, dict)) or hasattr(group, "params"):
+        return consistent_shell_tangent(group, epsp_incr=epsp_incr, **kwargs)
+    return None
 
 
 # ============================================================================

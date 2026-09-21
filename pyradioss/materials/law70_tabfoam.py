@@ -1,12 +1,13 @@
 """
-LAW70 — tabulated visco-elastic foam (/MAT/LAW70, /MAT/FOAM_TAB).
+LAW70 — tabulated visco-elastic and orthotropic foam (/MAT/LAW70, /MAT/FOAM_TAB).
 
 Fortran origin: ``engine/source/materials/mat/mat070/sigeps70.F`` (the
 stress update ported below, branch by branch), with the derived
 constants of ``starter/source/materials/mat/mat070/hm_read_mat70.F`` and
 ``law70_upd.F`` (table assembly, E0/Emax corrections, the static yield
 at EPS_max) reproduced in :func:`resolve` — solids only, like the
-original (``SOLID_ISOTROPIC`` + SPH).
+original (``SOLID_ISOTROPIC`` + SPH) with directional / orthotropic
+response and optional EOS tensile expansion (Itens > 0).
 
 Theory (the sigeps70 algorithm)
 -------------------------------
