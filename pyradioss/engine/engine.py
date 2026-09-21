@@ -706,6 +706,11 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         if state.stop_reason:
             break
 
+        # /SPHCEL / SPH particle step (M_SPH)
+        if hasattr(model, 'sph_cells') and model.sph_cells:
+            from .sph_engine import sph_step
+            sph_step(model, dt, state)
+
         # ---- 2. contact forces -------------------------------------------
         # (into their own array — see the fcont declaration and step 5b;
         # the work increment the interface returns is its own estimate at
@@ -726,6 +731,11 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             if noda is None:
                 dt_next = min(dt_next, dt_i)
 
+        # ALE advection step (M_ALE)
+        if getattr(controls, 'ale_on', False) or (hasattr(model, 'ale_bcs') and model.ale_bcs):
+            from .ale_engine import ale_step
+            ale_step(model, dt, state)
+
         # ---- 3. external loads (gravity, /CLOAD, /PLOAD) -------------------
         fext[:] = 0.0
         loads.external_forces(state.t, fext, model.x, sensors)
@@ -736,6 +746,33 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                 update_airbag_volume(mv, model, model.x)
                 update_airbag_thermodynamics(mv, model, dt, state.t)
                 apply_airbag_forces(mv, model, model.x, fext)
+            elif mv.vol_type == 'GAS':
+                from .airbag import update_monvol_gas
+                update_airbag_volume(mv, model, model.x)
+                update_monvol_gas(mv, model, dt, state.t)
+                apply_airbag_forces(mv, model, model.x, fext)
+            elif mv.vol_type == 'PRES':
+                from .airbag import update_monvol_pres
+                update_airbag_volume(mv, model, model.x)
+                update_monvol_pres(mv, model, dt, state.t)
+                apply_airbag_forces(mv, model, model.x, fext)
+
+        # Standalone /MONVOL/GAS or /MONVOL/PRES not in monitored_volumes
+        if hasattr(model, "monvol_gases") and model.monvol_gases:
+            for _, mg in model.monvol_gases.items():
+                if mg.id not in model.monitored_volumes:
+                    from .airbag import update_monvol_gas
+                    update_airbag_volume(mg, model, model.x)
+                    update_monvol_gas(mg, model, dt, state.t)
+                    apply_airbag_forces(mg, model, model.x, fext)
+
+        if hasattr(model, "monvol_pres") and model.monvol_pres:
+            for _, mp in model.monvol_pres.items():
+                if mp.id not in model.monitored_volumes:
+                    from .airbag import update_monvol_pres
+                    update_airbag_volume(mp, model, model.x)
+                    update_monvol_pres(mp, model, dt, state.t)
+                    apply_airbag_forces(mp, model, model.x, fext)
 
         # /MONVOL/FVMBAG1 and /MONVOL/FVMBAG2 (M108, M111, M583)
         if hasattr(model, "monvol_fvmbags") and model.monvol_fvmbags:
@@ -749,6 +786,11 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                 update_fvmbag_volume(fv, model, model.x)
                 update_fvmbag_thermodynamics(fv, model, dt, state.t)
                 apply_fvmbag_forces(fv, model, model.x, fext)
+
+        # FSI coupling forces (M_FSI)
+        if hasattr(model, 'inter_fsi') and model.inter_fsi:
+            from .fsi_coupling import fsi_step
+            fsi_step(model, dt, state, fext)
 
         # ---- 3b. tied interfaces (/INTER/TYPE2, i2for3): move the tied
         # nodes' internal + external forces onto their main segments (the

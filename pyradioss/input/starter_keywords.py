@@ -20763,10 +20763,12 @@ def read_monvol_pres(block: KeywordBlock, model: Model, log: MessageLog) -> None
         p_ext = float(toks[2]) if len(toks) > 2 else 0.0
         fct_id = int(float(toks[3])) if len(toks) > 3 else 0
 
-    model.monvol_pres[block.user_id] = MonvolPres(
+    mp = MonvolPres(
         id=block.user_id, title=title, surf_id=surf_id, fscale=fscale,
         p_ext=p_ext, fct_id=fct_id,
     )
+    model.monvol_pres[block.user_id] = mp
+    model.monitored_volumes[block.user_id] = mp
 
 
 def read_monvol_gas(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -20846,13 +20848,15 @@ def read_monvol_gas(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             vinc = float(t4[3]) if len(t4) > 3 else 0.0
             mini = float(t4[4]) if len(t4) > 4 else 0.0
 
-    model.monvol_gases[block.user_id] = MonvolGas(
+    mg = MonvolGas(
         id=block.user_id, title=title, surf_id=surf_id, heat_t0=heat_t0,
         scal_t=scal_t, scal_p=scal_p, scal_s=scal_s, scal_a=scal_a,
         scal_d=scal_d, gamma=gamma, mu=mu, trelax=trelax, tini=tini,
         rho_gas=rho_gas, pext=pext, pini=pini, pmax=pmax, vinc=vinc,
         mini=mini,
     )
+    model.monvol_gases[block.user_id] = mg
+    model.monitored_volumes[block.user_id] = mg
 
 
 def read_monvol_commu(block: KeywordBlock, model: Model, log: MessageLog) -> None:

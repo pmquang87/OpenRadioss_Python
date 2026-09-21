@@ -2087,6 +2087,10 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 # /PARITH/ON, /PARITH/OFF (M200)
                 sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
                 ec.parith = sub
+            elif key == "ALE":
+                # /ALE/ON, /ALE/OFF (M_ALE)
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
+                ec.ale_on = (sub == "ON")
             elif key == "TH":
                 # /TH/TITLE (M200)
                 sub = block.parts[1].upper() if len(block.parts) > 1 else ""

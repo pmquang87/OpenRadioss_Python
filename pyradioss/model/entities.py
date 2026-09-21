@@ -2945,6 +2945,7 @@ class MonvolPres:
     """
     id: int
     title: str = ""
+    vol_type: str = "PRES"
     surf_id: int = 0
     fscale: float = 1.0
     p_ext: float = 0.0
@@ -2959,6 +2960,7 @@ class MonvolGas:
     """
     id: int
     title: str = ""
+    vol_type: str = "GAS"
     surf_id: int = 0
     heat_t0: float = 0.0
     scal_t: float = 1.0

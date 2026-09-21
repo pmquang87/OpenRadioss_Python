@@ -256,6 +256,7 @@ class EngineControls:
     parith: str = "ON"                                                               # /PARITH/ON, /PARITH/OFF (M200)
     heat_active: bool = False                                                        # /HEAT (M202)
     heat_flag: bool = False
+    ale_on: bool = False                                                             # /ALE/ON, /ALE/OFF (M_ALE)
 
     @property
     def tfile_dt(self) -> float:
@@ -1522,6 +1523,7 @@ class Model:
         self.prop_spr_tabs = self.prop_type26s
         self.damp_inters: Dict[int, Any] = {}                       # /DAMP/INTER (M196)
         self.inter_type18s: Dict[int, Any] = {}                     # /INTER/TYPE18 (M196)
+        self.inter_fsi: List[Any] = []                              # FSI interfaces (M_FSI)
         self.frame_nods: Dict[int, Any] = {}                        # /FRAME/NOD, /FRAME/NODE (M196)
         self.ini_spr_tables: Dict[int, Any] = {}                    # /INISPR, /INISPRI (M196)
         self.table_blocks: Dict[int, Any] = {}                      # /TABLE, /TABLE/0, /TABLE/1 (M196)

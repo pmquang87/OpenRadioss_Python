@@ -17,4 +17,11 @@ from .range_damping import (  # noqa: F401
     damping_range_shell_mom_subroutine,
 )
 from .noise import compute_filter_coefficients, FilterOutput, NoiseFilter  # noqa: F401
+from .fsi_coupling import (  # noqa: F401
+    FSIInterface,
+    fsi_compute_slave_normals,
+    fsi_pressure_to_force,
+    fsi_velocity_compatibility,
+    fsi_step,
+)
 

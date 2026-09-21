@@ -914,6 +914,10 @@ class FvmAirbagManager:
                             f[n2] += fn
                             f[n3] += fn
 
+        # 3. Injector jetting reaction forces
+        for inj in mv.injectors:
+            apply_injector_jetting_forces(inj, f, model)
+
 
 # Top-level functional interface matching airbag.py
 def update_fvmbag_volume(mv: MonvolFvmbag, model: Model, x: np.ndarray) -> None:
@@ -933,3 +937,103 @@ def apply_fvmbag_forces(
 ) -> None:
     """Apply FVM airbag pressure forces to nodal force array."""
     FvmAirbagManager.apply_forces(mv, model, x, f)
+
+
+def apply_injector_jetting_forces(
+    injector: FvmInjector, fext: np.ndarray, model: Model
+) -> None:
+    """Project injector jetting recoil / thrust reaction forces onto finite element nodes.
+
+    Upstream Fortran:
+    - engine/source/airbag/fvbag1.F (lines 904-933): momentum flux DQI = -DMI * V_jet * n.
+    - engine/source/airbag/fvinjt6.F (lines 70-131): mass flow and gas velocity.
+    - engine/source/airbag/volpres.F (lines 216-332): force distribution on surface facets.
+
+    Reaction force on nozzle boundary has magnitude F_thrust = m_dot * v_jet,
+    directed along the outward surface normal n (opposite to the injected jet velocity).
+    """
+    if injector.sens_id > 0 and hasattr(model, "sensors") and injector.sens_id in model.sensors:
+        sens = model.sensors[injector.sens_id]
+        if not getattr(sens, "is_active", True):
+            return
+
+    current_time = getattr(model, "t", getattr(model, "current_time", 0.0))
+
+    # Mass flow rate m_dot
+    if injector.fct_mass > 0 and hasattr(model, "functions") and injector.fct_mass in model.functions:
+        f_m = model.functions[injector.fct_mass]
+        m_dot = float(f_m.eval(current_time)) * injector.scale_mass
+    else:
+        m_dot = injector.mass_flow
+
+    # Jet velocity v_jet
+    if injector.fct_vel > 0 and hasattr(model, "functions") and injector.fct_vel in model.functions:
+        f_v = model.functions[injector.fct_vel]
+        v_jet = float(f_v.eval(current_time)) * injector.scale_vel
+    else:
+        v_jet = injector.scale_vel
+
+    if m_dot <= 0.0 or v_jet <= 0.0:
+        return
+
+    f_thrust = m_dot * v_jet
+
+    # Check if injector has associated surface
+    surf = model.surfaces.get(injector.surf_id) if hasattr(model, "surfaces") else None
+    x = getattr(model, "x", getattr(model, "x0", None))
+
+    if surf is not None and surf.segments is not None and len(surf.segments) > 0 and x is not None:
+        seg_normals = []
+        total_area = 0.0
+        for seg in surf.segments:
+            n1, n2, n3 = seg[0], seg[1], seg[2]
+            is_tri = (len(seg) < 4) or (seg[3] == n3) or (seg[3] < 0)
+            x1, x2, x3 = x[n1], x[n2], x[n3]
+            v31 = x3 - x1
+            if not is_tri:
+                n4 = seg[3]
+                x4 = x[n4]
+                v42 = x4 - x2
+                xn = 0.5 * np.cross(v31, v42)
+            else:
+                v21 = x2 - x1
+                xn = 0.5 * np.cross(v21, v31)
+            area_seg = float(np.linalg.norm(xn))
+            total_area += area_seg
+            seg_normals.append((seg, is_tri, xn, area_seg))
+
+        if total_area > 1e-15:
+            p_jet = f_thrust / total_area
+            for seg, is_tri, xn, area_seg in seg_normals:
+                if not is_tri:
+                    n1, n2, n3, n4 = seg[0], seg[1], seg[2], seg[3]
+                    fn = 0.25 * p_jet * xn
+                    fext[n1] += fn
+                    fext[n2] += fn
+                    fext[n3] += fn
+                    fext[n4] += fn
+                else:
+                    n1, n2, n3 = seg[0], seg[1], seg[2]
+                    fn = (1.0 / 3.0) * p_jet * xn
+                    fext[n1] += fn
+                    fext[n2] += fn
+                    fext[n3] += fn
+    else:
+        n_vec = np.array(getattr(injector, "normal", (0.0, 0.0, 1.0)), dtype=float)
+        norm_val = np.linalg.norm(n_vec)
+        if norm_val > 1e-12:
+            n_vec = n_vec / norm_val
+        force_vec = f_thrust * n_vec
+
+        nodes = None
+        if surf is not None:
+            if getattr(surf, "nodes", None) is not None and len(surf.nodes) > 0:
+                nodes = surf.nodes
+            elif getattr(surf, "segments", None) is not None and len(surf.segments) > 0:
+                nodes = np.unique(surf.segments)
+        if nodes is not None and len(nodes) > 0:
+            fn_node = force_vec / len(nodes)
+            for nid in nodes:
+                if 0 <= nid < len(fext):
+                    fext[nid] += fn_node
+
