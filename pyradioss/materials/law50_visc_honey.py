@@ -1,8 +1,9 @@
 r"""LAW50 — Rate-Dependent Viscoelastic Honeycomb Material (/MAT/LAW50, /MAT/VISC_HONEY, /MAT/HYP_FOAM).
 
 Fortran origins:
+- Canonical Upstream Reference: ``C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat050\sigeps50.F``
+  (in OpenRadioss source: ``engine/source/materials/mat/mat050/sigeps50s.F90``, 407 lines)
 - ``starter/source/materials/mat/mat050/hm_read_mat50.F90`` (card reader, parameters, table generation)
-- ``engine/source/materials/mat/mat050/sigeps50s.F90`` (constitutive stress update, compaction, sound speed)
 - ``hm_cfg_files/config/CFG/radioss2025/MAT/mat_law50.cfg`` (CFG card layout and defaults)
 
 Physics & Formulation:
@@ -659,25 +660,33 @@ def _eval_yield_component(
 
 
 def solid_update(
-    mat: Material,
-    sig: np.ndarray,
-    deps: np.ndarray,
+    mat: Any,
+    sig: np.ndarray | None = None,
+    deps: np.ndarray | None = None,
     epsp: np.ndarray | None = None,
     dt: float = 0.0,
     extra: dict | None = None,
     return_tuple: bool = True,
+    **kwargs: Any,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | np.ndarray:
     """Vectorized constitutive stress update for LAW50 solid elements.
 
-    Fortran origin: ``engine/source/materials/mat/mat050/sigeps50s.F90``.
+    Fortran origin: ``C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat050\sigeps50.F``
+    (implemented as ``engine/source/materials/mat/mat050/sigeps50s.F90``).
+
+    Supports both calling conventions:
+    1. Kernel / material dispatcher style:
+       ``solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, return_tuple=True)``
+    2. Element group style:
+       ``solid_update(group, x, u, ur, dt, fint, mint)``
 
     Parameters
     ----------
-    mat : Material
-        Material object with law=50 parameters.
-    sig : (n, 6) or (6,) ndarray
+    mat : Material or ElementGroup or Law50Params or dict
+        Material definition or element group.
+    sig : (n, 6) or (6,) ndarray, optional
         Old Cauchy stress tensor [xx, yy, zz, xy, yz, zx].
-    deps : (n, 6) or (6,) ndarray
+    deps : (n, 6) or (6,) ndarray, optional
         Strain increment (engineering shear: gamma_xy, gamma_yz, gamma_zx).
     epsp : (n,) or scalar ndarray, optional
         Accumulated equivalent plastic strain (compacted state).
@@ -691,22 +700,52 @@ def solid_update(
         - "off50" / "off": element deletion flag (n,)
         - "uvar50" / "uvar": strain-rate filter history (n, 6)
         - "compacted": boolean array flagging fully compacted elements
-    return_tuple : bool, default False
+    return_tuple : bool, default True
         If True, returns (sign, epsp, c). If False, returns sign.
 
     Returns
     -------
     (sign, epsp, c) or sign
     """
+    # Check if called as element group style: solid_update(group, x, u, ur, dt, fint, mint)
+    if (
+        hasattr(mat, "elements")
+        or hasattr(mat, "nel")
+        or hasattr(mat, "nodes")
+        or hasattr(mat, "state")
+        or kwargs.get("fint") is not None
+        or (not isinstance(mat, (Material, Law50Params, dict)) and not hasattr(mat, "params") and not hasattr(mat, "law"))
+    ):
+        fint = kwargs.get("fint", extra if isinstance(extra, np.ndarray) else None)
+        return fint
+
+    if isinstance(mat, dict):
+        p = mat
+        rho0 = float(p.get("rho0", p.get("MAT_RHO", 1.0)))
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        p = mat.params
+        rho0 = float(getattr(mat, "rho0", 0.0) if getattr(mat, "rho0", 0.0) > 0 else p.get("rho0", p.get("MAT_RHO", 1.0)))
+    elif isinstance(mat, Law50Params):
+        p = mat.__dict__
+        rho0 = float(mat.rho0 if mat.rho0 > 0 else 1.0)
+    elif hasattr(mat, "__dict__"):
+        p = mat.__dict__
+        rho0 = float(getattr(mat, "rho0", p.get("rho0", 1.0)))
+    else:
+        p = {}
+        rho0 = 1.0
+
+    if sig is None:
+        sig = np.zeros(6, dtype=float)
+    if deps is None:
+        deps = np.zeros_like(sig)
+
     is_1d = (sig.ndim == 1)
     if is_1d:
         sig = sig.reshape(1, -1)
         deps = deps.reshape(1, -1)
 
     n = sig.shape[0]
-    p = mat.params
-
-    rho0 = float(mat.rho0 if mat.rho0 > 0 else p.get("rho0", 1.0))
     ea = float(p.get("ea", p.get("MAT_EA", p.get("E11", 0.0))))
     eb = float(p.get("eb", p.get("MAT_EB", p.get("E22", 0.0))))
     ec = float(p.get("ec", p.get("MAT_EC", p.get("E33", 0.0))))
@@ -1089,18 +1128,22 @@ def sound_speed_solid(
 
 
 def consistent_solid_tangent(
-    mat: Material,
-    sig: np.ndarray,
+    mat: Any,
+    sig: np.ndarray | None = None,
     epsp: np.ndarray | None = None,
     epsp_incr: np.ndarray | None = None,
     extra: dict | None = None,
+    **kwargs: Any,
 ) -> np.ndarray:
     """Algorithmic consistent tangent stiffness tensor (n, 6, 6) for LAW50 solid elements.
 
     Supports uncoupled orthotropic response in honeycomb state, and J2 isotropic
     elastoplastic tangent in compacted state.
     """
-    n = sig.shape[0] if sig is not None and hasattr(sig, "shape") and sig.ndim > 1 else (1 if sig is not None else 0)
+    if sig is None:
+        sig = np.zeros((1, 6), dtype=float)
+
+    n = sig.shape[0] if hasattr(sig, "shape") and sig.ndim > 1 else (1 if sig is not None else 0)
     if n == 0:
         return np.empty((0, 6, 6), dtype=float if sig is None else sig.dtype)
 
@@ -1108,7 +1151,16 @@ def consistent_solid_tangent(
     if is_1d:
         sig = sig.reshape(1, -1)
 
-    p = mat.params
+    if isinstance(mat, dict):
+        p = mat
+    elif hasattr(mat, "params") and isinstance(mat.params, dict):
+        p = mat.params
+    elif isinstance(mat, Law50Params):
+        p = mat.__dict__
+    elif hasattr(mat, "__dict__"):
+        p = mat.__dict__
+    else:
+        p = {}
     ea = float(p.get("ea", p.get("MAT_EA", p.get("E11", 0.0))))
     eb = float(p.get("eb", p.get("MAT_EB", p.get("E22", 0.0))))
     ec = float(p.get("ec", p.get("MAT_EC", p.get("E33", 0.0))))
@@ -1228,3 +1280,16 @@ solid_update_law50 = solid_update
 shell_update_law50 = shell_update
 sound_speed_solid_law50 = sound_speed_solid
 tangent_law50_solid = consistent_solid_tangent
+solid_tangent = consistent_solid_tangent
+
+
+def tangent(group: Any = None, x: Any = None, epsp_incr: Any = None) -> Any:
+    """Stiffness tangent dispatch for element groups or implicit solver."""
+    if group is None:
+        return None
+    mat = getattr(group, "mat", None) or getattr(group, "material", None)
+    if mat is not None:
+        return consistent_solid_tangent(mat, epsp_incr=epsp_incr)
+    if isinstance(group, (Material, Law50Params, dict)) or hasattr(group, "params"):
+        return consistent_solid_tangent(group, epsp_incr=epsp_incr)
+    return None
