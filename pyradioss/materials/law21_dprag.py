@@ -1,9 +1,17 @@
 r"""LAW21 — Drucker-Prager parabolic/linear yield surface material model with compaction EOS (/MAT/LAW21, /MAT/DPRAG).
 
 Fortran origins:
-- ``engine/source/materials/mat/mat021/m21law.F`` (solid constitutive update)
+- ``engine/source/materials/mat/mat021/m21law.F`` (solid constitutive update, historically cited as sigeps21.F)
 - ``starter/source/materials/mat/mat021/hm_read_mat21.F`` (starter card reader, defaults & parameter estimation)
 - ``hm_cfg_files/config/CFG/radioss110/MAT/matl21_dprag.cfg`` (CFG attributes & card format)
+
+Difference from LAW81:
+----------------------
+Unlike LAW81 (which maintains a constant bulk modulus without compaction memory),
+LAW21 features cap hardening for volumetric compression via an evolving compaction EOS:
+historical maximum compaction strain mu_bak is tracked in state variables, and subsequent
+unloading occurs along a stiffer hysteretic slope K_unload = alpha * B_max + (1 - alpha) * B_min,
+dissipating plastic compaction energy.
 
 Theory
 ------
@@ -113,17 +121,32 @@ def _ensure_params(mat: Material | dict) -> dict[str, Any]:
     else:
         refer_rho = rho0
 
-    # Young's modulus E
+    # Young's modulus E and Poisson's ratio nu
     e_val = p.get("E") if p.get("E") is not None else (p.get("MAT_E") if p.get("MAT_E") is not None else p.get("e"))
-    if e_val is None or float(e_val) <= 0.0:
-        raise ValueError(f"LAW21: Young's modulus E must be > 0 (got {e_val})")
-    e = float(e_val)
-
-    # Poisson's ratio nu in [0, 0.5)
     nu_val = p.get("nu") if p.get("nu") is not None else (p.get("MAT_NU") if p.get("MAT_NU") is not None else p.get("poisson"))
-    if nu_val is None:
-        raise ValueError("LAW21: Poisson's ratio nu must be defined")
-    nu = float(nu_val)
+    g_val = p.get("G") if p.get("G") is not None else (p.get("MAT_G") if p.get("MAT_G") is not None else p.get("g"))
+    k_val = p.get("c1") if p.get("c1") is not None else (p.get("MAT_C1") if p.get("MAT_C1") is not None else (p.get("K") or p.get("bulk")))
+
+    if e_val is None and g_val is not None:
+        g = float(g_val)
+        if nu_val is not None:
+            nu = float(nu_val)
+            e = 2.0 * g * (1.0 + nu)
+        elif k_val is not None:
+            k = float(k_val)
+            e = 9.0 * k * g / max(3.0 * k + g, 1e-20)
+            nu = (3.0 * k - 2.0 * g) / max(2.0 * (3.0 * k + g), 1e-20)
+        else:
+            nu = 0.25
+            e = 2.0 * g * (1.0 + nu)
+    else:
+        if e_val is None or float(e_val) <= 0.0:
+            raise ValueError(f"LAW21: Young's modulus E must be > 0 (got {e_val})")
+        e = float(e_val)
+        if nu_val is None:
+            raise ValueError("LAW21: Poisson's ratio nu must be defined")
+        nu = float(nu_val)
+
     if not (0.0 <= nu < 0.5):
         raise ValueError(f"LAW21: Poisson's ratio nu must be in [0, 0.5) (got {nu})")
 
@@ -185,7 +208,11 @@ def _ensure_params(mat: Material | dict) -> dict[str, Any]:
         else (
             p.get("BUNL")
             if p.get("BUNL") is not None
-            else (p.get("bmax") if p.get("bmax") is not None else (p.get("BMAX") if p.get("BMAX") is not None else p.get("MAT_K_UNLOAD")))
+            else (
+                p.get("MAT_BUNL")
+                if p.get("MAT_BUNL") is not None
+                else (p.get("bmax") if p.get("bmax") is not None else (p.get("BMAX") if p.get("BMAX") is not None else p.get("MAT_K_UNLOAD")))
+            )
         )
     )
     bunl = float(bunl_val) if bunl_val is not None and float(bunl_val) != 0.0 else c1
@@ -197,7 +224,11 @@ def _ensure_params(mat: Material | dict) -> dict[str, Any]:
         else (
             p.get("PMIN")
             if p.get("PMIN") is not None
-            else (p.get("MAT_PC") if p.get("MAT_PC") is not None else p.get("p_min"))
+            else (
+                p.get("MAT_PMIN")
+                if p.get("MAT_PMIN") is not None
+                else (p.get("MAT_PC") if p.get("MAT_PC") is not None else p.get("p_min"))
+            )
         )
     )
     pmin = float(pmin_val) if pmin_val is not None and float(pmin_val) != 0.0 else -_INF
@@ -221,7 +252,11 @@ def _ensure_params(mat: Material | dict) -> dict[str, Any]:
         else (
             p.get("MUMAX")
             if p.get("MUMAX") is not None
-            else (p.get("xmumx") if p.get("xmumx") is not None else (p.get("XMUMX") if p.get("XMUMX") is not None else p.get("MAT_SIG")))
+            else (
+                p.get("MAT_MUMAX")
+                if p.get("MAT_MUMAX") is not None
+                else (p.get("mu_max") if p.get("mu_max") is not None else (p.get("xmumx") if p.get("xmumx") is not None else (p.get("XMUMX") if p.get("XMUMX") is not None else p.get("MAT_SIG"))))
+            )
         )
     )
     mumax = float(mumax_val) if mumax_val is not None and float(mumax_val) != 0.0 else _EP20
@@ -1092,6 +1127,20 @@ def tangent_law21_solid(
 
 consistent_solid_tangent = tangent_law21_solid
 solid_tangent = tangent_law21_solid
+tangent = tangent_law21_solid
+
+
+def needs_defgrad(mat: Any = None) -> bool:
+    """Return False: LAW21 uses an incremental hypoelastic rate formulation."""
+    return False
+
+
+def extra_shapes(mat: Any = None, nip: Optional[int] = None) -> dict[str, tuple[int, ...]]:
+    """Persistent history variables for LAW21 (m21law.F lines 67, 72)."""
+    return {
+        "mu_bak": () if nip is None else (nip,),
+        "epxe": () if nip is None else (nip,),
+    }
 
 
 
