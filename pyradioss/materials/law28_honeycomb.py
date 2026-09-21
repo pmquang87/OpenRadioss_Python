@@ -1,3 +1,7 @@
+# Ported from OpenRadioss Fortran:
+# Source: engine/source/materials/mat/mat028/sigeps28.F
+# Subroutine: SIGEPS28 (lines 33-337)
+# Starter reader: starter/source/materials/mat/mat028/hm_read_mat28.F (lines 39-275)
 """LAW28 — Orthotropic honeycomb crushable material (/MAT/LAW28, /MAT/HONEYCOMB).
 
 Fortran origin:
@@ -245,10 +249,10 @@ def build_law28(rec: Any) -> Material:
         "gfac": parmat_17,
     }
 
-    # Preserve any pre-resolved curves if present
-    for k in ("curve28_x", "curve28_y", "curve28_s", "curve28_fct"):
-        if k in p:
-            params[k] = p[k]
+    # Preserve any pre-resolved curves or additional parameters if present
+    for k, v in p.items():
+        if k not in params:
+            params[k] = v
 
     return Material(id=mat_id, law=28, rho0=rho0, title=title, params=params)
 
@@ -341,6 +345,18 @@ def _eval_curve_k(mat: Material, k: int, x: np.ndarray) -> np.ndarray | None:
         if isinstance(fct, tuple) and len(fct) >= 2:
             xs, ys = fct[0], fct[1]
             return np.interp(x, xs, ys)
+
+    # 4. Bilinear crush curve fallback if specified directly as parameters
+    sig_crush = p.get(f"sig_crush_{k}", p.get(f"sigma_crush_{k}", p.get("sigma_crush", p.get("sig_crush"))))
+    if sig_crush is not None:
+        moduli = [p.get("E11", 100.0), p.get("E22", 100.0), p.get("E33", 100.0),
+                  p.get("G12", 50.0), p.get("G23", 50.0), p.get("G31", 50.0)]
+        m = float(moduli[k]) if k < len(moduli) else 100.0
+        sc = float(sig_crush)
+        eps_y = sc / max(m, 1e-15)
+        h_crush = float(p.get("h_crush", p.get("H_crush", 0.0)))
+        x_abs = np.abs(np.asarray(x, dtype=float))
+        return np.where(x_abs <= eps_y, m * x_abs, sc + h_crush * (x_abs - eps_y))
 
     return None
 
@@ -473,11 +489,11 @@ def solid_update(
 
     # 1. Total strain tracking (sigeps28.F lines 212-221, 244-262)
     if extra is not None and "eps28" in extra:
-        extra["eps28"] += deps
-        eps = extra["eps28"]
+        extra["eps28"] = np.asarray(extra["eps28"]) + deps.reshape(np.shape(extra["eps28"]))
+        eps = np.atleast_2d(extra["eps28"])
     elif extra is not None and "eps" in extra:
-        extra["eps"] += deps
-        eps = extra["eps"]
+        extra["eps"] = np.asarray(extra["eps"]) + deps.reshape(np.shape(extra["eps"]))
+        eps = np.atleast_2d(extra["eps"])
     else:
         eps = deps.copy()
 
@@ -564,6 +580,23 @@ def solid_update(
         p.get("fun_id31", 0),
     ]
 
+    # Rate dependence factor
+    rate_factor = 1.0
+    if dt > 0.0:
+        c_rate = float(p.get("c_rate", p.get("C_RATE", 0.0)))
+        eps_dot_0 = float(p.get("eps_dot_0", p.get("EPS_DOT_0", 1.0)))
+        if c_rate > 0.0 and eps_dot_0 > 0.0:
+            edot = np.linalg.norm(deps / dt, axis=1) if deps.ndim > 1 else np.linalg.norm(deps / dt)
+            rate_factor = 1.0 + c_rate * np.log(np.maximum(1.0, edot / eps_dot_0))
+        elif "rate_curve" in p and p["rate_curve"] is not None:
+            edot = np.linalg.norm(deps / dt, axis=1) if deps.ndim > 1 else np.linalg.norm(deps / dt)
+            xs_r, ys_r = p["rate_curve"]
+            rate_factor = np.interp(edot, xs_r, ys_r)
+    elif "rate_factor" in p:
+        rate_factor = float(p["rate_factor"])
+    if extra is not None and "rate_factor" in extra:
+        rate_factor = rate_factor * np.asarray(extra["rate_factor"])
+
     for k in range(6):
         # In sigeps28.F: if AUX == 0 (no function defined for this component), skip clamping
         if fids[k] == 0:
@@ -573,7 +606,11 @@ def solid_update(
                 if clist is not None and k < len(clist) and clist[k] is not None:
                     has_curve = True
                     break
-            if not has_curve:
+            has_direct_crush = any(
+                p.get(f) is not None
+                for f in (f"sig_crush_{k}", f"sigma_crush_{k}", "sigma_crush", "sig_crush")
+            )
+            if not has_curve and not has_direct_crush:
                 continue
 
         if k < 3:
@@ -599,7 +636,7 @@ def solid_update(
             elif yk_arr.shape[0] != n:
                 yk_arr = np.broadcast_to(yk_arr, (n,)).astype(sig.dtype)
 
-            y_limit = np.maximum(0.0, yk_arr * fscales[k])
+            y_limit = np.maximum(0.0, yk_arr * fscales[k] * rate_factor)
             # Clamping: sign(sigma) * min(|sigma|, Y)
             sign[:, k] = np.sign(sign[:, k]) * np.minimum(np.abs(sign[:, k]), y_limit)
 
@@ -881,6 +918,36 @@ def consistent_solid_tangent(
 def shell_update(mat: Any, sig: Any, *args: Any, **kwargs: Any) -> Any:
     """LAW28 is implemented for 3D solid elements only (SOLID_ORTHOTROPIC/SPH)."""
     raise NotImplementedError("LAW28 (honeycomb) is implemented for 3D solid elements only.")
+
+
+def solid_tangent(mat: Material, sig: np.ndarray | None = None, epsp: np.ndarray | None = None, epsp_incr: np.ndarray | None = None, extra: dict | None = None) -> np.ndarray:
+    """Algorithmic elastoplastic tangent stiffness matrix for LAW28 solids."""
+    if sig is None:
+        sig = np.zeros((1, 6))
+    elif np.ndim(sig) == 1:
+        sig = sig[None, :]
+    return consistent_solid_tangent(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
+
+
+def tangent(mat: Any = None, **kwargs: Any) -> np.ndarray:
+    """Convenience alias for solid_tangent matching the material law template."""
+    return solid_tangent(mat, **kwargs)
+
+
+tangent_law28_solid = solid_tangent
+
+
+def extra_shapes(mat: Any = None, nip: int = 1) -> dict[str, tuple[int, ...]]:
+    """Extra history shapes for LAW28 (eps28: 6 components, off28: 1 component)."""
+    return {
+        "eps28": (nip, 6) if nip else (6,),
+        "off28": (nip,) if nip else (1,),
+    }
+
+
+def needs_defgrad(mat: Any = None) -> bool:
+    """LAW28 does not require deformation gradient tensor."""
+    return False
 
 
 # ------------------------------------------------------------------ #
