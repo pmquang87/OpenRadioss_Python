@@ -1,6 +1,8 @@
 """
 LAW73 — Thermal Hill Orthotropic Plasticity for Shell Elements (/MAT/LAW73, /MAT/BARLAT2000, /MAT/HILL_THERM).
 
+OpenRadioss /MAT/HILL_THERM (LAW73) Python implementation.
+
 Upstream Fortran reference:
   - Starter reader: starter/source/materials/mat/mat073/hm_read_mat73.F
   - Engine physics: engine/source/materials/mat/mat073/sigeps73c.F
