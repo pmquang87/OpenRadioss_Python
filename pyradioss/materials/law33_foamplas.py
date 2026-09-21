@@ -1,3 +1,8 @@
+# Ported from OpenRadioss Fortran:
+# Source: engine/source/materials/mat/mat033/sigeps33.F
+# Subroutine: SIGEPS33 (lines 35-580)
+# Subroutines called: JACOBIEW, DREH, VALPVEC_V, VALPVECDP_V, FINTER
+# Starter reader: starter/source/materials/mat/mat033/hm_read_mat33.F (lines 39-290)
 """LAW33 — Crushable foam plasticity (/MAT/LAW33, /MAT/FOAM_PLAS).
 
 Fortran origin: ``engine/source/materials/mat/mat033/sigeps33.F`` (the
@@ -49,6 +54,7 @@ _THREE_HALF = 1.5
 _EP20 = 1.0e20
 _EM10 = 1.0e-10
 _EM15 = 1.0e-15
+_EM20 = 1.0e-20
 
 
 # ------------------------------------------------------------------ #
@@ -124,9 +130,9 @@ def build_law33(rec) -> Material:
     if fac == 0.0:
         fac = 1.0   # hm_read_mat33: IF (FAC == ZERO) FAC = ONE * FAC_UNIT
 
-    # Hidden parameters (not exposed in current HM reader)
-    ifn2 = 0
-    fac1 = 0.0
+    # Rate dependence parameters (hm_read_mat33 lines 125-136, sigeps33 lines 161-172)
+    ifn2 = int(_g(["FUN_A2", "ifn2", "IFN2", "rate_curve_id", "IFORM"], 0))
+    fac1 = _g(["MAT_F1", "fac1", "FAC1", "IFscale1"], 1.0 if ifn2 != 0 else 0.0)
 
     p0 = _g(["MAT_P0", "p0", "P0"])
     phi = _g(["MAT_PHI", "phi", "PHI"])
@@ -145,6 +151,10 @@ def build_law33(rec) -> Material:
         "FAC": fac, "FAC1": fac1,
         "IFN1": ifn1, "IFN2": ifn2,
     }
+    if "yield_curve" in p:
+        params["yield_curve"] = p["yield_curve"]
+    if "rate_curve" in p:
+        params["rate_curve"] = p["rate_curve"]
 
     if icase == 3:
         # KEN = 2 (or -2): tension cutoff branch
@@ -171,11 +181,11 @@ def build_law33(rec) -> Material:
 
 
 def resolve(mat: Material, model, log) -> None:
-    """Pull optional /FUNCT yield curve (IFN1) into plain arrays.
+    """Pull optional /FUNCT yield curve (IFN1) and rate curve (IFN2) into plain arrays.
 
     Called from ``starter/initialization.py:resolve_materials()`` after
     all /FUNCT cards have been parsed — deck order between /MAT and
-    /FUNCT is free (hm_read_mat33 stores IFN1, the starter resolves the
+    /FUNCT is free (hm_read_mat33 stores IFN1/IFN2, the starter resolves the
     actual function data later).
     """
     p = mat.params
@@ -188,6 +198,12 @@ def resolve(mat: Material, model, log) -> None:
                           f"(FUN_A1) not defined", "MAT CHECK")
             return
         p["yield_curve"] = (fct.x.copy(), fct.y.copy())
+
+    ifn2 = p.get("IFN2", 0)
+    if ifn2 and ifn2 != 0:
+        fct2 = model.functions.get(ifn2)
+        if fct2 is not None:
+            p["rate_curve"] = (fct2.x.copy(), fct2.y.copy())
 
 
 # ------------------------------------------------------------------ #
@@ -387,19 +403,49 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     # Volumetric strain and air pressure
     gamma, sig_air = _air_pressure(rho0_arr, rho, p0, phi, gama0)
 
-    # Yield stress
-    yield_curve = None
-    if p.get("IFN1") and p.get("IFN1") != 0:
-        yield_curve = p.get("yield_curve")
-
-    syield = _compute_yield(gamma, (a_coeff, b_coeff, c_coeff), fac,
-                            yield_curve=yield_curve)
-
     if dt <= 0.0:
         return sig.copy(), epsp, None
 
     # Strain rate (deps / dt)
     deps_rate = deps / dt
+
+    # Yield stress (with optional IFN1 yield curve and IFN2 strain-rate curve)
+    yield_curve = None
+    if p.get("IFN1") and p.get("IFN1") != 0:
+        yield_curve = p.get("yield_curve")
+    elif p.get("yield_curve") is not None:
+        yield_curve = p.get("yield_curve")
+
+    rate_curve = None
+    if p.get("IFN2") and p.get("IFN2") != 0:
+        rate_curve = p.get("rate_curve")
+    elif p.get("rate_curve") is not None:
+        rate_curve = p.get("rate_curve")
+
+    fac1 = p.get("FAC1", 1.0)
+    if fac1 == 0.0 and rate_curve is not None:
+        fac1 = 1.0
+
+    # Deviatoric equivalent strain rate (sigeps33 lines 162-171, 314-323, 467-476)
+    tr_rate = (deps_rate[:, 0] + deps_rate[:, 1] + deps_rate[:, 2]) * _THIRD
+    e1 = deps_rate[:, 0] - tr_rate
+    e2 = deps_rate[:, 1] - tr_rate
+    e3 = deps_rate[:, 2] - tr_rate
+    e4 = deps_rate[:, 3] * _HALF
+    e5 = deps_rate[:, 4] * _HALF
+    e6 = deps_rate[:, 5] * _HALF
+    epsp_rate = 0.5 * (e1**2 + e2**2 + e3**2) + e4**2 + e5**2 + e6**2
+    eq_rate = np.sqrt(3.0 * np.maximum(0.0, epsp_rate)) / _THREE_HALF
+
+    syield = _compute_yield(
+        gamma,
+        (a_coeff, b_coeff, c_coeff),
+        fac,
+        yield_curve=yield_curve,
+        deps_rate=eq_rate,
+        rate_curve=rate_curve,
+        fac1=fac1,
+    )
 
     if icase == 1:
         # ---- KEN=0: Simple elastic trial + principal return ----------
@@ -603,6 +649,50 @@ def consistent_solid_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
         return D
 
     raise NotImplementedError(f"LAW33 KEN={ken} tangent not implemented")
+
+
+def solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
+    """Algorithmic elastoplastic tangent stiffness matrix for LAW33 solids."""
+    if sig is None:
+        sig = np.zeros((1, 6))
+    elif np.ndim(sig) == 1:
+        sig = sig[None, :]
+    return consistent_solid_tangent(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
+
+
+def tangent(mat=None, **kwargs):
+    """Convenience alias for solid_tangent matching the material law template."""
+    return solid_tangent(mat, **kwargs)
+
+
+tangent_law33_solid = solid_tangent
+
+
+def extra_shapes(mat=None, nip=1):
+    """Extra history shapes for LAW33.
+
+    When KEN=1 (Kelvin viscoelastic model), requires total strain tensor
+    tracking (eps33: 6 components).
+    """
+    if mat is not None:
+        p = getattr(mat, "params", {}) or {}
+        ken = p.get("KEN", 0)
+        if abs(ken) == 1:
+            return {"eps33": (nip, 6) if nip else (6,)}
+    return {}
+
+
+def needs_defgrad(mat=None):
+    """LAW33 does not require deformation gradient tensor."""
+    return False
+
+
+def sound_speed(mat, eps=None, extra=None, is_shell=False, **kwargs):
+    """Acoustic sound speed for LAW33 solids: c = sqrt(E / rho0)."""
+    p = getattr(mat, "params", {}) or {}
+    e = p.get("E", p.get("young", 0.0))
+    rho0 = getattr(mat, "rho0", 1.0)
+    return math.sqrt(max(0.0, e) / max(rho0, _EM20))
 
 
 # ------------------------------------------------------------------ #
