@@ -511,3 +511,12 @@ def fsi_step(
         setattr(state, "e_fsi", prev_fsi + dE_fsi)
 
     return dE_fsi
+
+
+__all__ = [
+    "FSIInterface",
+    "fsi_compute_slave_normals",
+    "fsi_pressure_to_force",
+    "fsi_velocity_compatibility",
+    "fsi_step",
+]
