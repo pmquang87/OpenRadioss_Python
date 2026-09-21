@@ -1970,6 +1970,7 @@ _NEW_PORTED_LAWS: dict[int, Any] = {
     20: law20_rigid,
     23: law23_user_mat,
     26: law26_honeycomb_sesame,
+    37: law37_biphas,
     41: law41_jwl_burn,
     45: law45_orth_fabric,
     46: law46_kin_hard,
@@ -1991,6 +1992,7 @@ _NEW_PORTED_LAWS: dict[int, Any] = {
     84: law84_mooney_rivlin,
     85: law85_void_pinch,
     86: law86_honeycomb_shell,
+    90: law90_foam,
     91: law91_pinch_shell,
     96: law96_thermovp,
     97: law97_orth_nonlinear,
@@ -2062,6 +2064,7 @@ _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
     "uv22": (4,),
     "uv25": (12,),
     "uv32": (2,),
+    "uv37": (5,),
     "uv38": (33,),
     "uv43": (4,),
     "uv50": (6,),
@@ -2440,9 +2443,21 @@ LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
     "PLAS_TAB_RATE": {"plane_stress": True, "solid": True, "shell": True},
     "MAT_PLAS_TAB_RATE": {"plane_stress": True, "solid": True, "shell": True},
     "MAT_121": {"plane_stress": True, "solid": True, "shell": True},
+    37: {"plane_stress": False, "solid": True, "shell": False},
+    "37": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW37": {"plane_stress": False, "solid": True, "shell": False},
+    "BIPHAS": {"plane_stress": False, "solid": True, "shell": False},
+    "BIPHASIC": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_LAW37": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_BIPHAS": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_BIPHASIC": {"plane_stress": False, "solid": True, "shell": False},
 }
 
 MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
+    37: law37_biphas.solid_update, "37": law37_biphas.solid_update, "LAW37": law37_biphas.solid_update,
+    "BIPHAS": law37_biphas.solid_update, "BIPHASIC": law37_biphas.solid_update,
+    "MAT_LAW37": law37_biphas.solid_update, "MAT_BIPHAS": law37_biphas.solid_update,
+    "MAT_BIPHASIC": law37_biphas.solid_update,
     120: law120_solid_update, "120": law120_solid_update, "LAW120": law120_solid_update,
     "TAPO": law120_solid_update, "MAT_LAW120": law120_solid_update, "MAT_TAPO": law120_solid_update,
     "LAW120_TAPO": law120_solid_update, "TAB_PONT_ORTH": law120_solid_update,
@@ -2877,7 +2892,7 @@ def extra_shapes(mat, nip=None):
                       dam24=(3,), ang24=(6,), epsf24=(3,),
                       siga24=(3,), epsa24=(3,),
                       vk024=(), vk24=(), rob24=(), off24=(), ini24=())
-    if mat.law == 81:
+    if getattr(mat, "law", None) in (81, "81", "LAW81", "DPRAG_CAP", "MAT_LAW81", "MAT_DPRAG_CAP") or getattr(mat, "law_name", None) in (81, "81", "LAW81", "DPRAG_CAP", "MAT_LAW81", "MAT_DPRAG_CAP"):
         # M37 pack 2: the defp(nel, 2) plastic strains of sigeps81.F90
         shapes.update(epspd81=(), epspv81=())
     if mat.law == 62 and mat.params.get("NPRONY", 0) > 0:
@@ -3180,7 +3195,7 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
         return law42_ogden.solid_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 24:
         return law24_concrete.solid_update(mat, sig, deps, epsp, dt, extra)
-    if mat.law == 81:
+    if getattr(mat, "law", None) in (81, "81", "LAW81", "DPRAG_CAP", "MAT_LAW81", "MAT_DPRAG_CAP") or getattr(mat, "law_name", None) in (81, "81", "LAW81", "DPRAG_CAP", "MAT_LAW81", "MAT_DPRAG_CAP"):
         return law81_druckerprager.solid_update(mat, sig, deps, epsp, dt,
                                                 extra)
     if mat.law == 83:
@@ -4241,6 +4256,8 @@ def sound_speed(mat, rho=None, extra=None, is_shell: bool = False):
         return law60_sound_speed(mat, rho=rho, extra=extra)
     if law in (69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC") or law_name in ("69", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC"):
         return law69_sound_speed(mat, rho=rho, extra=extra)
+    if law in (81, "81", "LAW81", "DPRAG_CAP", "MAT_LAW81", "MAT_DPRAG_CAP") or law_name in ("81", "LAW81", "DPRAG_CAP", "MAT_LAW81", "MAT_DPRAG_CAP"):
+        return law81_druckerprager.sound_speed(mat, rho=rho, extra=extra)
     if law in (82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN") or law_name in ("82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN"):
         return law82_sound_speed(mat, rho=rho, extra=extra)
     if law in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO") or law_name in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO"):
@@ -4712,7 +4729,7 @@ def solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
         _get_law60()
         return law60_solid_tangent(
             mat, sig=sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
-    if mat.law == 81:
+    if getattr(mat, "law", None) in (81, "81", "LAW81", "DPRAG_CAP", "MAT_LAW81", "MAT_DPRAG_CAP") or getattr(mat, "law_name", None) in (81, "81", "LAW81", "DPRAG_CAP", "MAT_LAW81", "MAT_DPRAG_CAP"):
         return law81_druckerprager.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr, extra)
     if mat.law == 62:

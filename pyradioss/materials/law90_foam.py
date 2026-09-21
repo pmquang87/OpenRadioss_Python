@@ -114,6 +114,7 @@ class Law90Params:
     fscales: List[float] = field(default_factory=list)
     curves: List[Tuple[np.ndarray, np.ndarray]] = field(default_factory=list)
     E_MAX: float = 0.0
+    iflag: int = 2  # 1: load/unload follow input curve; 2: hysteretic damage on unloading (sigeps90.F line 157)
 
     def __post_init__(self) -> None:
         if self.gamma != 1.0 and self.alpha == 1.0:
@@ -135,6 +136,8 @@ class Law90Params:
             self.gamma = 1.0
         if self.hys == 0.0:
             self.hys = 1.0
+        if self.iflag == 0:
+            self.iflag = 1 if (self.nl > 0 and self.hys == 0.0) else 2
         if self.E_MAX == 0.0:
             self.E_MAX = max(self.E0, 100.0 * self.E0)
 
@@ -213,6 +216,7 @@ def build_law90(rec: Any) -> Material:
     ismooth = int(_get_param_val(p, ["Ismooth", "ismooth", "ISMOOTH"], 0))
     fcut = float(_get_param_val(p, ["Fcut", "fcut", "FCUT"], 0.0))
     nl = int(_get_param_val(p, ["NL", "nl"], 0))
+    iflag = int(_get_param_val(p, ["IFLAG", "iflag", "MAT_IFLAG"], 2 if hys > 0.0 else 1)) or 2
 
     fct_ids = list(_get_param_val(p, ["fct_IDL", "fct_ids", "FCT_IDL", "load_fids"], []))
     eps_dots = list(_get_param_val(p, ["EpsilondotL", "eps_dots", "EPSILONDOTL", "load_rates"], []))
@@ -241,6 +245,7 @@ def build_law90(rec: Any) -> Material:
         "ismooth": ismooth,
         "fcut": fcut,
         "nl": nl,
+        "iflag": iflag,
         "fct_ids": fct_ids,
         "eps_dots": eps_dots,
         "fscales": fscales,
@@ -264,6 +269,7 @@ def build_law90(rec: Any) -> Material:
         ismooth=ismooth,
         fcut=fcut,
         nl=nl,
+        iflag=iflag,
         fct_ids=fct_ids,
         eps_dots=eps_dots,
         fscales=fscales,
@@ -474,6 +480,7 @@ def solid_step(
     fail = int(p.get("fail", 0))
     ismooth = int(p.get("ismooth", 0))
     fcut = float(p.get("fcut", 0.0))
+    iflag = int(p.get("iflag", 2))
     emax = float(p.get("E_MAX", max(e0, 100.0 * e0)))
     rho0 = float(getattr(mat, "rho0", 1.0))
     if rho0 <= 0.0:
@@ -643,7 +650,8 @@ def solid_step(
         uv[i, 5] = epst
 
         dam = 1.0
-        if (not is_loading) and (w_max > 0.0) and (hys < 1.0 or abs(hys - 1.0) > 1e-12):
+        # Hysteretic energy dissipation on unloading (sigeps90.F lines 514, 660-706)
+        if iflag == 2 and (not is_loading) and (w_max > 0.0) and (hys < 1.0 or abs(hys - 1.0) > 1e-12):
             frac = min(1.0, max(0.0, w_cum / w_max))
             dam_base = max(0.0, 1.0 - (frac**shape))
             dam_pow = dam_base**alpha
@@ -775,6 +783,11 @@ def consistent_solid_tangent(
 ) -> np.ndarray:
     """Consistent solid tangent alias."""
     return solid_tangent(mat, sig=sig, deps=deps, dt=dt, extra=extra, **kwargs)
+
+
+def tangent(group: Any = None, **kwargs: Any) -> np.ndarray:
+    """Material law template tangent interface conforming to pyradioss dispatcher."""
+    return solid_tangent(group, **kwargs)
 
 
 def _register() -> None:
