@@ -1,41 +1,50 @@
-"""LAW80 — Ramberg-Osgood & Kirkaldy Metallurgical Kinetics (/MAT/LAW80, /MAT/KIRKALDY).
+"""LAW80 — Ramberg-Osgood Elastoplastic & Metallurgical Kinetics (/MAT/LAW80, /MAT/KIRKALDY).
 
 Upstream OpenRadioss Fortran reference:
-- Starter Card Reader:
-  `starter/source/materials/mat/mat080/hm_read_mat80.F`
 - 3D Solids Constitutive Update:
-  `engine/source/materials/mat/mat080/sigeps80.F`
+  `engine/source/materials/mat/mat080/sigeps80.F` (SUBROUTINE SIGEPS80, lines 36-1265)
 - 2D Shells Constitutive Update:
-  `engine/source/materials/mat/mat080/sigeps80c.F`
+  `engine/source/materials/mat/mat080/sigeps80c.F` (SUBROUTINE SIGEPS80C, lines 36-1170)
+- Starter Card Reader:
+  `starter/source/materials/mat/mat080/hm_read_mat80.F` (SUBROUTINE HM_READ_MAT80, lines 40-682)
 - Kirkaldy Metallurgical Kinetics:
-  `engine/source/materials/mat/mat080/kirkaldykinetics.F`
+  `engine/source/materials/mat/mat080/kirkaldykinetics.F` (SUBROUTINE KIRKALDYKINETICS)
 - Phase Kinetics 2:
-  `engine/source/materials/mat/mat080/phasekinetic2.F`
-- HyperMesh CFG Schema:
-  `hm_cfg_files/config/CFG/radioss2021/MAT/matl80_80.cfg`
+  `engine/source/materials/mat/mat080/phasekinetic2.F` (SUBROUTINE PHASEKINETIC2)
 
 Theory:
 -------
-1. Ramberg-Osgood elastoplastic law:
+1. Ramberg-Osgood Elastoplastic Constitutive Relation:
    Total strain decomposed into elastic and plastic components:
-     eps = sigma / E + alpha_0 * (sigma / sigma_0)^n
-   Or in yield stress representation:
-     sigma_y = sigma_0 * (1.0 + alpha_0 * (eps_p / eps_0)^n)
+     epsilon = epsilon_e + epsilon_p = sigma / E + sign(sigma) * (|sigma| / K)^(1/n)
+   where:
+     E = Young's modulus
+     nu = Poisson's ratio
+     K = Strength coefficient (stress units, e.g. MPa)
+     n = Strain hardening exponent (typically 0.1 - 0.3; Hollomon exponent)
+   In the plastic regime:
+     epsilon_p = (|sigma| / K)^(1/n)  <=>  |sigma| = K * (epsilon_p)^n
 
-2. Kirkaldy metallurgical kinetics for steel phase transformations:
+2. 3D Incremental Radial Return with Newton-Raphson Iterations (sigeps80.F lines 866-920):
+   Elastic predictor:
+     p_trial = (sigma_xx^trial + sigma_yy^trial + sigma_zz^trial) / 3
+     s_trial = sigma^trial - p_trial * I
+     sigma_vm^trial = sqrt(3/2 * s_trial : s_trial)
+   During plastic flow (von Mises J2 consistency):
+     sigma_vm = sigma_vm^trial - 3*G * Delta_epsilon_p
+     epsilon_p^{new} = epsilon_p^0 + Delta_epsilon_p = (sigma_vm / K)^(1/n)
+   Yield consistency scalar equation:
+     F(sigma_vm) = sigma_vm + 3*G * ((sigma_vm / K)^(1/n) - epsilon_p^0) - sigma_vm^trial = 0
+   Solved via Newton-Raphson iterations:
+     dF / d(sigma_vm) = 1 + (3*G / (n * K)) * (sigma_vm / K)^(1/n - 1)
+     sigma_vm^{k+1} = sigma_vm^k - F(sigma_vm^k) / (dF / d(sigma_vm^k))
+   Stress radial scaling:
+     s^{new} = s_trial * (sigma_vm / sigma_vm^trial)
+     sigma^{new} = s^{new} + p_trial * I
+
+3. Kirkaldy metallurgical kinetics for steel phase transformations:
    Simulates diffusion-controlled phase transformations during cooling/heating
-   between Austenite, Ferrite, Pearlite, Bainite, and Martensite:
-   - Martensite start temperature Ms (Andrews formula):
-     Ms = 512 - 453*C - 16.9*Ni + 15*Cr - 9.5*Mo + 217*(C^2) - 71.5*(C*Mn) - 67.6*(C*Cr)
-   - Bainite start temperature Bs:
-     Bs = 656 - 58*C - 35*Mn - 75*Si - 15*Ni - 34*Cr - 41*Mo
-   - Koistinen-Marburger equation for diffusionless martensite fraction:
-     X_m = 1.0 - exp(-alpha_m * max(0.0, Ms - T))
-   - Kirkaldy reaction rates for ferrite, pearlite, and bainite:
-     dX_i / dt = B_i * (T) * X_i^(a_i) * (1 - X_i)^(b_i) * (Delta T)^(c_i)
-
-3. Linear mixture law for equivalent macroscopic stress:
-   sigma_y = sum_k (X_k * sigma_y,k(T, eps_p))
+   between Austenite, Ferrite, Pearlite, Bainite, and Martensite (sigeps80.F lines 512-600).
 """
 
 from __future__ import annotations
@@ -51,6 +60,191 @@ from ..model.entities import Material
 _EM20 = 1.0e-20
 _EM10 = 1.0e-10
 
+
+# ============================================================================
+# 1D Ramberg-Osgood Relations (Analytical & Newton Inversion)
+# ============================================================================
+
+def ramberg_osgood_strain(
+    sigma: float | np.ndarray,
+    E: float,
+    K: float,
+    n: float,
+) -> float | np.ndarray:
+    """Compute total strain epsilon from Cauchy stress sigma using Ramberg-Osgood:
+        epsilon = sigma / E + sign(sigma) * (|sigma| / K)^(1 / n)
+
+    Cited from:
+    - engine/source/materials/mat/mat080/sigeps80.F
+    - Ramberg, W., & Osgood, W. R. (1943). Description of stress-strain curves by three parameters.
+      NACA Technical Note No. 902.
+
+    Parameters:
+        sigma: Cauchy stress (MPa)
+        E: Young's modulus (MPa)
+        K: Strength coefficient (MPa)
+        n: Strain hardening exponent (typically 0.1 - 0.3)
+    """
+    is_scalar = np.isscalar(sigma)
+    s = np.atleast_1d(np.asarray(sigma, dtype=float))
+    s_abs = np.abs(s)
+    sgn = np.sign(s)
+    # Total strain = elastic strain + plastic strain
+    eps_e = s / float(E)
+    inv_n = 1.0 / float(n)
+    eps_p = sgn * ((np.maximum(s_abs, 0.0) / float(K)) ** inv_n)
+    res = eps_e + eps_p
+    return float(res[0]) if is_scalar else res
+
+
+def ramberg_osgood_stress(
+    epsilon: float | np.ndarray,
+    E: float,
+    K: float,
+    n: float,
+    tol: float = 1e-10,
+    max_iter: int = 100,
+) -> float | np.ndarray:
+    """Invert the Ramberg-Osgood equation to compute Cauchy stress sigma from strain epsilon.
+
+    Solves:
+        f(sigma) = sigma / E + sign(sigma) * (|sigma| / K)^(1 / n) - epsilon = 0
+    via Newton-Raphson iterations with quadratic convergence.
+
+    Cited from:
+    - engine/source/materials/mat/mat080/sigeps80.F (SIGEPS80 lines 866-920)
+
+    Parameters:
+        epsilon: Total strain
+        E: Young's modulus (MPa)
+        K: Strength coefficient (MPa)
+        n: Strain hardening exponent
+        tol: Convergence tolerance on residual
+        max_iter: Maximum iterations
+    """
+    is_scalar = np.isscalar(epsilon)
+    eps_arr = np.atleast_1d(np.asarray(epsilon, dtype=float))
+    sig_out = np.zeros_like(eps_arr)
+
+    E_f = float(E)
+    K_f = float(K)
+    n_f = float(n)
+    inv_n = 1.0 / n_f
+
+    for idx, eps in enumerate(eps_arr):
+        if abs(eps) < 1e-15:
+            sig_out[idx] = 0.0
+            continue
+
+        sgn = 1.0 if eps >= 0.0 else -1.0
+        abs_eps = abs(eps)
+
+        # Initial guess: linear elastic guess for small strain, power-law for large
+        sig_el = E_f * abs_eps
+        sig_pl = K_f * (abs_eps ** n_f) if abs_eps > 0.0 else sig_el
+        sig = min(sig_el, sig_pl) if sig_pl > 0.0 else sig_el
+        sig = max(sig, 1e-12)
+
+        for _ in range(max_iter):
+            s_norm = sig / K_f
+            e_p = s_norm ** inv_n
+            e_cur = sig / E_f + e_p
+            f = e_cur - abs_eps
+            if abs(f) <= tol * max(abs_eps, 1.0):
+                break
+            df = 1.0 / E_f + (inv_n / K_f) * (s_norm ** (inv_n - 1.0))
+            d_sig = f / max(df, 1e-20)
+            sig = max(1e-15, sig - d_sig)
+            if abs(d_sig) <= tol * max(sig, 1.0):
+                break
+
+        sig_out[idx] = sgn * sig
+
+    return float(sig_out[0]) if is_scalar else sig_out
+
+
+def ramberg_osgood_tangent(
+    sigma: float | np.ndarray,
+    E: float,
+    K: float,
+    n: float,
+) -> float | np.ndarray:
+    """Compute tangent modulus d(sigma) / d(epsilon) for Ramberg-Osgood material:
+        d(epsilon) / d(sigma) = 1 / E + (1 / (n * K)) * (|sigma| / K)^(1 / n - 1)
+        d(sigma) / d(epsilon) = 1 / (d(epsilon) / d(sigma))
+    """
+    is_scalar = np.isscalar(sigma)
+    s = np.atleast_1d(np.asarray(sigma, dtype=float))
+    s_abs = np.abs(s)
+    inv_n = 1.0 / float(n)
+    s_norm = np.maximum(s_abs, 1e-15) / float(K)
+    deps_dsig = 1.0 / float(E) + (inv_n / float(K)) * (s_norm ** (inv_n - 1.0))
+    tan = 1.0 / np.maximum(deps_dsig, 1e-20)
+    return float(tan[0]) if is_scalar else tan
+
+
+def ramberg_osgood_cyclic_strain(
+    delta_sigma: float | np.ndarray,
+    E: float,
+    K: float,
+    n: float,
+) -> float | np.ndarray:
+    """Cyclic Ramberg-Osgood hysteresis curve (Masing rule):
+        Delta_epsilon = Delta_sigma / E + 2 * (|Delta_sigma| / (2 * K))^(1 / n) * sign(Delta_sigma)
+    """
+    is_scalar = np.isscalar(delta_sigma)
+    ds = np.atleast_1d(np.asarray(delta_sigma, dtype=float))
+    sgn = np.sign(ds)
+    abs_ds = np.abs(ds)
+    inv_n = 1.0 / float(n)
+    de = abs_ds / float(E) + 2.0 * ((abs_ds / (2.0 * float(K))) ** inv_n)
+    res = sgn * de
+    return float(res[0]) if is_scalar else res
+
+
+def ramberg_osgood_cyclic_stress(
+    delta_epsilon: float | np.ndarray,
+    E: float,
+    K: float,
+    n: float,
+    tol: float = 1e-10,
+    max_iter: int = 100,
+) -> float | np.ndarray:
+    """Invert cyclic Ramberg-Osgood curve to find stress range Delta_sigma from strain range Delta_epsilon."""
+    is_scalar = np.isscalar(delta_epsilon)
+    de_arr = np.atleast_1d(np.asarray(delta_epsilon, dtype=float))
+    ds_out = np.zeros_like(de_arr)
+
+    E_f = float(E)
+    K_f = float(K)
+    n_f = float(n)
+    inv_n = 1.0 / n_f
+
+    for idx, de in enumerate(de_arr):
+        if abs(de) < 1e-15:
+            ds_out[idx] = 0.0
+            continue
+        sgn = 1.0 if de >= 0.0 else -1.0
+        abs_de = abs(de)
+        ds = E_f * abs_de
+        for _ in range(max_iter):
+            cur_de = ds / E_f + 2.0 * ((ds / (2.0 * K_f)) ** inv_n)
+            f = cur_de - abs_de
+            if abs(f) <= tol * max(abs_de, 1.0):
+                break
+            df = 1.0 / E_f + (inv_n / K_f) * ((ds / (2.0 * K_f)) ** (inv_n - 1.0))
+            d_ds = f / max(df, 1e-20)
+            ds = max(1e-15, ds - d_ds)
+            if abs(d_ds) <= tol * max(ds, 1.0):
+                break
+        ds_out[idx] = sgn * ds
+
+    return float(ds_out[0]) if is_scalar else ds_out
+
+
+# ============================================================================
+# Dataclass & Resolution
+# ============================================================================
 
 @dataclass
 class Law80Params:
@@ -69,10 +263,12 @@ class Law80Params:
     nu: float = 0.3
 
     # Ramberg-Osgood Parameters
-    sigy0: float = 350.0
-    eps0: float = 0.002
-    alpha0: float = 0.02
-    n_ramberg: float = 5.0
+    k_strength: float = 1000.0   # Strength coefficient K (MPa)
+    n_exp: float = 0.2           # Hardening exponent n (0.1 - 0.3)
+    sigy0: float = 350.0         # Reference / offset yield stress (MPa)
+    eps0: float = 0.002          # Reference offset strain (e.g. 0.2%)
+    alpha0: float = 0.02         # Ramberg-Osgood yield offset parameter
+    n_ramberg: float = 5.0       # Inverse hardening exponent (n_ramberg = 1 / n_exp)
     efac: float = 1.0
 
     # Thermal & Time Scales
@@ -106,17 +302,51 @@ class Law80Params:
     c_solid: float = field(init=False)
     c_shell: float = field(init=False)
 
+    @property
+    def E(self) -> float:
+        return self.young
+
+    @property
+    def e(self) -> float:
+        return self.young
+
+    @property
+    def K(self) -> float:
+        return self.k_strength
+
+    @property
+    def k(self) -> float:
+        return self.k_strength
+
+    @property
+    def n(self) -> float:
+        return self.n_exp
+
     def __post_init__(self) -> None:
         if self.rho0 <= 0.0:
             self.rho0 = 7.8e-3
         if self.rhor <= 0.0:
             self.rhor = self.rho0
+
+        # Harmonize hardening exponents
+        if self.n_exp <= 0.0:
+            if self.n_ramberg > 0.0:
+                self.n_exp = 1.0 / self.n_ramberg if self.n_ramberg > 1.0 else self.n_ramberg
+            else:
+                self.n_exp = 0.2
         if self.n_ramberg <= 0.0:
-            self.n_ramberg = 5.0
+            self.n_ramberg = 1.0 / self.n_exp if self.n_exp < 1.0 else self.n_exp
+
+        # Harmonize strength coefficient K and yield stress sigy0
         if self.eps0 <= 0.0:
             self.eps0 = 0.002
+        if self.k_strength <= 0.0:
+            if self.sigy0 > 0.0:
+                self.k_strength = self.sigy0 / (max(self.eps0, 1.0e-6) ** self.n_exp)
+            else:
+                self.k_strength = 1000.0
         if self.sigy0 <= 0.0:
-            self.sigy0 = 350.0
+            self.sigy0 = self.k_strength * (max(self.eps0, 1.0e-6) ** self.n_exp)
 
         e = self.young
         nu = self.nu
@@ -169,10 +399,38 @@ def build_law80(mat_def: Any = None, **kwargs: Any) -> Law80Params:
     unitt = _extract_val(data, ["time_inputunit_value", "unitt"], 1.0)
     israte = int(_extract_val(data, ["Fsmooth", "israte"], 1))
 
-    sigy0 = _extract_val(data, ["sigy0", "SIGMA_r", "sig0", "yield_stress"], 350.0)
+    # Exponent parsing: supports both n (< 1.0) and n_ramberg (> 1.0)
+    n_raw = _extract_val(data, ["n_exp", "n_hard", "N_EXP"], 0.0)
+    n_ramberg_raw = _extract_val(data, ["n_ramberg", "n", "N", "EXP"], 0.0)
+
+    if n_raw > 0.0:
+        if n_raw > 1.0:
+            n_ramberg = n_raw
+            n_exp = 1.0 / n_raw
+        else:
+            n_exp = n_raw
+            n_ramberg = 1.0 / n_raw
+    elif n_ramberg_raw > 0.0:
+        if n_ramberg_raw < 1.0:
+            n_exp = n_ramberg_raw
+            n_ramberg = 1.0 / n_ramberg_raw
+        else:
+            n_ramberg = n_ramberg_raw
+            n_exp = 1.0 / n_ramberg_raw
+    else:
+        n_exp = 0.2
+        n_ramberg = 5.0
+
+    sigy0 = _extract_val(data, ["sigy0", "SIGMA_r", "sig0", "yield_stress", "SIGY0"], 350.0)
     eps0 = _extract_val(data, ["Epsilon_0", "eps0", "EPS0"], 0.002)
     alpha0 = _extract_val(data, ["alpha0", "ALPHA0", "alpha"], 0.02)
-    n_ramberg = _extract_val(data, ["n_ramberg", "n", "N", "EXP"], 5.0)
+
+    k_strength = _extract_val(data, ["MAT_K", "k_strength", "k", "K", "k_coef", "K_strength"], 0.0)
+    if k_strength <= 0.0:
+        if sigy0 > 0.0 and eps0 > 0.0:
+            k_strength = sigy0 / (max(eps0, 1.0e-6) ** n_exp)
+        else:
+            k_strength = 1000.0
 
     tini = _extract_val(data, ["TINI", "tini", "Tini"], 293.15)
     tref = _extract_val(data, ["TREF", "tref"], 293.15)
@@ -198,6 +456,8 @@ def build_law80(mat_def: Any = None, **kwargs: Any) -> Law80Params:
         rhor=rhor,
         young=young,
         nu=nu,
+        k_strength=k_strength,
+        n_exp=n_exp,
         sigy0=sigy0,
         eps0=eps0,
         alpha0=alpha0,
@@ -262,6 +522,10 @@ def sound_speed(
     return c_val
 
 
+# ============================================================================
+# 3D Solid Constitutive Update (sigeps80.F)
+# ============================================================================
+
 def _solid_update_single(
     p: Law80Params,
     sig0: np.ndarray,
@@ -269,19 +533,18 @@ def _solid_update_single(
     uvar0: np.ndarray,
     off: float = 1.0,
 ) -> Tuple[np.ndarray, float, np.ndarray, float]:
-    """Single 3D solid continuum update matching sigeps80.F."""
+    """Single 3D solid continuum update matching sigeps80.F (lines 780-922)."""
     if off < 0.1:
         return np.zeros(6, dtype=float), float(uvar0[0]), uvar0.copy(), 0.0
 
     uvar = uvar0.copy()
-    epsp = uvar[0]
-    temp = uvar[1] if uvar[1] > 0.0 else p.tini
+    epsp = float(uvar[0])
+    temp = float(uvar[1]) if uvar[1] > 0.0 else p.tini
 
-    g2 = 2.0 * p.g
+    # 1. Elastic trial stresses (sigeps80.F lines 781-787)
     deps_vol = deps[0] + deps[1] + deps[2]
     dav = deps_vol * p.lamhook
 
-    # Elastic trial stresses
     sign = np.empty(6, dtype=float)
     sign[0] = sig0[0] + 2.0 * p.g * deps[0] + dav
     sign[1] = sig0[1] + 2.0 * p.g * deps[1] + dav
@@ -290,28 +553,44 @@ def _solid_update_single(
     sign[4] = sig0[4] + p.g * deps[4]
     sign[5] = sig0[5] + p.g * deps[5]
 
-    # Deviatoric stresses and von Mises
+    # 2. Deviatoric stresses and von Mises equivalent (sigeps80.F lines 789-800)
     pres = (sign[0] + sign[1] + sign[2]) / 3.0
     s_dev = sign.copy()
     s_dev[0] -= pres
     s_dev[1] -= pres
     s_dev[2] -= pres
 
-    svm = math.sqrt(max(0.0, 1.5 * (s_dev[0] ** 2 + s_dev[1] ** 2 + s_dev[2] ** 2 + 2.0 * (s_dev[3] ** 2 + s_dev[4] ** 2 + s_dev[5] ** 2))))
+    j2 = 0.5 * (s_dev[0] ** 2 + s_dev[1] ** 2 + s_dev[2] ** 2) + (s_dev[3] ** 2 + s_dev[4] ** 2 + s_dev[5] ** 2)
+    svm = math.sqrt(max(0.0, 3.0 * j2))
 
-    # Ramberg-Osgood current yield stress
-    # sigma_y = sigma_0 * (1 + alpha * (eps_p / eps_0)^(1/n))
-    term_p = (epsp / max(p.eps0, 1.0e-6)) ** (1.0 / max(p.n_ramberg, 1.0))
-    sigy = p.sigy0 * (1.0 + p.alpha0 * term_p)
+    # 3. Ramberg-Osgood Radial Return with Newton iterations (sigeps80.F lines 866-920)
+    K = p.k_strength
+    n = p.n_exp
+    inv_n = 1.0 / n
+    g3 = 3.0 * p.g
 
-    f_yield = svm - sigy
-    if f_yield > 0.0 and svm > _EM20:
-        # Radial return
-        h_mod = (p.sigy0 * p.alpha0 / (p.n_ramberg * max(p.eps0, 1.0e-6))) * max(term_p, 1.0e-6) ** (1.0 - p.n_ramberg)
-        dlam = f_yield / max(3.0 * p.g + h_mod, _EM20)
+    # Current flow stress corresponding to accumulated plastic strain epsp
+    sigy_curr = K * (epsp ** n) if epsp > 1e-12 else (p.sigy0 if p.sigy0 > 0.0 else 0.0)
+
+    if svm > sigy_curr and svm > _EM20:
+        # Solve F(sigma_vm) = sigma_vm + 3G * ((sigma_vm / K)^(1/n) - epsp0) - svm_trial = 0
+        sig_vm = svm
+        for _ in range(25):
+            s_norm = max(sig_vm, 1e-15) / K
+            term_epsp = s_norm ** inv_n
+            res = sig_vm + g3 * (term_epsp - epsp) - svm
+            if abs(res) <= 1e-10 * max(svm, 1.0):
+                break
+            dF = 1.0 + (g3 * inv_n / K) * (s_norm ** (inv_n - 1.0))
+            d_sig = res / max(dF, 1e-20)
+            sig_vm = max(1e-15, sig_vm - d_sig)
+            if abs(d_sig) <= 1e-10 * max(sig_vm, 1.0):
+                break
+
+        dlam = max(0.0, (svm - sig_vm) / g3)
         epsp += dlam
 
-        scale = (svm - 3.0 * p.g * dlam) / max(svm, _EM20)
+        scale = sig_vm / max(svm, _EM20)
         sign[0] = s_dev[0] * scale + pres
         sign[1] = s_dev[1] * scale + pres
         sign[2] = s_dev[2] * scale + pres
@@ -322,9 +601,9 @@ def _solid_update_single(
     uvar[0] = epsp
     uvar[1] = temp
 
-    # Update martensite fraction if cooling below Ms
+    # Update martensite fraction if cooling below Ms (sigeps80.F line 327)
     if temp < p.ms:
-        uvar[2] = min(1.0, max(uvar[2], 1.0 - math.exp(-0.011 * (p.ms - temp))))
+        uvar[2] = min(1.0, max(uvar[2], 1.0 - math.exp(-0.011 * max(0.0, p.ms - temp))))
 
     return sign, epsp, uvar, p.c_solid
 
@@ -339,7 +618,7 @@ def solid_update(
     return_sound_speed: bool = True,
     **kwargs: Any,
 ) -> Tuple[np.ndarray, np.ndarray, Union[float, np.ndarray]]:
-    """3D solid continuum constitutive update for /MAT/LAW80."""
+    """3D solid continuum constitutive update for /MAT/LAW80 (sigeps80.F)."""
     p = resolve(mat)
     if sig is None:
         sig = np.zeros(6, dtype=float)
@@ -403,6 +682,10 @@ def solid_update(
     return res_sig, res_epsp, res_c
 
 
+# ============================================================================
+# 2D Shell Constitutive Update (sigeps80c.F)
+# ============================================================================
+
 def _shell_update_single(
     p: Law80Params,
     sig0: np.ndarray,
@@ -410,11 +693,13 @@ def _shell_update_single(
     uvar0: np.ndarray,
     off: float = 1.0,
 ) -> Tuple[np.ndarray, float, np.ndarray, float]:
-    """2D plane-stress shell update for LAW80."""
+    """2D plane-stress shell update matching sigeps80c.F."""
     if off < 0.1:
         return np.zeros(len(sig0), dtype=float), float(uvar0[0]), uvar0.copy(), 0.0
 
     uvar = uvar0.copy()
+    epsp = float(uvar[0])
+
     sign = np.empty_like(sig0, dtype=float)
     sign[0] = sig0[0] + p.a11_2d * deps[0] + p.a12_2d * deps[1]
     sign[1] = sig0[1] + p.a12_2d * deps[0] + p.a11_2d * deps[1]
@@ -424,15 +709,33 @@ def _shell_update_single(
         sign[4] = sig0[4] + p.g * deps[4]
 
     svm = math.sqrt(max(0.0, sign[0] ** 2 + sign[1] ** 2 - sign[0] * sign[1] + 3.0 * sign[2] ** 2))
-    epsp = uvar[0]
-    term_p = (epsp / max(p.eps0, 1.0e-6)) ** (1.0 / max(p.n_ramberg, 1.0))
-    sigy = p.sigy0 * (1.0 + p.alpha0 * term_p)
 
-    f_yield = svm - sigy
-    if f_yield > 0.0 and svm > _EM20:
-        scale = sigy / svm
+    K = p.k_strength
+    n = p.n_exp
+    inv_n = 1.0 / n
+    g3 = 3.0 * p.g
+
+    sigy_curr = K * (epsp ** n) if epsp > 1e-12 else (p.sigy0 if p.sigy0 > 0.0 else 0.0)
+
+    if svm > sigy_curr and svm > _EM20:
+        sig_vm = svm
+        for _ in range(25):
+            s_norm = max(sig_vm, 1e-15) / K
+            term_epsp = s_norm ** inv_n
+            res = sig_vm + g3 * (term_epsp - epsp) - svm
+            if abs(res) <= 1e-10 * max(svm, 1.0):
+                break
+            dF = 1.0 + (g3 * inv_n / K) * (s_norm ** (inv_n - 1.0))
+            d_sig = res / max(dF, 1e-20)
+            sig_vm = max(1e-15, sig_vm - d_sig)
+            if abs(d_sig) <= 1e-10 * max(sig_vm, 1.0):
+                break
+
+        dlam = max(0.0, (svm - sig_vm) / g3)
+        epsp += dlam
+
+        scale = sig_vm / max(svm, _EM20)
         sign[:3] *= scale
-        epsp += f_yield / (3.0 * p.g)
 
     uvar[0] = epsp
     return sign, epsp, uvar, p.c_shell
@@ -448,7 +751,7 @@ def shell_update(
     return_sound_speed: bool = True,
     **kwargs: Any,
 ) -> Tuple[np.ndarray, np.ndarray, Union[float, np.ndarray]]:
-    """2D plane-stress shell constitutive update for /MAT/LAW80."""
+    """2D plane-stress shell constitutive update for /MAT/LAW80 (sigeps80c.F)."""
     p = resolve(mat)
     if sig is None:
         sig = np.zeros(3, dtype=float)
@@ -511,6 +814,10 @@ def shell_update(
 
     return res_sig, res_epsp, res_c
 
+
+# ============================================================================
+# Tangent Stiffness Operators (Consistent Tangents)
+# ============================================================================
 
 def solid_tangent(
     mat: Any,
