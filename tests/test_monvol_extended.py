@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from pyradioss.model.model import Model
+from pyradioss.common.tables import FunctTable
 from pyradioss.model.entities import (
     MonvolGas,
     MonvolPres,
@@ -20,7 +21,6 @@ from pyradioss.model.entities import (
     FvmInjector,
     Surface,
     Material,
-    Function,
 )
 from pyradioss.engine.airbag import (
     update_airbag_thermodynamics,
@@ -97,7 +97,7 @@ def test_monvol_pres_follows_curve():
     t_samples = [0.0, 0.01, 0.02, 0.05, 0.10]
     p_samples = [100000.0, 150000.0, 220000.0, 180000.0, 120000.0]
 
-    func = Function(id=1, x=np.array(t_samples), y=np.array(p_samples))
+    func = FunctTable(fct_id=1, x=np.array(t_samples), y=np.array(p_samples))
     model.functions[1] = func
 
     mv = MonvolPres(
@@ -193,7 +193,8 @@ def test_airbag_volume_change_work():
     """
     model = Model()
     # Material for AIRBAG1
-    mat = Material(id=1, title="AirbagGas", r_spec=287.05)
+    mat = Material(id=1, law=19, title="AirbagGas")
+    mat.r_spec = 287.05
     mat.params["CPA"] = 1004.0
     mat.params["CPB"] = 0.0
     mat.params["CPC"] = 0.0
