@@ -627,10 +627,13 @@ from .law34_boltzmann import (solid_update as law34_solid_update,
                              shell_membrane_tangent as law34_shell_tangent,
                              truss_update as law34_truss_update,
                              beam_update as law34_beam_update)
-from .law37_biphas import (solid_update as law37_solid_update,
+from .law37_biphas import (Law37Params,
+                           build_law37,
+                           solid_update as law37_solid_update,
                            shell_update as law37_shell_update,
                            sound_speed as law37_sound_speed,
-                           consistent_solid_tangent as law37_solid_tangent)
+                           consistent_solid_tangent as law37_solid_tangent,
+                           tangent_law37_solid)
 from .law69_hyperelastic import (
     Law69Params,
     build_law69,
