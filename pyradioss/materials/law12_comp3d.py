@@ -1,17 +1,43 @@
 """
-pyradioss.materials.law12_comp3d — /MAT/LAW12 (/MAT/3D_COMP, /MAT/COMP_3D).
+OpenRadioss /MAT/LAW12 (/MAT/3D_COMP, /MAT/COMP_3D) — 3D Orthotropic Elastic Composite.
 
-3D Orthotropic Elastic-Plastic Composite Material with Fibers and Damage.
+Upstream OpenRadioss Fortran source references:
+- Engine constitutive kernel:
+  C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat012\m12law.F
+  Subroutine: M12LAW (referenced as sigeps12.F for LAW12)
+- Starter card reader and property initialization:
+  C:\OpenRadioss\source\OpenRadioss-latest-20260520\starter\source\materials\mat\mat012\hm_read_mat12.F
+  Subroutine: HM_READ_MAT12
+- Local fiber orientation transformations:
+  engine/source/materials/mat/mat014/m14ama.F
+  engine/source/materials/mat/mat014/m14gtf.F
+  engine/source/materials/mat/mat014/m14ftg.F
+- HyperMesh configuration:
+  hm_cfg_files/config/CFG/radioss2020/MAT/3d_comp_12.cfg
 
-Fortran origin:
-  - Starter reader: starter/source/materials/mat/mat012/hm_read_mat12.F
-  - Engine kernel:  engine/source/materials/mat/mat012/m12law.F
-  - Coordinate transformations:
-      engine/source/materials/mat/mat014/m14ama.F
-      engine/source/materials/mat/mat014/m14gtf.F
-      engine/source/materials/mat/mat014/m14ftg.F
-  - CFG specification:
-      hm_cfg_files/config/CFG/radioss2020/MAT/3d_comp_12.cfg
+Constitutive Model:
+-------------------
+LAW12 models 3D orthotropic elastic composite solid elements with optional fiber reinforcement:
+1. 3D Orthotropic Elasticity (9 independent engineering constants):
+   - Young's moduli: E11, E22, E33 (MAT_EA, MAT_EB, MAT_EC)
+   - Poisson's ratios: nu12, nu23, nu31 (MAT_PRAB, MAT_PRBC, MAT_PRCA)
+     Reciprocity relations: nu21 = nu12*E22/E11, nu32 = nu23*E33/E22, nu13 = nu31*E11/E33
+   - Shear moduli: G12, G23, G31 (MAT_GAB, MAT_GBC, MAT_GCA)
+2. Inversion of 3D compliance matrix to stiffness tensor D:
+   - D11, D12, D13, D22, D23, D33, G12, G23, G31
+   - Incremental Hooke's law in local orthotropic axes:
+       Delta sigma_1 = D11*Deps_1 + D12*Deps_2 + D13*Deps_3
+       Delta sigma_2 = D12*Deps_1 + D22*Deps_2 + D23*Deps_3
+       Delta sigma_3 = D13*Deps_1 + D23*Deps_2 + D33*Deps_3
+       Delta sigma_12 = G12*Deps_12
+       Delta sigma_23 = G23*Deps_23
+       Delta sigma_31 = G31*Deps_31
+3. Fiber Composite Reinforcement:
+   - Fiber volume fraction: alpha (MAT_ALPHA)
+   - Fiber Young's modulus: Efib (MAT_EFIB)
+   - Fiber strain and stress tracking: sigma_f = Efib * eps_f
+4. Acoustic Sound Speed:
+   - c = sqrt(max(D11, D22, D33) / rho0)
 """
 
 from __future__ import annotations
@@ -1631,6 +1657,22 @@ def consistent_solid_tangent(
     if is_1d:
         return tangents[0]
     return tangents
+
+
+solid_tangent = consistent_solid_tangent
+
+
+def tangent(group: Any = None, sig: Optional[np.ndarray] = None, **kwargs: Any) -> Optional[np.ndarray]:
+    """Elemental / group tangent interface compliance."""
+    if group is None:
+        return None
+    mat = getattr(group, "mat", group)
+    if sig is None:
+        sig = np.zeros(6, dtype=float)
+    try:
+        return solid_tangent(mat, sig, **kwargs)
+    except Exception:
+        return None
 
 
 # ============================================================================
