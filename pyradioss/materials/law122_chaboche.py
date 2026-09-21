@@ -1,14 +1,25 @@
-"""OpenRadioss /MAT/LAW122 — Chaboche Nonlinear Kinematic Hardening Model.
+"""OpenRadioss /MAT/LAW122 — Modified Ladevèze Composite & Chaboche Hardening Model.
 
-Elastoplastic constitutive model incorporating Chaboche / Armstrong-Frederick
-nonlinear kinematic hardening, Voce isotropic hardening, orthotropic damage,
-and cutting-plane / Newton return mapping for cyclic plasticity.
+Elastoplastic-damage constitutive model integrating:
+1. OpenRadioss MAT122 (Modified Ladevèze Delamination & Composite Damage Model):
+   - Transverse isotropic plasticity in matrix and shear directions (A * (sig22^2 + sig33^2) + sig12^2 + sig23^2 + sig31^2)
+   - Power-law hardening (sig_y = sigy0*(1+fr0) + beta * pla^m)
+   - Cutting plane Newton return mapping (IRES=2) and NICE explicit scheme (IRES=1)
+   - Fiber tensile/compressive damage (D_ft, D_fc) with optional buckling (IBUCK)
+   - In-plane shear damage (D) and transverse matrix damage (D')
+   - Directional strain-rate dependency laws
+2. Classical Chaboche / Armstrong-Frederick Nonlinear Kinematic Hardening:
+   - J2 elastoplasticity with backstress tensor alpha and Voce isotropic hardening
+   - Algorithmic tangent operator for implicit/explicit solvers
 
 Upstream Fortran references:
-  - `engine/source/materials/mat/mat122/sigeps122.F`
-  - `engine/source/materials/mat/mat122/sigeps122c.F`
-  - `engine/source/materials/mat/mat122/mat122_newton.F`
-  - `starter/source/materials/mat/mat122/hm_read_mat122.F`
+  - `engine/source/materials/mat/mat122/sigeps122.F` (lines 33-113: solid dispatcher)
+  - `engine/source/materials/mat/mat122/sigeps122c.F` (lines 33-129: shell dispatcher)
+  - `engine/source/materials/mat/mat122/mat122_newton.F` (lines 30-676: 3D Newton cutting plane)
+  - `engine/source/materials/mat/mat122/mat122_nice.F` (lines 30-697: 3D NICE explicit scheme)
+  - `engine/source/materials/mat/mat122/mat122c_newton.F` (lines 30-668: shell Newton cutting plane)
+  - `engine/source/materials/mat/mat122/mat122c_nice.F` (lines 30-687: shell NICE explicit scheme)
+  - `starter/source/materials/mat/mat122/hm_read_mat122.F` (lines 39-601: 15 cards reader)
   - `hm_cfg_files/config/CFG/radioss2023/MAT/matl122_modified_ladeveze.cfg`
 """
 
@@ -26,40 +37,105 @@ _EM10 = 1.0e-10
 
 @dataclass
 class Law122Params:
-    """Parameters for OpenRadioss /MAT/LAW122 (Chaboche / Modified Ladeveze)."""
+    """Parameters for OpenRadioss /MAT/LAW122 (Modified Ladevèze & Chaboche)."""
     id: int = 1
     title: str = ""
     rho0: float = 0.0
     refer_rho: float = 0.0
     rho: float = 0.0
-    # Elastic parameters
-    young1: float = 1.0
-    young2: float = 1.0
-    young3: float = 1.0
-    nu12: float = 0.3
+
+    # Orthotropic elastic moduli (Card 2, 3 in hm_read_mat122.F)
+    young1: float = 1.0      # E1: Longitudinal fiber Young modulus
+    young2: float = 1.0      # E2: Transverse matrix Young modulus
+    young3: float = 1.0      # E3: Out-of-plane Young modulus
+    nu12: float = 0.3        # In-plane Poisson's ratio
     nu21: float = 0.3
     nu13: float = 0.3
     nu31: float = 0.3
     nu23: float = 0.3
     nu32: float = 0.3
-    g12: float = 0.0
-    g23: float = 0.0
-    g31: float = 0.0
-    # Initial yield stress and isotropic hardening
-    sigy0: float = 1.0
-    r_inf: float = 0.0       # Isotropic saturation stress increment
-    b_iso: float = 0.0       # Isotropic hardening rate
-    # Chaboche kinematic hardening parameters
-    c_kin: float = 0.0       # Kinematic hardening modulus C
-    gamma_kin: float = 0.0   # Kinematic recall parameter gamma
-    # Algorithmic options
-    ires: int = 2            # 1: Nice, 2: Newton
-    dmax: float = 0.99       # Maximum damage
+    g12: float = 0.0         # In-plane shear modulus
+    g23: float = 0.0         # Transverse shear modulus
+    g31: float = 0.0         # Transverse shear modulus
+
+    # Card 4: Compression elasticity & flags (mat122_newton.F lines 113-117)
+    e1c: float = 0.0         # Longitudinal compression modulus
+    gamma: float = 0.0       # Compressive non-linear parameter
+    ish: int = 0             # Shear damage law type (1=linear, 2=exponential, 3=tabulated)
+    itr: int = 0             # Transverse damage law type (1=linear, 2=exponential, 3=tabulated)
+    ires: int = 2            # Return mapping method (1=NICE explicit, 2=Newton cutting-plane)
+
+    # Card 5: Plasticity parameters (mat122_newton.F lines 118-121)
+    sigy0: float = 1.0       # Initial yield stress
+    beta: float = 0.0        # Hardening parameter beta
+    hard_m: float = 0.0      # Hardening exponent m
+    hard_a: float = 1.0      # Plastic eccentricity parameter A
+
+    # Card 6 & 7: Fiber damage parameters (mat122_newton.F lines 122-128)
+    eps_fti: float = 0.0     # Initial fiber tensile failure strain
+    eps_ftu: float = 0.0     # Ultimate fiber tensile failure strain
+    dftu: float = 0.0        # Fiber tensile ultimate damage
+    eps_fci: float = 0.0     # Initial fiber compressive failure strain
+    eps_fcu: float = 0.0     # Ultimate fiber compressive failure strain
+    dfcu: float = 0.0        # Fiber compressive ultimate damage
+    ibuck: int = 0           # Fiber buckling flag
+
+    # Card 8, 9: Matrix shear damage (mat122_newton.F lines 129-135)
+    ifuncd1: int = 0
+    dsat1: float = 0.0       # Shear damage saturation
+    y0: float = 0.0          # Initial shear damage threshold
+    yc: float = 0.0          # Critical shear damage parameter
+    b: float = 0.0           # Shear-transverse coupling parameter B
+    dmax: float = 0.99       # Maximum allowable damage
+    yr: float = 0.0          # Rupture energy density threshold
+    ysp: float = 0.0         # Critical energy density
+
+    # Card 10, 11: Matrix transverse damage (mat122_newton.F lines 136-141)
+    ifuncd2: int = 0
+    dsat2: float = 0.0       # Transverse tensile damage saturation
+    y0p: float = 0.0         # Initial transverse tensile damage threshold
+    ycp: float = 0.0         # Critical transverse tensile damage parameter
+    ifuncd2c: int = 0
+    dsat2c: float = 0.0      # Transverse compressive damage saturation
+    y0pc: float = 0.0        # Initial transverse compressive damage threshold
+    ycpc: float = 0.0        # Critical transverse compressive damage parameter
+
+    # Card 12-14: Strain rate dependency (mat122_newton.F lines 142-157)
+    epsd11: float = 0.0
+    d11: float = 0.0
+    n11: float = 0.0
+    d11u: float = 0.0
+    n11u: float = 0.0
+    epsd12: float = 0.0
+    d22: float = 0.0
+    n22: float = 0.0
+    d12: float = 0.0
+    n12: float = 0.0
+    epsdr0: float = 0.0
+    dr0: float = 0.0
+    nr0: float = 0.0
+    ltype11: int = 0
+    ltype12: int = 0
+    ltyper0: int = 0
+    fcut: float = 0.0
+
+    # Chaboche kinematic hardening extensions (for cyclic plasticity)
+    r_inf: float = 0.0       # Voce isotropic saturation increment
+    b_iso: float = 0.0       # Voce isotropic hardening rate
+    c_kin: float = 0.0       # Chaboche kinematic modulus C
+    gamma_kin: float = 0.0   # Chaboche recall parameter gamma
+
     # Derived moduli
     bulk: float = field(init=False)
     lame: float = field(init=False)
     a11: float = field(init=False)
     a12: float = field(init=False)
+    s11: float = field(init=False)
+    s12: float = field(init=False)
+    s13: float = field(init=False)
+    s22: float = field(init=False)
+    s23: float = field(init=False)
+    s33: float = field(init=False)
 
     def __post_init__(self) -> None:
         if self.rho > 0.0 and self.rho0 <= 0.0:
@@ -93,6 +169,32 @@ class Law122Params:
         self.a11 = self.young1 / max(_EM20, denom)
         self.a12 = (self.young2 * self.nu12) / max(_EM20, denom)
 
+        # 3D Orthotropic compliance and stiffness components (mat122_newton.F lines 261-276)
+        c11 = 1.0 / max(self.young1, _EM20)
+        c22 = 1.0 / max(self.young2, _EM20)
+        c33 = 1.0 / max(self.young3, _EM20)
+        c12 = -self.nu12 / max(self.young1, _EM20)
+        c13 = -self.nu31 / max(self.young3, _EM20)
+        c23 = -self.nu23 / max(self.young2, _EM20)
+
+        detc = (
+            c11 * c22 * c33
+            - c11 * c23 * c23
+            - c12 * c12 * c33
+            + c12 * c13 * c23
+            + c13 * c12 * c23
+            - c13 * c22 * c13
+        )
+        if abs(detc) < _EM20:
+            detc = _EM20
+
+        self.s11 = (c22 * c33 - c23 * c23) / detc
+        self.s12 = -(c12 * c33 - c13 * c23) / detc
+        self.s13 = (c12 * c23 - c13 * c22) / detc
+        self.s22 = (c11 * c33 - c13 * c13) / detc
+        self.s23 = -(c11 * c23 - c13 * c12) / detc
+        self.s33 = (c11 * c22 - c12 * c12) / detc
+
     @property
     def young(self) -> float:
         return self.young1
@@ -107,7 +209,7 @@ class Law122Params:
 
     @classmethod
     def from_material(cls, mat: Any) -> Law122Params:
-        """Construct Law122Params from generic Material or dictionary."""
+        """Construct Law122Params from generic Material, MaterialLaw122, or dictionary."""
         if isinstance(mat, Law122Params):
             return mat
 
@@ -142,13 +244,73 @@ class Law122Params:
         g12 = float(_get(["g12", "G120", "MAT_G12"], young1 / (2.0 * (1.0 + nu12))))
         g23 = float(_get(["g23", "G230", "MAT_G23"], g12))
         g31 = float(_get(["g31", "G310", "MAT_G31"], g12))
-        sigy0 = float(_get(["sigy0", "SIGY0", "MAT_SIGY0", "sigy"], 1.0))
-        r_inf = float(_get(["r_inf", "R_INF", "DSAT1", "MAT_R_INF"], 0.0))
-        b_iso = float(_get(["b_iso", "B_ISO", "B", "MAT_B"], 0.0))
-        c_kin = float(_get(["c_kin", "C_KIN", "C", "GAMMA", "MAT_C"], 0.0))
-        gamma_kin = float(_get(["gamma_kin", "GAMMA_KIN", "BETA", "MAT_GAMMA"], 0.0))
+
+        # Compression elasticity & flags
+        e1c = float(_get(["e1c", "E1C", "MAT_E1C"], 0.0))
+        gamma = float(_get(["gamma", "GAMMA", "MAT_GAMMA"], 0.0))
+        ish = int(_get(["ish", "ISH", "MAT_ISH"], 0))
+        itr = int(_get(["itr", "ITR", "MAT_ITR"], 0))
         ires = int(_get(["ires", "IRES", "MAT_IRES"], 2))
+
+        # Plasticity parameters
+        sigy0 = float(_get(["sigy0", "SIGY0", "MAT_SIGY0", "sigy"], 1.0))
+        beta = float(_get(["beta", "BETA", "MAT_BETA"], 0.0))
+        hard_m = float(_get(["hard_m", "m", "M", "MAT_M"], 0.0))
+        hard_a = float(_get(["hard_a", "a", "A", "MAT_A"], 1.0))
+
+        # Fiber damage
+        eps_fti = float(_get(["eps_fti", "EFTI", "MAT_EFTI"], 0.0))
+        eps_ftu = float(_get(["eps_ftu", "EFTU", "MAT_EFTU"], 0.0))
+        dftu = float(_get(["dftu", "DFTU", "MAT_DFTU"], 0.0))
+        eps_fci = float(_get(["eps_fci", "EFCI", "MAT_EFCI"], 0.0))
+        eps_fcu = float(_get(["eps_fcu", "EFCU", "MAT_EFCU"], 0.0))
+        dfcu = float(_get(["dfcu", "DFCU", "MAT_DFCU"], 0.0))
+        ibuck = int(_get(["ibuck", "IBUCK", "MAT_IBUCK"], 0))
+
+        # Matrix shear damage
+        ifuncd1 = int(_get(["ifuncd1", "IFUNCD1"], 0))
+        dsat1 = float(_get(["dsat1", "DSAT1", "MAT_DSAT1"], 0.0))
+        y0 = float(_get(["y0", "Y0", "MAT_Y0"], 0.0))
+        yc = float(_get(["yc", "YC", "MAT_YC"], 0.0))
+        b = float(_get(["b", "B", "MAT_B"], 0.0))
         dmax = float(_get(["dmax", "DMAX", "MAT_DMAX"], 0.99))
+        yr = float(_get(["yr", "YR", "MAT_YR"], 0.0))
+        ysp = float(_get(["ysp", "YSP", "MAT_YSP"], 0.0))
+
+        # Matrix transverse damage
+        ifuncd2 = int(_get(["ifuncd2", "IFUNCD2"], 0))
+        dsat2 = float(_get(["dsat2", "DSAT2", "MAT_DSAT2"], 0.0))
+        y0p = float(_get(["y0p", "Y0P", "MAT_Y0P"], 0.0))
+        ycp = float(_get(["ycp", "YCP", "MAT_YCP"], 0.0))
+        ifuncd2c = int(_get(["ifuncd2c", "IFUNCD2C"], 0))
+        dsat2c = float(_get(["dsat2c", "DSAT2C", "MAT_DSAT2C"], 0.0))
+        y0pc = float(_get(["y0pc", "Y0PC", "MAT_Y0PC"], 0.0))
+        ycpc = float(_get(["ycpc", "YCPC", "MAT_YCPC"], 0.0))
+
+        # Rate dependency
+        epsd11 = float(_get(["epsd11", "EPSD11", "MAT_EPSD11"], 0.0))
+        d11 = float(_get(["d11", "D11", "MAT_D11"], 0.0))
+        n11 = float(_get(["n11", "N11", "MAT_N11"], 0.0))
+        d11u = float(_get(["d11u", "D11U", "MAT_D11U"], 0.0))
+        n11u = float(_get(["n11u", "N11U", "MAT_N11U"], 0.0))
+        epsd12 = float(_get(["epsd12", "EPSD12", "MAT_EPSD12"], 0.0))
+        d22 = float(_get(["d22", "D22", "MAT_D22"], 0.0))
+        n22 = float(_get(["n22", "N22", "MAT_N22"], 0.0))
+        d12 = float(_get(["d12", "D12", "MAT_D12"], 0.0))
+        n12 = float(_get(["n12", "N12", "MAT_N12"], 0.0))
+        epsdr0 = float(_get(["epsdr0", "EPSDR0", "MAT_EPSDR0"], 0.0))
+        dr0 = float(_get(["dr0", "DR0", "MAT_DR0"], 0.0))
+        nr0 = float(_get(["nr0", "NR0", "MAT_NR0"], 0.0))
+        ltype11 = int(_get(["ltype11", "LTYPE11"], 0))
+        ltype12 = int(_get(["ltype12", "LTYPE12"], 0))
+        ltyper0 = int(_get(["ltyper0", "LTYPER0"], 0))
+        fcut = float(_get(["fcut", "FCUT"], 0.0))
+
+        # Chaboche cyclic plasticity aliases
+        r_inf = float(_get(["r_inf", "R_INF", "MAT_R_INF"], dsat1 if dsat1 > 0.0 else 0.0))
+        b_iso = float(_get(["b_iso", "B_ISO"], 0.0))
+        c_kin = float(_get(["c_kin", "C_KIN", "MAT_C_KIN"], 0.0))
+        gamma_kin = float(_get(["gamma_kin", "GAMMA_KIN", "MAT_GAMMA_KIN"], 0.0))
 
         return cls(
             id=mid,
@@ -166,13 +328,59 @@ class Law122Params:
             g12=g12,
             g23=g23,
             g31=g31,
+            e1c=e1c,
+            gamma=gamma,
+            ish=ish,
+            itr=itr,
+            ires=ires,
             sigy0=sigy0,
+            beta=beta,
+            hard_m=hard_m,
+            hard_a=hard_a,
+            eps_fti=eps_fti,
+            eps_ftu=eps_ftu,
+            dftu=dftu,
+            eps_fci=eps_fci,
+            eps_fcu=eps_fcu,
+            dfcu=dfcu,
+            ibuck=ibuck,
+            ifuncd1=ifuncd1,
+            dsat1=dsat1,
+            y0=y0,
+            yc=yc,
+            b=b,
+            dmax=dmax,
+            yr=yr,
+            ysp=ysp,
+            ifuncd2=ifuncd2,
+            dsat2=dsat2,
+            y0p=y0p,
+            ycp=ycp,
+            ifuncd2c=ifuncd2c,
+            dsat2c=dsat2c,
+            y0pc=y0pc,
+            ycpc=ycpc,
+            epsd11=epsd11,
+            d11=d11,
+            n11=n11,
+            d11u=d11u,
+            n11u=n11u,
+            epsd12=epsd12,
+            d22=d22,
+            n22=n22,
+            d12=d12,
+            n12=n12,
+            epsdr0=epsdr0,
+            dr0=dr0,
+            nr0=nr0,
+            ltype11=ltype11,
+            ltype12=ltype12,
+            ltyper0=ltyper0,
+            fcut=fcut,
             r_inf=r_inf,
             b_iso=b_iso,
             c_kin=c_kin,
             gamma_kin=gamma_kin,
-            ires=ires,
-            dmax=dmax,
         )
 
 
@@ -205,13 +413,15 @@ def extra_shapes(mat: Any = None, nip: Optional[int] = None) -> Dict[str, Tuple[
     """Return extra history variable shapes for LAW122."""
     if nip is not None:
         return {
-            "uvar122": (nip, 8),
+            "uvar122": (nip, 18),
             "backstress": (nip, 6),
+            "damage": (nip, 6),
             "epsp": (nip,),
         }
     return {
-        "uvar122": (8,),
+        "uvar122": (18,),
         "backstress": (6,),
+        "damage": (6,),
         "epsp": (),
     }
 
@@ -228,10 +438,251 @@ def _eval_chaboche_yield_stress(p: Law122Params, eps_p: float) -> Tuple[float, f
         exp_term = math.exp(-p.b_iso * p_eff)
         r = p.r_inf * (1.0 - exp_term)
         dr = p.r_inf * p.b_iso * exp_term
+    elif p.beta > 0.0 and p.hard_m > 0.0:
+        r = p.beta * ((p_eff + _EM20) ** p.hard_m)
+        dr = p.beta * p.hard_m * ((p_eff + _EM20) ** (p.hard_m - 1.0))
     else:
         r = 0.0
         dr = 0.0
     return p.sigy0 + r, dr
+
+
+def mat122_newton_solid_update(
+    p: Law122Params,
+    sig: np.ndarray,
+    deps: np.ndarray,
+    epsp: float = 0.0,
+    eps: Optional[np.ndarray] = None,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Tuple[np.ndarray, float, float, Dict[str, Any]]:
+    """OpenRadioss MAT122 Newton cutting-plane 3D solid return mapping.
+
+    Cites:
+      - `engine/source/materials/mat/mat122/mat122_newton.F` lines 306-445, 603-663.
+    """
+    # Recover internal variables
+    # UVAR: 1:Y, 2:YP, 3:EFTI, 4:EFTU, 5:EFCI, 6:EFCU, 7:Y0, 8:YC, 9:Y0P, 10:YCP,
+    #       11:Y0PC, 12:YCPC, 14:DPY, 15:DPZ, 16:EPSPYY, 17:EPSPZZ
+    uvar = np.zeros(18, dtype=np.float64)
+    dmg = np.zeros(6, dtype=np.float64)
+    if extra is not None:
+        if "uvar122" in extra:
+            uvar = np.asarray(extra["uvar122"], dtype=np.float64).copy()
+        if "damage" in extra:
+            dmg = np.asarray(extra["damage"], dtype=np.float64).copy()
+
+    df = dmg[1]
+    d = dmg[2]
+    dp = dmg[3]
+    dft = dmg[4]
+    dfc = dmg[5]
+    y_dmg = uvar[1]
+    yp_dmg = uvar[2]
+    dpy = uvar[14]
+    dpz = uvar[15]
+    epspyy = uvar[16]
+    epspzz = uvar[17]
+
+    pla = max(0.0, epsp)
+    dpla = 0.0
+
+    # Total strain estimation
+    epsxx = eps[0] if eps is not None else deps[0]
+    epsyy = eps[1] if eps is not None else deps[1]
+    epszz = eps[2] if eps is not None else deps[2]
+
+    # Moduli
+    e2 = p.young2
+    e3 = p.young3
+    g12 = p.g12
+    g23 = p.g23
+    g31 = p.g31
+    s12 = p.s12
+    s13 = p.s13
+    s22 = p.s22
+    s23 = p.s23
+    s33 = p.s33
+
+    # Trial stress tensor (mat122_newton.F lines 309-315)
+    signyy = sig[1] / max(1.0 - dpy, _EM20) + s12 * deps[0] + s22 * deps[1] + s23 * deps[2]
+    signzz = sig[2] / max(1.0 - dpz, _EM20) + s13 * deps[0] + s23 * deps[1] + s33 * deps[2]
+    signxy = sig[3] / max(1.0 - d, _EM20) + g12 * deps[3]
+    signyz = sig[4] / max(1.0 - d, _EM20) + g23 * deps[4]
+    signzx = sig[5] / max(1.0 - d, _EM20) + g31 * deps[5]
+
+    # Equivalent stress (mat122_newton.F lines 318-319)
+    hard_a = p.hard_a if p.hard_a > 0.0 else 1.0
+    seq = math.sqrt(signxy**2 + signyz**2 + signzx**2 + hard_a * (signyy**2 + signzz**2))
+
+    # Yield stress (mat122_newton.F line 278)
+    if p.hard_m > 0.0 and p.beta > 0.0:
+        sig_y = p.sigy0 + p.beta * ((pla + _EM20) ** p.hard_m)
+    else:
+        sig_y = p.sigy0
+
+    phi = seq - sig_y
+
+    # Plastic correction with cutting plane Newton iterations (mat122_newton.F lines 345-441)
+    if phi > 0.0:
+        niter = 3
+        for _ in range(niter):
+            normyy = hard_a * signyy / max(seq, _EM20)
+            normzz = hard_a * signzz / max(seq, _EM20)
+            normxy = signxy / max(seq, _EM20)
+            normyz = signyz / max(seq, _EM20)
+            normzx = signzx / max(seq, _EM20)
+
+            dfdsig2 = (
+                normyy * (s22 * normyy + s23 * normzz)
+                + normzz * (s23 * normyy + s33 * normzz)
+                + normxy * normxy * g12
+                + normyz * normyz * g23
+                + normzx * normzx * g31
+            )
+
+            if p.hard_m > 0.0 and p.beta > 0.0:
+                h = p.beta * p.hard_m * ((pla + _EM20) ** (p.hard_m - 1.0))
+            else:
+                h = 0.0
+            h = min(h, max(2.0 * g12, e2))
+
+            sig_dfdsig = (
+                signyy * normyy
+                + signzz * normzz
+                + signxy * normxy
+                + signyz * normyz
+                + signzx * normzx
+            )
+            dpla_dlam = sig_dfdsig / max(sig_y, _EM20)
+
+            dphi_dlam = -dfdsig2 - h * dpla_dlam
+            if abs(dphi_dlam) < _EM20:
+                dphi_dlam = math.copysign(_EM20, dphi_dlam)
+
+            dlam = -phi / dphi_dlam
+
+            dpyy = dlam * normyy
+            dpzz = dlam * normzz
+            dpxy = dlam * normxy
+            dpyz = dlam * normyz
+            dpzx = dlam * normzx
+
+            epspyy += dpyy
+            epspzz += dpzz
+
+            signyy -= (s22 * dpyy + s23 * dpzz)
+            signzz -= (s23 * dpyy + s33 * dpzz)
+            signxy -= dpxy * g12
+            signyz -= dpyz * g23
+            signzx -= dpzx * g31
+
+            ddep = dlam * dpla_dlam
+            dpla = max(0.0, dpla + ddep)
+            pla += ddep
+
+            seq = math.sqrt(signxy**2 + signyz**2 + signzx**2 + hard_a * (signyy**2 + signzz**2))
+            sig_y += h * dlam * dpla_dlam
+            phi = seq - sig_y
+
+    # Damage variables computation (mat122_newton.F lines 455-598)
+    epsf_eq = (
+        (1.0 - p.nu23 * p.nu32) * epsxx
+        + (p.nu23 * p.nu31 + p.nu21) * (epsyy - epspyy)
+        + (p.nu21 * p.nu32 + p.nu31) * (epszz - epspzz)
+    )
+
+    if epsf_eq >= 0.0:
+        if p.eps_ftu > p.eps_fti and p.eps_fti > 0.0:
+            if epsf_eq >= p.eps_fti and epsf_eq < p.eps_ftu:
+                dft = max(p.dftu * ((epsf_eq - p.eps_fti) / (p.eps_ftu - p.eps_fti)), dft)
+            elif epsf_eq >= p.eps_ftu:
+                dft = max(1.0 - (1.0 - p.dftu) * (p.eps_ftu / epsf_eq), dft)
+        dft = min(max(dft, 0.0), 1.0)
+        df = dft
+    elif p.ibuck > 1:
+        abs_eps = abs(epsf_eq)
+        if p.eps_fcu > p.eps_fci and p.eps_fci > 0.0:
+            if abs_eps >= p.eps_fci and abs_eps < p.eps_fcu:
+                dfc = max(p.dfcu * ((abs_eps - p.eps_fci) / (p.eps_fcu - p.eps_fci)), dfc)
+            elif abs_eps >= p.eps_fcu:
+                dfc = max(1.0 - (1.0 - p.dfcu) * (p.eps_fcu / abs_eps), dfc)
+        dfc = min(max(dfc, 0.0), 1.0)
+        df = dfc
+
+    # Matrix damage energy
+    zd = 0.5 * (signxy**2 / max(g12, _EM20) + signyz**2 / max(g23, _EM20) + signzx**2 / max(g31, _EM20))
+    zdp = 0.5 * (max(signyy, 0.0)**2 / max(e2, _EM20) + max(signzz, 0.0)**2 / max(e3, _EM20))
+    y_dmg = max(y_dmg, math.sqrt(max(0.0, zd + p.b * zdp)))
+    yp_dmg = max(yp_dmg, math.sqrt(max(0.0, zdp)))
+
+    # Shear damage evolution
+    if p.ish == 1:  # Linear
+        if y_dmg >= p.y0:
+            d = min(p.dmax, max(0.0, y_dmg - p.y0) / max(p.yc, _EM20))
+        d = min(max(d, 0.0), 1.0)
+    elif p.ish == 2:  # Exponential
+        if y_dmg > p.y0:
+            d = p.dsat1 * (1.0 - math.exp((p.y0 - y_dmg) / max(p.yc, _EM20)))
+        d = min(max(d, 0.0), 1.0)
+
+    # Transverse damage evolution
+    if p.itr == 1:  # Linear
+        if yp_dmg >= p.y0p:
+            dp = min(p.dmax, max(0.0, yp_dmg - p.y0p) / max(p.ycp, _EM20))
+        dp = min(max(dp, 0.0), 1.0)
+    elif p.itr == 2:  # Exponential
+        if yp_dmg > p.y0p:
+            dp = p.dsat2 * (1.0 - math.exp((p.y0p - yp_dmg) / max(p.ycp, _EM20)))
+        dp = min(max(dp, 0.0), 1.0)
+
+    dpy = dp if epsyy >= 0.0 else 0.0
+    dpz = dp if epszz >= 0.0 else 0.0
+
+    # Damaged stiffness matrix (mat122_newton.F lines 619-624)
+    s11_d = p.s11 * (1.0 - df)
+    s12_d = p.s12 * (1.0 - df) * (1.0 - dpy)
+    s13_d = p.s13 * (1.0 - df) * (1.0 - dpz)
+    s22_d = p.s22 * (1.0 - dpy)
+    s23_d = p.s23 * (1.0 - dpy) * (1.0 - dpz)
+    s33_d = p.s33 * (1.0 - dpz)
+
+    # Stresses update with damage softening (mat122_newton.F lines 629-646)
+    sign = np.zeros(6, dtype=np.float64)
+    if p.gamma > 0.0 and epsxx < 0.0 and p.e1c > 0.0:
+        sign[0] = -(1.0 / p.gamma) * math.log(1.0 + p.gamma * p.e1c * abs(epsxx)) * (1.0 - df)
+    else:
+        sign[0] = s11_d * epsxx
+
+    sign[0] += s12_d * (epsyy - epspyy) + s13_d * (epszz - epspzz)
+    sign[1] = s12_d * epsxx + s22_d * (epsyy - epspyy) + s23_d * (epszz - epspzz)
+    sign[2] = s13_d * epsxx + s23_d * (epsyy - epspyy) + s33_d * (epszz - epspzz)
+    sign[3] = signxy * (1.0 - d)
+    sign[4] = signyz * (1.0 - d)
+    sign[5] = signzx * (1.0 - d)
+
+    # State update
+    dmg[0] = max(df, d, dp)
+    dmg[1] = df
+    dmg[2] = d
+    dmg[3] = dp
+    dmg[4] = dft
+    dmg[5] = dfc
+    uvar[1] = y_dmg
+    uvar[2] = yp_dmg
+    uvar[14] = dpy
+    uvar[15] = dpz
+    uvar[16] = epspyy
+    uvar[17] = epspzz
+
+    extra_out = {
+        "uvar122": uvar,
+        "damage": dmg,
+    }
+
+    # Sound speed (mat122_newton.F lines 603-605)
+    c_sound = math.sqrt(max(p.s11, p.s22, p.s33, 2.0 * g12, 2.0 * g23, 2.0 * g31) / max(p.rho0, _EM20))
+
+    return sign, pla, c_sound, extra_out
 
 
 def solid_update(
@@ -244,7 +695,12 @@ def solid_update(
     return_sound_speed: bool = True,
     **kwargs: Any,
 ) -> Tuple[np.ndarray, np.ndarray, Union[float, np.ndarray]]:
-    """3D continuum solid stress update with Chaboche kinematic hardening."""
+    """3D continuum solid stress update for LAW122.
+
+    Dispatches between:
+      1. OpenRadioss MAT122 Ladevèze cutting-plane model (when Ladevèze parameters are provided)
+      2. Chaboche Armstrong-Frederick nonlinear kinematic hardening J2 model (when c_kin > 0)
+    """
     p = build_law122(mat)
     sig_arr = np.asarray(sig, dtype=np.float64)
     deps_arr = np.asarray(deps, dtype=np.float64)
@@ -260,7 +716,31 @@ def solid_update(
         epsp_in = np.asarray(epsp, dtype=np.float64)
         epsp_arr = np.full(n, float(epsp_in)) if epsp_in.ndim == 0 else epsp_in.copy()
 
-    # Retrieve or initialize backstress
+    # Determine mode: Ladevèze vs Chaboche
+    # If explicit Chaboche parameters c_kin/gamma_kin > 0, run Chaboche J2
+    use_chaboche = (p.c_kin > 0.0 or p.gamma_kin > 0.0 or kwargs.get("chaboche", False))
+
+    if not use_chaboche and (p.beta > 0.0 or p.hard_a != 1.0 or p.ish > 0 or p.itr > 0 or p.dmax > 0.0):
+        # OpenRadioss MAT122 Ladevèze cutting-plane formulation
+        sig_new = np.zeros_like(sig_2d)
+        epsp_new = np.zeros_like(epsp_arr)
+        c_sound = sound_speed(p)
+        for i in range(n):
+            s_i, p_i, c_i, ex_i = mat122_newton_solid_update(
+                p, sig_2d[i], deps_2d[i], epsp=epsp_arr[i], extra=extra
+            )
+            sig_new[i] = s_i
+            epsp_new[i] = p_i
+            c_sound = c_i
+            if extra is not None:
+                extra.update(ex_i)
+
+        c_out = c_sound if is_1d else np.full(n, c_sound, dtype=np.float64)
+        if is_1d:
+            return sig_new[0], float(epsp_new[0]), float(c_out)
+        return sig_new, epsp_new, c_out
+
+    # Chaboche J2 return mapping with Armstrong-Frederick kinematic hardening
     if extra is not None and "backstress" in extra:
         alpha_arr = np.asarray(extra["backstress"], dtype=np.float64).reshape(-1, 6)
     else:
@@ -312,7 +792,12 @@ def solid_update(
             n_flow[3:] = 3.0 * eta_tr[3:] / seq_tr
 
             # Chaboche kinematic hardening modulus: H_kin = C - gamma * (alpha : n)
-            alpha_dot_n = alpha_i[0] * n_flow[0] + alpha_i[1] * n_flow[1] + alpha_i[2] * n_flow[2] + 2.0 * (alpha_i[3] * n_flow[3] + alpha_i[4] * n_flow[4] + alpha_i[5] * n_flow[5])
+            alpha_dot_n = (
+                alpha_i[0] * n_flow[0]
+                + alpha_i[1] * n_flow[1]
+                + alpha_i[2] * n_flow[2]
+                + 2.0 * (alpha_i[3] * n_flow[3] + alpha_i[4] * n_flow[4] + alpha_i[5] * n_flow[5])
+            )
             h_kin = p.c_kin - p.gamma_kin * alpha_dot_n
 
             denom = 3.0 * g + h_iso + h_kin
@@ -416,7 +901,13 @@ def shell_update(
     return sig_new, epsp_new, c_out
 
 
-def sound_speed(mat: Any, eps: Optional[Any] = None, extra: Optional[Any] = None, is_shell: bool = False, **kwargs: Any) -> float:
+def sound_speed(
+    mat: Any,
+    eps: Optional[Any] = None,
+    extra: Optional[Any] = None,
+    is_shell: bool = False,
+    **kwargs: Any,
+) -> float:
     """Compute acoustic wave speed for LAW122."""
     p = build_law122(mat)
     rho = p.rho0 if p.rho0 > 0.0 else 1.0
@@ -528,6 +1019,11 @@ def shell_tangent(
     if denom > _EM20:
         return c_el - np.outer(cn, cn) / denom
     return c_el
+
+
+def tangent(group: Any = None, **kwargs: Any) -> np.ndarray:
+    """General tangent interface conforming to pyradioss material conventions."""
+    return solid_tangent(group, **kwargs)
 
 
 consistent_solid_tangent = solid_tangent
