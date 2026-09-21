@@ -1,3 +1,7 @@
+# C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat079\sigeps79.F
+# Function: SIGEPS79 (lines 28-311)
+# C:\OpenRadioss\source\OpenRadioss-latest-20260520\starter\source\materials\mat\mat079\hm_read_mat79.F
+# Function: HM_READ_MAT79 (lines 38-250)
 r"""LAW79 — Johnson-Holmquist (JH-2) ceramic/brittle damage model (/MAT/LAW79, /MAT/JOHN_HOLM).
 
 Fortran origins:
@@ -611,7 +615,12 @@ def solid_update_law79(
         dmg = np.zeros(n, dtype=float)
     if dmg.shape != (n,):
         dmg = np.full(n, float(dmg.flat[0]) if dmg.size > 0 else 0.0, dtype=float)
-    dmg_old = dmg.copy()
+    if "dmg_old" in extra and extra["dmg_old"] is not None:
+        dmg_old = np.atleast_1d(np.asarray(extra["dmg_old"], dtype=float)).copy()
+        if dmg_old.shape != (n,):
+            dmg_old = np.full(n, float(dmg_old.flat[0]) if dmg_old.size > 0 else 0.0, dtype=float)
+    else:
+        dmg_old = dmg.copy()
 
     # Volumetric strain mu = rho / rho0 - 1
     tr_deps = deps_arr[:, 0] + deps_arr[:, 1] + deps_arr[:, 2]
@@ -1050,6 +1059,7 @@ def tangent_law79_solid(
 consistent_solid_tangent = tangent_law79_solid
 solid_tangent = tangent_law79_solid
 solid_tangent_law79 = tangent_law79_solid
+tangent = tangent_law79_solid
 
 
 # -----------------------------------------------------------------------------
