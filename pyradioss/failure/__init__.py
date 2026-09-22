@@ -58,6 +58,7 @@ from . import (  # noqa: F401
     hashin,
     hc_dsse,
     hoffman,
+    inicrack,
     inievo,
     johnson,
     lemaitre,
