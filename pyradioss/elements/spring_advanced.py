@@ -34,7 +34,7 @@ from ..common.constants import EM20, EP30
 from ..common.fastmath import norm3
 
 #: Advanced spring property type numbers
-ADVANCED_SPRING_PROP_TYPES = frozenset({19, 25, 26, 44, 46})
+ADVANCED_SPRING_PROP_TYPES = frozenset({19, 25, 26, 27, 44, 46})
 
 
 def _safe_param(params: dict, key: str, default: float = 0.0) -> float:
@@ -870,6 +870,296 @@ def forces_tab_type26(group, x, v, dt, fint, idx26):
 
 
 # ============================================================================
+# TYPE27: Spring with Bilinear Damping & Nonlinear Exponent (/PROP/SPR_BDAMP)
+# ============================================================================
+# Fortran origin:
+#   engine/source/elements/spring/r27def3.F
+#   engine/source/elements/spring/rforc3.F
+#   starter/source/properties/spring/hm_read_prop27.F
+
+def init_bdamp_type27(group, model, log, idx27, massn, inertn):
+    """Initialize state arrays for TYPE27 (/PROP/SPR_BDAMP) springs.
+
+    Fortran origin: starter/source/properties/spring/hm_read_prop27.F,
+    engine/source/elements/spring/r27def3.F.
+    """
+    st = group.state
+    n = group.n
+    if len(idx27) == 0:
+        return
+
+    if "t27_stiff" not in st:
+        st["t27_mass"] = np.zeros(n)
+        st["t27_stiff"] = np.zeros(n)
+        st["t27_damp"] = np.zeros(n)
+        st["t27_nexp"] = np.ones(n)
+        st["t27_dmin"] = np.full(n, -1e30)
+        st["t27_dmax"] = np.full(n, 1e30)
+        st["t27_gap"] = np.zeros(n)
+        st["t27_ifail"] = np.zeros(n, dtype=np.int64)
+        st["t27_ileng"] = np.zeros(n, dtype=np.int64)
+        st["t27_itens"] = np.zeros(n, dtype=np.int64)
+        st["t27_fsmooth"] = np.zeros(n, dtype=np.int64)
+        st["t27_fcut"] = np.zeros(n)
+        st["t27_fun1"] = np.zeros(n, dtype=np.int64)
+        st["t27_ascale1"] = np.ones(n)
+        st["t27_fscale1"] = np.ones(n)
+        st["t27_fun2"] = np.zeros(n, dtype=np.int64)
+        st["t27_ascale2"] = np.ones(n)
+        st["t27_fscale2"] = np.ones(n)
+        st["t27_dx_old"] = np.zeros(n)
+
+    pos = {int(e): j for j, e in enumerate(idx27)}
+    for sl, mat, prop in st["slices"]:
+        if getattr(prop, "type", 0) != 27:
+            continue
+        rng = np.arange(group.n)[sl]
+        local = [e for e in rng if int(e) in pos]
+        if not len(local):
+            continue
+
+        p = getattr(prop, "params", {}) or {}
+        ms = float(getattr(prop, "mass", _safe_param(p, "mass", 0.0)))
+        km = float(getattr(prop, "stiff", _safe_param(p, "stiff", _safe_param(p, "k", 0.0))))
+        dm = float(getattr(prop, "damp", _safe_param(p, "damp", _safe_param(p, "c", 0.0))))
+        nx = float(getattr(prop, "nexp", _safe_param(p, "nexp", _safe_param(p, "n", 1.0))))
+        if nx <= 0.0:
+            nx = 1.0
+
+        d_min = float(getattr(prop, "delta_min", _safe_param(p, "delta_min", _safe_param(p, "min_rup", 0.0))))
+        if d_min == 0.0:
+            d_min = -1e30
+        else:
+            d_min = -abs(d_min)
+
+        d_max = float(getattr(prop, "delta_max", _safe_param(p, "delta_max", _safe_param(p, "max_rup", 0.0))))
+        if d_max == 0.0:
+            d_max = 1e30
+        else:
+            d_max = abs(d_max)
+
+        gp = -abs(float(getattr(prop, "gap", _safe_param(p, "gap", 0.0))))
+        it = int(getattr(prop, "itens", _safe_int_param(p, "itens", 0)))
+        if gp < 0.0:
+            it = 0
+        ifl = int(getattr(prop, "ifail", _safe_int_param(p, "ifail", 0)))
+        il = int(getattr(prop, "ileng", _safe_int_param(p, "ileng", 0)))
+        fsm = int(getattr(prop, "fsmooth", _safe_int_param(p, "fsmooth", 0)))
+        fc = float(getattr(prop, "fcut", _safe_param(p, "fcut", 0.0)))
+        if fc > 0.0:
+            fsm = 1
+
+        fn1 = int(getattr(prop, "fct_id1", _safe_int_param(p, "fun1", _safe_int_param(p, "fct_id1", 0))))
+        as1 = float(getattr(prop, "ascale1", _safe_param(p, "ascale1", 1.0)))
+        fs1 = float(getattr(prop, "fscale1", _safe_param(p, "fscale1", 1.0)))
+        if as1 == 0.0:
+            as1 = 1.0
+        if fs1 == 0.0:
+            fs1 = 1.0
+
+        fn2 = int(getattr(prop, "fct_id2", _safe_int_param(p, "fun2", _safe_int_param(p, "fct_id2", 0))))
+        as2 = float(getattr(prop, "ascale2", _safe_param(p, "ascale2", 1.0)))
+        fs2 = float(getattr(prop, "fscale2", _safe_param(p, "fscale2", 1.0)))
+        if as2 == 0.0:
+            as2 = 1.0
+        if fs2 == 0.0:
+            fs2 = 1.0
+
+        st["t27_mass"][local] = ms
+        st["t27_stiff"][local] = km
+        st["t27_damp"][local] = dm
+        st["t27_nexp"][local] = nx
+        st["t27_dmin"][local] = d_min
+        st["t27_dmax"][local] = d_max
+        st["t27_gap"][local] = gp
+        st["t27_ifail"][local] = ifl
+        st["t27_ileng"][local] = il
+        st["t27_itens"][local] = it
+        st["t27_fsmooth"][local] = fsm
+        st["t27_fcut"][local] = fc
+        st["t27_fun1"][local] = fn1
+        st["t27_ascale1"][local] = as1
+        st["t27_fscale1"][local] = fs1
+        st["t27_fun2"][local] = fn2
+        st["t27_ascale2"][local] = as2
+        st["t27_fscale2"][local] = fs2
+        st["k"][local] = km
+        st["cdamp"][local] = dm
+        st["mass"][local] = ms
+
+        if massn is not None and ms > 0.0:
+            for e in local:
+                if 2 * e + 1 < len(massn):
+                    massn[2 * e] += ms / 2.0
+                    massn[2 * e + 1] += ms / 2.0
+
+
+def forces_bdamp_type27(group, x, v, dt, fint, idx27):
+    """Compute forces for TYPE27 (/PROP/SPR_BDAMP) springs.
+
+    Fortran origin: engine/source/elements/spring/r27def3.F, rforc3.F.
+    """
+    if idx27 is None or len(idx27) == 0:
+        return np.empty(0)
+
+    st = group.state
+    conn = group.conn[idx27]
+    n1, n2 = conn[:, 0], conn[:, 1]
+    n_elem = len(idx27)
+
+    dx = x[n2] - x[n1]
+    norm = norm3(dx)
+    degen = (norm < EM20)
+    L = np.where(degen, EM20, norm)
+    e1 = np.where(degen[:, None], np.array([1.0, 0.0, 0.0]), dx / L[:, None])
+
+    L0 = st["L0"][idx27]
+    alive = st.get("off", np.ones(group.n))[idx27] > 0.0
+
+    ileng = st["t27_ileng"][idx27]
+    xl0 = np.where(ileng != 0, np.maximum(L0, EM20), 1.0)
+    dl_total = L - L0
+    dx_val = dl_total / xl0
+    dx_old = st["t27_dx_old"][idx27]
+    ddx = dx_val - dx_old
+
+    dt_val = dt if (dt is not None and dt > 0.0) else EP30
+    dvl = ddx / dt_val
+    st["t27_dx_old"][idx27] = dx_val.copy()
+
+    f_old = st["force"][idx27].copy()
+    gap = st["t27_gap"][idx27]
+    itens = st["t27_itens"][idx27]
+
+    active = alive & ((dx_val < gap) | (itens > 0))
+
+    F = np.zeros(n_elem)
+    k_eff = np.zeros(n_elem)
+    c_eff = np.zeros(n_elem)
+
+    model = st.get("model")
+    has_model_funcs = model is not None and hasattr(model, "functions")
+
+    for i in range(n_elem):
+        if not active[i]:
+            continue
+
+        elem_idx = idx27[i]
+        delta = dx_val[i] - gap[i]
+        fn1 = st["t27_fun1"][elem_idx]
+        fn2 = st["t27_fun2"][elem_idx]
+        km = st["t27_stiff"][elem_idx]
+        cm = st["t27_damp"][elem_idx]
+        nx = st["t27_nexp"][elem_idx]
+
+        # 1. Stiffness force FK
+        if fn1 > 0 and has_model_funcs and fn1 in model.functions:
+            as1 = st["t27_ascale1"][elem_idx]
+            fs1 = st["t27_fscale1"][elem_idx]
+            fk = fs1 * model.functions[fn1].eval(delta / as1)
+            k_eff[i] = km if km > 0.0 else 1000.0
+        else:
+            if abs(delta) > 0.0:
+                fk = math.copysign(1.0, delta) * km * (abs(delta) ** nx)
+            else:
+                fk = 0.0
+            k_eff[i] = km
+            if nx > 1.0:
+                delta_old = dx_old[i] - gap[i]
+                fk_old = math.copysign(1.0, delta_old) * km * (abs(delta_old) ** nx) if abs(delta_old) > 0.0 else 0.0
+                slope = abs(fk - fk_old) / max(abs(ddx[i]), EM20)
+                k_eff[i] = max(slope, km)
+
+        # 2. Damping force FD
+        if fn2 > 0 and has_model_funcs and fn2 in model.functions:
+            as2 = st["t27_ascale2"][elem_idx]
+            fs2 = st["t27_fscale2"][elem_idx]
+            fd = fs2 * model.functions[fn2].eval(dvl[i] / as2)
+            c_eff[i] = cm
+        else:
+            fd = cm * dvl[i]
+            c_eff[i] = cm
+
+        # 3. Assembling forces (r27def3.F lines 259-265)
+        if abs(fk) > abs(fd):
+            F[i] = fk + fd
+        else:
+            F[i] = 2.0 * fk
+            k_eff[i] = 2.0 * k_eff[i]
+            c_eff[i] = 0.0
+
+        # 4. Spring force filtering (r27def3.F lines 272-275)
+        fsm = st["t27_fsmooth"][elem_idx]
+        fc = st["t27_fcut"][elem_idx]
+        if fsm > 0 and fc > 0.0:
+            omega_cut = 2.0 * math.pi * dt_val * fc
+            alpha = omega_cut / (omega_cut + 1.0)
+            F[i] = alpha * F[i] + (1.0 - alpha) * f_old[i]
+
+    # Rupture checks (r27def3.F lines 322-374)
+    ifail = st["t27_ifail"][idx27]
+    dmin = st["t27_dmin"][idx27]
+    dmax = st["t27_dmax"][idx27]
+    for i in range(n_elem):
+        if not alive[i]:
+            continue
+        elem_idx = idx27[i]
+        ifl = ifail[i]
+        it = itens[i]
+        d_val = dx_val[i] * xl0[i]
+        f_val = F[i]
+
+        if ifl == 1:
+            # Displacement rupture
+            if it > 0:
+                if d_val > dmax[i] * xl0[i] or d_val < dmin[i] * xl0[i]:
+                    st["off"][elem_idx] = 0.0
+                    alive[i] = False
+                    F[i] = 0.0
+            else:
+                if d_val < dmin[i] * xl0[i]:
+                    st["off"][elem_idx] = 0.0
+                    alive[i] = False
+                    F[i] = 0.0
+        elif ifl == 2:
+            # Force rupture
+            if it > 0:
+                if f_val > dmax[i] or f_val < dmin[i]:
+                    st["off"][elem_idx] = 0.0
+                    alive[i] = False
+                    F[i] = 0.0
+            else:
+                if f_val < dmin[i]:
+                    st["off"][elem_idx] = 0.0
+                    alive[i] = False
+                    F[i] = 0.0
+
+    F = np.where(alive, F, 0.0)
+    st["force"][idx27] = F
+
+    # Internal energy update (r27def3.F lines 308-309)
+    if dt is not None and dt > 0.0:
+        dE = 0.5 * ddx * (F + f_old) * xl0
+        st["eint"][idx27] += np.where(alive, dE, 0.0)
+
+    # Nodal force scatter
+    fvec = F[:, None] * e1
+    if fint is not None:
+        np.add.at(fint, n1, fvec)
+        np.add.at(fint, n2, -fvec)
+
+    # Critical time step (r27def3.F lines 312-315)
+    mass = np.maximum(st["t27_mass"][idx27], EM20) * xl0
+    k_dt = np.maximum(k_eff, EM20) / xl0
+    c_dt = c_eff / xl0
+    pos_k = k_dt > 0.0
+    omega = 2.0 * np.sqrt(np.where(pos_k, k_dt / mass, 1.0))
+    xi = np.where(pos_k, c_dt / np.sqrt(np.maximum(k_dt * mass, EM20)), 0.0)
+    dt_crit = (2.0 / omega) * (np.sqrt(1.0 + xi ** 2) - xi)
+    return np.where(alive, dt_crit, EP30)
+
+
+# ============================================================================
 # TYPE44: Crushing Spring with Energy Absorption
 # ============================================================================
 
@@ -1519,7 +1809,7 @@ def forces_muscle_type46(group, x, v, dt, fint, idx46):
 # Combined Dispatch for spring.py and Standalone Element Kernel
 # ============================================================================
 
-def init_advanced(group, model, log, *pos_args, idx19=None, idx25=None, idx26=None, idx44=None, idx46=None, massn=None, inertn=None, **kwargs):
+def init_advanced(group, model, log, *pos_args, idx19=None, idx25=None, idx26=None, idx27=None, idx44=None, idx46=None, massn=None, inertn=None, **kwargs):
     """Dispatcher called by spring.py init_group for advanced spring types."""
     if len(pos_args) == 5:
         idx19, idx44, idx46, massn, inertn = pos_args
@@ -1527,6 +1817,8 @@ def init_advanced(group, model, log, *pos_args, idx19=None, idx25=None, idx26=No
         idx19, idx25, idx44, idx46, massn, inertn = pos_args
     elif len(pos_args) == 7:
         idx19, idx25, idx26, idx44, idx46, massn, inertn = pos_args
+    elif len(pos_args) == 8:
+        idx19, idx25, idx26, idx27, idx44, idx46, massn, inertn = pos_args
 
     if idx19 is not None and len(idx19):
         init_torsion_type19(group, model, log, idx19, massn, inertn)
@@ -1534,6 +1826,8 @@ def init_advanced(group, model, log, *pos_args, idx19=None, idx25=None, idx26=No
         init_axi_type25(group, model, log, idx25, massn, inertn)
     if idx26 is not None and len(idx26):
         init_tab_type26(group, model, log, idx26, massn, inertn)
+    if idx27 is not None and len(idx27):
+        init_bdamp_type27(group, model, log, idx27, massn, inertn)
     if idx44 is not None and len(idx44):
         init_crushing_type44(group, model, log, idx44, massn, inertn)
     if idx46 is not None and len(idx46):

@@ -7634,7 +7634,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             )
         return
 
-    if ptype in (27, 51, 17, 34, 12, 15, 23):
+    if ptype in (51, 17, 34, 12, 15, 23):
         from .prop_reader import InactiveProperty, _universal_geo_params
         full_params = _universal_geo_params()
         full_params.update(params)
@@ -7642,6 +7642,40 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             id=block.user_id, type=ptype, title=title, params=full_params,
             prop_name=f"/PROP/{block.parts[1] if len(block.parts) > 1 else 'TYPE' + str(ptype)}"
         )
+    elif ptype == 27:
+        from ..model.entities import PropType27, Property
+        from .prop_reader import _universal_geo_params
+        p27 = PropType27(
+            id=block.user_id,
+            mass=float(params.get("mass", 0.0)),
+            sens_id=int(params.get("sens_id", 0)),
+            isflag=int(params.get("isflag", 0)),
+            ileng=int(params.get("ileng", 0)),
+            itens=int(params.get("itens", 0)),
+            ifail=int(params.get("ifail", 0)),
+            stiff=float(params.get("stiff", 0.0)),
+            damp=float(params.get("damp", 0.0)),
+            nexp=float(params.get("nexp", 1.0)),
+            delta_min=float(params.get("delta_min", 0.0)),
+            delta_max=float(params.get("delta_max", 0.0)),
+            gap=float(params.get("gap", 0.0)),
+            fsmooth=int(params.get("fsmooth", 0)),
+            fcut=float(params.get("fcut", 0.0)),
+            fct_id1=int(params.get("fun1", 0)),
+            fct_id2=int(params.get("fun2", 0)),
+            ascale1=float(params.get("ascale1", 1.0)),
+            fscale1=float(params.get("fscale1", 1.0)),
+            ascale2=float(params.get("ascale2", 1.0)),
+            fscale2=float(params.get("fscale2", 1.0)),
+            title=title,
+        )
+        model.prop_spr_bdamps[block.user_id] = p27
+        full_params = _universal_geo_params()
+        full_params.update(params)
+        model.properties[block.user_id] = Property(
+            id=block.user_id, type=27, title=title, params=full_params,
+        )
+        return
     elif ptype == 26:
         read_prop_spr_tab(block, model, log)
         return
@@ -35130,8 +35164,8 @@ def read_prop_spr_tab(block: KeywordBlock, model: Model, log: MessageLog) -> Non
 
 def read_prop_spr_bdamp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/PROP/TYPE27/id`` or ``/PROP/SPR_BDAMP/id`` (M182): Spring with bilinear/barycentric damping."""
-    from ..model.entities import PropType27
-    from .prop_reader import InactiveProperty, _universal_geo_params
+    from ..model.entities import PropType27, Property
+    from .prop_reader import _universal_geo_params
     prop_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank]
@@ -35235,8 +35269,8 @@ def read_prop_spr_bdamp(block: KeywordBlock, model: Model, log: MessageLog) -> N
         "ascale1": ascale1, "fscale1": fscale1,
         "ascale2": ascale2, "fscale2": fscale2,
     })
-    model.properties[prop_id] = InactiveProperty(
-        id=prop_id, type=27, title=title, prop_name="TYPE27",
+    model.properties[prop_id] = Property(
+        id=prop_id, type=27, title=title,
         params=p27_params,
     )
 
