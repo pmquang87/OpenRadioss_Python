@@ -34,6 +34,11 @@ from .inter_type23 import ContactType23 # noqa: F401
 from .inter_type24 import ContactType24  # noqa: F401
 from .inter_type25 import ContactType25 # noqa: F401
 from .inter_guided_cable import ContactGuidedCable # noqa: F401
+from .friction_models import (  # noqa: F401
+    FrictionModel,
+    compute_friction_coefficient,
+    compute_friction_force,
+)
 
 ContactType4 = ContactType7
 ContactType13 = ContactType7
