@@ -24,4 +24,29 @@ from .fsi_coupling import (  # noqa: F401
     fsi_velocity_compatibility,
     fsi_step,
 )
+try:
+    from .bolt_preload import (  # noqa: F401
+        BoltPreloadEngine,
+        BoltPreloadParams,
+        PreloadMethod,
+        PreloadPhase,
+        build_bolt_preloads,
+    )
+except ImportError:
+    pass
 
+from .thermal_loads import (  # noqa: F401
+    ConvecLoad,
+    ConvecParams,
+    RadiationLoad,
+    RadiationParams,
+    STEFAN_BOLTZMANN,
+    ThermalLoadsManager,
+    ThermalStepResult,
+    compute_convec_flux,
+    compute_radiation_flux,
+    compute_segment_area,
+    convec_subroutine,
+    radiation_subroutine,
+    simulate_lumped_cooling,
+)
