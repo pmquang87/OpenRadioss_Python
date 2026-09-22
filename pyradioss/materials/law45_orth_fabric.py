@@ -482,6 +482,18 @@ def shell_update(
             dpla = (1.0 - scale) * svm / max(p.ea + h_slope, _EM20)
             epsp_arr[i] += off_arr[i] * dpla
             uvar[i, 0] = epsp_arr[i]
+        else:
+            dpla = 0.0
+
+        # Thickness strain update (sigeps45c.F lines 310-313)
+        nnu1 = p.nu / max(1.0 - p.nu, 1e-12)
+        nu3 = 1.0 - nnu1
+        dezz_pl = (dpla * 0.5 * (s_xx + s_yy) / sigy) if sigy > _EM20 else 0.0
+        dezz = -(de_xx + de_yy) * nnu1 - nu3 * dezz_pl
+        if "thk" in extra and extra["thk"] is not None:
+            extra["thk"][i] += dezz * extra["thk"][i]
+        if "dezz" in extra:
+            extra["dezz"][i] = dezz
 
         # Element deletion check (sigeps45c.F line 393)
         if epsp_arr[i] > p.epsm and off_arr[i] == 1.0:

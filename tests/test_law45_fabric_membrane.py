@@ -414,3 +414,19 @@ def test_law45_element_group_full_template_signature():
     assert s.shape == (6,)
     assert c > 0.0
 
+
+def test_law45_shell_thickness_evolution():
+    """Verify thickness strain dezz and thickness change per sigeps45c.F lines 310-313."""
+    p = law45_orth_fabric.Law45Params(e=100000.0, nu=0.3, ca=1e6)  # Elastic
+    sig = np.zeros(3)
+    deps = np.array([1e-3, 1e-3, 0.0])
+    extra = {"thk": np.array([1.5]), "dezz": np.zeros(1)}
+    s, ep, _ = law45_orth_fabric.shell_update(p, sig, deps, dt=1e-4, extra=extra)
+
+    # Elastic: dezz = -(deps_xx + deps_yy) * (nu / (1 - nu))
+    expected_dezz = -(1e-3 + 1e-3) * (0.3 / 0.7)
+    assert abs(extra["dezz"][0] - expected_dezz) < 1e-8
+    expected_thk = 1.5 + expected_dezz * 1.5
+    assert abs(extra["thk"][0] - expected_thk) < 1e-8
+
+
