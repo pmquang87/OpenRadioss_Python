@@ -55,7 +55,7 @@ from typing import Any
 
 import numpy as np
 
-from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa: F401
+from . import (detonation, eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa: F401
                law04_hyd_jcook, law06_hyd_visc, law10_soil,
                law12_comp3d, law14_compso, law15_chang,
                law19_fabric, law21_dprag, law22_dama, law24_concrete, law25_composite, law27_brittle,
@@ -103,7 +103,7 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                mat_gas, mat_void,
                law00_void, law11_fluid_visc, law13_fluid_ale, law16_gray_ewing, law17_orth_elastic,
                law18_plas_iso, law20_rigid, law23_user_mat, law26_honeycomb_sesame, law41_jwl_burn,
-               law45_orth_fabric, law46_kin_hard, law51_granular_soil, law53_tab_foam, law54_hyd_visc,
+               law45_fabric_membrane, law45_orth_fabric, law46_kin_hard, law51_granular_soil, law53_tab_foam, law54_hyd_visc,
                law55_shell_orth, law56_orth_fail, law59_spring_rate, law63_composite_shell, law64_rate_comp,
                law65_thermo_visc, law68_tab_plas, law72_hill_mmc, law75_thermo_trans, law77_visc_poly, law77_polymer,
                law78_composite_dmg, law78_yoshida, law80_ramberg, law84_mooney_rivlin, law85_void_pinch, law86_honeycomb_shell,
