@@ -85,11 +85,97 @@ Extra state (materials.extra_shapes -> solid kernels):
 
 from __future__ import annotations
 
+import math
+from typing import Any, Dict, Optional, Tuple, Union
+
 import numpy as np
 
 from ..model.entities import Material
 
 _EM20 = 1e-20
+
+
+class Law24Params:
+    """Parameters container for /MAT/LAW24 (/MAT/CONC, Peric concrete damage model).
+
+    Supports:
+    1. Peric scalar isotropic damage model (effective stress sigma = (1 - D) * C * eps)
+    2. Smeared crack / Ottosen criterion with compressive cap plasticity
+    """
+
+    def __init__(
+        self,
+        E: float = 30000.0,
+        nu: float = 0.2,
+        rho0: float = 2400.0,
+        fc: float = 30.0,
+        ft: float = 3.0,
+        fb: Optional[float] = None,
+        f2d: Optional[float] = None,
+        s0: float = 1.25,
+        ht: Optional[float] = None,
+        damage_max: float = 0.99,
+        eps_0: Optional[float] = None,
+        eps_f: float = 0.005,
+        eps_max: float = 1e20,
+        icap: int = 0,
+        damage_model: str = "scalar",
+        **kwargs: Any,
+    ) -> None:
+        self.E = float(E)
+        self.nu = float(nu)
+        self.rho0 = float(rho0)
+        self.fc = float(fc)
+        self.ft = float(ft)
+        self.fb = float(fb) if fb is not None else 1.16 * self.fc
+        self.f2d = float(f2d) if f2d is not None else 4.0 * self.fc
+        self.s0 = float(s0)
+        self.ht = float(ht) if ht is not None else -self.E
+        self.damage_max = float(damage_max)
+        self.eps_0 = float(eps_0) if eps_0 is not None else (self.ft / max(self.E, 1e-6))
+        self.eps_f = float(eps_f)
+        self.eps_max = float(eps_max)
+        self.icap = int(icap)
+        self.damage_model = str(damage_model)
+        self.law = 24
+        self.law_name = "LAW24"
+
+        self.G = self.E / (2.0 * (1.0 + self.nu))
+        self.K = self.E / (3.0 * (1.0 - 2.0 * self.nu))
+        den = (1.0 + self.nu) * (1.0 - 2.0 * self.nu)
+        self.A11 = self.E * (1.0 - self.nu) / max(den, 1e-12)
+        self.A12 = self.E * self.nu / max(den, 1e-12)
+
+        self.params: Dict[str, Any] = {
+            "MAT_E": self.E,
+            "MAT_NU": self.nu,
+            "RHO0": self.rho0,
+            "MAT_SIGY": self.fc,
+            "MAT_FtFc": self.ft / self.fc if self.fc > 0 else 0.1,
+            "MAT_FbFc": self.fb / self.fc if self.fc > 0 else 1.16,
+            "MAT_F2Fc": self.f2d / self.fc if self.fc > 0 else 4.0,
+            "MAT_SoFc": self.s0,
+            "MAT_ETAN": self.ht,
+            "MAT_DAMAGE": self.damage_max,
+            "MAT_EPS": self.eps_max,
+            "Iflag": self.icap,
+            "E": self.E,
+            "nu": self.nu,
+            "FC": self.fc,
+            "FT": self.ft,
+            "DSUP": self.damage_max,
+            "EPS_0": self.eps_0,
+            "EPST": self.eps_0,
+            "EPS_F": self.eps_f,
+            "EPSMAX": self.eps_max,
+            "A11c": self.A11,
+            "A12c": self.A12,
+            "Gc": self.G,
+            "BULK": self.K,
+            "DAMAGE_MODEL": self.damage_model,
+        }
+        for k, v in kwargs.items():
+            self.params[k] = v
 
 
 # ----------------------------------------------------------------------------
@@ -863,6 +949,152 @@ def _dama24_one(p, sigc, dam, ang, epsf, crak, s0, eps6, scle2, g):
     sigc[5] = scal[2] * scal[0] * sigo[5]
 
 
+def peric_damage_update(
+    mat: Any,
+    sig: np.ndarray,
+    deps: np.ndarray,
+    epsp: Optional[np.ndarray] = None,
+    dt: float = 0.0,
+    extra: Optional[Dict[str, Any]] = None,
+    **kwargs: Any,
+) -> Tuple[np.ndarray, Optional[np.ndarray], np.ndarray]:
+    """Constitutive stress update for Peric scalar concrete damage model.
+
+    Upstream Fortran origins & theory:
+    - engine/source/materials/mat/mat024/sigeps24.F (conc24.F, elas24.F, dama24.F)
+    - Peric scalar damage model for concrete and brittle materials.
+
+    Formulation:
+    - Linear elastic until damage initiation: r <= eps_0
+    - Scalar damage variable D in [0, DSUP] (0 = intact, 1 = fully damaged)
+    - Effective stress formulation: sigma = (1 - D) * C * epsilon
+    """
+    mat = getattr(mat, "mat", getattr(mat, "material", mat))
+    is_1d = (sig.ndim == 1)
+    sig_arr = np.atleast_2d(sig).astype(float)
+    deps_arr = np.atleast_2d(deps).astype(float)
+    m = sig_arr.shape[0]
+
+    if m == 0:
+        return sig, epsp, np.empty(0, dtype=sig.dtype)
+
+    if extra is None:
+        extra = {}
+
+    p = mat.params if hasattr(mat, "params") and mat.params is not None else {}
+    young = float(p.get("E", p.get("MAT_E", 30000.0)))
+    nu = float(p.get("nu", p.get("MAT_NU", 0.2)))
+    rho0 = float(getattr(mat, "rho0", p.get("RHO0", 2400.0)) or 2400.0)
+    fc = float(p.get("FC", p.get("MAT_SIGY", 30.0)))
+    ft_val = float(p.get("FT", p.get("MAT_FtFc", 3.0)))
+    if 0.0 < ft_val <= 1.0:
+        ft = ft_val * fc
+    elif ft_val > 1.0:
+        ft = ft_val
+    else:
+        ft = 0.1 * fc
+
+    eps_0 = float(p.get("EPS_0", p.get("EPST", ft / max(young, 1e-6))))
+    eps_f = float(p.get("EPS_F", p.get("EPSMAX", 10.0 * eps_0)))
+    if eps_f <= eps_0:
+        eps_f = 10.0 * eps_0
+
+    dsup = float(p.get("DSUP", p.get("MAT_DAMAGE", 0.99)))
+    alpha_d = float(p.get("ALPHA_DAM", 0.9))
+    beta_d = float(p.get("BETA_DAM", 1.0 / max(eps_f - eps_0, 1e-6)))
+    softening = str(p.get("SOFTENING", "exponential")).lower()
+
+    # Elastic Lame constants
+    lam = young * nu / ((1.0 + nu) * (1.0 - 2.0 * nu))
+    g = young / (2.0 * (1.0 + nu))
+    c_sound_0 = math.sqrt((lam + 2.0 * g) / max(rho0, 1e-20))
+
+    # Retrieve or initialize persistent state
+    eps_tot = extra.get("strain24", extra.get("eps24_tot"))
+    if eps_tot is None or eps_tot.shape != (m, 6):
+        eps_tot = np.zeros((m, 6), dtype=float)
+    extra["strain24"] = eps_tot
+    extra["eps24_tot"] = eps_tot
+
+    eps_tot += deps_arr
+
+    dam_scalar = extra.get("dam24_scalar")
+    if dam_scalar is None or len(dam_scalar) != m:
+        dam_scalar = np.zeros(m, dtype=float)
+    extra["dam24_scalar"] = dam_scalar
+
+    r_thresh = extra.get("r_thresh")
+    if r_thresh is None or len(r_thresh) != m:
+        r_thresh = np.full(m, eps_0, dtype=float)
+    extra["r_thresh"] = r_thresh
+
+    # Compute equivalent tensile strain per element
+    eps_tilde = np.zeros(m, dtype=float)
+    for i in range(m):
+        e11 = eps_tot[i, 0]
+        e22 = eps_tot[i, 1]
+        e33 = eps_tot[i, 2]
+        e12 = 0.5 * eps_tot[i, 3]
+        e23 = 0.5 * eps_tot[i, 4]
+        e31 = 0.5 * eps_tot[i, 5]
+        E_mat = np.array([
+            [e11, e12, e31],
+            [e12, e22, e23],
+            [e31, e23, e33],
+        ], dtype=float)
+        evals = np.linalg.eigvalsh(E_mat)
+        pos_evals = np.maximum(evals, 0.0)
+        eps_tilde[i] = math.sqrt(float(np.sum(pos_evals ** 2)))
+
+    # Update threshold & damage
+    np.maximum(r_thresh, eps_tilde, out=r_thresh)
+
+    damaged_mask = r_thresh > eps_0
+    for i in range(m):
+        if damaged_mask[i]:
+            r_i = r_thresh[i]
+            if softening == "linear":
+                d_val = (eps_f / (eps_f - eps_0)) * (1.0 - eps_0 / r_i)
+            else:
+                d_val = 1.0 - (eps_0 / r_i) * (1.0 - alpha_d + alpha_d * math.exp(-beta_d * (r_i - eps_0)))
+            d_val = min(dsup, max(dam_scalar[i], d_val))
+            dam_scalar[i] = d_val
+        else:
+            dam_scalar[i] = 0.0
+
+    extra["dam24"] = np.column_stack([dam_scalar, dam_scalar, dam_scalar])
+
+    # Effective stress computation: sigma = (1 - D) * C * epsilon
+    tr_eps = eps_tot[:, 0] + eps_tot[:, 1] + eps_tot[:, 2]
+    sig_0 = np.zeros((m, 6), dtype=float)
+    sig_0[:, 0] = lam * tr_eps + 2.0 * g * eps_tot[:, 0]
+    sig_0[:, 1] = lam * tr_eps + 2.0 * g * eps_tot[:, 1]
+    sig_0[:, 2] = lam * tr_eps + 2.0 * g * eps_tot[:, 2]
+    sig_0[:, 3] = g * eps_tot[:, 3]
+    sig_0[:, 4] = g * eps_tot[:, 4]
+    sig_0[:, 5] = g * eps_tot[:, 5]
+
+    factor = 1.0 - dam_scalar
+    sig_arr[:] = factor[:, None] * sig_0
+
+    if is_1d:
+        sig[:] = sig_arr[0]
+    else:
+        sig[:] = sig_arr
+
+    if epsp is not None and hasattr(epsp, "__setitem__"):
+        try:
+            if np.ndim(epsp) == 0 or (isinstance(epsp, np.ndarray) and epsp.size == 1 and m == 1):
+                epsp[...] = dam_scalar[0]
+            else:
+                epsp[:] = dam_scalar
+        except Exception:
+            pass
+
+    soundsp = np.maximum(0.1 * c_sound_0, np.sqrt(np.maximum(factor, 0.01)) * c_sound_0)
+    return sig, epsp, soundsp
+
+
 # ----------------------------------------------------------------------------
 # conc24.F — the driver
 # ----------------------------------------------------------------------------
@@ -870,13 +1102,16 @@ def _dama24_one(p, sigc, dam, ang, epsf, crak, s0, eps6, scle2, g):
 def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
     """One cycle for the group slice.  Returns (sig, epsp, c) — c is the
     constant sqrt(A11/rho0) of m24law.F."""
+    mat = getattr(mat, "mat", getattr(mat, "material", mat))
     m = len(sig)
     if m == 0:
         return sig, epsp, np.empty(0, dtype=sig.dtype)
     if extra is None:
         extra = {}
 
-    p = mat.params
+    p = mat.params if hasattr(mat, "params") and mat.params is not None else {}
+    if str(p.get("DAMAGE_MODEL", "")).upper() in ("SCALAR", "PERIC") or extra.get("scalar_damage", False):
+        return peric_damage_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
     young, nu, g = p["E"], p["nu"], p["Gc"]
     a11, a12 = p["A11c"], p["A12c"]
     dsup, qq = p["DSUP"], p["QQ"]
@@ -1078,32 +1313,57 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
 # Consistent tangents for implicit analysis
 # ----------------------------------------------------------------------------
 
-def consistent_solid_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
-                             epsp_incr: np.ndarray,
-                             extra=None) -> np.ndarray:
+def consistent_solid_tangent(mat, sig: Optional[np.ndarray] = None,
+                             epsp: Optional[np.ndarray] = None,
+                             epsp_incr: Optional[np.ndarray] = None,
+                             extra=None, **kwargs: Any) -> np.ndarray:
     """The CONSISTENT (algorithmic) elastoplastic and damaged tangent
     for concrete solids, (n, 6, 6), Voigt / engineering shear.
 
     Returns the damaged / rebar-reinforced Hooke matrix rotated to the
     element frame, with plastic softening reduction if yielding.
     """
-    n = sig.shape[0]
-    if n == 0:
-        return np.empty((0, 6, 6), dtype=sig.dtype)
+    mat = getattr(mat, "mat", getattr(mat, "material", mat))
+    if sig is not None:
+        sig_arr = np.atleast_2d(sig)
+        n = sig_arr.shape[0]
+        dtype = sig_arr.dtype
+    elif extra is not None and "strain24" in extra:
+        n = extra["strain24"].shape[0]
+        dtype = extra["strain24"].dtype
+    else:
+        n = 1
+        dtype = float
 
-    p = mat.params
-    young, nu, g = p["E"], p["nu"], p["Gc"]
-    a11, a12 = p["A11c"], p["A12c"]
+    if n == 0:
+        return np.empty((0, 6, 6), dtype=dtype)
+
+    p = mat.params if hasattr(mat, "params") and mat.params is not None else {}
+    young = float(p.get("E", p.get("MAT_E", 30000.0)))
+    nu = float(p.get("nu", p.get("MAT_NU", 0.2)))
+    g = float(p.get("Gc", young / (2.0 * (1.0 + nu))))
+    den = (1.0 + nu) * (1.0 - 2.0 * nu)
+    a11 = float(p.get("A11c", young * (1.0 - nu) / max(den, 1e-12)))
+    a12 = float(p.get("A12c", young * nu / max(den, 1e-12)))
     arm1, arm2, arm3 = p.get("ARM1", 0.0), p.get("ARM2", 0.0), p.get("ARM3", 0.0)
     yms = p.get("YMS", 0.0)
 
     # Base elastic matrix for uncracked concrete
-    C_base = np.zeros((6, 6), dtype=sig.dtype)
+    C_base = np.zeros((6, 6), dtype=dtype)
     C_base[0, 0] = C_base[1, 1] = C_base[2, 2] = a11
     C_base[0, 1] = C_base[1, 0] = C_base[0, 2] = C_base[2, 0] = C_base[1, 2] = C_base[2, 1] = a12
     C_base[3, 3] = C_base[4, 4] = C_base[5, 5] = g
 
     C = np.broadcast_to(C_base, (n, 6, 6)).copy()
+
+    # If scalar damage is active
+    if str(p.get("DAMAGE_MODEL", "")).upper() in ("SCALAR", "PERIC") or (extra and extra.get("scalar_damage", False)):
+        d_val = extra.get("dam24_scalar", 0.0) if extra else 0.0
+        d_arr = np.atleast_1d(np.asarray(d_val, dtype=float))
+        if d_arr.shape[0] != n:
+            d_arr = np.full(n, float(d_arr[0]))
+        C = (1.0 - np.clip(d_arr[:, None, None], 0.0, 1.0)) * C_base
+        return C
 
     # If extra is present, check for directional damage/cracking
     if extra is not None and "dam24" in extra and "ang24" in extra and "crak24" in extra:
@@ -1121,7 +1381,7 @@ def consistent_solid_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
                 de5 = sc_i[0, 1] * sc_i[0, 2]
                 de6 = sc_i[0, 2] * sc_i[0, 0]
 
-                C_local = np.zeros((6, 6), dtype=sig.dtype)
+                C_local = np.zeros((6, 6), dtype=dtype)
                 C_local[:3, :3] = C_dam3
                 C_local[3, 3] = de4 * g
                 C_local[4, 4] = de5 * g
@@ -1131,7 +1391,7 @@ def consistent_solid_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
                 # using _rot_strain_to_crack and _rot_stress_from_crack
                 ang_row = ang[idx:idx+1]
                 for k in range(6):
-                    e_k = np.zeros((1, 6), dtype=sig.dtype)
+                    e_k = np.zeros((1, 6), dtype=dtype)
                     e_k[0, k] = 1.0
                     e_crack = _rot_strain_to_crack(e_k, ang_row)
                     s_crack = e_crack @ C_local.T
@@ -1165,6 +1425,30 @@ def consistent_solid_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
     return C
 
 
+def sound_speed(
+    mat: Any,
+    rho: Optional[Union[float, np.ndarray]] = None,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Union[float, np.ndarray]:
+    """Compute acoustic sound speed for LAW24 concrete.
+
+    Upstream Fortran reference: m24law.F (c = sqrt(PM(24) / PM(1))).
+    """
+    mat = getattr(mat, "mat", getattr(mat, "material", mat))
+    p = mat.params if hasattr(mat, "params") and mat.params is not None else {}
+    young = float(p.get("E", p.get("MAT_E", 30000.0)))
+    nu = float(p.get("nu", p.get("MAT_NU", 0.2)))
+    den = (1.0 + nu) * (1.0 - 2.0 * nu)
+    a11 = float(p.get("A11c", young * (1.0 - nu) / max(den, 1e-12)))
+    rho0 = rho if rho is not None else float(getattr(mat, "rho0", p.get("RHO0", 2400.0)) or 2400.0)
+    is_scalar = np.isscalar(rho0)
+    rho_arr = np.atleast_1d(np.asarray(rho0, dtype=float))
+    c = np.sqrt(a11 / np.maximum(rho_arr, _EM20))
+    if is_scalar:
+        return float(c[0])
+    return c
+
+
 # ----------------------------------------------------------------------------
 # cfg-record constructor (mat_reader physics registry)
 # ----------------------------------------------------------------------------
@@ -1173,7 +1457,26 @@ def consistent_solid_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
 def build_conc(rec) -> Material:
     """hm_read_mat24.F: cfg attributes -> the PM table (each param below
     notes its PM index)."""
-    q = rec.params
+    if isinstance(rec, Law24Params):
+        return Material(
+            id=int(getattr(rec, "id", 1)),
+            law=24,
+            rho0=float(rec.rho0),
+            title=str(getattr(rec, "title", "LAW24")),
+            params=dict(rec.params),
+        )
+    if hasattr(rec, "params") and getattr(rec, "params") is not None:
+        q = getattr(rec, "params")
+    elif isinstance(rec, dict) and "params" in rec and isinstance(rec["params"], dict):
+        q = rec["params"]
+    elif isinstance(rec, dict):
+        q = rec
+    else:
+        q = {}
+
+    density = float(getattr(rec, "density", getattr(rec, "rho0", q.get("RHO0", q.get("rho0", q.get("density", 2400.0))))) or 2400.0)
+    rec_id = int(getattr(rec, "id", q.get("id", 1)))
+    rec_title = str(getattr(rec, "title", q.get("title", f"LAW24_{rec_id}")))
     ymc = float(q.get("MAT_E") if q.get("MAT_E") is not None else (q.get("e") if q.get("e") is not None else (q.get("E") or 0.0)))
     anuc = float(q.get("MAT_NU") if q.get("MAT_NU") is not None else (q.get("nu") if q.get("nu") is not None else (q.get("NU") or 0.0)))
     icap = int(q.get("Iflag") if q.get("Iflag") is not None else (q.get("icap") if q.get("icap") is not None else (q.get("iflag") or 0)))
@@ -1277,7 +1580,7 @@ def build_conc(rec) -> Material:
         "E": ymc, "nu": anuc,                 # PM(20) / PM(21)
         "K": bulk, "G": gc,
         "Gc": gc, "A11c": a11c, "A12c": a12c,
-        "RHO0": rec.density,                  # PM(1) (RHOR = RHO0 here)
+        "RHO0": density,                      # PM(1) (RHOR = RHO0 here)
         "DSUP": max(0.0, dsup1),              # PM(26)
         "VMAX": vmax,                         # PM(27)
         "QQ": 1.0 - ht / ymc,                 # PM(28)
@@ -1297,15 +1600,45 @@ def build_conc(rec) -> Material:
         "FT": ft, "FB": fb, "F2D": f2d, "S0FC": s0, "CCOTT": cc,
         "YMS": yms, "Y0S": y0s, "ETS": ets,
         "ARM1": arm[0], "ARM2": arm[1], "ARM3": arm[2],
+        "DAMAGE_MODEL": str(q.get("DAMAGE_MODEL", q.get("damage_model", "smeared_crack"))),
+        "EPS_0": float(q.get("EPS_0", q.get("eps_0", ft * fc / ymc if ymc > 0 else 1e-4))),
+        "EPS_F": float(q.get("EPS_F", q.get("eps_f", epsmax))),
     }
-    return Material(id=rec.id, law=24, rho0=rec.density,
-                    title=rec.title, params=params)
+    return Material(id=rec_id, law=24, rho0=density,
+                    title=rec_title, params=params)
+
+
+build_law24 = build_conc
+solid_step = solid_update
+solid_tangent = consistent_solid_tangent
+tangent_law24_solid = consistent_solid_tangent
+
+
+def tangent(group_or_mat: Any = None, **kwargs: Any) -> np.ndarray:
+    """Material law template tangent interface conforming to pyradioss dispatcher."""
+    mat = getattr(group_or_mat, "mat", getattr(group_or_mat, "material", group_or_mat))
+    return consistent_solid_tangent(mat, **kwargs)
 
 
 def _register():
     from ..input.mat_reader import MAT_PHYSICS_REGISTRY
-    MAT_PHYSICS_REGISTRY.setdefault("CONC", build_conc)
-    MAT_PHYSICS_REGISTRY.setdefault("LAW24", build_conc)
+    for k in ("CONC", "LAW24", "CONCRETE", "PERIC_CONC", "PERIC_CONCRETE", 24, "24"):
+        MAT_PHYSICS_REGISTRY.setdefault(k, build_conc)
 
 
 _register()
+
+__all__ = [
+    "Law24Params",
+    "build_conc",
+    "build_law24",
+    "solid_step",
+    "solid_update",
+    "shell_update",
+    "sound_speed",
+    "peric_damage_update",
+    "consistent_solid_tangent",
+    "solid_tangent",
+    "tangent_law24_solid",
+    "tangent",
+]

@@ -624,6 +624,13 @@ from .law60_plast3 import (
     consistent_solid_tangent as law60_solid_tangent,
     consistent_shell_tangent as law60_shell_tangent,
 )
+from .law24_concrete import (Law24Params,
+                             build_conc,
+                             build_law24,
+                             solid_update as law24_solid_update,
+                             consistent_solid_tangent as law24_solid_tangent,
+                             sound_speed as law24_sound_speed,
+                             peric_damage_update as law24_peric_damage_update)
 from .law34_boltzmann import (solid_update as law34_solid_update,
                              shell_update as law34_shell_update,
                              sound_speed as law34_sound_speed,
@@ -1976,6 +1983,7 @@ _NEW_PORTED_LAWS: dict[int, Any] = {
     18: law18_plas_iso,
     20: law20_rigid,
     23: law23_user_mat,
+    24: law24_concrete,
     26: law26_honeycomb_sesame,
     37: law37_biphas,
     41: law41_jwl_burn,
@@ -2458,9 +2466,19 @@ LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
     "MAT_LAW37": {"plane_stress": False, "solid": True, "shell": False},
     "MAT_BIPHAS": {"plane_stress": False, "solid": True, "shell": False},
     "MAT_BIPHASIC": {"plane_stress": False, "solid": True, "shell": False},
+    24: {"plane_stress": False, "solid": True, "shell": False},
+    "24": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW24": {"plane_stress": False, "solid": True, "shell": False},
+    "CONC": {"plane_stress": False, "solid": True, "shell": False},
+    "CONCRETE": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_LAW24": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_CONC": {"plane_stress": False, "solid": True, "shell": False},
 }
 
 MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
+    24: law24_concrete.solid_update, "24": law24_concrete.solid_update, "LAW24": law24_concrete.solid_update,
+    "CONC": law24_concrete.solid_update, "CONCRETE": law24_concrete.solid_update,
+    "MAT_LAW24": law24_concrete.solid_update, "MAT_CONC": law24_concrete.solid_update,
     37: law37_biphas.solid_update, "37": law37_biphas.solid_update, "LAW37": law37_biphas.solid_update,
     "BIPHAS": law37_biphas.solid_update, "BIPHASIC": law37_biphas.solid_update,
     "MAT_LAW37": law37_biphas.solid_update, "MAT_BIPHAS": law37_biphas.solid_update,
@@ -3209,7 +3227,7 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
         return sig, epsp, None
     if mat.law == 42:
         return law42_ogden.solid_update(mat, sig, deps, epsp, dt, extra)
-    if mat.law == 24:
+    if getattr(mat, "law", None) in (24, "24", "LAW24", "CONC", "CONCRETE", "PERIC_CONC") or getattr(mat, "law_name", None) in (24, "24", "LAW24", "CONC", "CONCRETE", "PERIC_CONC"):
         return law24_concrete.solid_update(mat, sig, deps, epsp, dt, extra)
     if getattr(mat, "law", None) in (81, "81", "LAW81", "DPRAG_CAP", "MAT_LAW81", "MAT_DPRAG_CAP") or getattr(mat, "law_name", None) in (81, "81", "LAW81", "DPRAG_CAP", "MAT_LAW81", "MAT_DPRAG_CAP"):
         return law81_druckerprager.solid_update(mat, sig, deps, epsp, dt,
@@ -4236,6 +4254,8 @@ def sound_speed(mat, rho=None, extra=None, is_shell: bool = False):
         return law34_boltzmann.sound_speed(mat, rho=rho, extra=extra)
     if law in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or law_name in ("LAW37", "BIPHAS", "BIPHASIC"):
         return law37_sound_speed(mat, rho=rho, extra=extra)
+    if law in (24, "24", "LAW24", "CONC", "CONCRETE", "PERIC_CONC") or law_name in (24, "24", "LAW24", "CONC", "CONCRETE", "PERIC_CONC"):
+        return law24_concrete.sound_speed(mat, rho=rho, extra=extra)
     if law in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG") or law_name in ("15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG"):
         return law15_chang.sound_speed(mat, rho=rho, extra=extra)
     if law in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or law_name in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
@@ -4725,7 +4745,7 @@ def solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
                 "supported for the solid kernels (hexa8/tetra4) under "
                 "/IMPL/NONLIN only")
         return law82_solid_tangent(mat, extra["F"])
-    if mat.law == 24:
+    if getattr(mat, "law", None) in (24, "24", "LAW24", "CONC", "CONCRETE", "PERIC_CONC") or getattr(mat, "law_name", None) in (24, "24", "LAW24", "CONC", "CONCRETE", "PERIC_CONC"):
         return law24_concrete.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr, extra)
     if mat.law == 35:
