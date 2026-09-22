@@ -15,3 +15,13 @@ Pipeline (see starter.py):
 """
 
 from .starter import run_starter  # noqa: F401
+from .inivel import (  # noqa: F401
+    InivelRecord,
+    InivelType,
+    apply_bcs_mask,
+    apply_inivel,
+    build_cylindrical_inivel,
+    build_rotational_inivel,
+    build_spherical_inivel,
+    build_translational_inivel,
+)
