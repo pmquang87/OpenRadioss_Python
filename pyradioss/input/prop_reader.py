@@ -361,10 +361,13 @@ def parse_spr_beam(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
         params["ileng"] = 0
         params["ifail2"] = 0
 
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    cards_per_dof = 3 if (len(valid_cards) - 1 >= 18) else 2
+
     # 6 DOF blocks
     for i in range(1, 7):
         # Card 1: Ki, Ci, Ai, Bi, Di
-        kc = _get(cards, 1 + 3 * (i - 1))
+        kc = _get(cards, 1 + cards_per_dof * (i - 1))
         if kc is not None:
             r = _row(kc, "F20X5", fixed)
             params[f"k{i}"] = _fv(r[0])
@@ -380,7 +383,7 @@ def parse_spr_beam(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
             params[f"d{i}"] = 1.0
 
         # Card 2: FUN_Ai, HFLAGi, FUN_Bi, FUN_Ci, FUN_Di, MIN_RUPi, MAX_RUPi
-        fc = _get(cards, 2 + 3 * (i - 1))
+        fc = _get(cards, 2 + cards_per_dof * (i - 1))
         if fc is not None:
             if fixed:
                 r = _row(fc, "PROP_SPR_DOF_FCT", True)
@@ -411,13 +414,19 @@ def parse_spr_beam(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
             params[f"max_rup{i}"] = 1e30
 
         # Card 3: Fi, Ei, scalei, Hi
-        sc = _get(cards, 3 + 3 * (i - 1))
-        if sc is not None:
-            r = _row(sc, "F20X4", fixed)
-            params[f"f{i}"] = _fv(r[0], 1.0) if len(r) > 0 and r[0].strip() else 1.0
-            params[f"e{i}"] = _fv(r[1], 0.0) if len(r) > 1 and r[1].strip() else 0.0
-            params[f"scale{i}"] = _fv(r[2], 1.0) if len(r) > 2 and r[2].strip() else 1.0
-            params[f"h{i}"] = _fv(r[3], 1.0) if len(r) > 3 and r[3].strip() else 1.0
+        if cards_per_dof >= 3:
+            sc = _get(cards, 3 + cards_per_dof * (i - 1))
+            if sc is not None:
+                r = _row(sc, "F20X4", fixed)
+                params[f"f{i}"] = _fv(r[0], 1.0) if len(r) > 0 and r[0].strip() else 1.0
+                params[f"e{i}"] = _fv(r[1], 0.0) if len(r) > 1 and r[1].strip() else 0.0
+                params[f"scale{i}"] = _fv(r[2], 1.0) if len(r) > 2 and r[2].strip() else 1.0
+                params[f"h{i}"] = _fv(r[3], 1.0) if len(r) > 3 and r[3].strip() else 1.0
+            else:
+                params[f"f{i}"] = 1.0
+                params[f"e{i}"] = 0.0
+                params[f"scale{i}"] = 1.0
+                params[f"h{i}"] = 1.0
         else:
             params[f"f{i}"] = 1.0
             params[f"e{i}"] = 0.0
@@ -431,7 +440,8 @@ def parse_spr_beam(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
             params[f"e{i}"] = 0.0
 
     # Optional trailing velocity / rate card
-    vc = _get(cards, 19)
+    vc_idx = 1 + 6 * cards_per_dof
+    vc = _get(cards, vc_idx)
     if vc is not None:
         r = _row(vc, "PROP_SPR_VEL", fixed)
         params["trans_vel0"] = _fv(r[0]) if len(r) > 0 else 0.0

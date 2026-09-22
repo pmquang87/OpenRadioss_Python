@@ -5425,10 +5425,16 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if typename in ("SPR_PULL", "PROP_SPR_PULL", "P13_SPR_PULL"):
         read_prop_type13(block, model, log)
         return
-    if typename in ("TYPE13", "PROP_TYPE13", "SPR_BEAM", "PROP_SPR_BEAM", "P13_SPR_BEAM"):
+    if typename in ("SPR_BEAM", "PROP_SPR_BEAM", "P13_SPR_BEAM"):
+        from .prop_reader import parse_spr_beam
+        prop = parse_spr_beam(block, log)
+        if prop is not None:
+            model.properties[block.user_id] = prop
+        return
+    if typename in ("TYPE13", "PROP_TYPE13"):
         _t, _cards = _fixed_data(block) if block.fixed else _title_and_data(block)
         _valid = [c for c in _cards if not c.is_blank and not c.raw.strip().startswith("#")]
-        if len(_valid) <= 1 and _valid and len(_valid[0].tokens()) <= 2:
+        if len(_valid) <= 1:
             read_prop_type13(block, model, log)
             return
         from .prop_reader import parse_spr_beam

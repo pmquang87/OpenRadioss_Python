@@ -223,9 +223,13 @@ def init_spring_beam_type13(group, model, log, idx13, massn=None, inertn=None):
         idx=np.asarray(idx13, dtype=np.int64),
         conn=conn[:, :2],
         L0=L0,
+        d0=d.copy(),
         e1=e1,
         e2=e2,
         e3=e3,
+        e1_0=e1.copy(),
+        e2_0=e2.copy(),
+        e3_0=e3.copy(),
         mass=mass,
         inertia=inertia,
         skew_id=skew_id,
@@ -268,14 +272,17 @@ def init_spring_beam_type13(group, model, log, idx13, massn=None, inertn=None):
     st["spr_beam13"] = beam_state
 
     # Mirror into group.state["gen6"] for compatibility with general spring inspections
-    if "gen6" not in st:
-        st["gen6"] = {}
-    st["gen6"].update({
-        "e1": e1, "e2": e2, "e3": e3,
-        "k6": k6, "c6": c6, "mass": mass, "inertia": inertia,
-        "force": np.zeros((m13, 3)), "moment": np.zeros((m13, 3)),
-        "eint": np.zeros(m13),
-    })
+    # only when group has no TYPE8 elements (idx6)
+    has_idx6 = len(st.get("idx6", [])) > 0
+    if not has_idx6:
+        if "gen6" not in st:
+            st["gen6"] = {}
+        st["gen6"].update({
+            "e1": e1, "e2": e2, "e3": e3,
+            "k6": k6, "c6": c6, "mass": mass, "inertia": inertia,
+            "force": np.zeros((m13, 3)), "moment": np.zeros((m13, 3)),
+            "eint": np.zeros(m13),
+        })
 
 
 def forces_spring_beam_type13(group, x, v, vr, dt, fint, mint, idx13=None):
@@ -354,6 +361,13 @@ def forces_spring_beam_type13(group, x, v, vr, dt, fint, mint, idx13=None):
         e2[j] = e2_j
         e3[j] = e3_j
 
+    d0 = b.get("d0")
+    if d0 is None:
+        if model is not None and hasattr(model, "x0"):
+            d0 = model.x0[n2] - model.x0[n1]
+        else:
+            d0 = np.zeros_like(d)
+
     # 2. Kinematics (r4def3.F lines 218-289)
     dx = np.zeros((m13, 3))
     theta = np.zeros((m13, 3))
@@ -361,41 +375,23 @@ def forces_spring_beam_type13(group, x, v, vr, dt, fint, mint, idx13=None):
     dx_old = b["dx"].copy()
     theta_old = b["theta"].copy()
 
+    e1_ref = b.get("e1_0", e1)
+    e2_ref = b.get("e2_0", e2)
+    e3_ref = b.get("e3_0", e3)
+
+    d_rel = d - d0
     for j in range(m13):
-        Lj = L[j]
-        # Axial elongation: DX = L - L0 (r4def3.F line 283)
-        dx[j, 0] = Lj - L0[j]
-
-        # Transverse displacements (r4def3.F lines 261-285)
-        if v is not None and dt is not None and dt > 0.0:
-            v21 = v[n2[j]] - v[n1[j]]
-            w21 = vr[n2[j]] + vr[n1[j]] if vr is not None else np.zeros(3)
-
-            epxy = float(np.dot(v21, e2[j])) * dt05
-            epxz = float(np.dot(v21, e3[j])) * dt05
-
-            ryav1 = float(np.dot(w21, e2[j]))
-            rzav1 = float(np.dot(w21, e3[j]))
-
-            al_safe = max(Lj, 1e-30)
-            at_z = math.atan(epxz / al_safe)
-            at_y = math.atan(epxy / al_safe)
-
-            ryav = dt05 * ryav1 + 2.0 * at_z
-            rzav = dt05 * rzav1 - 2.0 * at_y
-
-            dx[j, 1] = dx_old[j, 1] - rzav * Lj
-            dx[j, 2] = dx_old[j, 2] + ryav * Lj
-        else:
-            dx[j, 1] = dx_old[j, 1]
-            dx[j, 2] = dx_old[j, 2]
+        # Local translational displacements resolved on element triad
+        dx[j, 0] = float(np.dot(d_rel[j], e1_ref[j]))
+        dx[j, 1] = float(np.dot(d_rel[j], e2_ref[j]))
+        dx[j, 2] = float(np.dot(d_rel[j], e3_ref[j]))
 
         # Relative rotations (rate integration)
         if vr is not None and dt is not None and dt > 0.0:
             w_diff = vr[n2[j]] - vr[n1[j]]
-            theta[j, 0] = theta_old[j, 0] + float(np.dot(w_diff, e1[j])) * dt_safe
-            theta[j, 1] = theta_old[j, 1] + float(np.dot(w_diff, e2[j])) * dt_safe
-            theta[j, 2] = theta_old[j, 2] + float(np.dot(w_diff, e3[j])) * dt_safe
+            theta[j, 0] = theta_old[j, 0] + float(np.dot(w_diff, e1_ref[j])) * dt_safe
+            theta[j, 1] = theta_old[j, 1] + float(np.dot(w_diff, e2_ref[j])) * dt_safe
+            theta[j, 2] = theta_old[j, 2] + float(np.dot(w_diff, e3_ref[j])) * dt_safe
         else:
             theta[j] = theta_old[j]
 
@@ -403,7 +399,27 @@ def forces_spring_beam_type13(group, x, v, vr, dt, fint, mint, idx13=None):
     gen_disp = np.hstack([dx, theta])          # (m13, 6)
     gen_disp_old = np.hstack([dx_old, theta_old])
 
-    gen_vel = (gen_disp - gen_disp_old) / dt_safe
+    v_loc = np.zeros((m13, 3))
+    w_loc = np.zeros((m13, 3))
+    if v is not None:
+        v_diff = v[n2] - v[n1]
+        for j in range(m13):
+            v_loc[j, 0] = float(np.dot(v_diff[j], e1_ref[j]))
+            v_loc[j, 1] = float(np.dot(v_diff[j], e2_ref[j]))
+            v_loc[j, 2] = float(np.dot(v_diff[j], e3_ref[j]))
+    else:
+        v_loc = (dx - dx_old) / dt_safe
+
+    if vr is not None:
+        w_diff = vr[n2] - vr[n1]
+        for j in range(m13):
+            w_loc[j, 0] = float(np.dot(w_diff[j], e1_ref[j]))
+            w_loc[j, 1] = float(np.dot(w_diff[j], e2_ref[j]))
+            w_loc[j, 2] = float(np.dot(w_diff[j], e3_ref[j]))
+    else:
+        w_loc = (theta - theta_old) / dt_safe
+
+    gen_vel = np.hstack([v_loc, w_loc])
 
     # 3. Constitutive model evaluation (redef3.F90 lines 736-1158)
     forces_local = np.zeros((m13, 6))
@@ -428,7 +444,7 @@ def forces_spring_beam_type13(group, x, v, vr, dt, fint, mint, idx13=None):
             d_bar = d_k / L_ref
             d_bar_old = d_old_k / L_ref
             delta_d = d_bar - d_bar_old
-            v_bar = delta_d / dt_safe
+            v_bar = v_k / L_ref
 
             stiff = b["k6"][j, k]
             damp = b["c6"][j, k]
@@ -632,11 +648,16 @@ def forces_spring_beam_type13(group, x, v, vr, dt, fint, mint, idx13=None):
             mint[node1] += m1_glob
             mint[node2] += m2_glob
 
-    # Mirror force/moment into gen6 for inspection
-    if "gen6" in st:
+    # Mirror force/moment into gen6 for inspection if no TYPE8 elements
+    if "gen6" in st and len(st.get("idx6", [])) == 0:
         st["gen6"]["force"] = b["force"]
         st["gen6"]["moment"] = b["moment"]
         st["gen6"]["eint"] = b["eint"]
+
+    if "eint" in st:
+        st["eint"][idx13] = b["eint"]
+    if "force" in st:
+        st["force"][idx13] = b["force"][:, 0]
 
     return dt_elem
 
@@ -735,4 +756,9 @@ def ke_spring_beam_type13(group, x, idx13=None):
         ke[j_idx, 6:, :6] = KE12.T
         ke[j_idx, 6:, 6:] = KE22
 
-    return ke
+    edofs = np.empty((m, 12), dtype=np.int64)
+    for c in range(6):
+        edofs[:, c] = conn[:, 0] * 6 + c
+        edofs[:, 6 + c] = conn[:, 1] * 6 + c
+
+    return ke, edofs
