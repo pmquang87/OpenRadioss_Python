@@ -69,3 +69,14 @@ from .pfluid import (  # noqa: F401
     pfluid_subroutine,
 )
 
+
+from .sph_boundary import (  # noqa: F401
+    SphBoundaryManager,
+    SphInflow,
+    SphInflowParams,
+    SphOutflow,
+    SphOutflowParams,
+    build_sph_inflow,
+    build_sph_outflow,
+)
+

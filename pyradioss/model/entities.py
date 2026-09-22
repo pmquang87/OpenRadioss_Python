@@ -1155,6 +1155,13 @@ class Sensor:
     func_name: str = ""
     target_id: int = 0   # SPH, AIRBAG, MONVOL, SHELL, SOLID (M136)
     dflag: int = 0       # DIST deactivation flag (M165)
+    # Extended sensor threshold aliases
+    a_max: float = 0.0
+    e_max: float = 0.0
+    f_max: float = 0.0
+    t_max: float = 0.0
+    energy_type: str = ""
+
 
 
 @dataclass
