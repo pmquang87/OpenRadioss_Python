@@ -102,4 +102,14 @@ try:
 except ImportError:
     pass
 
+from .load_centri import (  # noqa: F401
+    LoadCentri,
+    CentrifugalResult,
+    compute_centrifugal_forces,
+    cfield_subroutine,
+    CentrifugalEngine,
+    build_load_centri,
+)
+
+
 
