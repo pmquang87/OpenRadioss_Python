@@ -2,11 +2,16 @@
 LAW190 — Du Bois Crushable Foam Material (/MAT/LAW190, /MAT/FOAM_DUBOIS).
 
 Fortran upstream references:
-- Starter reader: ``starter/source/materials/mat/mat190/hm_read_mat190.F``
-- Starter property setup: ``starter/source/materials/mat/mat190/law190_upd.F90``
-- Engine constitutive update: ``engine/source/materials/mat/mat190/sigeps190.F``
-- Tangent stiffness & rate interpolation: ``engine/source/materials/mat/mat190/conversion.F``
-- Hysteretic energy & unloading damage: ``engine/source/materials/mat/mat190/condamage.F``
+- Engine constitutive update:
+  ``engine/source/materials/mat/mat190/sigeps190.F`` (Subroutine SIGEPS190, lines 38-420)
+- Tangent stiffness & rate interpolation:
+  ``engine/source/materials/mat/mat190/conversion.F`` (Subroutine CONVERSION, lines 41-250)
+- Hysteretic energy & unloading damage:
+  ``engine/source/materials/mat/mat190/condamage.F`` (Subroutine CONDAMAGE, lines 41-175)
+- Starter reader:
+  ``starter/source/materials/mat/mat190/hm_read_mat190.F`` (Subroutine HM_READ_MAT190, lines 39-208)
+- Starter property setup & energy table pre-integration:
+  ``starter/source/materials/mat/mat190/law190_upd.F90`` (Subroutine LAW190_UPD, lines 33-228)
 
 Theory & Algorithm:
 --------------------
@@ -1142,3 +1147,17 @@ def shell_tangent(
 
 
 consistent_shell_tangent = shell_tangent
+
+
+def _register() -> None:
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        MAT_PHYSICS_REGISTRY["LAW190"] = build_law190
+        MAT_PHYSICS_REGISTRY["FOAM_DUBOIS"] = build_law190
+        MAT_PHYSICS_REGISTRY["DUBOIS"] = build_law190
+        MAT_PHYSICS_REGISTRY[190] = build_law190
+    except Exception:
+        pass
+
+
+_register()
