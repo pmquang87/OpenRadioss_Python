@@ -95,6 +95,179 @@ def minter1d_rat(x0: float, x1: float, x2: float, x3: float,
     return float(y), float(yp)
 
 
+def mindex_1d(arr: np.ndarray | list[float], val: float) -> int:
+    """1-based binary search index matching engine/source/materials/mat/mat026/mindex.F.
+
+    Returns index 1 <= i <= len(arr) - 1.
+    """
+    n = len(arr)
+    if n <= 1:
+        return 1
+    idx = int(np.searchsorted(arr, val, side="right"))
+    return max(1, min(n - 1, idx))
+
+
+def mintp1_rt(
+    xx: np.ndarray,
+    yy: np.ndarray,
+    zz: np.ndarray,
+    x: float,
+    y: float,
+) -> tuple[float, float, float]:
+    """2D rational interpolation Z(x,y) and partial derivatives dZ/dx, dZ/dy.
+
+    Upstream Fortran reference:
+      common_source/eos/mintp1_rt.F
+      common_source/eos/mintp_rt.F
+    """
+    nx = len(xx)
+    ny = len(yy)
+    ix = mindex_1d(xx, x)
+    iy = mindex_1d(yy, y)
+
+    ix = max(1, min(nx - 1, ix))
+    iy = max(1, min(ny - 1, iy))
+
+    ixm1 = max(1, ix - 1)
+    ixp1 = ix + 1
+    ixp2 = min(nx, ix + 2)
+
+    iym1 = max(1, iy - 1)
+    iyp1 = iy + 1
+    iyp2 = min(ny, iy + 2)
+
+    i_x = [ixm1 - 1, ix - 1, ixp1 - 1, ixp2 - 1]
+    i_y = [iym1 - 1, iy - 1, iyp1 - 1, iyp2 - 1]
+
+    xx0, xx1, xx2, xx3 = float(xx[i_x[0]]), float(xx[i_x[1]]), float(xx[i_x[2]]), float(xx[i_x[3]])
+
+    z_lev = []
+    dzdx_lev = []
+    for ky in i_y:
+        z_k, dzdx_k = minter1d_rat(
+            xx0, xx1, xx2, xx3,
+            float(zz[i_x[0], ky]), float(zz[i_x[1], ky]),
+            float(zz[i_x[2], ky]), float(zz[i_x[3], ky]),
+            x, ix, nx,
+        )
+        z_lev.append(z_k)
+        dzdx_lev.append(dzdx_k)
+
+    yy0, yy1, yy2, yy3 = float(yy[i_y[0]]), float(yy[i_y[1]]), float(yy[i_y[2]]), float(yy[i_y[3]])
+
+    z_val, dzdy = minter1d_rat(
+        yy0, yy1, yy2, yy3,
+        z_lev[0], z_lev[1], z_lev[2], z_lev[3],
+        y, iy, ny,
+    )
+    dzdx, _ = minter1d_rat(
+        yy0, yy1, yy2, yy3,
+        dzdx_lev[0], dzdx_lev[1], dzdx_lev[2], dzdx_lev[3],
+        y, iy, ny,
+    )
+    return float(z_val), float(dzdx), float(dzdy)
+
+
+def mintp_re(
+    xx: np.ndarray,
+    yy: np.ndarray,
+    zz: np.ndarray,
+    x: float,
+    z: float,
+) -> tuple[float, float]:
+    """Inverse 2D rational interpolation: find y(x, z) such that Z(x, y) = z, and dy/dz.
+
+    Upstream Fortran reference:
+      common_source/eos/mintp_re.F
+    """
+    nx = len(xx)
+    ny = len(yy)
+    ix = mindex_1d(xx, x)
+    ix = max(1, min(nx - 1, ix))
+    col_z = zz[ix - 1, :]
+    iy = mindex_1d(col_z, z)
+    iy = max(1, min(ny - 1, iy))
+
+    ixm1 = max(1, ix - 1)
+    ixp1 = ix + 1
+    ixp2 = min(nx, ix + 2)
+
+    iym1 = max(1, iy - 1)
+    iyp1 = iy + 1
+    iyp2 = min(ny, iy + 2)
+
+    i_x = [ixm1 - 1, ix - 1, ixp1 - 1, ixp2 - 1]
+    i_y = [iym1 - 1, iy - 1, iyp1 - 1, iyp2 - 1]
+
+    xx0, xx1, xx2, xx3 = float(xx[i_x[0]]), float(xx[i_x[1]]), float(xx[i_x[2]]), float(xx[i_x[3]])
+
+    z_lev = []
+    dzdx_lev = []
+    for ky in i_y:
+        z_k, dzdx_k = minter1d_rat(
+            xx0, xx1, xx2, xx3,
+            float(zz[i_x[0], ky]), float(zz[i_x[1], ky]),
+            float(zz[i_x[2], ky]), float(zz[i_x[3], ky]),
+            x, ix, nx,
+        )
+        z_lev.append(z_k)
+        dzdx_lev.append(dzdx_k)
+
+    yy0, yy1, yy2, yy3 = float(yy[i_y[0]]), float(yy[i_y[1]]), float(yy[i_y[2]]), float(yy[i_y[3]])
+
+    y_val, dydz = minter1d_rat(
+        z_lev[0], z_lev[1], z_lev[2], z_lev[3],
+        yy0, yy1, yy2, yy3,
+        z, iy, ny,
+    )
+    return float(y_val), float(dydz)
+
+
+def read_sesame_file(filepath: str) -> dict[str, Any]:
+    """Parse standard ASCII SESAME table (format 301) and convert to SI units.
+
+    Upstream Fortran reference:
+      starter/source/materials/mat/mat026/mrdse2.F
+      starter/source/materials/eos/sesame_tools.F
+    """
+    with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        lines = [line.strip() for line in f if line.strip()]
+
+    header_tokens = lines[1].split()
+    nr = int(float(header_tokens[0]))
+    nt = int(float(header_tokens[1]))
+
+    tokens: list[float] = []
+    for line in lines[2:]:
+        for tok in line.split():
+            try:
+                tokens.append(float(tok))
+            except ValueError:
+                pass
+
+    idx = 2
+    r_tab = np.array(tokens[idx:idx + nr], dtype=float) * 1000.0  # Mg/m^3 -> kg/m^3
+    idx += nr
+    t_tab = np.array(tokens[idx:idx + nt], dtype=float)  # K
+    idx += nt
+
+    p_flat = np.array(tokens[idx:idx + nr * nt], dtype=float) * 1.0e9  # GPa -> Pa
+    p_tab = p_flat.reshape((nt, nr)).T  # (nr, nt)
+    idx += nr * nt
+
+    e_flat = np.array(tokens[idx:idx + nr * nt], dtype=float) * 1.0e6  # MJ/kg -> J/kg
+    e_tab = e_flat.reshape((nt, nr)).T  # (nr, nt)
+
+    return {
+        "nr": nr,
+        "nt": nt,
+        "rho_table": r_tab,
+        "theta_table": t_tab,
+        "p_table": p_tab,
+        "e_table": e_tab,
+    }
+
+
 def _eval_funct_1d(func: Any, x: float | np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Evaluate 1D function or curve returning (y, dy/dx)."""
     if callable(func):
@@ -508,9 +681,79 @@ def _coefficients_idealgas_vt(eos, mu: np.ndarray, e: np.ndarray | float | None 
     return A, B
 
 
+def _coefficients_sesame(eos, mu: np.ndarray, e: np.ndarray | float | None = None):
+    """A(mu), B(mu) for SESAME Tabular EOS (common_source/eos/sesame.F)."""
+    p = eos.params
+    rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
+    rho_tab = p.get("rho_table", p.get("r_table"))
+    theta_tab = p.get("theta_table", p.get("t_table"))
+    p_tab = p.get("p_table")
+    e_tab = p.get("e_table")
+    filename = p.get("filename")
+    if (rho_tab is None or p_tab is None or e_tab is None) and filename:
+        try:
+            table_dict = read_sesame_file(filename)
+            p.update(table_dict)
+            rho_tab = p.get("rho_table")
+            theta_tab = p.get("theta_table")
+            p_tab = p.get("p_table")
+            e_tab = p.get("e_table")
+        except Exception:
+            pass
+
+    has_table = (rho_tab is not None and theta_tab is not None
+                 and p_tab is not None and e_tab is not None)
+
+    mu_arr = np.asarray(mu, dtype=float)
+    if e is None:
+        e = p.get("e0", 0.0)
+    e_arr = np.asarray(e, dtype=float)
+    if e_arr.ndim == 0:
+        e_arr = np.full_like(mu_arr, float(e_arr))
+
+    if has_table:
+        r_arr = np.asarray(rho_tab, dtype=float)
+        t_arr = np.asarray(theta_tab, dtype=float)
+        p_mat = np.asarray(p_tab, dtype=float)
+        e_mat = np.asarray(e_tab, dtype=float)
+
+        A = np.zeros_like(mu_arr)
+        B = np.zeros_like(mu_arr)
+        for i in range(len(mu_arr)):
+            rho_i = rho0 * (1.0 + float(mu_arr[i]))
+            espem = float(e_arr[i]) / max(rho0, 1e-12)
+            t_val, dtde = mintp_re(r_arr, t_arr, e_mat, rho_i, espem)
+            p_val, _, dpdt = mintp1_rt(r_arr, t_arr, p_mat, rho_i, t_val)
+            dpde = dpdt * dtde / max(rho0, 1e-12)
+            B[i] = dpde
+            A[i] = p_val - dpde * float(e_arr[i])
+        return A, B
+    else:
+        k0 = float(p.get("k0", 2.0e9))
+        gamma0 = float(p.get("gamma0", 1.4))
+        A = k0 * mu_arr
+        B = (gamma0 - 1.0) * (1.0 + mu_arr)
+        return A, B
+
+
+def _coefficients_idealgas(eos, mu: np.ndarray):
+    """A(mu), B(mu) for Ideal Gas EOS (common_source/eos/idealgas.F)."""
+    p = eos.params
+    gamma = p.get("gamma", p.get("c4", 0.4) + 1.0)
+    psh = p.get("psh", 0.0)
+    eta = 1.0 + mu
+    A = np.full_like(mu, -psh, dtype=float)
+    B = (gamma - 1.0) * eta
+    return A, B
+
+
 def coefficients(eos, mu: np.ndarray, e: np.ndarray | float | None = None, time: float = 0.0):
     """A(mu), B(mu) of p = A + B E (see module docstring)."""
     kind = eos.kind.upper()
+    if kind == "SESAME":
+        return _coefficients_sesame(eos, mu, e)
+    if kind in ("IDEAL-GAS", "IDEAL_GAS"):
+        return _coefficients_idealgas(eos, mu)
     if kind == "GRUNEISEN":
         return _coefficients_gruneisen(eos, mu)
     if kind == "TILLOTSON":
@@ -527,8 +770,8 @@ def coefficients(eos, mu: np.ndarray, e: np.ndarray | float | None = None, time:
         return _coefficients_puff(eos, mu, e)
     if kind in ("STIFF-GAS", "STIFF_GAS", "STIFFENED_GAS"):
         p = eos.params
-        gamma = p["gamma"]
-        p_star = p["p_star"]
+        gamma = p.get("gamma", 1.4)
+        p_star = p.get("p_star", 0.0)
         psh = p.get("psh", 0.0)
         A = -gamma * p_star - psh
         B = (gamma - 1.0) * (1.0 + mu)
@@ -552,7 +795,7 @@ def coefficients(eos, mu: np.ndarray, e: np.ndarray | float | None = None, time:
     if kind == "TABULATED":
         return _coefficients_tabulated(eos, mu)
 
-    # Standard POLYNOMIAL and IDEAL-GAS
+    # Standard POLYNOMIAL
     p = eos.params
     mubar = np.maximum(mu, 0.0)
     c0 = p.get("c0", 0.0)
@@ -1039,12 +1282,27 @@ def update(eos, mu: np.ndarray, dv: np.ndarray, e_old: np.ndarray,
         c2 = dpdm / rho0
         return p_new, e_new, np.maximum(c2, 0.0)
 
-    # General default polynomial / ideal-gas fallback
+    if kind in ("IDEAL-GAS", "IDEAL_GAS"):
+        gamma = p.get("gamma", p.get("c4", 0.4) + 1.0)
+        psh = p.get("psh", 0.0)
+        pmin = p.get("pmin", -psh)
+        eta = 1.0 + mu
+        A, B = _coefficients_idealgas(eos, mu)
+        denom = 1.0 + 0.5 * B * dv
+        e_new = (e_old + de_other - 0.5 * dv * (p_old + A + 2.0 * psh)) / np.maximum(denom, 1e-6)
+        e_new = np.maximum(e_new, 0.0)
+        p_raw = A + B * e_new
+        p_new = np.maximum(p_raw, pmin)
+
+        df = 1.0 / np.maximum(eta, 1e-12)
+        dpdm = (gamma - 1.0) * (e_new + (p_new + psh) * df)
+        c2 = dpdm / rho0
+        return p_new, e_new, np.maximum(c2, 0.0)
+
+    # General default polynomial fallback
     A, B = coefficients(eos, mu)
     denom = 1.0 + 0.5 * B * dv
     e_new = (e_old + de_other - 0.5 * dv * (p_old + A)) / np.maximum(denom, 1e-6)
-    if kind in ("IDEAL-GAS", "IDEAL_GAS"):
-        e_new = np.maximum(e_new, 0.0)
     p_new = A + B * e_new
 
     mubar = np.maximum(mu, 0.0)
@@ -1186,10 +1444,15 @@ def pressure(eos, mu: np.ndarray | float, e: np.ndarray | float, time: float = 0
         p_val = np.maximum(A + B * e_arr, pmin)
         return float(p_val) if is_scalar else p_val
 
+    if kind in ("IDEAL-GAS", "IDEAL_GAS"):
+        A, B = _coefficients_idealgas(eos, mu_arr)
+        psh = eos.params.get("psh", 0.0)
+        pmin = eos.params.get("pmin", -psh)
+        p_val = np.maximum(A + B * e_arr, pmin)
+        return float(p_val) if is_scalar else p_val
+
     A, B = coefficients(eos, mu_arr)
     p_val = A + B * e_arr
-    if kind in ("IDEAL-GAS", "IDEAL_GAS"):
-        p_val = np.maximum(p_val, 0.0)
     return float(p_val) if is_scalar else p_val
 
 
@@ -1354,6 +1617,16 @@ def initial_state(eos):
     if kind == "SESAME":
         e0 = p.get("e0", 0.0)
         p0 = p.get("p0", 0.0) - p.get("psh", 0.0)
+        return e0, p0
+
+    if kind in ("IDEAL-GAS", "IDEAL_GAS"):
+        gamma = p.get("gamma", p.get("c4", 0.4) + 1.0)
+        p0_param = p.get("p0", 0.0)
+        psh = p.get("psh", 0.0)
+        e0 = p.get("e0")
+        if e0 is None:
+            e0 = p0_param / (gamma - 1.0) if gamma > 1.0 else 0.0
+        p0 = p0_param - psh if p0_param > 0.0 else (gamma - 1.0) * e0 - psh
         return e0, p0
 
     e0 = eos.params.get("e0", 0.0)
