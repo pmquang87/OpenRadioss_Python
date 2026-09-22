@@ -1,5 +1,6 @@
 """Unit tests for LAW77 (Thermoplastic Viscoplastic Polymer / Foam-Air) ported from sigeps77.F."""
 
+import math
 import numpy as np
 import pytest
 
