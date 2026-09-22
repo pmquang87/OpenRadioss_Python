@@ -63,10 +63,10 @@ from . import spring_advanced, spring_general
 #: already warns (checks.check_model's PROP CHECK), which is the honest
 #: pair of messages.  Add a type here only together with a reader that fills
 #: its mass AND a Fortran Starter that actually requires it.
-_MASS_REQUIRED_SPRING_TYPES = frozenset({4})
+_MASS_REQUIRED_SPRING_TYPES = frozenset({4, 12})
 
 #: /PROP spelling per TYPE for the mass message (the card the user wrote)
-_SPRING_PROP_SPELLING = {4: "SPRING", 19: "SPR_TORS", 25: "SPR_AXI", 26: "SPR_TAB", 27: "SPR_BDAMP", 32: "SPR_PRE", 35: "STITCH", 44: "SPR_CRUS", 46: "SPR_MUSCLE"}
+_SPRING_PROP_SPELLING = {4: "SPRING", 12: "SPR_PUL", 19: "SPR_TORS", 25: "SPR_AXI", 26: "SPR_TAB", 27: "SPR_BDAMP", 32: "SPR_PRE", 35: "STITCH", 44: "SPR_CRUS", 46: "SPR_MUSCLE"}
 
 
 def _safe_param(params: dict, key: str, default: float = 0.0) -> float:
@@ -102,6 +102,7 @@ def init_group(group, model, log):
             ehour=np.empty(0),
             idx4=np.empty(0, dtype=np.int64),
             idx6=np.empty(0, dtype=np.int64),
+            idx12=np.empty(0, dtype=np.int64),
             idx32=np.empty(0, dtype=np.int64),
             idx19=np.empty(0, dtype=np.int64),
             idx44=np.empty(0, dtype=np.int64),
@@ -110,8 +111,11 @@ def init_group(group, model, log):
         )
         return np.empty(0, dtype=np.int64), np.empty(0), None
 
-    xe = model.x0[group.conn]
-    L0 = norm3(xe[:, 1] - xe[:, 0])
+    if group.conn.shape[1] >= 2:
+        xe = model.x0[group.conn[:, :2]]
+        L0 = norm3(xe[:, 1] - xe[:, 0])
+    else:
+        L0 = np.zeros(n)
     mass = np.zeros(n)
     k = np.zeros(n)
     cdamp = np.zeros(n)
@@ -119,13 +123,17 @@ def init_group(group, model, log):
     for sl, mat, prop in st["slices"]:
         pt = getattr(prop, "type", 4)
         kind[sl] = pt
+        p = getattr(prop, "params", {}) or {}
+        if pt == 12:
+            mass[sl] = _safe_param(p, "mass", 0.0)
+            continue
         if pt in spring_general.SPRING_PROP_TYPES or pt in spring_advanced.ADVANCED_SPRING_PROP_TYPES:
             continue                       # 6-DOF and advanced springs built by their own modules
-        p = getattr(prop, "params", {}) or {}
         mass[sl] = _safe_param(p, "mass", 0.0)
         k[sl] = _safe_param(p, "k", 0.0)
         cdamp[sl] = _safe_param(p, "c", 0.0)
     is6 = np.isin(kind, list(spring_general.SPRING_PROP_TYPES))
+    is12 = (kind == 12)
     is32 = (kind == 32)
     is19 = (kind == 19)
     is25 = (kind == 25)
@@ -134,10 +142,11 @@ def init_group(group, model, log):
     is35 = (kind == 35)
     is44 = (kind == 44)
     is46 = (kind == 46)
-    is_adv = is19 | is25 | is26 | is27 | is35 | is44 | is46
+    is_adv = is12 | is19 | is25 | is26 | is27 | is35 | is44 | is46
     is_kj = (kind == 33) | (kind == 45)
     idx4 = np.where(~is6 & ~is32 & ~is_adv & ~is_kj)[0]
     idx6 = np.where(is6)[0]
+    idx12 = np.where(is12)[0]
     idx32 = np.where(is32)[0]
     idx19 = np.where(is19)[0]
     idx25 = np.where(is25)[0]
@@ -147,6 +156,15 @@ def init_group(group, model, log):
     idx44 = np.where(is44)[0]
     idx46 = np.where(is46)[0]
     idx_kj = np.where(is_kj)[0]
+
+    # Initial length for 3-node pulley spring (r3buf3.F lines 97-99): L0 = L01 + L02
+    if len(idx12) > 0 and group.conn.shape[1] >= 3:
+        n1 = group.conn[idx12, 0]
+        n2 = group.conn[idx12, 1]
+        n3 = group.conn[idx12, 2]
+        L01 = norm3(model.x0[n2] - model.x0[n1])
+        L02 = norm3(model.x0[n2] - model.x0[n3])
+        L0[idx12] = L01 + L02
 
     if len(idx32):
         st["stif0"] = np.zeros(n)
@@ -201,17 +219,26 @@ def init_group(group, model, log):
 
     st.update(L0=L0, mass=mass, k=k, cdamp=cdamp,
               force=np.zeros(n), eint=np.zeros(n), ehour=np.zeros(n),
-              idx4=idx4, idx6=idx6, idx32=idx32,
+              idx4=idx4, idx6=idx6, idx12=idx12, idx32=idx32,
               idx19=idx19, idx25=idx25, idx26=idx26, idx27=idx27, idx35=idx35, idx44=idx44, idx46=idx46, idx_kj=idx_kj, model=model)
 
-    massn = np.repeat(mass / 2.0, 2)       # per (elem, localnode)
-    inertn = np.zeros(2 * n)
+    stride = group.conn.shape[1] if group.conn.ndim == 2 else 2
+    massn = np.zeros(stride * n)
+    inertn = np.zeros(stride * n)
+    for i in range(n):
+        if is12[i] or is6[i] or is19[i]:
+            continue
+        m = mass[i]
+        massn[stride * i] = m / 2.0
+        massn[stride * i + 1] = m / 2.0
+
     if len(idx6):
         spring_general.init6(group, model, log, idx6, massn, inertn)
-    if len(idx19) or len(idx25) or len(idx26) or len(idx27) or len(idx35) or len(idx44) or len(idx46):
-        spring_advanced.init_advanced(group, model, log, idx19=idx19, idx25=idx25, idx26=idx26, idx27=idx27, idx35=idx35, idx44=idx44, idx46=idx46, massn=massn, inertn=inertn)
+    if len(idx12) or len(idx19) or len(idx25) or len(idx26) or len(idx27) or len(idx35) or len(idx44) or len(idx46):
+        spring_advanced.init_advanced(group, model, log, idx12=idx12, idx19=idx19, idx25=idx25, idx26=idx26, idx27=idx27, idx35=idx35, idx44=idx44, idx46=idx46, massn=massn, inertn=inertn)
     node_idx = group.conn.reshape(-1)
-    return node_idx, massn, (inertn if inertn.any() else None)
+    valid = (node_idx >= 0)
+    return node_idx[valid], massn[valid], (inertn[valid] if inertn.any() else None)
 
 
 def _forces_axial(group, x, v, dt, fint, idx):
@@ -415,6 +442,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     alive = st.get("off", np.ones(group.n, dtype=float)) > 0.0
     idx6 = st.get("idx6")
     idx4 = st.get("idx4")
+    idx12 = st.get("idx12")
     idx32 = st.get("idx32")
     idx19 = st.get("idx19")
     idx25 = st.get("idx25")
@@ -425,6 +453,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     idx46 = st.get("idx46")
     idx_kj = st.get("idx_kj")
     if ((idx6 is None or len(idx6) == 0) and
+        (idx12 is None or len(idx12) == 0) and
         (idx32 is None or len(idx32) == 0) and
         (idx19 is None or len(idx19) == 0) and
         (idx25 is None or len(idx25) == 0) and
@@ -442,6 +471,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     dtc = np.full(group.n, EP30)
     if idx4 is not None and len(idx4):
         dtc[idx4] = _forces_axial(group, x, v, dt, fint, idx4)
+    if idx12 is not None and len(idx12):
+        dtc[idx12] = spring_advanced.forces_pulley_type12(group, x, v, dt, fint, idx12)
     if idx32 is not None and len(idx32):
         dtc[idx32] = _forces_axial_type32(group, x, v, dt, fint, idx32)
     if idx6 is not None and len(idx6):

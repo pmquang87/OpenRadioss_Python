@@ -612,6 +612,210 @@ def parse_spr_bdamp(block: KeywordBlock, log: MessageLog) -> Property:
                             params=params, prop_name=typename)
 
 
+def parse_spr_pul(block: KeywordBlock, log: MessageLog) -> Property:
+    """/PROP/SPR_PUL or /PROP/TYPE12 — Pulley spring / sliding cable property.
+
+    Fortran origin: starter/source/properties/spring/hm_read_prop12.F
+    CFG: prop_p12_spr_pul.cfg
+    """
+    title, cards, fixed = _data_cards(block)
+    params = _universal_geo_params()
+
+    mass = 0.0
+    isensor = 0
+    isflag = 0
+    ileng = 0
+    fric = 0.0
+    stiff1 = 0.0
+    damp1 = 0.0
+    acoeft1 = 1.0
+    bcoeft1 = 0.0
+    dcoeft1 = 1.0
+    fun_a1 = 0
+    hflag1 = 0
+    fun_b1 = 0
+    fct_id31 = 0
+    fun_a2 = 0
+    min_rup1 = -1.0e30
+    max_rup1 = 1.0e30
+    prop_x_f = 1.0
+    prop_x_e = 0.0
+    scale1 = 1.0
+    h = 1.0
+    funct_id = 0
+    ifric = 0
+    scale2 = 1.0
+    scale3 = 1.0
+    f_min = -1.0e30
+    f_max = 1.0e30
+
+    valid_cards = [c for c in cards if not c.is_blank]
+    if valid_cards:
+        if fixed:
+            f0 = valid_cards[0].cut("PROP_TYPE12_1")
+            mass = _fv(f0[0]) if len(f0) > 0 else 0.0
+            isensor = _iv(f0[2]) if len(f0) > 2 else 0
+            isflag = _iv(f0[3]) if len(f0) > 3 else 0
+            ileng = _iv(f0[4]) if len(f0) > 4 else 0
+            fric = _fv(f0[5]) if len(f0) > 5 else 0.0
+
+            if len(valid_cards) > 1:
+                f1 = valid_cards[1].cut("PROP_TYPE12_2")
+                stiff1 = _fv(f1[0]) if len(f1) > 0 else 0.0
+                damp1 = _fv(f1[1]) if len(f1) > 1 else 0.0
+                acoeft1 = _fv(f1[2], 1.0) if len(f1) > 2 and f1[2].strip() else 1.0
+                bcoeft1 = _fv(f1[3]) if len(f1) > 3 else 0.0
+                dcoeft1 = _fv(f1[4], 1.0) if len(f1) > 4 and f1[4].strip() else 1.0
+
+            if len(valid_cards) > 2:
+                f2 = valid_cards[2].cut("PROP_TYPE12_3")
+                if len(f2) >= 8 and (f2[6].strip() or f2[7].strip()):
+                    fun_a1 = _iv(f2[0]) if len(f2) > 0 else 0
+                    hflag1 = _iv(f2[1]) if len(f2) > 1 else 0
+                    fun_b1 = _iv(f2[2]) if len(f2) > 2 else 0
+                    fct_id31 = _iv(f2[3]) if len(f2) > 3 else 0
+                    fun_a2 = _iv(f2[4]) if len(f2) > 4 else 0
+                    min_rup1 = _fv(f2[6], -1.0e30) if len(f2) > 6 and f2[6].strip() else -1.0e30
+                    max_rup1 = _fv(f2[7], 1.0e30) if len(f2) > 7 and f2[7].strip() else 1.0e30
+                else:
+                    f2_old = valid_cards[2].cut("PROP_TYPE12_3_OLD")
+                    fun_a1 = _iv(f2_old[0]) if len(f2_old) > 0 else 0
+                    hflag1 = _iv(f2_old[1]) if len(f2_old) > 1 else 0
+                    fun_b1 = _iv(f2_old[2]) if len(f2_old) > 2 else 0
+                    min_rup1 = _fv(f2_old[4], -1.0e30) if len(f2_old) > 4 and f2_old[4].strip() else -1.0e30
+                    max_rup1 = _fv(f2_old[5], 1.0e30) if len(f2_old) > 5 and f2_old[5].strip() else 1.0e30
+
+            if len(valid_cards) > 3:
+                f3 = valid_cards[3].cut("PROP_TYPE12_4")
+                prop_x_f = _fv(f3[0], 1.0) if len(f3) > 0 and f3[0].strip() else 1.0
+                prop_x_e = _fv(f3[1]) if len(f3) > 1 else 0.0
+                scale1 = _fv(f3[2], 1.0) if len(f3) > 2 and f3[2].strip() else 1.0
+                h = _fv(f3[3], 1.0) if len(f3) > 3 and f3[3].strip() else 1.0
+
+            if len(valid_cards) > 4:
+                f4 = valid_cards[4].cut("PROP_TYPE12_5")
+                funct_id = _iv(f4[0]) if len(f4) > 0 else 0
+                ifric = _iv(f4[1]) if len(f4) > 1 else 0
+                scale2 = _fv(f4[2], 1.0) if len(f4) > 2 and f4[2].strip() else 1.0
+                scale3 = _fv(f4[3], 1.0) if len(f4) > 3 and f4[3].strip() else 1.0
+                f_min = _fv(f4[4], -1.0e30) if len(f4) > 4 and f4[4].strip() else -1.0e30
+                f_max = _fv(f4[5], 1.0e30) if len(f4) > 5 and f4[5].strip() else 1.0e30
+        else:
+            t0 = valid_cards[0].tokens()
+            mass = _fv(t0[0]) if len(t0) > 0 else 0.0
+            if len(t0) == 5:
+                isensor = _iv(t0[1])
+                isflag = _iv(t0[2])
+                ileng = _iv(t0[3])
+                fric = _fv(t0[4])
+            elif len(t0) >= 6:
+                isensor = _iv(t0[2])
+                isflag = _iv(t0[3])
+                ileng = _iv(t0[4])
+                fric = _fv(t0[5])
+            elif len(t0) == 2:
+                fric = _fv(t0[1])
+
+            if len(valid_cards) > 1:
+                t1 = valid_cards[1].tokens()
+                stiff1 = _fv(t1[0]) if len(t1) > 0 else 0.0
+                damp1 = _fv(t1[1]) if len(t1) > 1 else 0.0
+                acoeft1 = _fv(t1[2], 1.0) if len(t1) > 2 else 1.0
+                bcoeft1 = _fv(t1[3]) if len(t1) > 3 else 0.0
+                dcoeft1 = _fv(t1[4], 1.0) if len(t1) > 4 else 1.0
+
+            if len(valid_cards) > 2:
+                t2 = valid_cards[2].tokens()
+                fun_a1 = _iv(t2[0]) if len(t2) > 0 else 0
+                hflag1 = _iv(t2[1]) if len(t2) > 1 else 0
+                fun_b1 = _iv(t2[2]) if len(t2) > 2 else 0
+                if len(t2) >= 7:
+                    fct_id31 = _iv(t2[3])
+                    fun_a2 = _iv(t2[4])
+                    min_rup1 = _fv(t2[5], -1.0e30)
+                    max_rup1 = _fv(t2[6], 1.0e30)
+                elif len(t2) >= 5:
+                    min_rup1 = _fv(t2[3], -1.0e30)
+                    max_rup1 = _fv(t2[4], 1.0e30)
+
+            if len(valid_cards) > 3:
+                t3 = valid_cards[3].tokens()
+                prop_x_f = _fv(t3[0], 1.0) if len(t3) > 0 else 1.0
+                prop_x_e = _fv(t3[1]) if len(t3) > 1 else 0.0
+                scale1 = _fv(t3[2], 1.0) if len(t3) > 2 else 1.0
+                h = _fv(t3[3], 1.0) if len(t3) > 3 else 1.0
+
+            if len(valid_cards) > 4:
+                t4 = valid_cards[4].tokens()
+                funct_id = _iv(t4[0]) if len(t4) > 0 else 0
+                ifric = _iv(t4[1]) if len(t4) > 1 else 0
+                scale2 = _fv(t4[2], 1.0) if len(t4) > 2 else 1.0
+                scale3 = _fv(t4[3], 1.0) if len(t4) > 3 else 1.0
+                f_min = _fv(t4[4], -1.0e30) if len(t4) > 4 else -1.0e30
+                f_max = _fv(t4[5], 1.0e30) if len(t4) > 5 else 1.0e30
+
+    params.update({
+        "mass": mass,
+        "isensor": isensor,
+        "sens_id": isensor,
+        "isflag": isflag,
+        "ileng": ileng,
+        "fric": fric,
+        "stiff1": stiff1,
+        "stiff": stiff1,
+        "k": stiff1,
+        "damp1": damp1,
+        "damp": damp1,
+        "c": damp1,
+        "acoeft1": acoeft1,
+        "a": acoeft1,
+        "bcoeft1": bcoeft1,
+        "b": bcoeft1,
+        "dcoeft1": dcoeft1,
+        "d": dcoeft1,
+        "fun_a1": fun_a1,
+        "fun_a": fun_a1,
+        "fct_id1": fun_a1,
+        "hflag1": hflag1,
+        "hflag": hflag1,
+        "fun_b1": fun_b1,
+        "fun_b": fun_b1,
+        "fct_id2": fun_b1,
+        "fct_id31": fct_id31,
+        "fun_a2": fun_a2,
+        "min_rup1": min_rup1,
+        "min_rup": min_rup1,
+        "delta_min": min_rup1,
+        "max_rup1": max_rup1,
+        "max_rup": max_rup1,
+        "delta_max": max_rup1,
+        "prop_x_f": prop_x_f,
+        "fscale": prop_x_f,
+        "prop_x_e": prop_x_e,
+        "e": prop_x_e,
+        "scale1": scale1,
+        "ascale": scale1,
+        "h": h,
+        "funct_id": funct_id,
+        "fct_idfr": funct_id,
+        "ifric": ifric,
+        "scale2": scale2,
+        "yscale_f": scale2,
+        "scale3": scale3,
+        "xscale_f": scale3,
+        "f_min": f_min,
+        "f_max": f_max,
+    })
+
+    return Property(
+        id=block.user_id,
+        type=12,
+        title=title,
+        params=params,
+        prop_name="SPR_PUL",
+    )
+
+
 
 def parse_tshell(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     """/PROP/TSHELL (TYPE20) - thick shell (cfg prop_p20_tshell.cfg)"""
@@ -782,6 +986,8 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
         return parse_spr_tab(block, log)
     if typename in ("SPR_BDAMP", "TYPE27"):
         return parse_spr_bdamp(block, log)
+    if typename in ("SPR_PUL", "TYPE12", "PROP_TYPE12", "PROP_SPR_PUL", "P12_SPR_PUL", "PULLEY"):
+        return parse_spr_pul(block, log)
     if typename in ("TSHELL", "TYPE20", "PROP_TYPE20"):
         return parse_tshell(block, log)
     if typename in ("TSH_ORTH", "TYPE21", "PROP_TYPE21", "TSHELL_COMP", "TSH_COMP"):

@@ -127,7 +127,7 @@ def init6(group, model, log, idx6, massn, inertn):
         return
     st = group.state
     m6 = len(idx6)
-    conn6 = group.conn[idx6]
+    conn6 = group.conn[idx6, :2]
     xe = model.x0[conn6]                       # (m6, 2, 3)
     e1 = np.zeros((m6, 3))
     e2 = np.zeros((m6, 3))
@@ -188,15 +188,16 @@ def init6(group, model, log, idx6, massn, inertn):
         skews=skews, skew_row=skew_row, skew_mov=mov,
     )
     # half/half lumped mass + inertia into the caller's per-(elem,node)
-    # arrays: node_idx = conn.reshape(-1) => slot 2*e (node0), 2*e+1 (node1)
+    # arrays: node_idx = conn.reshape(-1) => slot stride*e (node0), stride*e+1 (node1)
     if massn is not None and inertn is not None:
+        stride = group.conn.shape[1] if hasattr(group, "conn") and group.conn.ndim == 2 else 2
         for j, e in enumerate(idx6):
-            if 2 * e + 1 < len(massn):
-                massn[2 * e] += mass[j] / 2.0
-                massn[2 * e + 1] += mass[j] / 2.0
-            if 2 * e + 1 < len(inertn):
-                inertn[2 * e] += inertia[j] / 2.0
-                inertn[2 * e + 1] += inertia[j] / 2.0
+            if stride * e + 1 < len(massn):
+                massn[stride * e] += mass[j] / 2.0
+                massn[stride * e + 1] += mass[j] / 2.0
+            if stride * e + 1 < len(inertn):
+                inertn[stride * e] += inertia[j] / 2.0
+                inertn[stride * e + 1] += inertia[j] / 2.0
 
 
 def forces6(group, x, v, vr, dt, fint, mint, idx6):

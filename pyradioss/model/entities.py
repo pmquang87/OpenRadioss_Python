@@ -11915,11 +11915,20 @@ class PropType12:
     fun_a1: int = 0
     hflag1: int = 0
     fun_b1: int = 0
+    fct_id31: int = 0
+    fun_a2: int = 0
     min_rup1: float = -1.0e30
     max_rup1: float = 1.0e30
     prop_x_f: float = 1.0
     prop_x_e: float = 0.0
     scale1: float = 1.0
+    h: float = 1.0
+    funct_id: int = 0
+    ifric: int = 0
+    scale2: float = 1.0
+    scale3: float = 1.0
+    f_min: float = -1.0e30
+    f_max: float = 1.0e30
     title: str = ""
 
     @property

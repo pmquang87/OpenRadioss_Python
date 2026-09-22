@@ -184,17 +184,19 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
         # user node ids -> indices (USR2SYS)
         valid_raw = []
         valid_conn = []
+        max_nodes = max(len(t[2]) for t in raw) if (etype == "SPRING" and raw) else nnode
         for eid, pid, nodes in raw:
             try:
                 c_nodes = []
                 for j, n in enumerate(nodes):
                     n_int = int(n)
-                    if n_int == 0:
+                    if n_int == 0 or n_int == -1:
                         is_optional = (
                             (etype == "TETRA10" and j >= 4) or
                             (etype == "BRIC20" and j >= 8) or
                             (etype == "SHEL16" and j >= 8) or
-                            (etype == "BEAM" and j >= 2)
+                            (etype == "BEAM" and j >= 2) or
+                            (etype == "SPRING" and j >= 2)
                         )
                         if is_optional:
                             c_nodes.append(-1)
@@ -204,6 +206,8 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
                             raise KeyError(0)
                     else:
                         c_nodes.append(model._id2idx[n_int])
+                if len(c_nodes) < max_nodes:
+                    c_nodes.extend([-1] * (max_nodes - len(c_nodes)))
                 valid_conn.append(c_nodes)
                 valid_raw.append((eid, pid, nodes))
             except KeyError as exc:
@@ -1674,9 +1678,11 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
     for name, group in model.element_groups():
         node_idx, mass_c, inertia_c = KERNELS[name].init_group(
             group, model, log)
-        np.add.at(model.mass, node_idx, mass_c)
-        if inertia_c is not None:
-            np.add.at(model.inertia, node_idx, inertia_c)
+        if len(node_idx) > 0:
+            valid = (node_idx >= 0)
+            np.add.at(model.mass, node_idx[valid], mass_c[valid])
+            if inertia_c is not None:
+                np.add.at(model.inertia, node_idx[valid], inertia_c[valid])
             
         from pyradioss.engine.coloring import compute_element_colors
         if group.conn is not None and len(group.conn) > 0:

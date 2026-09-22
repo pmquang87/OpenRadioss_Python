@@ -655,8 +655,41 @@ def read_truss(block, model, log):
 
 
 def read_spring(block, model, log):
-    """``/SPRING/part_ID``: 2-node springs (elem_ID + 2 node IDs)."""
-    _read_elems(block, model, log, "SPRING", 2)
+    """``/SPRING/part_ID``: 2-node or 3-node springs (elem_ID + 2 or 3 node IDs)."""
+    part_id = block.user_id
+    if part_id is None:
+        log.error(f"/{block.key0} block without part id", block.source)
+        return
+    if block.fixed:
+        for card in block.cards:
+            f = card.cut("ELEM_IDS")
+            if not f or not f[0].strip():
+                continue
+            try:
+                elem_id = int(f[0])
+                n1 = int(f[1]) if len(f) > 1 and f[1].strip() else 0
+                n2 = int(f[2]) if len(f) > 2 and f[2].strip() else 0
+                n3 = int(f[3]) if len(f) > 3 and f[3].strip() else 0
+                if n3 != 0:
+                    model.raw_elems["SPRING"].append((elem_id, part_id, [n1, n2, n3]))
+                else:
+                    model.raw_elems["SPRING"].append((elem_id, part_id, [n1, n2]))
+            except ValueError as e:
+                log.error(f"/SPRING {f[0]}: {e}", card.source)
+    else:
+        for card in block.cards:
+            t = card.ints()
+            if len(t) < 3:
+                log.error(f"/SPRING card needs at least 3 ids (elem, n1, n2), got {len(t)}", card.source)
+                continue
+            elem_id = t[0]
+            n1 = t[1]
+            n2 = t[2]
+            if len(t) >= 4 and t[3] != 0:
+                n3 = t[3]
+                model.raw_elems["SPRING"].append((elem_id, part_id, [n1, n2, n3]))
+            else:
+                model.raw_elems["SPRING"].append((elem_id, part_id, [n1, n2]))
 
 
 def read_beam(block, model, log):
@@ -7360,7 +7393,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             log.error(f"/PROP/SPR_PUL/{block.user_id}: missing cards", block.source)
             return
         if block.fixed:
-            c0 = cards[0].cut("PROP_SPR_PUL_0")
+            c0 = cards[0].cut("PROP_TYPE12_1")
             params["mass"] = _fval(c0[0]) if len(c0) > 0 else 0.0
             params["isensor"] = _ival(c0[2]) if len(c0) > 2 else 0
             params["sens_id"] = params["isensor"]
@@ -7368,63 +7401,184 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             params["ileng"] = _ival(c0[4]) if len(c0) > 4 else 0
             params["fric"] = _fval(c0[5]) if len(c0) > 5 else 0.0
             if len(cards) > 1 and not cards[1].is_blank:
-                c1 = cards[1].cut("PROP_SPR_PUL_1")
-                params["stiff"] = _fval(c1[0]) if len(c1) > 0 else 0.0
-                params["k"] = params["stiff"]
-                params["damp"] = _fval(c1[1]) if len(c1) > 1 else 0.0
-                params["c"] = params["damp"]
-                params["a"] = _fval(c1[2]) if len(c1) > 2 else 0.0
-                params["b"] = _fval(c1[3]) if len(c1) > 3 else 0.0
-                params["d"] = _fval(c1[4]) if len(c1) > 4 else 0.0
+                c1 = cards[1].cut("PROP_TYPE12_2")
+                params["stiff1"] = _fval(c1[0]) if len(c1) > 0 else 0.0
+                params["stiff"] = params["stiff1"]
+                params["k"] = params["stiff1"]
+                params["damp1"] = _fval(c1[1]) if len(c1) > 1 else 0.0
+                params["damp"] = params["damp1"]
+                params["c"] = params["damp1"]
+                params["acoeft1"] = _fval(c1[2], 1.0) if len(c1) > 2 and c1[2].strip() else 1.0
+                params["a"] = params["acoeft1"]
+                params["bcoeft1"] = _fval(c1[3]) if len(c1) > 3 else 0.0
+                params["b"] = params["bcoeft1"]
+                params["dcoeft1"] = _fval(c1[4], 1.0) if len(c1) > 4 and c1[4].strip() else 1.0
+                params["d"] = params["dcoeft1"]
             if len(cards) > 2 and not cards[2].is_blank:
-                c2 = cards[2].cut("PROP_SPR_PUL_2")
-                params["fun_a"] = _ival(c2[0]) if len(c2) > 0 else 0
-                params["fct_id1"] = params["fun_a"]
-                params["hflag"] = _ival(c2[1]) if len(c2) > 1 else 0
-                params["fun_b"] = _ival(c2[2]) if len(c2) > 2 else 0
-                params["fct_id2"] = params["fun_b"]
-                params["min_rup"] = _fval(c2[4]) if len(c2) > 4 else 0.0
-                params["delta_min"] = params["min_rup"]
-                params["max_rup"] = _fval(c2[5]) if len(c2) > 5 else 0.0
-                params["delta_max"] = params["max_rup"]
+                c2 = cards[2].cut("PROP_TYPE12_3")
+                if len(c2) >= 8 and (c2[6].strip() or c2[7].strip()):
+                    params["fun_a1"] = _ival(c2[0]) if len(c2) > 0 else 0
+                    params["fun_a"] = params["fun_a1"]
+                    params["fct_id1"] = params["fun_a1"]
+                    params["hflag1"] = _ival(c2[1]) if len(c2) > 1 else 0
+                    params["hflag"] = params["hflag1"]
+                    params["fun_b1"] = _ival(c2[2]) if len(c2) > 2 else 0
+                    params["fun_b"] = params["fun_b1"]
+                    params["fct_id2"] = params["fun_b1"]
+                    params["fct_id31"] = _ival(c2[3]) if len(c2) > 3 else 0
+                    params["fun_a2"] = _ival(c2[4]) if len(c2) > 4 else 0
+                    params["min_rup1"] = _fval(c2[6], -1.0e30) if len(c2) > 6 and c2[6].strip() else -1.0e30
+                    params["min_rup"] = params["min_rup1"]
+                    params["delta_min"] = params["min_rup1"]
+                    params["max_rup1"] = _fval(c2[7], 1.0e30) if len(c2) > 7 and c2[7].strip() else 1.0e30
+                    params["max_rup"] = params["max_rup1"]
+                    params["delta_max"] = params["max_rup1"]
+                else:
+                    c2_old = cards[2].cut("PROP_TYPE12_3_OLD")
+                    params["fun_a1"] = _ival(c2_old[0]) if len(c2_old) > 0 else 0
+                    params["fun_a"] = params["fun_a1"]
+                    params["fct_id1"] = params["fun_a1"]
+                    params["hflag1"] = _ival(c2_old[1]) if len(c2_old) > 1 else 0
+                    params["hflag"] = params["hflag1"]
+                    params["fun_b1"] = _ival(c2_old[2]) if len(c2_old) > 2 else 0
+                    params["fun_b"] = params["fun_b1"]
+                    params["fct_id2"] = params["fun_b1"]
+                    params["min_rup1"] = _fval(c2_old[4], -1.0e30) if len(c2_old) > 4 and c2_old[4].strip() else -1.0e30
+                    params["min_rup"] = params["min_rup1"]
+                    params["delta_min"] = params["min_rup1"]
+                    params["max_rup1"] = _fval(c2_old[5], 1.0e30) if len(c2_old) > 5 and c2_old[5].strip() else 1.0e30
+                    params["max_rup"] = params["max_rup1"]
+                    params["delta_max"] = params["max_rup1"]
             if len(cards) > 3 and not cards[3].is_blank:
-                c3 = cards[3].cut("PROP_SPR_PUL_3")
-                params["fscale"] = _fval(c3[0], 1.0) if len(c3) > 0 else 1.0
-                params["e"] = _fval(c3[1]) if len(c3) > 1 else 0.0
-                params["ascale"] = _fval(c3[2], 1.0) if len(c3) > 2 else 1.0
+                c3 = cards[3].cut("PROP_TYPE12_4")
+                params["prop_x_f"] = _fval(c3[0], 1.0) if len(c3) > 0 and c3[0].strip() else 1.0
+                params["fscale"] = params["prop_x_f"]
+                params["prop_x_e"] = _fval(c3[1]) if len(c3) > 1 else 0.0
+                params["e"] = params["prop_x_e"]
+                params["scale1"] = _fval(c3[2], 1.0) if len(c3) > 2 and c3[2].strip() else 1.0
+                params["ascale"] = params["scale1"]
+                params["h"] = _fval(c3[3], 1.0) if len(c3) > 3 and c3[3].strip() else 1.0
+            if len(cards) > 4 and not cards[4].is_blank:
+                c4 = cards[4].cut("PROP_TYPE12_5")
+                params["funct_id"] = _ival(c4[0]) if len(c4) > 0 else 0
+                params["fct_idfr"] = params["funct_id"]
+                params["ifric"] = _ival(c4[1]) if len(c4) > 1 else 0
+                params["scale2"] = _fval(c4[2], 1.0) if len(c4) > 2 and c4[2].strip() else 1.0
+                params["yscale_f"] = params["scale2"]
+                params["scale3"] = _fval(c4[3], 1.0) if len(c4) > 3 and c4[3].strip() else 1.0
+                params["xscale_f"] = params["scale3"]
+                params["f_min"] = _fval(c4[4], -1.0e30) if len(c4) > 4 and c4[4].strip() else -1.0e30
+                params["f_max"] = _fval(c4[5], 1.0e30) if len(c4) > 5 and c4[5].strip() else 1.0e30
         else:
             t0 = cards[0].tokens()
             params["mass"] = float(t0[0]) if len(t0) > 0 else 0.0
-            params["isensor"] = int(float(t0[1])) if len(t0) > 1 else 0
-            params["sens_id"] = params["isensor"]
-            params["isflag"] = int(float(t0[2])) if len(t0) > 2 else 0
-            params["ileng"] = int(float(t0[3])) if len(t0) > 3 else 0
-            params["fric"] = float(t0[4]) if len(t0) > 4 else 0.0
+            if len(t0) == 5:
+                params["isensor"] = int(float(t0[1]))
+                params["isflag"] = int(float(t0[2]))
+                params["ileng"] = int(float(t0[3]))
+                params["fric"] = float(t0[4])
+            elif len(t0) >= 6:
+                params["isensor"] = int(float(t0[2]))
+                params["isflag"] = int(float(t0[3]))
+                params["ileng"] = int(float(t0[4]))
+                params["fric"] = float(t0[5])
+            elif len(t0) == 2:
+                params["fric"] = float(t0[1])
+            params["sens_id"] = params.get("isensor", 0)
+
             if len(cards) > 1 and not cards[1].is_blank:
                 t1 = cards[1].tokens()
-                params["stiff"] = float(t1[0]) if len(t1) > 0 else 0.0
-                params["k"] = params["stiff"]
-                params["damp"] = float(t1[1]) if len(t1) > 1 else 0.0
-                params["c"] = params["damp"]
-                params["a"] = float(t1[2]) if len(t1) > 2 else 0.0
-                params["b"] = float(t1[3]) if len(t1) > 3 else 0.0
-                params["d"] = float(t1[4]) if len(t1) > 4 else 0.0
+                params["stiff1"] = float(t1[0]) if len(t1) > 0 else 0.0
+                params["stiff"] = params["stiff1"]
+                params["k"] = params["stiff1"]
+                params["damp1"] = float(t1[1]) if len(t1) > 1 else 0.0
+                params["damp"] = params["damp1"]
+                params["c"] = params["damp1"]
+                params["acoeft1"] = float(t1[2]) if len(t1) > 2 else 1.0
+                params["a"] = params["acoeft1"]
+                params["bcoeft1"] = float(t1[3]) if len(t1) > 3 else 0.0
+                params["b"] = params["bcoeft1"]
+                params["dcoeft1"] = float(t1[4]) if len(t1) > 4 else 1.0
+                params["d"] = params["dcoeft1"]
             if len(cards) > 2 and not cards[2].is_blank:
                 t2 = cards[2].tokens()
-                params["fun_a"] = int(float(t2[0])) if len(t2) > 0 else 0
-                params["fct_id1"] = params["fun_a"]
-                params["hflag"] = int(float(t2[1])) if len(t2) > 1 else 0
-                params["fun_b"] = int(float(t2[2])) if len(t2) > 2 else 0
-                params["fct_id2"] = params["fun_b"]
-                params["min_rup"] = float(t2[3]) if len(t2) > 3 else 0.0
-                params["delta_min"] = params["min_rup"]
-                params["max_rup"] = float(t2[4]) if len(t2) > 4 else 0.0
-                params["delta_max"] = params["max_rup"]
+                params["fun_a1"] = int(float(t2[0])) if len(t2) > 0 else 0
+                params["fun_a"] = params["fun_a1"]
+                params["fct_id1"] = params["fun_a1"]
+                params["hflag1"] = int(float(t2[1])) if len(t2) > 1 else 0
+                params["hflag"] = params["hflag1"]
+                params["fun_b1"] = int(float(t2[2])) if len(t2) > 2 else 0
+                params["fun_b"] = params["fun_b1"]
+                params["fct_id2"] = params["fun_b1"]
+                if len(t2) >= 7:
+                    params["fct_id31"] = int(float(t2[3]))
+                    params["fun_a2"] = int(float(t2[4]))
+                    params["min_rup1"] = float(t2[5])
+                    params["max_rup1"] = float(t2[6])
+                elif len(t2) >= 5:
+                    params["min_rup1"] = float(t2[3])
+                    params["max_rup1"] = float(t2[4])
+                else:
+                    params["min_rup1"] = -1.0e30
+                    params["max_rup1"] = 1.0e30
+                params["min_rup"] = params["min_rup1"]
+                params["delta_min"] = params["min_rup1"]
+                params["max_rup"] = params["max_rup1"]
+                params["delta_max"] = params["max_rup1"]
             if len(cards) > 3 and not cards[3].is_blank:
                 t3 = cards[3].tokens()
-                params["fscale"] = float(t3[0]) if len(t3) > 0 else 1.0
-                params["e"] = float(t3[1]) if len(t3) > 1 else 0.0
-                params["ascale"] = float(t3[2]) if len(t3) > 2 else 1.0
+                params["prop_x_f"] = float(t3[0]) if len(t3) > 0 else 1.0
+                params["fscale"] = params["prop_x_f"]
+                params["prop_x_e"] = float(t3[1]) if len(t3) > 1 else 0.0
+                params["e"] = params["prop_x_e"]
+                params["scale1"] = float(t3[2]) if len(t3) > 2 else 1.0
+                params["ascale"] = params["scale1"]
+                params["h"] = float(t3[3]) if len(t3) > 3 else 1.0
+            if len(cards) > 4 and not cards[4].is_blank:
+                t4 = cards[4].tokens()
+                params["funct_id"] = int(float(t4[0])) if len(t4) > 0 else 0
+                params["fct_idfr"] = params["funct_id"]
+                params["ifric"] = int(float(t4[1])) if len(t4) > 1 else 0
+                params["scale2"] = float(t4[2]) if len(t4) > 2 else 1.0
+                params["yscale_f"] = params["scale2"]
+                params["scale3"] = float(t4[3]) if len(t4) > 3 else 1.0
+                params["xscale_f"] = params["scale3"]
+                params["f_min"] = float(t4[4]) if len(t4) > 4 else -1.0e30
+                params["f_max"] = float(t4[5]) if len(t4) > 5 else 1.0e30
+
+        from ..model.entities import PropType12
+        p12 = PropType12(
+            id=block.user_id,
+            mass=params.get("mass", 0.0),
+            isensor=params.get("isensor", 0),
+            isflag=params.get("isflag", 0),
+            ileng=params.get("ileng", 0),
+            fric=params.get("fric", 0.0),
+            stiff1=params.get("stiff1", 0.0),
+            damp1=params.get("damp1", 0.0),
+            acoeft1=params.get("acoeft1", 1.0),
+            bcoeft1=params.get("bcoeft1", 0.0),
+            dcoeft1=params.get("dcoeft1", 1.0),
+            fun_a1=params.get("fun_a1", 0),
+            hflag1=params.get("hflag1", 0),
+            fun_b1=params.get("fun_b1", 0),
+            fct_id31=params.get("fct_id31", 0),
+            fun_a2=params.get("fun_a2", 0),
+            min_rup1=params.get("min_rup1", -1.0e30),
+            max_rup1=params.get("max_rup1", 1.0e30),
+            prop_x_f=params.get("prop_x_f", 1.0),
+            prop_x_e=params.get("prop_x_e", 0.0),
+            scale1=params.get("scale1", 1.0),
+            h=params.get("h", 1.0),
+            funct_id=params.get("funct_id", 0),
+            ifric=params.get("ifric", 0),
+            scale2=params.get("scale2", 1.0),
+            scale3=params.get("scale3", 1.0),
+            f_min=params.get("f_min", -1.0e30),
+            f_max=params.get("f_max", 1.0e30),
+            title=title,
+        )
+        model.prop_type12s[block.user_id] = p12
 
     elif ptype == 15:  # POROUS
         from ..common.constants import DEFAULT_HOURGLASS, DEFAULT_QA, DEFAULT_QB
@@ -38367,11 +38521,20 @@ def read_prop_type12(block: KeywordBlock, model: Model, log: MessageLog) -> None
     fun_a1 = 0
     hflag1 = 0
     fun_b1 = 0
+    fct_id31 = 0
+    fun_a2 = 0
     min_rup1 = -1.0e30
     max_rup1 = 1.0e30
     prop_x_f = 1.0
     prop_x_e = 0.0
     scale1 = 1.0
+    h = 1.0
+    funct_id = 0
+    ifric = 0
+    scale2 = 1.0
+    scale3 = 1.0
+    f_min = -1.0e30
+    f_max = 1.0e30
 
     valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
 
@@ -38392,16 +38555,35 @@ def read_prop_type12(block: KeywordBlock, model: Model, log: MessageLog) -> None
             dcoeft1 = _safe_float(c1[4]) if len(c1) > 4 and c1[4].strip() else 1.0
         if len(valid_cards) > 2:
             c2 = valid_cards[2].cut("PROP_TYPE12_3")
-            fun_a1 = _safe_int(c2[0]) if len(c2) > 0 else 0
-            hflag1 = _safe_int(c2[1]) if len(c2) > 1 else 0
-            fun_b1 = _safe_int(c2[2]) if len(c2) > 2 else 0
-            min_rup1 = _safe_float(c2[4]) if len(c2) > 4 and c2[4].strip() else -1.0e30
-            max_rup1 = _safe_float(c2[5]) if len(c2) > 5 and c2[5].strip() else 1.0e30
+            if len(c2) >= 8 and (c2[6].strip() or c2[7].strip()):
+                fun_a1 = _safe_int(c2[0]) if len(c2) > 0 else 0
+                hflag1 = _safe_int(c2[1]) if len(c2) > 1 else 0
+                fun_b1 = _safe_int(c2[2]) if len(c2) > 2 else 0
+                fct_id31 = _safe_int(c2[3]) if len(c2) > 3 else 0
+                fun_a2 = _safe_int(c2[4]) if len(c2) > 4 else 0
+                min_rup1 = _safe_float(c2[6]) if len(c2) > 6 and c2[6].strip() else -1.0e30
+                max_rup1 = _safe_float(c2[7]) if len(c2) > 7 and c2[7].strip() else 1.0e30
+            else:
+                c2_old = valid_cards[2].cut("PROP_TYPE12_3_OLD")
+                fun_a1 = _safe_int(c2_old[0]) if len(c2_old) > 0 else 0
+                hflag1 = _safe_int(c2_old[1]) if len(c2_old) > 1 else 0
+                fun_b1 = _safe_int(c2_old[2]) if len(c2_old) > 2 else 0
+                min_rup1 = _safe_float(c2_old[4]) if len(c2_old) > 4 and c2_old[4].strip() else -1.0e30
+                max_rup1 = _safe_float(c2_old[5]) if len(c2_old) > 5 and c2_old[5].strip() else 1.0e30
         if len(valid_cards) > 3:
             c3 = valid_cards[3].cut("PROP_TYPE12_4")
             prop_x_f = _safe_float(c3[0]) if len(c3) > 0 and c3[0].strip() else 1.0
             prop_x_e = _safe_float(c3[1]) if len(c3) > 1 else 0.0
             scale1 = _safe_float(c3[2]) if len(c3) > 2 and c3[2].strip() else 1.0
+            h = _safe_float(c3[3]) if len(c3) > 3 and c3[3].strip() else 1.0
+        if len(valid_cards) > 4:
+            c4 = valid_cards[4].cut("PROP_TYPE12_5")
+            funct_id = _safe_int(c4[0]) if len(c4) > 0 else 0
+            ifric = _safe_int(c4[1]) if len(c4) > 1 else 0
+            scale2 = _safe_float(c4[2]) if len(c4) > 2 and c4[2].strip() else 1.0
+            scale3 = _safe_float(c4[3]) if len(c4) > 3 and c4[3].strip() else 1.0
+            f_min = _safe_float(c4[4]) if len(c4) > 4 and c4[4].strip() else -1.0e30
+            f_max = _safe_float(c4[5]) if len(c4) > 5 and c4[5].strip() else 1.0e30
     else:
         if len(valid_cards) > 0:
             toks = valid_cards[0].tokens()
@@ -38411,10 +38593,17 @@ def read_prop_type12(block: KeywordBlock, model: Model, log: MessageLog) -> None
                 isflag = _safe_int(toks[2])
                 ileng = _safe_int(toks[3])
                 fric = _safe_float(toks[4])
+            elif len(toks) >= 6:
+                isensor = _safe_int(toks[2])
+                isflag = _safe_int(toks[3])
+                ileng = _safe_int(toks[4])
+                fric = _safe_float(toks[5])
             elif len(toks) == 4:
                 isensor = _safe_int(toks[1])
                 isflag = _safe_int(toks[2])
                 fric = _safe_float(toks[3])
+            elif len(toks) == 2:
+                fric = _safe_float(toks[1])
         if len(valid_cards) > 1:
             toks = valid_cards[1].tokens()
             stiff1 = _safe_float(toks[0]) if len(toks) > 0 else 0.0
@@ -38427,19 +38616,37 @@ def read_prop_type12(block: KeywordBlock, model: Model, log: MessageLog) -> None
             fun_a1 = _safe_int(toks[0]) if len(toks) > 0 else 0
             hflag1 = _safe_int(toks[1]) if len(toks) > 1 else 0
             fun_b1 = _safe_int(toks[2]) if len(toks) > 2 else 0
-            min_rup1 = _safe_float(toks[3]) if len(toks) > 3 else -1.0e30
-            max_rup1 = _safe_float(toks[4]) if len(toks) > 4 else 1.0e30
+            if len(toks) >= 7:
+                fct_id31 = _safe_int(toks[3])
+                fun_a2 = _safe_int(toks[4])
+                min_rup1 = _safe_float(toks[5])
+                max_rup1 = _safe_float(toks[6])
+            elif len(toks) >= 5:
+                min_rup1 = _safe_float(toks[3])
+                max_rup1 = _safe_float(toks[4])
         if len(valid_cards) > 3:
             toks = valid_cards[3].tokens()
             prop_x_f = _safe_float(toks[0]) if len(toks) > 0 else 1.0
             prop_x_e = _safe_float(toks[1]) if len(toks) > 1 else 0.0
             scale1 = _safe_float(toks[2]) if len(toks) > 2 else 1.0
+            h = _safe_float(toks[3]) if len(toks) > 3 else 1.0
+        if len(valid_cards) > 4:
+            toks = valid_cards[4].tokens()
+            funct_id = _safe_int(toks[0]) if len(toks) > 0 else 0
+            ifric = _safe_int(toks[1]) if len(toks) > 1 else 0
+            scale2 = _safe_float(toks[2]) if len(toks) > 2 else 1.0
+            scale3 = _safe_float(toks[3]) if len(toks) > 3 else 1.0
+            f_min = _safe_float(toks[4]) if len(toks) > 4 else -1.0e30
+            f_max = _safe_float(toks[5]) if len(toks) > 5 else 1.0e30
 
     p12 = PropType12(
         id=prop_id, mass=mass, isensor=isensor, isflag=isflag, ileng=ileng, fric=fric,
         stiff1=stiff1, damp1=damp1, acoeft1=acoeft1, bcoeft1=bcoeft1, dcoeft1=dcoeft1,
-        fun_a1=fun_a1, hflag1=hflag1, fun_b1=fun_b1, min_rup1=min_rup1, max_rup1=max_rup1,
-        prop_x_f=prop_x_f, prop_x_e=prop_x_e, scale1=scale1,
+        fun_a1=fun_a1, hflag1=hflag1, fun_b1=fun_b1, fct_id31=fct_id31, fun_a2=fun_a2,
+        min_rup1=min_rup1, max_rup1=max_rup1,
+        prop_x_f=prop_x_f, prop_x_e=prop_x_e, scale1=scale1, h=h,
+        funct_id=funct_id, ifric=ifric, scale2=scale2, scale3=scale3,
+        f_min=f_min, f_max=f_max,
         title=title,
     )
     model.prop_type12s[prop_id] = p12
@@ -38448,11 +38655,18 @@ def read_prop_type12(block: KeywordBlock, model: Model, log: MessageLog) -> None
         params={
             "mass": mass, "isensor": isensor, "sens_id": isensor, "isflag": isflag, "ileng": ileng, "fric": fric,
             "stiff1": stiff1, "stiff": stiff1, "k": stiff1, "damp1": damp1, "damp": damp1, "c": damp1,
-            "acoeft1": acoeft1, "bcoeft1": bcoeft1, "dcoeft1": dcoeft1,
-            "fun_a1": fun_a1, "fun_k": fun_a1, "hflag1": hflag1, "fun_b1": fun_b1, "fun_c": fun_b1,
-            "min_rup1": min_rup1, "delta_min": min_rup1, "dmin": min_rup1,
-            "max_rup1": max_rup1, "delta_max": max_rup1, "dmax": max_rup1,
-            "prop_x_f": prop_x_f, "fscale": prop_x_f, "prop_x_e": prop_x_e, "scale1": scale1,
+            "acoeft1": acoeft1, "a": acoeft1, "bcoeft1": bcoeft1, "b": bcoeft1, "dcoeft1": dcoeft1, "d": dcoeft1,
+            "fun_a1": fun_a1, "fun_a": fun_a1, "fun_k": fun_a1, "fct_id1": fun_a1,
+            "hflag1": hflag1, "hflag": hflag1,
+            "fun_b1": fun_b1, "fun_b": fun_b1, "fun_c": fun_b1, "fct_id2": fun_b1,
+            "fct_id31": fct_id31, "fun_a2": fun_a2,
+            "min_rup1": min_rup1, "min_rup": min_rup1, "delta_min": min_rup1, "dmin": min_rup1,
+            "max_rup1": max_rup1, "max_rup": max_rup1, "delta_max": max_rup1, "dmax": max_rup1,
+            "prop_x_f": prop_x_f, "fscale": prop_x_f, "prop_x_e": prop_x_e, "e": prop_x_e,
+            "scale1": scale1, "ascale": scale1, "h": h,
+            "funct_id": funct_id, "fct_idfr": funct_id, "ifric": ifric,
+            "scale2": scale2, "yscale_f": scale2, "scale3": scale3, "xscale_f": scale3,
+            "f_min": f_min, "f_max": f_max,
         }
     )
 

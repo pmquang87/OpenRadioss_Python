@@ -23,6 +23,7 @@ from .entities import (  # noqa: F401
     Material, Property, Part, NodeGroup, Surface, BoundaryCondition,
     InitialVelocity, Gravity, ConcentratedLoad, ImposedVelocity,
     RigidWall, Interface, Line, THRequest, Box,
+    PropType12, PropSprPul, PropPulley,
     PropType35, PropStitch, PropSew,
     MatLaw25, MatCompPlas, MatCompsh, MatTsaiWu, MatCrasurv, MatCompositePlas,
     MatLaw58, MatFabrA, MatFabricA,

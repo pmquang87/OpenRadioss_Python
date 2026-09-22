@@ -34,7 +34,7 @@ from ..common.constants import EM20, EP30
 from ..common.fastmath import norm3
 
 #: Advanced spring property type numbers
-ADVANCED_SPRING_PROP_TYPES = frozenset({19, 25, 26, 27, 35, 44, 46})
+ADVANCED_SPRING_PROP_TYPES = frozenset({12, 19, 25, 26, 27, 35, 44, 46})
 
 
 def _safe_param(params: dict, key: str, default: float = 0.0) -> float:
@@ -58,6 +58,331 @@ def _safe_int_param(params: dict, key: str, default: int = 0) -> int:
         return int(val)
     except (ValueError, TypeError):
         return default
+
+
+# ============================================================================
+# TYPE12: Pulley Spring (/PROP/TYPE12, /PROP/SPR_PUL)
+# ============================================================================
+
+def init_pulley_type12(group, model, log, idx12, massn, inertn):
+    """Initialize state arrays for TYPE12 (SPR_PUL) 3-node pulley springs.
+
+    Fortran origin:
+      - Starter: ``starter/source/properties/spring/hm_read_prop12.F``
+      - Init:    ``starter/source/elements/spring/r3buf3.F``, ``rmas12.F``
+      - Engine:  ``engine/source/elements/spring/r3def3.F``, ``r3cum3.F``, ``r3len3.F``
+    """
+    st = group.state
+    n = group.n
+    if idx12 is None or len(idx12) == 0:
+        return
+
+    if "t12_k" not in st:
+        st["t12_k"] = np.zeros(n)
+        st["t12_c"] = np.zeros(n)
+        st["t12_a"] = np.ones(n)
+        st["t12_b"] = np.zeros(n)
+        st["t12_d"] = np.ones(n)
+        st["t12_fun_a1"] = np.zeros(n, dtype=np.int64)
+        st["t12_hflag1"] = np.zeros(n, dtype=np.int64)
+        st["t12_fun_b1"] = np.zeros(n, dtype=np.int64)
+        st["t12_fct_id31"] = np.zeros(n, dtype=np.int64)
+        st["t12_fun_a2"] = np.zeros(n, dtype=np.int64)
+        st["t12_min_rup"] = np.full(n, -1.0e30)
+        st["t12_max_rup"] = np.full(n, 1.0e30)
+        st["t12_prop_x_f"] = np.ones(n)
+        st["t12_prop_x_e"] = np.zeros(n)
+        st["t12_scale1"] = np.ones(n)
+        st["t12_h"] = np.ones(n)
+        st["t12_ileng"] = np.zeros(n, dtype=np.int64)
+        st["t12_isensor"] = np.zeros(n, dtype=np.int64)
+        st["t12_isflag"] = np.zeros(n, dtype=np.int64)
+        st["t12_fric"] = np.zeros(n)
+        st["t12_funct_id"] = np.zeros(n, dtype=np.int64)
+        st["t12_ifric"] = np.zeros(n, dtype=np.int64)
+        st["t12_scale2"] = np.ones(n)
+        st["t12_scale3"] = np.ones(n)
+        st["t12_f_min"] = np.full(n, -1.0e30)
+        st["t12_f_max"] = np.full(n, 1.0e30)
+
+        st["t12_dfs"] = np.zeros(n)
+        st["t12_df"] = np.zeros(n)
+        st["t12_inifric"] = np.zeros(n)
+        st["t12_yield"] = np.zeros(n)
+        st["t12_dpl"] = np.zeros(n)
+        st["t12_fep"] = np.zeros(n)
+        st["t12_dl_old"] = np.zeros(n)
+        st["t12_df_old"] = np.zeros(n)
+        st["t12_force_old"] = np.zeros(n)
+
+    for sl, mat, prop in st.get("slices", []):
+        pt = getattr(prop, "type", 0)
+        if pt != 12 and getattr(prop, "prop_name", "") not in ("SPR_PUL", "TYPE12"):
+            continue
+        p = getattr(prop, "params", {}) or {}
+        st["t12_k"][sl] = _safe_param(p, "stiff1", _safe_param(p, "k", 0.0))
+        st["t12_c"][sl] = _safe_param(p, "damp1", _safe_param(p, "c", 0.0))
+        st["t12_a"][sl] = _safe_param(p, "acoeft1", _safe_param(p, "a", 1.0))
+        if np.any(st["t12_a"][sl] == 0.0):
+            st["t12_a"][sl] = np.where(st["t12_a"][sl] == 0.0, 1.0, st["t12_a"][sl])
+        st["t12_b"][sl] = _safe_param(p, "bcoeft1", _safe_param(p, "b", 0.0))
+        st["t12_d"][sl] = _safe_param(p, "dcoeft1", _safe_param(p, "d", 1.0))
+        if np.any(st["t12_d"][sl] == 0.0):
+            st["t12_d"][sl] = np.where(st["t12_d"][sl] == 0.0, 1.0, st["t12_d"][sl])
+        st["t12_fun_a1"][sl] = int(_safe_param(p, "fun_a1", _safe_param(p, "fct_id1", 0)))
+        st["t12_hflag1"][sl] = int(_safe_param(p, "hflag1", _safe_param(p, "hflag", 0)))
+        st["t12_fun_b1"][sl] = int(_safe_param(p, "fun_b1", _safe_param(p, "fct_id2", 0)))
+        st["t12_fct_id31"][sl] = int(_safe_param(p, "fct_id31", 0))
+        st["t12_fun_a2"][sl] = int(_safe_param(p, "fun_a2", 0))
+        st["t12_min_rup"][sl] = _safe_param(p, "min_rup1", _safe_param(p, "min_rup", -1.0e30))
+        st["t12_max_rup"][sl] = _safe_param(p, "max_rup1", _safe_param(p, "max_rup", 1.0e30))
+        st["t12_prop_x_f"][sl] = _safe_param(p, "prop_x_f", _safe_param(p, "fscale", 1.0))
+        st["t12_prop_x_e"][sl] = _safe_param(p, "prop_x_e", _safe_param(p, "e", 0.0))
+        st["t12_scale1"][sl] = _safe_param(p, "scale1", _safe_param(p, "ascale", 1.0))
+        st["t12_h"][sl] = _safe_param(p, "h", 1.0)
+        st["t12_ileng"][sl] = int(_safe_param(p, "ileng", 0))
+        st["t12_isensor"][sl] = int(_safe_param(p, "isensor", _safe_param(p, "sens_id", 0)))
+        st["t12_isflag"][sl] = int(_safe_param(p, "isflag", 0))
+        st["t12_fric"][sl] = _safe_param(p, "fric", 0.0)
+        st["t12_funct_id"][sl] = int(_safe_param(p, "funct_id", _safe_param(p, "fct_idfr", 0)))
+        st["t12_ifric"][sl] = int(_safe_param(p, "ifric", 0))
+        st["t12_scale2"][sl] = _safe_param(p, "scale2", _safe_param(p, "yscale_f", 1.0))
+        st["t12_scale3"][sl] = _safe_param(p, "scale3", _safe_param(p, "xscale_f", 1.0))
+        st["t12_f_min"][sl] = _safe_param(p, "f_min", -1.0e30)
+        st["t12_f_max"][sl] = _safe_param(p, "f_max", 1.0e30)
+
+        m = _safe_param(p, "mass", 0.0)
+        ileng = st["t12_ileng"][sl]
+        L0_sl = st.get("L0", np.ones(n))[sl]
+        m_tot = np.where(ileng == 1, m * L0_sl, m)
+        st["mass"][sl] = m_tot
+        st["k"][sl] = st["t12_k"][sl]
+        st["cdamp"][sl] = st["t12_c"][sl]
+
+        if massn is not None:
+            stride = group.conn.shape[1] if hasattr(group, "conn") and group.conn.ndim == 2 else 2
+            rng = np.arange(group.n)[sl]
+            for i_elem, e in enumerate(rng):
+                me = float(m_tot[i_elem]) if hasattr(m_tot, "__len__") else float(m_tot)
+                if me > 0.0:
+                    if stride >= 3:
+                        if 3 * e + 2 < len(massn):
+                            massn[3 * e] += 0.25 * me
+                            massn[3 * e + 1] += 0.50 * me
+                            massn[3 * e + 2] += 0.25 * me
+                    else:
+                        if 2 * e + 1 < len(massn):
+                            massn[2 * e] += 0.50 * me
+                            massn[2 * e + 1] += 0.50 * me
+
+
+def forces_pulley_type12(group, x, v, dt, fint, idx12):
+    """Compute internal forces for TYPE12 3-node pulley springs (SPR_PUL).
+
+    Fortran origin:
+      - Kinematics & sliding: ``engine/source/elements/spring/r3def3.F``
+      - Constitutive law:     ``engine/source/elements/spring/redef3.F90``
+      - Nodal forces:         ``engine/source/elements/spring/r3cum3.F``
+      - Time step:            ``engine/source/elements/spring/r3len3.F``
+      - Energy balance:       ``engine/source/elements/spring/r3bilan.F``
+    """
+    if idx12 is None or len(idx12) == 0:
+        return np.empty(0)
+
+    st = group.state
+    conn = group.conn[idx12]
+    n1 = conn[:, 0]
+    n2 = conn[:, 1]
+    n3 = conn[:, 2]
+    model = st.get("model")
+    n_elem = len(idx12)
+
+    # Branch vectors and lengths (r3def3.F lines 164-192)
+    # Branch 1 from node 1 to node 2:
+    ex1 = x[n2] - x[n1]
+    al1 = norm3(ex1)
+    al1_safe = np.maximum(al1, EM20)
+    a1 = ex1 / al1_safe[:, None]
+
+    # Branch 2 from node 3 to node 2:
+    ex2 = x[n2] - x[n3]
+    al2 = norm3(ex2)
+    al2_safe = np.maximum(al2, EM20)
+    a2 = ex2 / al2_safe[:, None]
+
+    # Total cable current length and elongation (r3def3.F line 183)
+    L = al1 + al2
+    L0 = st["L0"][idx12]
+    delta_L = L - L0
+
+    # Velocities and rates (r3def3.F lines 243-251 & 318-323)
+    if v is None:
+        vl1 = np.zeros(n_elem)
+        vl2 = np.zeros(n_elem)
+        v_elong = np.zeros(n_elem)
+        ddx = np.zeros(n_elem)
+    else:
+        v1 = v[n1]
+        v2 = v[n2]
+        v3 = v[n3]
+        vl1 = np.einsum("nb,nb->n", v2 - v1, a1)
+        vl2 = np.einsum("nb,nb->n", v2 - v3, a2)
+        v_elong = vl1 + vl2
+        # Relative sliding velocity over pulley: DDX = vl1 - vl2 (r3def3.F 318-323)
+        ddx = vl1 - vl2
+
+    dt_val = max(float(dt), 0.0) if dt is not None else 0.0
+
+    # Active status
+    if "off" not in st:
+        st["off"] = np.ones(group.n)
+    alive = st["off"][idx12] > 0.0
+
+    # Rupture checks (r3def3.F lines 288-296)
+    min_rup = st["t12_min_rup"][idx12]
+    max_rup = st["t12_max_rup"][idx12]
+    ruptured = alive & ((delta_L < min_rup) | (delta_L > max_rup))
+    if np.any(ruptured):
+        st["off"][idx12[ruptured]] = 0.0
+        alive = st["off"][idx12] > 0.0
+
+    # Engineering strain vs displacement scaling (ileng)
+    ileng = st["t12_ileng"][idx12]
+    use_strain = (ileng == 1) & (L0 > EM20)
+    scale_len = np.where(use_strain, L0, 1.0)
+
+    delta_scaled = delta_L / scale_len
+    v_scaled = v_elong / scale_len
+
+    k_cable = st["t12_k"][idx12] / scale_len
+    c_cable = st["t12_c"][idx12] / scale_len
+    a_coef = st["t12_a"][idx12]
+    b_coef = st["t12_b"][idx12]
+    d_coef = st["t12_d"][idx12]
+    fun_a1 = st["t12_fun_a1"][idx12]
+    hflag1 = st["t12_hflag1"][idx12]
+    scale1 = st["t12_scale1"][idx12]
+
+    # Cable quasi-static force (redef3.F90)
+    # Scaled stiffness: K = STIFF1 / A
+    k_eff = k_cable / np.maximum(a_coef, EM20)
+    F_qs = k_eff * delta_scaled
+
+    has_model_funcs = (model is not None and hasattr(model, "functions"))
+
+    for i in range(n_elem):
+        fa = fun_a1[i]
+        if fa > 0 and has_model_funcs and fa in model.functions:
+            func = model.functions[fa]
+            sc1 = scale1[i] if scale1[i] != 0.0 else 1.0
+            f_curve = func.eval(delta_scaled[i] / sc1)
+            hf = hflag1[i]
+            if hf == 0:
+                # Pure nonlinear elastic loading
+                F_qs[i] = f_curve
+            elif hf == 1:
+                # Isotropic hardening: yield cap
+                yield_prev = max(st["t12_yield"][idx12[i]], abs(f_curve))
+                if abs(F_qs[i]) > yield_prev:
+                    yield_prev = abs(F_qs[i])
+                    st["t12_yield"][idx12[i]] = yield_prev
+                F_qs[i] = np.clip(F_qs[i], -yield_prev, yield_prev)
+            else:
+                F_qs[i] = f_curve
+
+    # Dynamic amplification / rate effect (redef3.F90)
+    rate_factor = np.ones(n_elem)
+    rate_mask = (b_coef > 0.0) & (d_coef > 0.0)
+    if np.any(rate_mask):
+        rate_arg = 1.0 + np.abs(v_scaled[rate_mask]) / np.maximum(d_coef[rate_mask], EM20)
+        rate_factor[rate_mask] = np.maximum(1.0, 1.0 + b_coef[rate_mask] * np.log(np.maximum(1.0, rate_arg)))
+
+    F_dyn = F_qs * rate_factor
+    F_damp = c_cable * v_scaled
+    F = np.where(alive, F_dyn + F_damp, 0.0)
+
+    # Friction force calculation (r3def3.F lines 315-400)
+    # Sliding friction state accumulation: DFS += DDX * dt * K
+    if dt_val > 0.0:
+        st["t12_dfs"][idx12] += ddx * dt_val * k_cable
+    dfs = st["t12_dfs"][idx12]
+
+    # Pulley wrap angle beta = pi - arccos(a1 . a2)
+    cos_theta = np.clip(np.einsum("nb,nb->n", a1, a2), -1.0, 1.0)
+    beta = np.pi - np.arccos(cos_theta)
+
+    # Determine friction coefficient mu
+    mu = np.zeros(n_elem)
+    fric_const = st["t12_fric"][idx12]
+    funct_id = st["t12_funct_id"][idx12]
+    ifric = st["t12_ifric"][idx12]
+    scale2 = st["t12_scale2"][idx12]
+    scale3 = st["t12_scale3"][idx12]
+    f_min = st["t12_f_min"][idx12]
+    f_max = st["t12_f_max"][idx12]
+
+    for i in range(n_elem):
+        if ifric[i] == 0:
+            if funct_id[i] > 0 and has_model_funcs and funct_id[i] in model.functions:
+                xx = abs(dfs[i] * scale3[i])
+                mu[i] = model.functions[funct_id[i]].eval(xx) * scale2[i]
+            elif fric_const[i] > 0.0:
+                mu[i] = fric_const[i]
+        else: # ifric > 0
+            if funct_id[i] > 0 and has_model_funcs and funct_id[i] in model.functions:
+                xx = dfs[i] * scale3[i]
+                mu_val = model.functions[funct_id[i]].eval(xx) * scale2[i]
+                if dfs[i] <= f_min[i] or dfs[i] >= f_max[i]:
+                    st["t12_inifric"][idx12[i]] = 1.0
+                if st["t12_inifric"][idx12[i]] == 1.0:
+                    mu_val = fric_const[i]
+                mu[i] = mu_val
+            elif fric_const[i] > 0.0:
+                mu[i] = fric_const[i]
+
+    # Capstan friction limit Fmax = max(0, F * tanh(0.5 * mu * beta)) (r3def3.F line 330, 344, 378, 392)
+    fmax = np.maximum(0.0, F * np.tanh(0.5 * mu * beta))
+    fmax = np.minimum(fmax, np.abs(dfs))
+    dfs_capped = np.sign(dfs) * fmax
+    st["t12_dfs"][idx12] = dfs_capped
+    df = np.where(alive, dfs_capped, 0.0)
+    st["t12_df"][idx12] = df
+
+    # Nodal force scatter (r3cum3.F lines 64-99)
+    # Tension in branch 1 is T1 = F + df (pulling node 1 toward node 2)
+    # Tension in branch 2 is T2 = F - df (pulling node 3 toward node 2)
+    t1 = F + df
+    t2 = F - df
+
+    f1 = a1 * t1[:, None]
+    f3 = a2 * t2[:, None]
+    f2 = -f1 - f3
+
+    if fint is not None:
+        np.add.at(fint, n1, f1)
+        np.add.at(fint, n2, f2)
+        np.add.at(fint, n3, f3)
+
+    # Energy accounting (r3bilan.F)
+    # Tension work + friction sliding work:
+    f_old = st["t12_force_old"][idx12]
+    df_old = st["t12_df_old"][idx12]
+    if dt_val > 0.0:
+        dE_tens = 0.5 * (f_old + F) * v_elong * dt_val
+        dE_fric = 0.5 * (df_old + df) * ddx * dt_val
+        st["eint"][idx12] += np.where(alive, dE_tens + dE_fric, 0.0)
+
+    st["force"][idx12] = F
+    st["t12_force_old"][idx12] = F
+    st["t12_df_old"][idx12] = df
+
+    # Critical time step (r3len3.F lines 80-100)
+    m_cable = np.maximum(st["mass"][idx12], EM20)
+    pos_k = (k_cable > 0.0) & (m_cable > 0.0)
+    omega = 2.0 * np.sqrt(np.where(pos_k, k_cable / m_cable, 1.0))
+    xi = np.where(pos_k, c_cable / np.sqrt(np.maximum(k_cable * m_cable, EM20)), 0.0)
+    dt_crit = (2.0 / omega) * (np.sqrt(1.0 + xi ** 2) - xi)
+    return np.where(alive, dt_crit, EP30)
 
 
 # ============================================================================
@@ -2059,7 +2384,7 @@ def forces_muscle_type46(group, x, v, dt, fint, idx46):
 # Combined Dispatch for spring.py and Standalone Element Kernel
 # ============================================================================
 
-def init_advanced(group, model, log, *pos_args, idx19=None, idx25=None, idx26=None, idx27=None, idx35=None, idx44=None, idx46=None, massn=None, inertn=None, **kwargs):
+def init_advanced(group, model, log, *pos_args, idx12=None, idx19=None, idx25=None, idx26=None, idx27=None, idx35=None, idx44=None, idx46=None, massn=None, inertn=None, **kwargs):
     """Dispatcher called by spring.py init_group for advanced spring types."""
     if len(pos_args) == 5:
         idx19, idx44, idx46, massn, inertn = pos_args
@@ -2072,6 +2397,8 @@ def init_advanced(group, model, log, *pos_args, idx19=None, idx25=None, idx26=No
     elif len(pos_args) == 9:
         idx19, idx25, idx26, idx27, idx35, idx44, idx46, massn, inertn = pos_args
 
+    if idx12 is not None and len(idx12):
+        init_pulley_type12(group, model, log, idx12, massn, inertn)
     if idx19 is not None and len(idx19):
         init_torsion_type19(group, model, log, idx19, massn, inertn)
     if idx25 is not None and len(idx25):
@@ -2172,7 +2499,9 @@ def local_stiffness(group, x=None):
         ptype = getattr(prop, "type", 0) or getattr(prop, "prop_type", 0)
         pname = type(prop).__name__.upper()
         if ptype == 0:
-            if "26" in pname or "SPR_TAB" in pname:
+            if "12" in pname or "PUL" in pname:
+                ptype = 12
+            elif "26" in pname or "SPR_TAB" in pname:
                 ptype = 26
             elif "27" in pname or "BDAMP" in pname:
                 ptype = 27
@@ -2187,6 +2516,12 @@ def local_stiffness(group, x=None):
             elif "MAT" in pname or "23" in pname:
                 ptype = 23
         p = getattr(prop, "params", {}) or {}
+
+        if ptype == 12:  # /PROP/TYPE12, /PROP/SPR_PUL
+            stiff = float(getattr(prop, "stiff1", 0.0) or p.get("stiff1", 0.0) or p.get("k", 0.0))
+            if stiff == 0.0:
+                stiff = float(p.get("k", 1.0))
+            k_ax[sl] = stiff
 
         if ptype == 26:  # /PROP/TYPE26, /PROP/SPR_TAB
             kmax = float(getattr(prop, "kmax", 0.0) or p.get("kmax", 0.0) or p.get("k", 0.0))
