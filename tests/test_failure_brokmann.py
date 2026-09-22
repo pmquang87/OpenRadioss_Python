@@ -252,3 +252,55 @@ def test_dispatcher_registration():
     register(custom_dict)
     assert "BROKMANN" in custom_dict
     assert "FAIL_BROKMANN" in custom_dict
+
+
+def test_brokmann_step_fortran_state_update():
+    """Verify brokmann_step matches Fortran fail_brokmann.F crack growth and rupture."""
+    from pyradioss.failure.brokmann import brokmann_step
+
+    nel = 1
+    uvar = np.zeros((nel, 21), dtype=float)
+    # State variables (Python 0-based indexing matching Fortran UVAR(15..21)):
+    uvar[0, 14] = 0.0      # UVAR(15): FAIL_B = 0 (alive/not yet failed)
+    uvar[0, 15] = 2000.0   # UVAR(16): CR_LEN = 2000 um (2 mm)
+    uvar[0, 16] = 4000.0   # UVAR(17): CR_DEPTH = 4000 um (4 mm)
+    uvar[0, 17] = 0.0      # UVAR(18): CR_ANG = 0
+    uvar[0, 18] = 10000.0  # UVAR(19): THK0 = 10000 um (10 mm)
+    uvar[0, 19] = 50000.0  # UVAR(20): ALDT0 = 50000 um (50 mm)
+    uvar[0, 20] = 0.0      # UVAR(21): SIG_COS previous = 0
+
+    off = np.ones(nel, dtype=float)
+    tdel = np.zeros(nel, dtype=float)
+    uparam = np.zeros(35, dtype=float)
+    uparam[0] = 16.0       # EXP_N
+    uparam[5] = 10.0e6     # K_IC = 10 MPa*sqrt(m)
+    uparam[6] = 0.0        # K_TH = 0
+    uparam[7] = 1.0        # V0 = 1.0 m/s
+    uparam[9] = 1.0        # ALPHA = 1.0 (no lag filter)
+    uparam[29] = 0.0       # SIG_INI = 0
+    uparam[32] = 1.0       # FAC_M = 1
+    uparam[33] = 1.0       # FAC_L = 1
+    uparam[34] = 1.0       # FAC_T = 1
+
+    # Apply moderate tensile stress (CR_ANG=0 -> crack open by SIGNXX)
+    signxx = np.array([50.0e6])
+    signyy = np.array([0.0])
+    signxy = np.array([0.0])
+
+    # Advance 1 step
+    dt = 1.0e-3
+    failed = brokmann_step(uvar, off, signxx, signyy, signxy, uparam, dt, time=0.001, tdel=tdel)
+
+    assert not failed[0]
+    assert uvar[0, 14] == 0.0
+    # Crack should have grown (DA > 0 and DC > 0)
+    assert uvar[0, 15] > 2000.0
+    assert uvar[0, 16] > 4000.0
+
+    # Now apply high tensile stress exceeding fracture toughness K_IC
+    signxx = np.array([200.0e6])
+    failed_rupt = brokmann_step(uvar, off, signxx, signyy, signxy, uparam, dt, time=0.002, tdel=tdel)
+    assert failed_rupt[0]
+    assert uvar[0, 14] == 1.0
+    assert tdel[0] == 0.002
+

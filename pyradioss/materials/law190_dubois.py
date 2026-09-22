@@ -367,9 +367,17 @@ def build_law190(mat_def: Any) -> Material:
     )
 
 
-def resolve(mat: Material, model: Any, log: Any = None) -> None:
-    """Resolve table/function curves for /MAT/LAW190 from the model."""
-    p = mat.params
+def resolve(mat: Material | dict, model: Any, log: Any = None) -> None:
+    """Resolve table/function curves for /MAT/LAW190 from the model.
+    Cites starter/source/materials/mat/mat190/law190_upd.F90 lines 80-120.
+    """
+    if isinstance(mat, dict):
+        p = mat.get("params", mat)
+        mat_id = mat.get("id", 0)
+    else:
+        p = getattr(mat, "params", {})
+        mat_id = getattr(mat, "id", 0)
+
     tab_id = p.get("table_id", p.get("fun_1", p.get("FUN_1", 0)))
     if tab_id and tab_id != 0:
         resolved = None
@@ -385,7 +393,7 @@ def resolve(mat: Material, model: Any, log: Any = None) -> None:
             if "law190_params" in p and isinstance(p["law190_params"], Law190Params):
                 p["law190_params"].table = resolved
         elif log is not None and hasattr(log, "warning"):
-            log.warning(f"/MAT/LAW190/{mat.id}: table/curve ID {tab_id} not found in model", "MAT CHECK")
+            log.warning(f"/MAT/LAW190/{mat_id}: table/curve ID {tab_id} not found in model", "MAT CHECK")
 
 
 def extra_shapes(mat: Any, nip: int = 1) -> dict[str, tuple[int, ...]]:

@@ -126,23 +126,22 @@ def newman_raju(c: float, a: float, t: float, b: float, fpi: float) -> float:
         sinp = math.sin(fpi * math.pi)
         cosp = math.cos(fpi * math.pi)
 
-    ac = a / c                       # newman_raju.F90 line 84
-    at = a / t                       # newman_raju.F90 line 85
-    q  = 1.0 + 1.464 * ac ** 1.65   # newman_raju.F90 line 86
+    ac = a / max(c, _TINY)                       # newman_raju.F90 line 84
+    at = a / max(t, _TINY)                       # newman_raju.F90 line 85
+    q  = 1.0 + 1.464 * (ac ** 1.65)              # newman_raju.F90 line 86
 
-    m1 = 1.13 - 0.09 * ac           # newman_raju.F90 line 88
-    m2 = -0.54 + 0.89 / (0.2 + ac)  # newman_raju.F90 line 89
-    m3 = 0.5 - 1.0 / (0.65 + ac) + 14.0 * (1.0 - ac) ** 24  # line 90
-    g  = 1.0 + (0.1 + 0.35 * at ** 2) * (1.0 - sinp) ** 2   # line 91
+    m1 = 1.13 - 0.09 * ac                        # newman_raju.F90 line 88
+    m2 = -0.54 + 0.89 / (0.2 + ac)               # newman_raju.F90 line 89
+    m3 = 0.5 - 1.0 / (0.65 + ac) + 14.0 * ((1.0 - ac) ** 24)  # line 90
+    g  = 1.0 + (0.1 + 0.35 * (at ** 2)) * ((1.0 - sinp) ** 2)   # line 91
 
     fphi = (ac ** 2 * cosp ** 2 + sinp ** 2) ** 0.25          # line 93
-    # fb = math.pi * c * math.sqrt(at)                        # line 94  (unused in Y)
 
     # finite-width correction  (newman_raju.F90 line 96)
-    fw = math.cos(math.pi * c / (2.0 * b) * math.sqrt(at))
+    fw = math.cos(math.pi * c / (2.0 * max(b, _TINY)) * math.sqrt(max(at, 0.0)))
 
-    f = (m1 + m2 * at ** 2 + m3 * at ** 4) * fphi * g / math.sqrt(abs(fw) + _TINY)
-    y = math.sqrt(1.0 / q) * f      # newman_raju.F90 line 99
+    f = (m1 + m2 * (at ** 2) + m3 * (at ** 4)) * fphi * g / math.sqrt(abs(fw) + _TINY)
+    y = math.sqrt(1.0 / max(q, _TINY)) * f      # newman_raju.F90 line 99
     return y
 
 
@@ -472,9 +471,9 @@ def brokmann_step(
     uvar[idx, 16] += dc   # UVAR(17) += DC  (CR_DEPTH, Python [16])
 
     # --- rupture criterion #2 (fail_brokmann.F lines 161-169) ---
-    # Re-evaluate K1_A with updated crack length (still uses sig_cos unfiltered)
+    # Re-evaluate K1_A with updated crack length (uses SIG_COS damped at line 126)
     nr_a_new = uvar[idx, 15]
-    k1_a2 = ya * sig_cos * np.sqrt(math.pi * nr_a_new * _EM6)
+    k1_a2 = ya * sig_cos_filt * np.sqrt(math.pi * nr_a_new * _EM6)
     not_yet_failed = uvar[idx, 14] == 0.0
     fail2 = (k1_a2 >= kcm) & not_yet_failed
     if np.any(fail2):

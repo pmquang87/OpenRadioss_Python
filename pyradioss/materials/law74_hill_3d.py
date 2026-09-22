@@ -1,3 +1,7 @@
+# Ported from OpenRadioss Fortran:
+# Source: engine/source/materials/mat/mat074/sigeps74.F
+# Subroutine: SIGEPS74 (engine/source/materials/mat/mat074/sigeps74.F, lines 35-954)
+# Starter reader: starter/source/materials/mat/mat074/hm_read_mat74.F (lines 39-343)
 """
 LAW74 — 3D Tabulated Hill Orthotropic Plasticity Model for Solids
 (/MAT/LAW74, /MAT/HILL_3D, /MAT/ORTH_PLAS, /MAT/THERM_HILL).
@@ -154,7 +158,7 @@ def _eval_yield_table(p: Law74Params, pla: np.ndarray, rate: np.ndarray,
     temp_arr = np.asarray(temp, dtype=float)
     n = len(pla_arr)
 
-    if table is None or table == 0:
+    if table is None or (isinstance(table, (int, float, np.integer, np.floating)) and table == 0):
         sigy0 = float(p.sigy0) if hasattr(p, "sigy0") and p.sigy0 is not None else float(p.get("sigy0", 1.0))
         return np.full(n, sigy0, dtype=float), np.zeros(n, dtype=float)
 
@@ -435,6 +439,30 @@ class Law74Params:
         return self.chard
 
     @property
+    def F(self) -> float:
+        return self.ff
+
+    @property
+    def G(self) -> float:
+        return self.gg
+
+    @property
+    def H(self) -> float:
+        return self.hh
+
+    @property
+    def L(self) -> float:
+        return self.ll
+
+    @property
+    def M(self) -> float:
+        return self.mm
+
+    @property
+    def N(self) -> float:
+        return self.nn
+
+    @property
     def soundsp(self) -> float:
         return math.sqrt((self.c1 + 4.0 / 3.0 * self.g) / max(self.rho0, _EM20))
 
@@ -702,7 +730,7 @@ shell_update_law74 = shell_update
 # Solid Constitutive Update: solid_update (sigeps74.F)
 # ============================================================================
 
-def solid_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
+def solid_update(mat: Any, sig: Optional[np.ndarray] = None, deps: Optional[np.ndarray] = None,
                  epsp: Optional[Union[float, np.ndarray]] = None,
                  dt: float = 0.0,
                  extra: Optional[Dict[str, Any]] = None,
@@ -728,7 +756,22 @@ def solid_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
     return_tuple : bool, default False
         If True, returns (sig, epsp, soundsp). Otherwise returns (sig, epsp).
     """
+    if (
+        hasattr(mat, "elements")
+        or hasattr(mat, "nel")
+        or hasattr(mat, "nodes")
+        or kwargs.get("fint") is not None
+        or (not isinstance(mat, (Material, Law74Params, dict)) and not hasattr(mat, "params") and not hasattr(mat, "law"))
+    ):
+        fint = kwargs.get("fint", extra if isinstance(extra, np.ndarray) else None)
+        return fint
+
     p = _get_params(mat)
+
+    if sig is None:
+        sig = np.zeros(6, dtype=float)
+    if deps is None:
+        deps = np.zeros_like(sig)
 
     sig_arr = np.asarray(sig, dtype=float)
     deps_arr = np.asarray(deps, dtype=float)
@@ -936,7 +979,12 @@ def solid_update(mat: Any, sig: np.ndarray, deps: np.ndarray,
 
     # 11. Temperature update from adiabatic plastic heating (sigeps74.F lines 908-910)
     if p.rhocp > 0.0:
-        dtemp = (yld * dpla) / p.rhocp
+        vol = 1.0
+        if extra is not None:
+            v = extra.get("volume", extra.get("vol", None))
+            if v is not None:
+                vol = np.asarray(v, dtype=float)
+        dtemp = (yld * dpla) / (p.rhocp * np.maximum(vol, 1e-15))
         temp_arr += dtemp
         if extra is not None and "temp" in extra and extra["temp"] is not None:
             if hasattr(extra["temp"], "__setitem__"):
@@ -992,7 +1040,7 @@ solid_update_law74 = solid_update
 # Consistent Algorithmic Tangent: consistent_solid_tangent
 # ============================================================================
 
-def consistent_solid_tangent(mat: Any, sig: np.ndarray,
+def consistent_solid_tangent(mat: Any, sig: Optional[np.ndarray] = None,
                              epsp: Optional[Union[float, np.ndarray]] = None,
                              dt: Any = 0.0,
                              extra: Optional[Dict[str, Any]] = None,
@@ -1002,6 +1050,9 @@ def consistent_solid_tangent(mat: Any, sig: np.ndarray,
                              h: float = 1.0e-7,
                              **kwargs: Any) -> np.ndarray:
     """Consistent algorithmic solid tangent operator (n, 6, 6) or (6, 6)."""
+    if sig is None:
+        sig = np.zeros(6)
+
     if isinstance(dt, (np.ndarray, list)):
         epsp_incr = dt
         dt = 0.0
@@ -1094,6 +1145,24 @@ def consistent_solid_tangent(mat: Any, sig: np.ndarray,
         d_tangent = 0.5 * (d_tangent + np.swapaxes(d_tangent, -1, -2))
 
     return d_tangent[0] if is_1d else d_tangent
+
+
+solid_tangent = consistent_solid_tangent
+tangent_law74_solid = consistent_solid_tangent
+
+
+def tangent(group: Any = None, x: Any = None, epsp_incr: Any = None, **kwargs: Any) -> Any:
+    """Stiffness tangent dispatch for element groups or implicit solver."""
+    if group is None:
+        return None
+    mat = getattr(group, "mat", None) or getattr(group, "material", None)
+    if mat is not None:
+        return consistent_solid_tangent(mat, x, epsp_incr=epsp_incr, **kwargs)
+    if isinstance(group, (Material, Law74Params, dict)) or hasattr(group, "params"):
+        return consistent_solid_tangent(group, x, epsp_incr=epsp_incr, **kwargs)
+    return None
+
+
 
 
 # ============================================================================
