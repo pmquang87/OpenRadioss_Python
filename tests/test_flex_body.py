@@ -390,8 +390,8 @@ def test_flex_body_forces_engine_hook():
         [0.0, 0.0],
         [0.0, 0.0],
         [0.0, 0.0],
-        [0.0, 1.0],  # Node 2 Y direction
         [0.0, 0.0],
+        [1.0, 0.0],  # Node 2 Y direction
         [0.0, 0.0],
     ])
 
