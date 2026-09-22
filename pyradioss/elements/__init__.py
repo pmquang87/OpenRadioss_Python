@@ -28,11 +28,11 @@ where internal forces enter negated).
 """
 
 from . import (beam_fiber, beam_type3, shell_bt4, shell_dkt18, shell_dkt6, shell_qbat, shell_qeph,  # noqa: F401
-               shell_thick16, shell_tri3, solid_bric20, solid_cohesive, solid_heph, solid_hexa8,
+               shell_thick16, shell_tri3, solid_bric20, solid_cohesive, solid_connect, solid_heph, solid_hexa8,
                solid_hexa8_eas, solid_hexa8_full, solid_penta6, solid_penta6_heph, solid_pyra5,
                solid_quad, solid_quad4_full, solid_shell_ha8, solid_tetra10, solid_tetra4,
                solid_tetra4_sfem, solid_tria3, solid_tshell8, spring, spring_advanced,
-               thickshell_composite, thickshell_wedge6, truss)
+               thickshell_composite, thickshell_wedge6, truss, nstrand)
 
 KERNELS = {
     # 3D Solids (8-node hexas, 20-node, wedges, tetras, pyramids, cohesive, solid shells)
@@ -42,6 +42,8 @@ KERNELS = {
     "bricks_heph": solid_heph,
     "solid_shells_ha8": solid_shell_ha8,
     "cohesives": solid_cohesive,
+    "solid_connect": solid_connect,
+    "connectors": solid_connect,
     "bric20s": solid_bric20,
     "penta6s": solid_penta6,
     "penta6s_heph": solid_penta6_heph,
@@ -69,11 +71,13 @@ KERNELS = {
     "quads_full": solid_quad4_full,
     "trias": solid_tria3,
 
-    # 1D Elements (beams, trusses, springs)
+    # 1D Elements (beams, trusses, springs, multi-strand cables)
     "trusses": truss,
     "springs": spring,
     "spring_advanced": spring_advanced,
     "springs_advanced": spring_advanced,
+    "nstrand": nstrand,
+    "nstrands": nstrand,
     "beams": beam_type3,
     "beams_fiber": beam_fiber,
 }
@@ -115,6 +119,7 @@ SOLID_ISOLID_GROUPS = {
     17: "bricks_eas",
     21: "cohesives",
     24: "bricks_heph",
+    43: "solid_connect",
 }
 
 #: /PROP/SOLID Itetra4 -> dedicated tetrahedral formulation group.

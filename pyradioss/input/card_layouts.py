@@ -8902,6 +8902,18 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_ARUP_ADHESIVE_1": [20],
     "MAT_ARUP_ADHESIVE_2": [20, 20, 20, 20, 20],
     "MAT_ARUP_ADHESIVE_3": [20, 20, 10, 10, 20],
+
+    # /PROP/TYPE28 (/PROP/NSTRAND) card layouts
+    # Fortran origin: hm_read_prop28.F; CFG: radioss130/PROP/prop_p28_nstrand.cfg
+    "PROP_TYPE28_1": [20, 20, 20],
+    "PROP_TYPE28_2": [10, 10, 20, 20, 20, 20],
+    "PROP_TYPE28_3": [20, 20],
+    "PROP_TYPE28_4": [10, 10, 20],
+
+    "PROP_NSTRAND_1": [20, 20, 20],
+    "PROP_NSTRAND_2": [10, 10, 20, 20, 20, 20],
+    "PROP_NSTRAND_3": [20, 20],
+    "PROP_NSTRAND_4": [10, 10, 20],
 }
 
 

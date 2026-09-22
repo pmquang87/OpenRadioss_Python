@@ -12001,6 +12001,8 @@ class PropType28:
     strain2: float = 1.0e30
     mu1: float = 0.0
     mu2: float = 0.0
+    fscale11: float = 1.0
+    fscale22: float = 1.0
     layers: list[PropStrandLayer] = field(default_factory=list)
     title: str = ""
 

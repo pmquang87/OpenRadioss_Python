@@ -34,7 +34,7 @@ from ..common.constants import EM20, EP30
 from ..common.fastmath import norm3
 
 #: Advanced spring property type numbers
-ADVANCED_SPRING_PROP_TYPES = frozenset({12, 19, 25, 26, 27, 35, 36, 44, 46})
+ADVANCED_SPRING_PROP_TYPES = frozenset({12, 19, 25, 26, 27, 28, 35, 36, 44, 46})
 
 
 def _safe_param(params: dict, key: str, default: float = 0.0) -> float:

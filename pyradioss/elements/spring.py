@@ -63,10 +63,10 @@ from . import spring_advanced, spring_general
 #: already warns (checks.check_model's PROP CHECK), which is the honest
 #: pair of messages.  Add a type here only together with a reader that fills
 #: its mass AND a Fortran Starter that actually requires it.
-_MASS_REQUIRED_SPRING_TYPES = frozenset({4, 12})
+_MASS_REQUIRED_SPRING_TYPES = frozenset({4, 12, 28})
 
 #: /PROP spelling per TYPE for the mass message (the card the user wrote)
-_SPRING_PROP_SPELLING = {4: "SPRING", 12: "SPR_PUL", 19: "SPR_TORS", 25: "SPR_AXI", 26: "SPR_TAB", 27: "SPR_BDAMP", 32: "SPR_PRE", 35: "STITCH", 36: "PREDIT", 44: "SPR_CRUS", 46: "SPR_MUSCLE"}
+_SPRING_PROP_SPELLING = {4: "SPRING", 12: "SPR_PUL", 19: "SPR_TORS", 25: "SPR_AXI", 26: "SPR_TAB", 27: "SPR_BDAMP", 28: "NSTRAND", 32: "SPR_PRE", 35: "STITCH", 36: "PREDIT", 44: "SPR_CRUS", 46: "SPR_MUSCLE"}
 
 
 def _safe_param(params: dict, key: str, default: float = 0.0) -> float:
@@ -128,9 +128,11 @@ def init_group(group, model, log):
                 pt = 36
             elif "12" in pname or "Pulley" in pname or "SprPul" in pname:
                 pt = 12
+            elif "28" in pname or "Nstrand" in pname or "Type28" in pname:
+                pt = 28
         kind[sl] = pt
         p = getattr(prop, "params", {}) or {}
-        if pt == 12:
+        if pt in (12, 28):
             mass[sl] = _safe_param(p, "mass", 0.0)
             continue
         if pt in spring_general.SPRING_PROP_TYPES or pt in spring_advanced.ADVANCED_SPRING_PROP_TYPES:
@@ -145,11 +147,12 @@ def init_group(group, model, log):
     is25 = (kind == 25)
     is26 = (kind == 26)
     is27 = (kind == 27)
+    is28 = (kind == 28)
     is35 = (kind == 35)
     is36 = (kind == 36)
     is44 = (kind == 44)
     is46 = (kind == 46)
-    is_adv = is12 | is19 | is25 | is26 | is27 | is35 | is36 | is44 | is46
+    is_adv = is12 | is19 | is25 | is26 | is27 | is28 | is35 | is36 | is44 | is46
     is_kj = (kind == 33) | (kind == 45)
     idx4 = np.where(~is6 & ~is32 & ~is_adv & ~is_kj)[0]
     idx6 = np.where(is6)[0]
@@ -159,11 +162,14 @@ def init_group(group, model, log):
     idx25 = np.where(is25)[0]
     idx26 = np.where(is26)[0]
     idx27 = np.where(is27)[0]
+    idx28 = np.where(is28)[0]
     idx35 = np.where(is35)[0]
     idx36 = np.where(is36)[0]
     idx44 = np.where(is44)[0]
     idx46 = np.where(is46)[0]
     idx_kj = np.where(is_kj)[0]
+
+    st["idx28"] = idx28
 
     # Initial length for 3-node pulley spring (r3buf3.F lines 97-99): L0 = L01 + L02
     if len(idx12) > 0 and group.conn.shape[1] >= 3:
@@ -234,7 +240,7 @@ def init_group(group, model, log):
     massn = np.zeros(stride * n)
     inertn = np.zeros(stride * n)
     for i in range(n):
-        if is12[i] or is6[i] or is19[i] or is36[i]:
+        if is12[i] or is28[i] or is6[i] or is19[i] or is36[i]:
             continue
         m = mass[i]
         massn[stride * i] = m / 2.0
@@ -244,6 +250,9 @@ def init_group(group, model, log):
         spring_general.init6(group, model, log, idx6, massn, inertn)
     if len(idx12) or len(idx19) or len(idx25) or len(idx26) or len(idx27) or len(idx35) or len(idx36) or len(idx44) or len(idx46):
         spring_advanced.init_advanced(group, model, log, idx12=idx12, idx19=idx19, idx25=idx25, idx26=idx26, idx27=idx27, idx35=idx35, idx36=idx36, idx44=idx44, idx46=idx46, massn=massn, inertn=inertn)
+    if len(idx28):
+        from . import nstrand
+        nstrand.init_nstrand_type28(group, model, log, idx28=idx28, massn=massn, inertn=inertn)
     node_idx = group.conn.reshape(-1)
     valid = (node_idx >= 0)
     return node_idx[valid], massn[valid], (inertn[valid] if inertn.any() else None)
@@ -456,6 +465,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     idx25 = st.get("idx25")
     idx26 = st.get("idx26")
     idx27 = st.get("idx27")
+    idx28 = st.get("idx28")
     idx35 = st.get("idx35")
     idx36 = st.get("idx36")
     idx44 = st.get("idx44")
@@ -468,6 +478,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         (idx25 is None or len(idx25) == 0) and
         (idx26 is None or len(idx26) == 0) and
         (idx27 is None or len(idx27) == 0) and
+        (idx28 is None or len(idx28) == 0) and
         (idx35 is None or len(idx35) == 0) and
         (idx36 is None or len(idx36) == 0) and
         (idx44 is None or len(idx44) == 0) and
@@ -495,6 +506,9 @@ def forces(group, x, v, vr, dt, fint, mint):
         dtc[idx26] = spring_advanced.forces_tab_type26(group, x, v, dt, fint, idx26)
     if idx27 is not None and len(idx27):
         dtc[idx27] = spring_advanced.forces_bdamp_type27(group, x, v, dt, fint, idx27)
+    if idx28 is not None and len(idx28):
+        from . import nstrand
+        dtc[idx28] = nstrand.forces_nstrand_type28(group, x, v, vr, dt, fint, mint, idx28)
     if idx35 is not None and len(idx35):
         dtc[idx35] = spring_advanced.forces_stitch_type35(group, x, v, dt, fint, idx35)
     if idx36 is not None and len(idx36):

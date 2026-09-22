@@ -38785,6 +38785,8 @@ def read_prop_type28(block: KeywordBlock, model: Model, log: MessageLog) -> None
     mu2 = 0.0
     layers: list[PropStrandLayer] = []
 
+    fscale11 = 1.0
+    fscale22 = 1.0
     valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
 
     if block.fixed:
@@ -38799,6 +38801,8 @@ def read_prop_type28(block: KeywordBlock, model: Model, log: MessageLog) -> None
             fun_b1 = _safe_int(c1[1]) if len(c1) > 1 else 0
             strain1 = _safe_float(c1[2]) if len(c1) > 2 and c1[2].strip() else -1.0e30
             strain2 = _safe_float(c1[3]) if len(c1) > 3 and c1[3].strip() else 1.0e30
+            fscale11 = _safe_float(c1[4]) if len(c1) > 4 and c1[4].strip() else 1.0
+            fscale22 = _safe_float(c1[5]) if len(c1) > 5 and c1[5].strip() else 1.0
         if len(valid_cards) > 2:
             c2 = valid_cards[2].cut("PROP_TYPE28_3")
             mu1 = _safe_float(c2[0]) if len(c2) > 0 else 0.0
@@ -38822,6 +38826,8 @@ def read_prop_type28(block: KeywordBlock, model: Model, log: MessageLog) -> None
             fun_b1 = _safe_int(toks[1]) if len(toks) > 1 else 0
             strain1 = _safe_float(toks[2]) if len(toks) > 2 else -1.0e30
             strain2 = _safe_float(toks[3]) if len(toks) > 3 else 1.0e30
+            fscale11 = _safe_float(toks[4]) if len(toks) > 4 else 1.0
+            fscale22 = _safe_float(toks[5]) if len(toks) > 5 else 1.0
         if len(valid_cards) > 2:
             toks = valid_cards[2].tokens()
             mu1 = _safe_float(toks[0]) if len(toks) > 0 else 0.0
@@ -38834,10 +38840,16 @@ def read_prop_type28(block: KeywordBlock, model: Model, log: MessageLog) -> None
                 mu = _safe_float(toks[2])
                 layers.append(PropStrandLayer(type_name=tname, k_id=kid, mu=mu))
 
+    if fscale11 == 0.0:
+        fscale11 = 1.0
+    if fscale22 == 0.0:
+        fscale22 = 1.0
+
     p28 = PropType28(
         id=prop_id, mass=mass, k=k, c=c, fun_a1=fun_a1, fun_b1=fun_b1,
-        strain1=strain1, strain2=strain2, mu1=mu1, mu2=mu2, layers=layers,
-        title=title,
+        strain1=strain1, strain2=strain2, mu1=mu1, mu2=mu2,
+        fscale11=fscale11, fscale22=fscale22,
+        layers=layers, title=title,
     )
     model.prop_type28s[prop_id] = p28
     model.prop_xelems[prop_id] = PropXelem(
@@ -38850,6 +38862,8 @@ def read_prop_type28(block: KeywordBlock, model: Model, log: MessageLog) -> None
             "fun_a1": fun_a1, "fun_k": fun_a1, "fun_b1": fun_b1, "fun_c": fun_b1,
             "strain1": strain1, "dmin": strain1, "delta_min": strain1,
             "strain2": strain2, "dmax": strain2, "delta_max": strain2,
+            "fscale11": fscale11, "ffac": fscale11,
+            "fscale22": fscale22, "xfac": 1.0 / fscale22,
             "mu1": mu1, "mu2": mu2,
             "nip": len(layers),
             "layers": layers,
