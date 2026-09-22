@@ -79,4 +79,27 @@ from .sph_boundary import (  # noqa: F401
     build_sph_inflow,
     build_sph_outflow,
 )
+from .load_pcyl import (  # noqa: F401
+    PcylLoadEngine,
+    PcylLoadParams,
+    PcylSegment,
+    build_pcyl_loads,
+)
+
+try:
+    from .inigrav import (  # noqa: F401
+        IniGravParams,
+        SoilLayer,
+        GeostaticStressResult,
+        compute_geostatic_stress,
+        compute_depth_along_gravity,
+        apply_inigrav,
+        check_geostatic_equilibrium,
+        k0_from_phi,
+        k0_from_nu,
+        build_inigrav,
+    )
+except ImportError:
+    pass
+
 
