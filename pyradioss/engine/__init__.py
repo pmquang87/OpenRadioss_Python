@@ -159,3 +159,51 @@ from .thermal_solver import (  # noqa: F401
     apply_conduction,
     solve_thermal_step,
 )
+
+from .bem_flow import (  # noqa: F401
+    BemFlowParams,
+    BemIncompressibleFlow,
+    assemble_bem_system,
+    solve_bem_system,
+    compute_triangle_normals_and_areas,
+    trgrad,
+    int_h_tg,
+    int_g_tg,
+    solid_angle_triangle,
+    evaluate_field_points,
+    compute_surface_velocities,
+    compute_unsteady_bernoulli_pressure,
+    compute_boundary_forces_and_work,
+)
+
+from .ale_fvm import (  # noqa: F401
+    ALEFVMParams,
+    ALEFVMState,
+    ALEFVMSolver,
+    compute_alefvm_face_normals,
+    alefvm_prepare_stress_buffer,
+    alefvm_compute_internal_forces,
+    alefvm_compute_face_fluxes,
+    alefvm_update_momentum,
+    alefvm_expand_momentum_to_nodes,
+    alefvm_reset_accelerations,
+    alefvm_advect_scalar,
+)
+
+from .ale_cut_cells import (  # noqa: F401
+    CutPlane,
+    CutCellInfo,
+    cross_prod_2d,
+    is_on_1st_half_plane,
+    intersect_segments_2d,
+    clip_edge_2d,
+    polygonal_clipping_2d,
+    polygon_area_2d,
+    i22aera,
+    slice_hex_edge_by_plane,
+    intersect_hex_cell_with_plane,
+    compute_fsi_wet_surface_force,
+    build_secondary_cell_links,
+    stack_secondary_cell_updates,
+)
+
