@@ -685,6 +685,273 @@ def mat122_newton_solid_update(
     return sign, pla, c_sound, extra_out
 
 
+def mat122_nice_solid_update(
+    p: Law122Params,
+    sig: np.ndarray,
+    deps: np.ndarray,
+    epsp: float = 0.0,
+    eps: Optional[np.ndarray] = None,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Tuple[np.ndarray, float, float, Dict[str, Any]]:
+    """OpenRadioss MAT122 NICE explicit algorithm 3D solid return mapping.
+
+    Cites:
+      - `engine/source/materials/mat/mat122/mat122_nice.F` lines 311-455, 600-660.
+    """
+    uvar = np.zeros(18, dtype=np.float64)
+    dmg = np.zeros(6, dtype=np.float64)
+    if extra is not None:
+        if "uvar122" in extra:
+            uvar = np.asarray(extra["uvar122"], dtype=np.float64).copy()
+        if "damage" in extra:
+            dmg = np.asarray(extra["damage"], dtype=np.float64).copy()
+
+    df = dmg[1]
+    d = dmg[2]
+    dp = dmg[3]
+    dft = dmg[4]
+    dfc = dmg[5]
+    y_dmg = uvar[1]
+    yp_dmg = uvar[2]
+    dpy = uvar[14]
+    dpz = uvar[15]
+    epspyy = uvar[16]
+    epspzz = uvar[17]
+
+    pla = max(0.0, epsp)
+    dpla = 0.0
+
+    # Total strain estimation
+    epsxx = eps[0] if eps is not None else deps[0]
+    epsyy = eps[1] if eps is not None else deps[1]
+    epszz = eps[2] if eps is not None else deps[2]
+
+    # Moduli
+    e2 = p.young2
+    e3 = p.young3
+    g12 = p.g12
+    g23 = p.g23
+    g31 = p.g31
+    s12 = p.s12
+    s13 = p.s13
+    s22 = p.s22
+    s23 = p.s23
+    s33 = p.s33
+    hard_a = p.hard_a if p.hard_a > 0.0 else 1.0
+
+    # Trial stress increment (mat122_nice.F lines 352-356)
+    dsigyy = s12 * deps[0] + s22 * deps[1] + s23 * deps[2]
+    dsigzz = s13 * deps[0] + s23 * deps[1] + s33 * deps[2]
+    dsigxy = g12 * deps[3]
+    dsigyz = g23 * deps[4]
+    dsigzx = g31 * deps[5]
+
+    # Trial stress tensor (mat122_nice.F lines 314-320)
+    signyy = sig[1] / max(1.0 - dpy, _EM20) + dsigyy
+    signzz = sig[2] / max(1.0 - dpz, _EM20) + dsigzz
+    signxy = sig[3] / max(1.0 - d, _EM20) + dsigxy
+    signyz = sig[4] / max(1.0 - d, _EM20) + dsigyz
+    signzx = sig[5] / max(1.0 - d, _EM20) + dsigzx
+
+    # Old equivalent stress SEQ0 (mat122_nice.F lines 370-374)
+    sigo_yy_eff = sig[1] / max(1.0 - dpy, _EM20)
+    sigo_zz_eff = sig[2] / max(1.0 - dpz, _EM20)
+    sigo_xy_eff = sig[3] / max(1.0 - d, _EM20)
+    sigo_yz_eff = sig[4] / max(1.0 - d, _EM20)
+    sigo_zx_eff = sig[5] / max(1.0 - d, _EM20)
+    seq0 = math.sqrt(
+        sigo_xy_eff**2 + sigo_yz_eff**2 + sigo_zx_eff**2
+        + hard_a * (sigo_yy_eff**2 + sigo_zz_eff**2)
+    )
+
+    # Current equivalent stress
+    seq = math.sqrt(signxy**2 + signyz**2 + signzx**2 + hard_a * (signyy**2 + signzz**2))
+
+    # Yield stress (mat122_nice.F line 278)
+    if p.hard_m > 0.0 and p.beta > 0.0:
+        sig_y = p.sigy0 + p.beta * ((pla + _EM20) ** p.hard_m)
+    else:
+        sig_y = p.sigy0
+
+    phi = seq - sig_y
+
+    if phi > 0.0:
+        if seq0 < _EM10:
+            seq_norm = max(seq, _EM20)
+            normyy = hard_a * signyy / seq_norm
+            normzz = hard_a * signzz / seq_norm
+            normxy = signxy / seq_norm
+            normyz = signyz / seq_norm
+            normzx = signzx / seq_norm
+            sig_eff_yy = signyy
+            sig_eff_zz = signzz
+            sig_eff_xy = signxy
+            sig_eff_yz = signyz
+            sig_eff_zx = signzx
+            phi0 = 0.0
+            dphi = phi
+        else:
+            seq_norm = max(seq0, _EM20)
+            normyy = hard_a * sigo_yy_eff / seq_norm
+            normzz = hard_a * sigo_zz_eff / seq_norm
+            normxy = sigo_xy_eff / seq_norm
+            normyz = sigo_yz_eff / seq_norm
+            normzx = sigo_zx_eff / seq_norm
+            sig_eff_yy = sigo_yy_eff
+            sig_eff_zz = sigo_zz_eff
+            sig_eff_xy = sigo_xy_eff
+            sig_eff_yz = sigo_yz_eff
+            sig_eff_zx = sigo_zx_eff
+            phi0 = seq0 - sig_y
+            dphi = normyy * dsigyy + normzz * dsigzz + normxy * dsigxy + normyz * dsigyz + normzx * dsigzx
+
+        dfdsig2 = (
+            normyy * (s22 * normyy + s23 * normzz)
+            + normzz * (s23 * normyy + s33 * normzz)
+            + normxy * normxy * g12
+            + normyz * normyz * g23
+            + normzx * normzx * g31
+        )
+
+        if p.hard_m > 0.0 and p.beta > 0.0:
+            h = p.beta * p.hard_m * ((pla + _EM20) ** (p.hard_m - 1.0))
+        else:
+            h = 0.0
+        h = min(h, max(2.0 * g12, e2))
+
+        sig_dfdsig = (
+            sig_eff_yy * normyy
+            + sig_eff_zz * normzz
+            + sig_eff_xy * normxy
+            + sig_eff_yz * normyz
+            + sig_eff_zx * normzx
+        )
+        dpla_dlam = sig_dfdsig / max(sig_y, _EM20)
+
+        dphi_dlam = -dfdsig2 - h * dpla_dlam
+        if abs(dphi_dlam) < _EM20:
+            dphi_dlam = math.copysign(_EM20, dphi_dlam)
+
+        # Explicit NICE plastic multiplier (mat122_nice.F line 419)
+        dlam = -(phi0 + dphi) / dphi_dlam
+        dlam = max(0.0, dlam)
+
+        dpyy = dlam * normyy
+        dpzz = dlam * normzz
+        dpxy = dlam * normxy
+        dpyz = dlam * normyz
+        dpzx = dlam * normzx
+
+        epspyy += dpyy
+        epspzz += dpzz
+
+        signyy -= (s22 * dpyy + s23 * dpzz)
+        signzz -= (s23 * dpyy + s33 * dpzz)
+        signxy -= dpxy * g12
+        signyz -= dpyz * g23
+        signzx -= dpzx * g31
+
+        ddep = dlam * dpla_dlam
+        dpla = max(0.0, dpla + ddep)
+        pla += ddep
+
+    # Damage variables computation (mat122_nice.F lines 455-598)
+    epsf_eq = (
+        (1.0 - p.nu23 * p.nu32) * epsxx
+        + (p.nu23 * p.nu31 + p.nu21) * (epsyy - epspyy)
+        + (p.nu21 * p.nu32 + p.nu31) * (epszz - epspzz)
+    )
+
+    if epsf_eq >= 0.0:
+        if p.eps_ftu > p.eps_fti and p.eps_fti > 0.0:
+            if epsf_eq >= p.eps_fti and epsf_eq < p.eps_ftu:
+                dft = max(p.dftu * ((epsf_eq - p.eps_fti) / (p.eps_ftu - p.eps_fti)), dft)
+            elif epsf_eq >= p.eps_ftu:
+                dft = max(1.0 - (1.0 - p.dftu) * (p.eps_ftu / epsf_eq), dft)
+        dft = min(max(dft, 0.0), 1.0)
+        df = dft
+    elif p.ibuck > 1:
+        abs_eps = abs(epsf_eq)
+        if p.eps_fcu > p.eps_fci and p.eps_fci > 0.0:
+            if abs_eps >= p.eps_fci and abs_eps < p.eps_fcu:
+                dfc = max(p.dfcu * ((abs_eps - p.eps_fci) / (p.eps_fcu - p.eps_fci)), dfc)
+            elif abs_eps >= p.eps_fcu:
+                dfc = max(1.0 - (1.0 - p.dfcu) * (p.eps_fcu / abs_eps), dfc)
+        dfc = min(max(dfc, 0.0), 1.0)
+        df = dfc
+
+    # Matrix damage energy
+    zd = 0.5 * (signxy**2 / max(g12, _EM20) + signyz**2 / max(g23, _EM20) + signzx**2 / max(g31, _EM20))
+    zdp = 0.5 * (max(signyy, 0.0)**2 / max(e2, _EM20) + max(signzz, 0.0)**2 / max(e3, _EM20))
+    y_dmg = max(y_dmg, math.sqrt(max(0.0, zd + p.b * zdp)))
+    yp_dmg = max(yp_dmg, math.sqrt(max(0.0, zdp)))
+
+    # Shear damage evolution
+    if p.ish == 1:
+        if y_dmg >= p.y0:
+            d = min(p.dmax, max(0.0, y_dmg - p.y0) / max(p.yc, _EM20))
+        d = min(max(d, 0.0), 1.0)
+    elif p.ish == 2:
+        if y_dmg > p.y0:
+            d = p.dsat1 * (1.0 - math.exp((p.y0 - y_dmg) / max(p.yc, _EM20)))
+        d = min(max(d, 0.0), 1.0)
+
+    # Transverse damage evolution
+    if p.itr == 1:
+        if yp_dmg >= p.y0p:
+            dp = min(p.dmax, max(0.0, yp_dmg - p.y0p) / max(p.ycp, _EM20))
+        dp = min(max(dp, 0.0), 1.0)
+    elif p.itr == 2:
+        if yp_dmg > p.y0p:
+            dp = p.dsat2 * (1.0 - math.exp((p.y0p - yp_dmg) / max(p.ycp, _EM20)))
+        dp = min(max(dp, 0.0), 1.0)
+
+    dpy = dp if epsyy >= 0.0 else 0.0
+    dpz = dp if epszz >= 0.0 else 0.0
+
+    # Damaged stiffness matrix (mat122_nice.F lines 634-639)
+    s11_d = p.s11 * (1.0 - df)
+    s12_d = p.s12 * (1.0 - df) * (1.0 - dpy)
+    s13_d = p.s13 * (1.0 - df) * (1.0 - dpz)
+    s22_d = p.s22 * (1.0 - dpy)
+    s23_d = p.s23 * (1.0 - dpy) * (1.0 - dpz)
+    s33_d = p.s33 * (1.0 - dpz)
+
+    # Stresses update
+    sign = np.zeros(6, dtype=np.float64)
+    if p.gamma > 0.0 and epsxx < 0.0 and p.e1c > 0.0:
+        sign[0] = -(1.0 / p.gamma) * math.log(1.0 + p.gamma * p.e1c * abs(epsxx)) * (1.0 - df)
+    else:
+        sign[0] = s11_d * epsxx
+
+    sign[0] += s12_d * (epsyy - epspyy) + s13_d * (epszz - epspzz)
+    sign[1] = s12_d * epsxx + s22_d * (epsyy - epspyy) + s23_d * (epszz - epspzz)
+    sign[2] = s13_d * epsxx + s23_d * (epsyy - epspyy) + s33_d * (epszz - epspzz)
+    sign[3] = signxy * (1.0 - d)
+    sign[4] = signyz * (1.0 - d)
+    sign[5] = signzx * (1.0 - d)
+
+    dmg[0] = max(df, d, dp)
+    dmg[1] = df
+    dmg[2] = d
+    dmg[3] = dp
+    dmg[4] = dft
+    dmg[5] = dfc
+    uvar[1] = y_dmg
+    uvar[2] = yp_dmg
+    uvar[14] = dpy
+    uvar[15] = dpz
+    uvar[16] = epspyy
+    uvar[17] = epspzz
+
+    extra_out = {
+        "uvar122": uvar,
+        "damage": dmg,
+    }
+    c_sound = math.sqrt(max(p.s11, p.s22, p.s33, 2.0 * g12, 2.0 * g23, 2.0 * g31) / max(p.rho0, _EM20))
+    return sign, pla, c_sound, extra_out
+
+
 def solid_update(
     mat: Any,
     sig: np.ndarray,
@@ -721,12 +988,13 @@ def solid_update(
     use_chaboche = (p.c_kin > 0.0 or p.gamma_kin > 0.0 or kwargs.get("chaboche", False))
 
     if not use_chaboche and (p.beta > 0.0 or p.hard_a != 1.0 or p.ish > 0 or p.itr > 0 or p.dmax > 0.0):
-        # OpenRadioss MAT122 Ladevèze cutting-plane formulation
+        # OpenRadioss MAT122 Ladevèze formulation (IRES=1: NICE, IRES=2: Newton cutting-plane)
         sig_new = np.zeros_like(sig_2d)
         epsp_new = np.zeros_like(epsp_arr)
         c_sound = sound_speed(p)
+        update_fn = mat122_nice_solid_update if p.ires == 1 else mat122_newton_solid_update
         for i in range(n):
-            s_i, p_i, c_i, ex_i = mat122_newton_solid_update(
+            s_i, p_i, c_i, ex_i = update_fn(
                 p, sig_2d[i], deps_2d[i], epsp=epsp_arr[i], extra=extra
             )
             sig_new[i] = s_i
@@ -832,6 +1100,206 @@ def solid_update(
     return sig_new, epsp_new, c_out
 
 
+def mat122c_newton_shell_update(
+    p: Law122Params,
+    sig: np.ndarray,
+    deps: np.ndarray,
+    epsp: float = 0.0,
+    eps: Optional[np.ndarray] = None,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Tuple[np.ndarray, float, float, Dict[str, Any]]:
+    """OpenRadioss MAT122C Newton cutting-plane 2D plane-stress shell return mapping.
+
+    Cites:
+      - `engine/source/materials/mat/mat122/mat122c_newton.F` lines 289-405, 413-500, 617-654.
+    """
+    uvar = np.zeros(18, dtype=np.float64)
+    dmg = np.zeros(6, dtype=np.float64)
+    if extra is not None:
+        if "uvar122" in extra:
+            uvar = np.asarray(extra["uvar122"], dtype=np.float64).copy()
+        if "damage" in extra:
+            dmg = np.asarray(extra["damage"], dtype=np.float64).copy()
+
+    df = dmg[1]
+    d = dmg[2]
+    dp = dmg[3]
+    dft = dmg[4]
+    dfc = dmg[5]
+    y_dmg = uvar[1]
+    yp_dmg = uvar[2]
+    epspyy = uvar[16]
+
+    pla = max(0.0, epsp)
+    dpla = 0.0
+
+    epsxx = eps[0] if eps is not None else deps[0]
+    epsyy = eps[1] if eps is not None else deps[1]
+
+    # Moduli (mat122c_newton.F lines 243-259)
+    e1 = p.young1
+    e2 = p.young2
+    g12 = p.g12
+    g23 = p.g23
+    g31 = p.g31
+    hard_a = p.hard_a if p.hard_a > 0.0 else 1.0
+
+    denom = max(1.0 - p.nu12 * p.nu21, _EM20)
+    a11 = e1 / denom
+    a12 = p.nu21 * a11
+    a22 = e2 / denom
+
+    # Trial stress components (mat122c_newton.F lines 292-295)
+    sig0_yy = sig[1] if len(sig) > 1 else 0.0
+    sig0_xy = sig[2] if len(sig) > 2 else 0.0
+    sig0_yz = sig[3] if len(sig) > 3 else 0.0
+    sig0_zx = sig[4] if len(sig) > 4 else 0.0
+
+    deps_xx = deps[0]
+    deps_yy = deps[1] if len(deps) > 1 else 0.0
+    deps_xy = deps[2] if len(deps) > 2 else 0.0
+    deps_yz = deps[3] if len(deps) > 3 else 0.0
+    deps_zx = deps[4] if len(deps) > 4 else 0.0
+
+    signyy = sig0_yy / max(1.0 - dp, _EM20) + a12 * deps_xx + a22 * deps_yy
+    signxy = sig0_xy / max(1.0 - d, _EM20) + g12 * deps_xy
+    d_eff = max(min(1.0 - d, 1.0 - dp), _EM20)
+    signyz = sig0_yz / d_eff + g23 * deps_yz
+    signzx = sig0_zx / d_eff + g31 * deps_zx
+
+    seq = math.sqrt(signxy**2 + hard_a * (signyy**2))
+
+    if p.hard_m > 0.0 and p.beta > 0.0:
+        sig_y = p.sigy0 + p.beta * ((pla + _EM20) ** p.hard_m)
+    else:
+        sig_y = p.sigy0
+
+    phi = seq - sig_y
+
+    if phi > 0.0:
+        niter = 3
+        for _ in range(niter):
+            normyy = hard_a * signyy / max(seq, _EM20)
+            normxy = signxy / max(seq, _EM20)
+
+            dfdsig2 = normyy * normyy * a22 + normxy * normxy * g12
+
+            if p.hard_m > 0.0 and p.beta > 0.0:
+                h = p.beta * p.hard_m * ((pla + _EM20) ** (p.hard_m - 1.0))
+            else:
+                h = 0.0
+            h = min(h, max(2.0 * g12, e2))
+
+            sig_dfdsig = signyy * normyy + signxy * normxy
+            dpla_dlam = sig_dfdsig / max(sig_y, _EM20)
+
+            dphi_dlam = -dfdsig2 - h * dpla_dlam
+            if abs(dphi_dlam) < _EM20:
+                dphi_dlam = math.copysign(_EM20, dphi_dlam)
+
+            dlam = -phi / dphi_dlam
+            dpyy = dlam * normyy
+            dpxy = dlam * normxy
+
+            epspyy += dpyy
+            signyy -= dpyy * a22
+            signxy -= dpxy * g12
+
+            ddep = dlam * dpla_dlam
+            dpla = max(0.0, dpla + ddep)
+            pla += ddep
+
+            seq = math.sqrt(signxy**2 + hard_a * (signyy**2))
+            sig_y += h * dlam * dpla_dlam
+            phi = seq - sig_y
+
+    # Damage computation (mat122c_newton.F lines 417-449)
+    epsf_eq = epsxx + p.nu21 * (epsyy - epspyy)
+    if epsf_eq >= 0.0:
+        if p.eps_ftu > p.eps_fti and p.eps_fti > 0.0:
+            if epsf_eq >= p.eps_fti and epsf_eq < p.eps_ftu:
+                dft = max(p.dftu * ((epsf_eq - p.eps_fti) / (p.eps_ftu - p.eps_fti)), dft)
+            elif epsf_eq >= p.eps_ftu:
+                dft = max(1.0 - (1.0 - p.dftu) * (p.eps_ftu / epsf_eq), dft)
+        dft = min(max(dft, 0.0), 1.0)
+        df = dft
+    elif p.ibuck > 1:
+        abs_eps = abs(epsf_eq)
+        if p.eps_fcu > p.eps_fci and p.eps_fci > 0.0:
+            if abs_eps >= p.eps_fci and abs_eps < p.eps_fcu:
+                dfc = max(p.dfcu * ((abs_eps - p.eps_fci) / (p.eps_fcu - p.eps_fci)), dfc)
+            elif abs_eps >= p.eps_fcu:
+                dfc = max(1.0 - (1.0 - p.dfcu) * (p.eps_fcu / abs_eps), dfc)
+        dfc = min(max(dfc, 0.0), 1.0)
+        df = dfc
+
+    # Matrix damage energy
+    zd = 0.5 * (signxy**2 / max(g12, _EM20) + signzx**2 / max(g31, _EM20))
+    zdp = 0.5 * (max(signyy, 0.0)**2 / max(e2, _EM20))
+    y_dmg = max(y_dmg, math.sqrt(max(0.0, zd + p.b * zdp)))
+    yp_dmg = max(yp_dmg, math.sqrt(max(0.0, zdp)))
+
+    # Shear damage
+    if p.ish == 1:
+        if y_dmg >= p.y0:
+            d = min(p.dmax, max(0.0, y_dmg - p.y0) / max(p.yc, _EM20))
+        d = min(max(d, 0.0), 1.0)
+    elif p.ish == 2:
+        if y_dmg > p.y0:
+            d = p.dsat1 * (1.0 - math.exp((p.y0 - y_dmg) / max(p.yc, _EM20)))
+        d = min(max(d, 0.0), 1.0)
+
+    # Transverse damage
+    if p.itr == 1:
+        if yp_dmg >= p.y0p:
+            dp = min(p.dmax, max(0.0, yp_dmg - p.y0p) / max(p.ycp, _EM20))
+        dp = min(max(dp, 0.0), 1.0)
+    elif p.itr == 2:
+        if yp_dmg > p.y0p:
+            dp = p.dsat2 * (1.0 - math.exp((p.y0p - yp_dmg) / max(p.ycp, _EM20)))
+        dp = min(max(dp, 0.0), 1.0)
+
+    # Damaged stiffness matrix (mat122c_newton.F lines 623-625)
+    a11_d = a11 * (1.0 - df)
+    a12_d = p.nu21 * a11_d * (1.0 - dp)
+    a22_d = a22 * (1.0 - dp)
+
+    # Stress update (mat122c_newton.F lines 630-640)
+    ncomp = max(3, len(sig))
+    sign = np.zeros(ncomp, dtype=np.float64)
+
+    if p.gamma > 0.0 and epsxx < 0.0 and p.e1c > 0.0:
+        sign[0] = -(1.0 / p.gamma) * math.log(1.0 + p.gamma * p.e1c * abs(epsxx)) * (1.0 - df)
+    else:
+        sign[0] = a11_d * epsxx
+
+    sign[0] += a12_d * (epsyy - epspyy)
+    sign[1] = a12_d * epsxx + a22_d * (epsyy - epspyy)
+    sign[2] = signxy * (1.0 - d)
+
+    if ncomp > 3:
+        sign[3] = signyz * min(1.0 - d, 1.0 - dp)
+    if ncomp > 4:
+        sign[4] = signzx * min(1.0 - d, 1.0 - dp)
+
+    dmg[0] = max(df, d, dp)
+    dmg[1] = df
+    dmg[2] = d
+    dmg[3] = dp
+    dmg[4] = dft
+    dmg[5] = dfc
+    uvar[1] = y_dmg
+    uvar[2] = yp_dmg
+    uvar[16] = epspyy
+
+    extra_out = {
+        "uvar122": uvar,
+        "damage": dmg,
+    }
+    c_sound = math.sqrt(max(a11, a22) / max(p.rho0, _EM20))
+    return sign, pla, c_sound, extra_out
+
+
 def shell_update(
     mat: Any,
     sig: np.ndarray,
@@ -857,6 +1325,28 @@ def shell_update(
     else:
         epsp_in = np.asarray(epsp, dtype=np.float64)
         epsp_arr = np.full(n, float(epsp_in)) if epsp_in.ndim == 0 else epsp_in.copy()
+
+    # Determine mode: Ladevèze vs Chaboche
+    use_chaboche = (p.c_kin > 0.0 or p.gamma_kin > 0.0 or kwargs.get("chaboche", False))
+
+    if not use_chaboche and (p.beta > 0.0 or p.hard_a != 1.0 or p.ish > 0 or p.itr > 0 or p.dmax > 0.0):
+        sig_new = np.zeros_like(sig_2d)
+        epsp_new = np.zeros_like(epsp_arr)
+        c_sound = sound_speed(p, is_shell=True)
+        for i in range(n):
+            s_i, p_i, c_i, ex_i = mat122c_newton_shell_update(
+                p, sig_2d[i], deps_2d[i], epsp=epsp_arr[i], extra=extra
+            )
+            sig_new[i] = s_i
+            epsp_new[i] = p_i
+            c_sound = c_i
+            if extra is not None:
+                extra.update(ex_i)
+
+        c_out = c_sound if is_1d else np.full(n, c_sound, dtype=np.float64)
+        if is_1d:
+            return sig_new[0], float(epsp_new[0]), float(c_out)
+        return sig_new, epsp_new, c_out
 
     ncomp = sig_2d.shape[1]
     sig_new = np.zeros_like(sig_2d)

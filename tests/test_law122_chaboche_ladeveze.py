@@ -230,3 +230,85 @@ def test_shell_update_and_tangents():
     c_tan_shell = law122_chaboche.shell_tangent(p, sig=sig_sh_new, epsp=epsp_sh)
     assert c_tan_shell.shape == (3, 3)
     assert np.all(np.isfinite(c_tan_shell))
+
+
+def test_mat122_nice_solid_update_explicit_mapping():
+    """Verify OpenRadioss MAT122 NICE explicit return mapping (mat122_nice.F)."""
+    p = build_law122(
+        young1=100000.0,
+        young2=10000.0,
+        young3=10000.0,
+        nu12=0.3,
+        nu23=0.35,
+        nu31=0.03,
+        g12=4000.0,
+        g23=3000.0,
+        g31=4000.0,
+        sigy0=150.0,
+        beta=500.0,
+        hard_m=0.5,
+        hard_a=1.0,
+        rho0=1.6e-9,
+        ires=1,
+    )
+
+    sig0 = np.zeros(6, dtype=np.float64)
+    deps_pl = np.array([0.0, 0.0, 0.0, 0.045, 0.0, 0.0], dtype=np.float64)
+    # Using NICE explicit scheme (IRES=1)
+    sig_nice, pla_nice, c_nice, extra_nice = law122_chaboche.mat122_nice_solid_update(
+        p, sig0, deps_pl, epsp=0.0
+    )
+    assert pla_nice > 0.0
+    assert sig_nice[3] < 180.0
+    assert c_nice > 0.0
+
+    # Also verify through solid_update dispatcher when ires=1
+    sig_disp, pla_disp, c_disp = law122_chaboche.solid_update(p, sig0, deps_pl, epsp=0.0)
+    assert np.allclose(sig_disp, sig_nice)
+    assert pla_disp == pytest.approx(pla_nice)
+
+
+def test_mat122c_newton_shell_cutting_plane():
+    """Verify OpenRadioss MAT122C cutting plane 2D plane-stress shell model (mat122c_newton.F)."""
+    p = build_law122(
+        young1=100000.0,
+        young2=10000.0,
+        nu12=0.3,
+        g12=4000.0,
+        g23=3000.0,
+        g31=4000.0,
+        sigy0=120.0,
+        beta=300.0,
+        hard_m=0.5,
+        hard_a=1.1,
+        rho0=1.6e-9,
+    )
+
+    sig0 = np.zeros(3, dtype=np.float64)
+    # Elastic in-plane shear
+    deps_el = np.array([0.0, 0.0, 0.01], dtype=np.float64)
+    sig_el, pla_el, c_el, _ = law122_chaboche.mat122c_newton_shell_update(p, sig0, deps_el, epsp=0.0)
+    assert sig_el[2] == pytest.approx(40.0, rel=1.0e-4)
+    assert pla_el == 0.0
+
+    # Plastic in-plane shear: trial = G12 * 0.04 = 160.0 > 120.0
+    deps_pl = np.array([0.0, 0.0, 0.04], dtype=np.float64)
+    sig_pl, pla_pl, c_pl, _ = law122_chaboche.mat122c_newton_shell_update(p, sig0, deps_pl, epsp=0.0)
+    assert pla_pl > 0.0
+    assert sig_pl[2] < 160.0
+    # Cutting plane updates yield stress and relaxes shear stress to 150.77
+    assert abs(sig_pl[2]) == pytest.approx(150.77, rel=0.01)
+
+    # Verify through shell_update dispatcher
+    sig_disp, pla_disp, c_disp = law122_chaboche.shell_update(p, sig0, deps_pl, epsp=0.0)
+    assert np.allclose(sig_disp, sig_pl)
+    assert pla_disp == pytest.approx(pla_pl)
+
+    # Without hardening (beta=0), plastic shear stress relaxes exactly to sigy0 = 120.0
+    p_no_hard = build_law122(
+        young1=100000.0, young2=10000.0, nu12=0.3, g12=4000.0, sigy0=120.0, beta=0.0, rho0=1.6e-9
+    )
+    sig_nh, pla_nh, _, _ = law122_chaboche.mat122c_newton_shell_update(p_no_hard, sig0, deps_pl, epsp=0.0)
+    assert abs(sig_nh[2]) == pytest.approx(120.0, rel=1e-4)
+    assert pla_nh > 0.0
+
