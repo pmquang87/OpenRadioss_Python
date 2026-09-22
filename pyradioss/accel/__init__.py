@@ -111,12 +111,12 @@ from __future__ import annotations
 import os
 import warnings
 
-#: resolved backend: {"name": "numpy"|"numba", "mod": module or None,
+#: resolved backend: {"name": "numpy"|"numba"|"cupy", "mod": module or None,
 #: "forced": bool}.  ``name = None`` means "not resolved yet" — the
 #: environment variable is read lazily on the first ``get()`` so library
 #: users, pytest and the CLIs all honour PYRADIOSS_BACKEND without extra
 #: plumbing.  ``forced`` is True when the user PINNED a backend explicitly
-#: (PYRADIOSS_BACKEND / -backend numpy|numba, or a direct select_backend
+#: (PYRADIOSS_BACKEND / -backend numpy|numba|cupy, or a direct select_backend
 #: call); ``auto_select_backend`` overrides only when it is False (M40).
 _state = {"name": None, "mod": None, "forced": False}
 
@@ -165,17 +165,30 @@ def _load_numba_module():
     return jit_kernels
 
 
+def _load_cupy_module():
+    """Import (hence probe the availability of) the CuPy GPU kernel module.
+    Factored out so the auto path and the tests share ONE seam — tests
+    monkeypatch this to simulate cupy being absent without touching the
+    real import machinery."""
+    import cupy  # noqa: F401 — probe availability before loading kernels
+    if hasattr(cupy, "cuda") and hasattr(cupy.cuda, "is_available"):
+        if not cupy.cuda.is_available():
+            raise RuntimeError("CUDA is unavailable")
+    from . import gpu_kernels
+    return gpu_kernels
+
+
 def select_backend(name=None, log=None) -> str:
     """Select the compute backend; returns the name actually activated.
 
     ``name = None`` reads ``PYRADIOSS_BACKEND`` (default ``"auto"`` since
-    M40).  A concrete ``"numpy"`` / ``"numba"`` — whether from the env var,
+    M40).  A concrete ``"numpy"`` / ``"numba"`` / ``"cupy"`` — whether from the env var,
     the ``-backend`` CLI flag, or a direct call — PINS that backend: it is
     recorded as *forced* so ``auto_select_backend`` leaves it untouched.
     ``"auto"`` (the default) resolves *provisionally* to NumPy — the safe
     choice while no model size is known — and is marked NOT forced so the
-    engine can upgrade it to numba once the restart is read.  Unknown names,
-    the deferred ``jax``, and a missing numba installation warn and fall
+    engine can upgrade it to cupy or numba once the restart is read.  Unknown names,
+    the deferred ``jax``, and a missing numba/cupy installation warn and fall
     back to NumPy — requesting acceleration must never break a run."""
     if name is None:
         name = os.environ.get("PYRADIOSS_BACKEND", "auto")
@@ -196,18 +209,16 @@ def select_backend(name=None, log=None) -> str:
             _state.update(name="numpy", mod=None, forced=True)
     elif name == "cupy":
         try:
-            import cupy
-            if hasattr(cupy, "cuda") and hasattr(cupy.cuda, "is_available"):
-                if not cupy.cuda.is_available():
-                    raise RuntimeError("No CUDA-capable device detected")
-            _state.update(name="cupy", mod=cupy, forced=True)
-        except (ImportError, RuntimeError, Exception):
+            _state.update(name="cupy", mod=_load_cupy_module(), forced=True)
+        except (ImportError, RuntimeError, TypeError, NameError):
             msg = ("cupy backend requested but cupy is not installed or "
                    "CUDA is unavailable — falling back to NumPy (pip install cupy)")
             warnings.warn(msg, stacklevel=2)
             if log is not None:
                 log.warning(msg, "BACKEND")
             _state.update(name="numpy", mod=None, forced=True)
+    elif name == "numpy":
+        _state.update(name="numpy", mod=None, forced=True)
     elif name == "jax":
         msg = ("JAX backend is deferred (see the M7 notes in "
                "PORTING_GUIDE.md §5) — falling back to NumPy")
@@ -258,11 +269,14 @@ def auto_select_backend(model, log=None, *, explicit=True) -> str:
 
     * A user-PINNED backend (forced via PYRADIOSS_BACKEND / -backend /
       select_backend) is respected untouched.
+    * Otherwise cupy is chosen when available (fastest GPU acceleration)
+      AND the model has at least ``_auto_min_elements()`` elements AND
+      the run is ``explicit``.
     * Otherwise numba is chosen when it imports cleanly AND the model has at
       least ``_auto_min_elements()`` elements AND the run is ``explicit``
       (the M39 speed sweep that set the threshold covers the /RUN leap-frog
       path only — implicit runs stay on NumPy under auto unless pinned).
-      Everything else falls back to NumPy; numba missing -> NumPy + warning.
+      Everything else falls back to NumPy; numba/cupy missing -> NumPy + warning.
     Small models where warm-up dominates therefore stay on NumPy — the
     documented threshold derivation (``_AUTO_MIN_ELEMENTS``) is the gate."""
     # resolve env/default the first time (sets name + forced)
@@ -278,15 +292,22 @@ def auto_select_backend(model, log=None, *, explicit=True) -> str:
 
     if not explicit:
         _state.update(name="numpy", mod=None)
-        _log_backend("numpy", "auto: implicit run — numba auto-enable is "
+        _log_backend("numpy", "auto: implicit run — accelerated auto-enable is "
                      "explicit-only (the M39 speed data covers /RUN)", log)
         return "numpy"
 
     if nelem < thr:
         _state.update(name="numpy", mod=None)
-        _log_backend("numpy", f"auto: {nelem} elements < {thr} — JIT warm-up "
+        _log_backend("numpy", f"auto: {nelem} elements < {thr} — JIT/GPU warm-up "
                      "dominates (see accel threshold)", log)
         return "numpy"
+
+    try:
+        _state.update(name="cupy", mod=_load_cupy_module())
+        _log_backend("cupy", f"auto: {nelem} elements >= {thr} (GPU accelerated)", log)
+        return "cupy"
+    except (ImportError, RuntimeError, TypeError, NameError):
+        pass
 
     try:
         _state.update(name="numba", mod=_load_numba_module())
@@ -294,13 +315,13 @@ def auto_select_backend(model, log=None, *, explicit=True) -> str:
         return "numba"
     except (ImportError, RuntimeError, TypeError, NameError):
         _state.update(name="numpy", mod=None)
-        _log_backend("numpy", "auto: numba not installed "
-                     "(pip install numba to enable)", log)
+        _log_backend("numpy", "auto: cupy and numba not installed "
+                     "(pip install cupy or numba to enable)", log)
         return "numpy"
 
 
 def backend_name(log=None) -> str:
-    """The active backend name ("numpy" or "numba"), resolving lazily
+    """The active backend name ("numpy", "numba", or "cupy"), resolving lazily
     (``log`` routes a fallback warning into the engine listing)."""
     if _state["name"] is None:
         select_backend(log=log)
