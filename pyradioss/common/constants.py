@@ -15,6 +15,7 @@ avoid division by zero.
 
 # Tiny value used to protect divisions (Fortran: EM20). Any length, area or
 # velocity magnitude smaller than this is treated as zero.
+EM15 = 1.0e-15
 EM20 = 1.0e-20
 EM30 = 1.0e-30
 

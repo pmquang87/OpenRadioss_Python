@@ -31,7 +31,7 @@ from . import (beam_fiber, beam_type3, shell_bt4, shell_dkt18, shell_dkt6, shell
                shell_thick16, shell_tri3, solid_bric20, solid_cohesive, solid_connect, solid_heph, solid_hexa8,
                solid_hexa8_eas, solid_hexa8_full, solid_penta6, solid_penta6_heph, solid_pyra5,
                solid_quad, solid_quad4_full, solid_shell_ha8, solid_tetra10, solid_tetra4,
-               solid_tetra4_sfem, solid_tria3, solid_tshell8, spring, spring_advanced,
+               solid_tetra4_sfem, solid_tria3, solid_tshell8, spring, spring_advanced, spring_mat,
                thickshell_composite, thickshell_wedge6, truss, nstrand)
 
 KERNELS = {
@@ -76,6 +76,8 @@ KERNELS = {
     "springs": spring,
     "spring_advanced": spring_advanced,
     "springs_advanced": spring_advanced,
+    "spring_mat": spring_mat,
+    "springs_mat": spring_mat,
     "nstrand": nstrand,
     "nstrands": nstrand,
     "beams": beam_type3,

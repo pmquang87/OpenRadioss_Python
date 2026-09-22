@@ -1731,6 +1731,13 @@ LAYOUTS: Dict[str, List[int]] = {
     # CARD("%20lg%20lg%10d%10d%10d%10d%10d%10d",
     #      Mass, Inertia, skew_ID, sens_ID, Isflag, Ifail, Ileng/Ifail2, ...)
     "PROP_SPR_HEAD": [20, 20, 10, 10, 10, 10, 10, 10],
+    # prop_p13_spr_beam.cfg per-DOF function card:
+    # CARD("%10d%10d%10d%10d%10d          %20lg%20lg",
+    #      FUN_A, HFLAG, FUN_B, FUN_C, FUN_D, (gap 10), MIN_RUP, MAX_RUP)
+    "PROP_SPR_DOF_FCT": [10, 10, 10, 10, 10, 10, 20, 20],
+    # prop_p13_spr_beam.cfg velocity / rate parameters card:
+    # CARD("%20lg%20lg%20lg%10d", TRANS_VEL0, ROT_VEL0, Asrate, ISRATE)
+    "PROP_SPR_VEL": [20, 20, 20, 10],
     # PROP/prop_p32_spr_pre.cfg (radioss100/radioss51) header card:
     # CARD("%20lg                              %10d%10d", MASS, ISENSOR, ILock)
     # — the 30 blank columns between the mass and sens_ID are a real gap in

@@ -23,7 +23,7 @@ import numpy as np
 
 from ..common.constants import EM20, EP30
 from ..common.fastmath import norm3
-from . import spring_advanced, spring_general
+from . import spring_advanced, spring_beam, spring_general, spring_mat
 
 #: Spring property TYPE numbers whose /PROP card carries a mass that THIS
 #: PORT actually reads AND whose Starter reader genuinely REQUIRES mass > 0.
@@ -103,6 +103,7 @@ def init_group(group, model, log):
             idx4=np.empty(0, dtype=np.int64),
             idx6=np.empty(0, dtype=np.int64),
             idx12=np.empty(0, dtype=np.int64),
+            idx23=np.empty(0, dtype=np.int64),
             idx32=np.empty(0, dtype=np.int64),
             idx19=np.empty(0, dtype=np.int64),
             idx44=np.empty(0, dtype=np.int64),
@@ -130,20 +131,26 @@ def init_group(group, model, log):
                 pt = 12
             elif "28" in pname or "Nstrand" in pname or "Type28" in pname:
                 pt = 28
+            elif "23" in pname or "SprMat" in pname or "Type23" in pname:
+                pt = 23
         kind[sl] = pt
         p = getattr(prop, "params", {}) or {}
         if pt in (12, 28):
             mass[sl] = _safe_param(p, "mass", 0.0)
             continue
+        if pt == 23:
+            continue                       # SPR_MAT mass & inertia computed by spring_mat
         if pt in spring_general.SPRING_PROP_TYPES or pt in spring_advanced.ADVANCED_SPRING_PROP_TYPES:
             continue                       # 6-DOF and advanced springs built by their own modules
         mass[sl] = _safe_param(p, "mass", 0.0)
         k[sl] = _safe_param(p, "k", 0.0)
         cdamp[sl] = _safe_param(p, "c", 0.0)
-    is6 = np.isin(kind, list(spring_general.SPRING_PROP_TYPES))
+    is6 = (kind == 8)
+    is13 = (kind == 13)
     is12 = (kind == 12)
     is32 = (kind == 32)
     is19 = (kind == 19)
+    is23 = (kind == 23)
     is25 = (kind == 25)
     is26 = (kind == 26)
     is27 = (kind == 27)
@@ -154,9 +161,11 @@ def init_group(group, model, log):
     is46 = (kind == 46)
     is_adv = is12 | is19 | is25 | is26 | is27 | is28 | is35 | is36 | is44 | is46
     is_kj = (kind == 33) | (kind == 45)
-    idx4 = np.where(~is6 & ~is32 & ~is_adv & ~is_kj)[0]
+    idx4 = np.where(~is6 & ~is13 & ~is32 & ~is_adv & ~is_kj & ~is23)[0]
     idx6 = np.where(is6)[0]
+    idx13 = np.where(is13)[0]
     idx12 = np.where(is12)[0]
+    idx23 = np.where(is23)[0]
     idx32 = np.where(is32)[0]
     idx19 = np.where(is19)[0]
     idx25 = np.where(is25)[0]
@@ -169,6 +178,7 @@ def init_group(group, model, log):
     idx46 = np.where(is46)[0]
     idx_kj = np.where(is_kj)[0]
 
+    st["idx23"] = idx23
     st["idx28"] = idx28
 
     # Initial length for 3-node pulley spring (r3buf3.F lines 97-99): L0 = L01 + L02
@@ -233,14 +243,14 @@ def init_group(group, model, log):
 
     st.update(L0=L0, mass=mass, k=k, cdamp=cdamp,
               force=np.zeros(n), eint=np.zeros(n), ehour=np.zeros(n),
-              idx4=idx4, idx6=idx6, idx12=idx12, idx32=idx32,
+              idx4=idx4, idx6=idx6, idx13=idx13, idx12=idx12, idx23=idx23, idx32=idx32,
               idx19=idx19, idx25=idx25, idx26=idx26, idx27=idx27, idx35=idx35, idx36=idx36, idx44=idx44, idx46=idx46, idx_kj=idx_kj, model=model)
 
     stride = group.conn.shape[1] if group.conn.ndim == 2 else 2
     massn = np.zeros(stride * n)
     inertn = np.zeros(stride * n)
     for i in range(n):
-        if is12[i] or is28[i] or is6[i] or is19[i] or is36[i]:
+        if is12[i] or is28[i] or is23[i] or is6[i] or is13[i] or is19[i] or is36[i]:
             continue
         m = mass[i]
         massn[stride * i] = m / 2.0
@@ -248,8 +258,12 @@ def init_group(group, model, log):
 
     if len(idx6):
         spring_general.init6(group, model, log, idx6, massn, inertn)
+    if len(idx13):
+        spring_beam.init_spring_beam_type13(group, model, log, idx13, massn, inertn)
     if len(idx12) or len(idx19) or len(idx25) or len(idx26) or len(idx27) or len(idx35) or len(idx36) or len(idx44) or len(idx46):
         spring_advanced.init_advanced(group, model, log, idx12=idx12, idx19=idx19, idx25=idx25, idx26=idx26, idx27=idx27, idx35=idx35, idx36=idx36, idx44=idx44, idx46=idx46, massn=massn, inertn=inertn)
+    if len(idx23):
+        spring_mat.init_spring_mat_type23(group, model, log, idx23=idx23, massn=massn, inertn=inertn)
     if len(idx28):
         from . import nstrand
         nstrand.init_nstrand_type28(group, model, log, idx28=idx28, massn=massn, inertn=inertn)
@@ -460,6 +474,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     idx6 = st.get("idx6")
     idx4 = st.get("idx4")
     idx12 = st.get("idx12")
+    idx13 = st.get("idx13")
+    idx23 = st.get("idx23")
     idx32 = st.get("idx32")
     idx19 = st.get("idx19")
     idx25 = st.get("idx25")
@@ -473,6 +489,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     idx_kj = st.get("idx_kj")
     if ((idx6 is None or len(idx6) == 0) and
         (idx12 is None or len(idx12) == 0) and
+        (idx13 is None or len(idx13) == 0) and
+        (idx23 is None or len(idx23) == 0) and
         (idx32 is None or len(idx32) == 0) and
         (idx19 is None or len(idx19) == 0) and
         (idx25 is None or len(idx25) == 0) and
@@ -494,6 +512,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         dtc[idx4] = _forces_axial(group, x, v, dt, fint, idx4)
     if idx12 is not None and len(idx12):
         dtc[idx12] = spring_advanced.forces_pulley_type12(group, x, v, dt, fint, idx12)
+    if idx13 is not None and len(idx13):
+        dtc[idx13] = spring_beam.forces_spring_beam_type13(group, x, v, vr, dt, fint, mint, idx13)
+    if idx23 is not None and len(idx23):
+        dtc[idx23] = spring_mat.forces_spring_mat_type23(group, x, v, vr, dt, fint, mint, idx23)
     if idx32 is not None and len(idx32):
         dtc[idx32] = _forces_axial_type32(group, x, v, dt, fint, idx32)
     if idx6 is not None and len(idx6):
@@ -602,6 +624,9 @@ def tangent(group, x, epsp_incr=None):
     if group.n == 0 or len(group.conn) == 0:
         return np.empty((0, 6, 6)), np.empty((0, 6), dtype=np.int64)
     st = group.state
+    idx13 = st.get("idx13")
+    if idx13 is not None and len(idx13) == group.n:
+        return spring_beam.ke_spring_beam_type13(group, x, idx13)
     conn, L, a = _spring_axis(group, x)
     kb = st["k"][:, None, None] * np.einsum("ni,nj->nij", a, a)
     return _blocks(kb), _spring_edofs(conn)

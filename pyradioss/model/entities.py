@@ -17996,6 +17996,7 @@ MatDPrag2 = MatLaw102
 class PropType23:
     """``/PROP/TYPE23`` or ``/PROP/SPR_MAT`` (M195): Spring material property."""
     id: int
+    type: int = 23
     title: str = ""
     mass: float = 0.0
     skew_id: int = 0

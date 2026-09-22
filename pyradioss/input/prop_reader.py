@@ -332,21 +332,113 @@ def parse_spr_gene(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
 
 
 def parse_spr_beam(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
-    """/PROP/SPR_BEAM (TYPE13) — spring-beam (cfg prop_p13_spr_beam.cfg
-    radioss2018).  Same header + 6 K/C blocks as SPR_GENE; the port reads
-    the linear K_i/C_i stiffness core and the element frame follows N1->N2
-    (see elements/spring_general.py).  The trailing Vo/Wo/Fcut card, the 6
-    per-DOF viscous cards, Ileng length normalisation, functions and
-    rupture limits are parsed-and-cut."""
+    """/PROP/SPR_BEAM (TYPE13) — spring-beam (cfg prop_p13_spr_beam.cfg radioss2018).
+    Fortran origin: starter/source/properties/spring/hm_read_prop13.F
+    Reads the full 6-DOF properties including nonlinear curves, hardening, damping,
+    scale factors, and failure/rupture limits.
+    """
     title, cards, fixed = _data_cards(block)
-    params: Dict[str, float] = {}
+    params: Dict[str, Any] = {}
     head = _get(cards, 0)
     if head is not None:
         h = _row(head, "PROP_SPR_HEAD", fixed)
         params["mass"] = _fv(h[0])
         params["inertia"] = _fv(h[1])
         params["skew_id"] = _iv(h[2])
-    params.update(_parse_spring_blocks(cards, fixed))
+        params["sens_id"] = _iv(h[3])
+        params["isensor"] = params["sens_id"]
+        params["isflag"] = _iv(h[4])
+        params["ifail"] = _iv(h[5])
+        params["ileng"] = _iv(h[6])
+        params["ifail2"] = _iv(h[7])
+    else:
+        params["mass"] = 0.0
+        params["inertia"] = 0.0
+        params["skew_id"] = 0
+        params["sens_id"] = 0
+        params["isflag"] = 0
+        params["ifail"] = 0
+        params["ileng"] = 0
+        params["ifail2"] = 0
+
+    # 6 DOF blocks
+    for i in range(1, 7):
+        # Card 1: Ki, Ci, Ai, Bi, Di
+        kc = _get(cards, 1 + 3 * (i - 1))
+        if kc is not None:
+            r = _row(kc, "F20X5", fixed)
+            params[f"k{i}"] = _fv(r[0])
+            params[f"c{i}"] = _fv(r[1])
+            params[f"a{i}"] = _fv(r[2], 1.0) if len(r) > 2 and r[2].strip() else 1.0
+            params[f"b{i}"] = _fv(r[3], 0.0) if len(r) > 3 and r[3].strip() else 0.0
+            params[f"d{i}"] = _fv(r[4], 1.0) if len(r) > 4 and r[4].strip() else 1.0
+        else:
+            params[f"k{i}"] = 0.0
+            params[f"c{i}"] = 0.0
+            params[f"a{i}"] = 1.0
+            params[f"b{i}"] = 0.0
+            params[f"d{i}"] = 1.0
+
+        # Card 2: FUN_Ai, HFLAGi, FUN_Bi, FUN_Ci, FUN_Di, MIN_RUPi, MAX_RUPi
+        fc = _get(cards, 2 + 3 * (i - 1))
+        if fc is not None:
+            if fixed:
+                r = _row(fc, "PROP_SPR_DOF_FCT", True)
+                params[f"fun_a{i}"] = _iv(r[0]) if len(r) > 0 else 0
+                params[f"hflag{i}"] = _iv(r[1]) if len(r) > 1 else 0
+                params[f"fun_b{i}"] = _iv(r[2]) if len(r) > 2 else 0
+                params[f"fun_c{i}"] = _iv(r[3]) if len(r) > 3 else 0
+                params[f"fun_d{i}"] = _iv(r[4]) if len(r) > 4 else 0
+                # r[5] is blank gap
+                params[f"min_rup{i}"] = _fv(r[6], -1e30) if len(r) > 6 and r[6].strip() else -1e30
+                params[f"max_rup{i}"] = _fv(r[7], 1e30) if len(r) > 7 and r[7].strip() else 1e30
+            else:
+                toks = fc.tokens()
+                params[f"fun_a{i}"] = _iv(toks[0]) if len(toks) > 0 else 0
+                params[f"hflag{i}"] = _iv(toks[1]) if len(toks) > 1 else 0
+                params[f"fun_b{i}"] = _iv(toks[2]) if len(toks) > 2 else 0
+                params[f"fun_c{i}"] = _iv(toks[3]) if len(toks) > 3 else 0
+                params[f"fun_d{i}"] = _iv(toks[4]) if len(toks) > 4 else 0
+                params[f"min_rup{i}"] = _fv(toks[5], -1e30) if len(toks) > 5 and toks[5].strip() else -1e30
+                params[f"max_rup{i}"] = _fv(toks[6], 1e30) if len(toks) > 6 and toks[6].strip() else 1e30
+        else:
+            params[f"fun_a{i}"] = 0
+            params[f"hflag{i}"] = 0
+            params[f"fun_b{i}"] = 0
+            params[f"fun_c{i}"] = 0
+            params[f"fun_d{i}"] = 0
+            params[f"min_rup{i}"] = -1e30
+            params[f"max_rup{i}"] = 1e30
+
+        # Card 3: Fi, Ei, scalei, Hi
+        sc = _get(cards, 3 + 3 * (i - 1))
+        if sc is not None:
+            r = _row(sc, "F20X4", fixed)
+            params[f"f{i}"] = _fv(r[0], 1.0) if len(r) > 0 and r[0].strip() else 1.0
+            params[f"e{i}"] = _fv(r[1], 0.0) if len(r) > 1 and r[1].strip() else 0.0
+            params[f"scale{i}"] = _fv(r[2], 1.0) if len(r) > 2 and r[2].strip() else 1.0
+            params[f"h{i}"] = _fv(r[3], 1.0) if len(r) > 3 and r[3].strip() else 1.0
+        else:
+            params[f"f{i}"] = 1.0
+            params[f"e{i}"] = 0.0
+            params[f"scale{i}"] = 1.0
+            params[f"h{i}"] = 1.0
+
+        # Defaults from hm_read_prop13.F lines 271-275:
+        if params[f"fun_a{i}"] == 0:
+            params[f"a{i}"] = 1.0
+            params[f"b{i}"] = 0.0
+            params[f"e{i}"] = 0.0
+
+    # Optional trailing velocity / rate card
+    vc = _get(cards, 19)
+    if vc is not None:
+        r = _row(vc, "PROP_SPR_VEL", fixed)
+        params["trans_vel0"] = _fv(r[0]) if len(r) > 0 else 0.0
+        params["rot_vel0"] = _fv(r[1]) if len(r) > 1 else 0.0
+        params["asrate"] = _fv(r[2]) if len(r) > 2 else 0.0
+        params["israte"] = _iv(r[3]) if len(r) > 3 else 0
+
     return Property(id=block.user_id, type=13, title=title, params=params)
 
 
@@ -1023,6 +1115,8 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
         return parse_spr_crus(block, log)
     if typename in ("SPR_MUSCLE", "TYPE46", "MUSCLE"):
         return parse_spr_muscle(block, log)
+    if typename in ("SPR_MAT", "TYPE23", "PROP_TYPE23", "PROP_SPR_MAT", "P23_SPR_MAT"):
+        return parse_spr_mat(block, log)
     # ---- everything else: parse-only + inactive ----------------------------
     title, _cards, _fixed = _data_cards(block)
     params = _universal_geo_params()
@@ -1436,6 +1530,91 @@ def parse_connect(block: KeywordBlock, log: MessageLog) -> Property:
             pass
             
     return Property(id=block.user_id, type=43, title=title, params=params)
+
+def parse_spr_mat(block: KeywordBlock, log: MessageLog) -> Property:
+    """/PROP/TYPE23 or /PROP/SPR_MAT: Spring with Material Laws property.
+
+    Fortran origin: starter/source/properties/spring/hm_read_prop23.F
+    CFG: prop_p23_SPR_MAT.cfg
+    """
+    title, cards, fixed = _data_cards(block)
+    params = _universal_geo_params()
+    imass = 2
+    area_or_volume = 0.0
+    inertia = 0.0
+    skew_id = 0
+    sens_id = 0
+    isflag = 0
+
+    valid_cards = [c for c in cards if not c.is_blank]
+    if valid_cards:
+        c0 = valid_cards[0]
+        if fixed:
+            raw = c0.raw if hasattr(c0, "raw") else str(c0)
+            f0 = raw[0:10].strip()
+            f1 = raw[10:30].strip()
+            f2 = raw[30:50].strip()
+            f3 = raw[50:60].strip()
+            f4 = raw[60:70].strip()
+            f5 = raw[70:80].strip() if len(raw) > 70 else ""
+            if len(f0) > 0 and "." not in f0 and (len(f1) > 0 or len(f2) > 0):
+                imass = _iv(f0, 2)
+                area_or_volume = _fv(f1)
+                inertia = _fv(f2)
+                skew_id = _iv(f3)
+                sens_id = _iv(f4)
+                isflag = _iv(f5)
+            else:
+                area_or_volume = _fv(raw[0:20].strip())
+                skew_id = _iv(raw[20:30].strip())
+                sens_id = _iv(raw[30:40].strip())
+                isflag = _iv(raw[40:50].strip())
+                imass = 1
+        else:
+            toks = c0.tokens()
+            if len(toks) >= 6:
+                imass = _iv(toks[0], 2)
+                area_or_volume = _fv(toks[1])
+                inertia = _fv(toks[2])
+                skew_id = _iv(toks[3])
+                sens_id = _iv(toks[4])
+                isflag = _iv(toks[5])
+            elif len(toks) == 4:
+                area_or_volume = _fv(toks[0])
+                skew_id = _iv(toks[1])
+                sens_id = _iv(toks[2])
+                isflag = _iv(toks[3])
+                imass = 1
+            else:
+                imass = _iv(toks[0], 2) if len(toks) > 0 else 2
+                area_or_volume = _fv(toks[1]) if len(toks) > 1 else (_fv(toks[0]) if len(toks) > 0 else 0.0)
+                inertia = _fv(toks[2]) if len(toks) > 2 else 0.0
+                skew_id = _iv(toks[3]) if len(toks) > 3 else 0
+                sens_id = _iv(toks[4]) if len(toks) > 4 else 0
+                isflag = _iv(toks[5]) if len(toks) > 5 else 0
+
+    if imass == 0:
+        imass = 2
+
+    params.update({
+        "imass": imass,
+        "area_or_volume": area_or_volume,
+        "mass": area_or_volume,
+        "inertia": inertia,
+        "skew_id": skew_id,
+        "sens_id": sens_id,
+        "sensor_id": sens_id,
+        "isens": sens_id,
+        "isflag": isflag,
+        "iflag": isflag,
+    })
+    if imass == 1:
+        params["area"] = area_or_volume
+    elif imass == 2:
+        params["volume"] = area_or_volume
+
+    return Property(id=block.user_id, type=23, title=title, params=params)
+
 
 def _type_number(typename: str) -> int:
     if typename in PROP_TYPE_NUMBERS:
