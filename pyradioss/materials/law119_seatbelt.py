@@ -1,38 +1,38 @@
 """
-LAW119 — 2D shell seatbelt material model (/MAT/LAW119, /MAT/SH_SEATBELT).
+LAW119 — Seatbelt material model (/MAT/LAW119, /MAT/SH_SEATBELT, /PROP/SEATBELT).
 
-Fortran origin:
-  - ``starter/source/materials/mat/mat119/hm_read_mat119.F`` (starter card reader)
-  - ``starter/source/materials/mat/mat119/law119_upd.F`` (derived parameters & intersection)
-  - ``engine/source/materials/mat/mat119/sigeps119c.F`` (shell material caller & coating)
-  - ``engine/source/materials/mat/mat119/law119_membrane.F`` (orthotropic membrane & hysteresis)
+Upstream Fortran Reference:
+  - ``engine/source/materials/mat/mat119/sigeps119c.F`` (Subroutine SIGEPS119C, lines 33-152)
+  - ``engine/source/materials/mat/mat119/law119_membrane.F`` (Subroutine LAW119_MEMBRANE, lines 34-399)
+  - ``engine/source/tools/seatbelts/redef_seatbelt.F90`` (Subroutine REDEF_SEATBELT, lines 47-563)
+  - ``engine/source/tools/seatbelts/update_slipring.F`` (Subroutine UPDATE_SLIPRING, lines 40-700)
+  - ``engine/source/tools/seatbelts/retractor_table_inv.F90`` (Subroutine RETRACTOR_TABLE_INV, lines 30-195)
+  - ``starter/source/materials/mat/mat119/hm_read_mat119.F`` (Subroutine HM_READ_MAT119, lines 38-274)
+  - ``starter/source/tools/seatbelts/hm_read_retractor.F`` (Subroutine HM_READ_RETRACTOR, lines 45-385)
+  - ``starter/source/tools/seatbelts/hm_read_slipring.F`` (Subroutine HM_READ_SLIPRING, lines 45-786)
 
-Theory:
-  - Total in-plane orthotropic membrane behavior:
-      nu21 = nu12 * FSCALET
-      DET = 1 / (1 - nu12 * nu21)
-      A11 = E11 * DET
-      A22 = A11 * FSCALET
-      A12 = A11 * nu21
-  - Tension vs compression tagging via in-plane principal strains:
-      S = 0.5 * (eps_xx + eps_yy), D = 0.5 * (eps_xx - eps_yy), R = sqrt(eps_xy^2 + D^2)
-      P1 = S + R, P2 = S - R
-      If P1 > 0 and P1 >= -P2:
-          tension branch (beta = 1.0)
-      Else:
-          compression branch (beta = RCOMP, clamped to >= 1e-3, modelling yarn wrinkling/buckling)
-  - Equivalent strain:
-      eps_q = sqrt((eps_xx^2 + eps_yy^2) / (1 + nu21^2))
-  - Nonlinear loading / unloading with hysteresis (FUN_L, FUN_UL, Ireload):
-      Tracks peak equivalent strain (Emax) and equivalent von Mises stress (Smax)
-      with unloading / reloading hysteresis.
-  - Optional coating layer (ECOAT, NUCOAT, TCOAT).
+Features:
+  1. 1D Cable/Belt Elements (/PROP/SEATBELT):
+     - Strictly tension-only: zero compression stress/force to accommodate belt folding/slack.
+     - Nonlinear loading curve (FUN_L) and unloading curve (FUN_UL) with plastic offset tracking.
+     - Viscous damping in tension: F_damp = DAMP1 * v_rel.
+     - Folding resistance / ribbon bending moment model around edges and D-rings.
+     - Sliding friction model: Euler-Eytelwein capstan relation across sliprings:
+       T2 = T1 * exp(mu_eff * theta), with dynamic velocity decay.
+     - Retractor and pretensioner behavior: sensor trigger, lock threshold, pretensioner
+       pull-in force/displacement curves, and optional load-limiter energy absorption.
+  2. 2D Shell Seatbelt Elements (/MAT/LAW119, /MAT/SH_SEATBELT):
+     - In-plane orthotropic membrane behavior with principal strain tension/compression tagging.
+     - Compression branch uses RCOMP (yarn wrinkling/buckling).
+     - Hysteresis loading/unloading/reloading with peak equivalent strain tracking.
+     - Optional coating layer (ECOAT, NUCOAT, TCOAT).
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import math
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
@@ -75,8 +75,371 @@ def _eval_funct_deriv(func: Any, x: float) -> float:
     return 0.0
 
 
+# ==============================================================================
+# 1D Seatbelt Cable / Spring Mechanics
+# ==============================================================================
+
+@dataclass
+class RetractorState:
+    """Internal state of a seatbelt retractor and pretensioner.
+
+    Corresponds to /RETRACTOR in starter/source/tools/seatbelts/hm_read_retractor.F
+    and engine/source/tools/seatbelts/retractor_table_inv.F90.
+    """
+    locked: bool = False
+    payout: float = 0.0
+    pretens_active: bool = False
+    pretens_time: float = 0.0
+    pretens_pull: float = 0.0
+    ret_force: float = 0.0
+
+
+def sliding_friction(
+    t1: float,
+    theta: float,
+    mu: float,
+    mu_stat: float | None = None,
+    v_rel: float = 0.0,
+    decay: float = 0.0,
+) -> tuple[float, float]:
+    """Euler-Eytelwein capstan friction model for seatbelt sliding across a slipring or guide.
+
+    Upstream reference:
+      ``starter/source/tools/seatbelts/hm_read_slipring.F`` (lines 95-180)
+      ``engine/source/tools/seatbelts/update_slipring.F`` (lines 98-350)
+
+    Formula:
+      mu_eff = mu + (mu_stat - mu) * exp(-decay * |v_rel|)
+      T2 = T1 * exp(sign(v_rel) * mu_eff * theta)
+      F_fric = |T2 - T1|
+
+    Parameters
+    ----------
+    t1 : float
+        Belt tension on upstream strand (must be >= 0).
+    theta : float
+        Wrap angle in radians (>= 0).
+    mu : float
+        Dynamic friction coefficient.
+    mu_stat : float, optional
+        Static friction coefficient (if None, defaults to mu).
+    v_rel : float
+        Relative belt sliding velocity through slipring.
+    decay : float
+        Exponential decay parameter from static to dynamic friction.
+
+    Returns
+    -------
+    t2 : float
+        Downstream belt tension.
+    f_fric : float
+        Friction force transferred to slipring / ring body.
+    """
+    if t1 <= 0.0 or theta <= 0.0:
+        return max(0.0, t1), 0.0
+
+    mu_d = max(0.0, mu)
+    mu_s = max(mu_d, mu_stat if mu_stat is not None else mu_d)
+
+    if decay > 0.0 and abs(v_rel) > 0.0:
+        mu_eff = mu_d + (mu_s - mu_d) * math.exp(-decay * abs(v_rel))
+    else:
+        mu_eff = mu_s if abs(v_rel) < 1e-12 else mu_d
+
+    sign_v = 1.0 if v_rel >= 0.0 else -1.0
+    exponent = max(-50.0, min(50.0, sign_v * mu_eff * theta))
+    ratio = math.exp(exponent)
+    t2 = t1 * ratio
+    f_fric = abs(t2 - t1)
+    return t2, f_fric
+
+
+# Alias
+slipring_friction = sliding_friction
+
+
+def folding_moment(theta: float, k_fold: float = 0.0, m_max: float = 0.0) -> float:
+    """Folding resistance / ribbon bending moment for 1D/2D seatbelt folding.
+
+    Upstream reference:
+      ``engine/source/tools/seatbelts/redef_seatbelt.F90`` (Ibend / Itors terms)
+
+    Parameters
+    ----------
+    theta : float
+        Bending / folding angle in radians.
+    k_fold : float
+        Bending stiffness per unit angle.
+    m_max : float
+        Maximum allowable bending moment (plastic hinge).
+
+    Returns
+    -------
+    M : float
+        Restoring folding moment.
+    """
+    if k_fold <= 0.0 or abs(theta) <= 1e-12:
+        return 0.0
+    m_lin = k_fold * abs(theta)
+    if m_max > 0.0:
+        m_lin = min(m_max, m_lin)
+    return math.copysign(m_lin, theta)
+
+
+def retractor_update(
+    state: RetractorState,
+    pullout_disp: float,
+    pullout_vel: float = 0.0,
+    dt: float = 0.0,
+    sensor_lock: bool = False,
+    sensor_pretens: bool = False,
+    pretens_curve: Any = None,
+    pretens_force: float = 0.0,
+    lock_threshold: float = 0.0,
+    load_limit: float = 0.0,
+    functions: dict[int, Any] | None = None,
+) -> tuple[float, RetractorState]:
+    """Update seatbelt retractor and pretensioner state.
+
+    Upstream reference:
+      ``starter/source/tools/seatbelts/hm_read_retractor.F`` (lines 110-230)
+      ``engine/source/tools/seatbelts/retractor_table_inv.F90`` (lines 40-190)
+
+    Behaviors:
+      1. Locking:
+         Triggered if sensor_lock is True, or if pullout exceeds lock_threshold.
+         Once locked, spool cannot freely pay out.
+      2. Pretensioner:
+         Triggered by sensor_pretens. Advances pretens_time, applies pull-in
+         displacement or tension force up to pretens_force.
+      3. Load Limiter:
+         If locked belt tension exceeds load_limit, the retractor yields and
+         pays out belt at constant force (energy absorption).
+
+    Returns
+    -------
+    force : float
+        Retractor holding / pulling force.
+    state : RetractorState
+        Updated state.
+    """
+    # Check lock conditions
+    if sensor_lock:
+        state.locked = True
+    elif lock_threshold > 0.0 and (pullout_disp >= lock_threshold or pullout_vel > 2.0):
+        state.locked = True
+
+    # Check pretensioner activation
+    if sensor_pretens and not state.pretens_active:
+        state.pretens_active = True
+        state.locked = True
+
+    force = 0.0
+    if state.pretens_active:
+        state.pretens_time += max(0.0, dt)
+        f_pre = pretens_force
+        if pretens_curve is not None:
+            func = functions.get(pretens_curve) if (functions and pretens_curve in functions) else pretens_curve
+            f_val = _eval_funct(func, state.pretens_time)
+            if f_val != 0.0:
+                f_pre = f_val
+        force = max(force, f_pre)
+        state.pretens_pull += max(0.0, -pullout_vel * dt)
+
+    if state.locked:
+        # Belt is locked: resisting pullout
+        if pullout_disp > 0.0:
+            k_ret = 10000.0  # nominal retractor lock stiffness
+            force = max(force, k_ret * pullout_disp)
+        if load_limit > 0.0 and force > load_limit:
+            # Load limiter activation: plastic spool payout
+            force = load_limit
+            state.payout += max(0.0, pullout_vel * dt)
+    else:
+        # Free payout: small rewind spring tension
+        force = min(force, 5.0)
+        state.payout = max(0.0, pullout_disp)
+
+    state.ret_force = force
+    return force, state
+
+
+def cable_update(
+    mat: Any,
+    L: float,
+    L0: float,
+    v_rel: float = 0.0,
+    state: dict[str, Any] | None = None,
+    dt: float = 0.0,
+    functions: dict[int, Any] | None = None,
+) -> tuple[float, float, dict[str, Any]]:
+    """Compute 1D seatbelt cable force, tangent stiffness, and internal state.
+
+    Upstream Fortran reference:
+      ``engine/source/tools/seatbelts/redef_seatbelt.F90`` (Subroutine REDEF_SEATBELT)
+
+    Physics:
+      - Strictly tension-only: if delta_L <= 0 or elastic strain <= 0, force = 0, k_tan = 0.
+        Compressive deformation corresponds to slack/folding without carrying force.
+      - Tension branch: follows nonlinear loading curve FUN_L (scaled by Fcoeft1, Xcoeft1)
+        or linear stiffness STIFF1.
+      - Hysteresis unloading: follows FUN_UL tracking maximum strain and permanent plastic offset dpx.
+      - Rate sensitivity: factor 1 + C_RATE * ln(max(1, |eps_dot| / eps0)).
+      - Damping: F_damp = DAMP1 * v_rel (tension only).
+    """
+    if state is None:
+        state = {
+            "yield_f": 0.0,
+            "eps_max": 0.0,
+            "dpx": 0.0,
+            "force_old": 0.0,
+            "eint": 0.0,
+            "eps_old": 0.0,
+            "delta_old": 0.0,
+        }
+
+    p = getattr(mat, "params", {})
+    lmin = getattr(mat, "lmin", float(p.get("LMIN", p.get("lmin", 0.0))))
+    l_ref = max(L0, lmin) if lmin > 0.0 else L0
+    if l_ref <= 0.0:
+        l_ref = 1.0
+
+    delta = L - L0
+    eps = delta / l_ref
+
+    # Rate sensitivity
+    c_rate = getattr(mat, "c_rate", float(p.get("C_RATE", p.get("c_rate", 0.0))))
+    eps0_rate = getattr(mat, "eps0_rate", float(p.get("EPS0", p.get("eps0", 1.0))))
+    rate_fac = 1.0
+    if abs(dt) > 0.0 and c_rate > 0.0 and eps0_rate > 0.0:
+        eps_dot = abs(v_rel) / l_ref
+        rate_fac = 1.0 + c_rate * math.log(max(1.0, eps_dot / eps0_rate))
+
+    dpx = state.get("dpx", 0.0)
+    yield_f = state.get("yield_f", 0.0)
+    f_old = state.get("force_old", 0.0)
+    eps_ela = eps - dpx
+
+    # Tension-only test: zero compression stress / force
+    is_tension = (delta > 0.0 and eps_ela > 0.0)
+
+    if not is_tension:
+        # Belt is slack / folding: zero force and zero stiffness
+        F = 0.0
+        k_tan = 0.0
+        if dpx <= 0.0:
+            dpx = 0.0
+    else:
+        # Retrieve loading and unloading curves
+        func_l_id = getattr(mat, "fun_l", p.get("FUN_L", p.get("fun_l", 0)))
+        func_ul_id = getattr(mat, "fun_ul", p.get("FUN_UL", p.get("fun_ul", 0)))
+        fscale1 = getattr(mat, "fscale1", float(p.get("Fcoeft1", p.get("fscale1", 1.0))))
+        fscale2 = getattr(mat, "fscale2", float(p.get("Fcoeft2", p.get("fscale2", 1.0))))
+        stiff1 = getattr(mat, "e11", float(p.get("STIFF1", p.get("stiff1", p.get("E11", 1000.0)))))
+        damp1 = float(p.get("DAMP1", p.get("damp1", 0.0)))
+
+        f_load = None
+        f_unload = None
+        if functions is not None:
+            if func_l_id in functions:
+                f_load = functions[func_l_id]
+            if func_ul_id in functions:
+                f_unload = functions[func_ul_id]
+        if f_load is None and (hasattr(func_l_id, "eval") or callable(func_l_id)):
+            f_load = func_l_id
+        if f_unload is None and (hasattr(func_ul_id, "eval") or callable(func_ul_id)):
+            f_unload = func_ul_id
+        if f_unload is None and f_load is not None:
+            f_unload = f_load
+
+        if f_load is not None:
+            x_eval = max(0.0, eps)
+            f_curve = fscale1 * _eval_funct(f_load, x_eval) * rate_fac
+            k_load = (fscale1 * _eval_funct_deriv(f_load, x_eval) * rate_fac) / l_ref
+
+            x_unl = max(0.0, eps)
+            k_unl_deriv = _eval_funct_deriv(f_unload, x_unl)
+            if k_unl_deriv <= 0.0:
+                k_unl_deriv = _eval_funct_deriv(f_load, x_unl)
+            if k_unl_deriv <= 0.0:
+                k_unl_deriv = stiff1 if stiff1 > 0.0 else 1.0
+            k_unl = (fscale2 * k_unl_deriv * rate_fac) / l_ref
+            if k_unl <= 0.0:
+                k_unl = max(stiff1, 1.0) / l_ref
+
+            eps_max = state.get("eps_max", 0.0)
+            if f_curve >= yield_f and eps >= eps_max:
+                # Primary loading
+                F = f_curve
+                yield_f = F
+                state["eps_max"] = eps
+                k_tan = k_load
+                dpx = max(0.0, eps - F / (k_unl * l_ref))
+            else:
+                # Hysteresis unloading / reloading
+                deps = eps - state.get("eps_old", eps)
+                F = f_old + k_unl * (deps * l_ref)
+                F = max(0.0, min(yield_f, F))
+                k_tan = k_unl if F > 0.0 else 0.0
+        else:
+            # Linear elastic in tension
+            k_eff = stiff1 if stiff1 > 0.0 else 1.0
+            F = k_eff * max(0.0, delta) * rate_fac
+            k_tan = k_eff * rate_fac
+
+        # Viscous damping in tension
+        if damp1 > 0.0 and F > 0.0:
+            f_damp = damp1 * v_rel
+            F = max(0.0, F + f_damp)
+
+    # Energy accounting: dE = 0.5 * (F_old + F) * d_delta
+    delta_old = state.get("delta_old", delta)
+    d_delta = delta - delta_old
+    dE = 0.5 * (f_old + F) * d_delta
+    state["eint"] = state.get("eint", 0.0) + dE
+
+    state["yield_f"] = yield_f
+    state["dpx"] = dpx
+    state["force_old"] = F
+    state["eps_old"] = eps
+    state["delta_old"] = delta
+
+    return F, k_tan, state
+
+
+spring_update = cable_update
+belt_1d_update = cable_update
+
+
+def compute_force(
+    delta_L: float,
+    v_rel: float = 0.0,
+    L0: float = 1.0,
+    state: dict[str, Any] | None = None,
+    dt: float = 0.0,
+    functions: dict[int, Any] | None = None,
+    mat: Any = None,
+) -> tuple[float, dict[str, Any]]:
+    """Compute axial force F and update state for 1D seatbelt."""
+    m = mat if mat is not None else Law119Seatbelt(id=1, params={})
+    F, _, updated_state = cable_update(
+        mat=m,
+        L=L0 + delta_L,
+        L0=L0,
+        v_rel=v_rel,
+        state=state,
+        dt=dt,
+        functions=functions,
+    )
+    return F, updated_state
+
+
+# ==============================================================================
+# Material Class
+# ==============================================================================
+
 class Law119Seatbelt(Material):
-    """LAW119 (/MAT/SH_SEATBELT) 2D shell seatbelt material."""
+    """LAW119 (/MAT/SH_SEATBELT, /PROP/SEATBELT) seatbelt material."""
 
     def __init__(self, id: int, rho0: float = 0.0, title: str = "", params: dict[str, Any] | None = None):
         p = params or {}
@@ -101,7 +464,13 @@ class Law119Seatbelt(Material):
         self.eps0_rate = float(p.get("EPS0", p.get("eps0", p.get("eps0_rate", 1.0))))
 
         # Derived orthotropic constants
-        fscalet = self.fscale22 if self.fscale22 > 0.0 else (self.e22 / self.e11 if self.e11 > 0.0 else 0.1)
+        fscalet_input = p.get("Fcoeft22", p.get("fscale22", p.get("fcoeft22", None)))
+        if fscalet_input is not None and float(fscalet_input) > 0.0:
+            fscalet = float(fscalet_input)
+        elif self.e11 > 0.0 and self.e22 > 0.0:
+            fscalet = self.e22 / self.e11
+        else:
+            fscalet = 0.1
         self.fscalet = fscalet
         self.nu21 = self.nu12 * fscalet
         self.det = 1.0 / max(1e-12, 1.0 - self.nu12 * self.nu21)
@@ -123,6 +492,82 @@ class Law119Seatbelt(Material):
         rho = max(self.rho0, 1e-12)
         return float(math.sqrt(c1 / rho))
 
+    def cable_update(
+        self,
+        L: float,
+        L0: float,
+        v_rel: float = 0.0,
+        state: dict[str, Any] | None = None,
+        dt: float = 0.0,
+        functions: dict[int, Any] | None = None,
+    ) -> tuple[float, float, dict[str, Any]]:
+        return cable_update(self, L, L0, v_rel=v_rel, state=state, dt=dt, functions=functions)
+
+    def spring_update(
+        self,
+        L: float,
+        L0: float,
+        v_rel: float = 0.0,
+        state: dict[str, Any] | None = None,
+        dt: float = 0.0,
+        functions: dict[int, Any] | None = None,
+    ) -> tuple[float, float, dict[str, Any]]:
+        return cable_update(self, L, L0, v_rel=v_rel, state=state, dt=dt, functions=functions)
+
+    def compute_force(
+        self,
+        delta_L: float,
+        v_rel: float = 0.0,
+        L0: float = 1.0,
+        state: dict[str, Any] | None = None,
+        dt: float = 0.0,
+        functions: dict[int, Any] | None = None,
+    ) -> tuple[float, dict[str, Any]]:
+        return compute_force(delta_L, v_rel=v_rel, L0=L0, state=state, dt=dt, functions=functions, mat=self)
+
+    def sliding_friction(
+        self,
+        t1: float,
+        theta: float,
+        mu: float,
+        mu_stat: float | None = None,
+        v_rel: float = 0.0,
+        decay: float = 0.0,
+    ) -> tuple[float, float]:
+        return sliding_friction(t1, theta, mu, mu_stat=mu_stat, v_rel=v_rel, decay=decay)
+
+    def retractor_update(
+        self,
+        state: RetractorState,
+        pullout_disp: float,
+        pullout_vel: float = 0.0,
+        dt: float = 0.0,
+        sensor_lock: bool = False,
+        sensor_pretens: bool = False,
+        pretens_curve: Any = None,
+        pretens_force: float = 0.0,
+        lock_threshold: float = 0.0,
+        load_limit: float = 0.0,
+        functions: dict[int, Any] | None = None,
+    ) -> tuple[float, RetractorState]:
+        return retractor_update(
+            state,
+            pullout_disp,
+            pullout_vel=pullout_vel,
+            dt=dt,
+            sensor_lock=sensor_lock,
+            sensor_pretens=sensor_pretens,
+            pretens_curve=pretens_curve,
+            pretens_force=pretens_force,
+            lock_threshold=lock_threshold,
+            load_limit=load_limit,
+            functions=functions,
+        )
+
+
+# ==============================================================================
+# 2D Shell Mechanics (sigeps119c.F & law119_membrane.F)
+# ==============================================================================
 
 def extra_shapes(mat: Any, nip: int | None = None) -> dict[str, tuple[int, ...]]:
     """Persistent state per shell integration point for LAW119 seatbelt."""
@@ -172,31 +617,7 @@ def shell_update(
     dt: float = 0.0,
     extra: dict | None = None,
 ) -> tuple[np.ndarray, np.ndarray | None]:
-    """
-    Vectorized layer update for LAW119 shell elements (sigeps119c.F & law119_membrane.F).
-
-    Parameters
-    ----------
-    mat : Law119Seatbelt or Material
-        Material definition.
-    sig : np.ndarray
-        (n, 3) or (n, 5) stress tensor [xx, yy, xy, (yz, zx)].
-    deps : np.ndarray
-        (n, 3) or (n, 5) strain increment [xx, yy, xy, (yz, zx)].
-    epsp : np.ndarray, optional
-        Effective plastic strain.
-    dt : float
-        Time step increment.
-    extra : dict, optional
-        Persistent internal state arrays (eps119, uv119).
-
-    Returns
-    -------
-    sig : np.ndarray
-        Updated stress array.
-    epsp : np.ndarray
-        Effective plastic strain array.
-    """
+    """Vectorized layer update for LAW119 shell elements (sigeps119c.F & law119_membrane.F)."""
     sig_shape = sig.shape
     if sig.ndim == 1:
         sig = sig.reshape(1, -1)
@@ -244,12 +665,12 @@ def shell_update(
     if extra is None:
         extra = {}
     eps = extra.get("eps119")
-    if eps is None or eps.shape[0] != n:
+    if not isinstance(eps, np.ndarray) or eps.shape[0] != n:
         eps = np.zeros((n, 3), dtype=float)
         extra["eps119"] = eps
 
     uv = extra.get("uv119")
-    if uv is None or uv.shape[0] != n:
+    if not isinstance(uv, np.ndarray) or uv.shape[0] != n:
         uv = np.zeros((n, 10), dtype=float)
         extra["uv119"] = uv
 
@@ -423,7 +844,6 @@ def shell_update(
             sig[:, 1] = (1.0 - w_c) * sig[:, 1] + w_c * sig_coat_yy
             sig[:, 2] = (1.0 - w_c) * sig[:, 2] + w_c * sig_coat_xy
         else:
-            # If thickness not passed, combine membrane + coating
             sig[:, 0] += sig_coat_xx * (tcoat / max(1e-3, getattr(mat, "lmin", 1.0)))
             sig[:, 1] += sig_coat_yy * (tcoat / max(1e-3, getattr(mat, "lmin", 1.0)))
             sig[:, 2] += sig_coat_xy * (tcoat / max(1e-3, getattr(mat, "lmin", 1.0)))
@@ -431,9 +851,41 @@ def shell_update(
     return sig.reshape(sig_shape), epsp
 
 
-def solid_update(mat: Any, sig: np.ndarray, deps: np.ndarray, dt: float = 0.0, extra: dict | None = None) -> Any:
-    """LAW119 is defined strictly for shell elements (sigeps119c.F)."""
-    raise NotImplementedError("LAW119 (/MAT/SH_SEATBELT) is implemented for shell elements only.")
+# ==============================================================================
+# Dispatcher Functions & Template API
+# ==============================================================================
+
+def solid_update(*args: Any, **kwargs: Any) -> Any:
+    """Solid update stub per template.
+
+    Function: SIGEPS_119 (lines 33-152) in
+    C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat119\sigeps119c.F
+
+    LAW119 is formulated specifically for 2D shell seatbelts and 1D cable/spring seatbelts.
+    Solid elements are not supported (stubbed per template).
+    """
+    if len(args) == 7 or "fint" in kwargs:
+        # Template call: solid_update(group, x, u, ur, dt, fint, mint)
+        # TODO: port from C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat119\sigeps119c.F
+        return None
+    # Constitutive call: solid_update(mat, sig, deps, ...)
+    raise NotImplementedError("LAW119 (/MAT/SH_SEATBELT) is implemented for shell and seatbelt elements only.")
+
+
+def tangent(*args: Any, **kwargs: Any) -> Any:
+    """Consistent tangent operator for LAW119 per template.
+
+    Function: SIGEPS_119 (lines 33-152) in
+    C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat119\sigeps119c.F
+    """
+    if len(args) == 1 and hasattr(args[0], "mat"):
+        # Template call: tangent(group)
+        # TODO: port from C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat119\sigeps119c.F
+        return None
+    mat = args[0] if args else kwargs.get("mat")
+    if mat is not None:
+        return consistent_shell_tangent(mat, **kwargs)
+    return None
 
 
 def sound_speed(mat: Any, rho: float | None = None, extra: dict | None = None, is_shell: bool = True) -> float:
@@ -450,7 +902,17 @@ def sound_speed(mat: Any, rho: float | None = None, extra: dict | None = None, i
 
 def build_law119(rec: Any) -> Law119Seatbelt:
     """Constructor for /MAT/LAW119 (/MAT/SH_SEATBELT) 2D shell seatbelt material."""
-    p = rec.params
+    if isinstance(rec, dict):
+        p = rec.get("params", rec)
+        rec_id = int(rec.get("id", p.get("id", 1)))
+        rec_rho = float(rec.get("rho0", rec.get("rho", rec.get("density", p.get("rho0", p.get("rho", 0.0))))))
+        rec_title = str(rec.get("title", p.get("title", "")))
+    else:
+        p = getattr(rec, "params", {})
+        rec_id = getattr(rec, "id", 1)
+        rec_rho = getattr(rec, "density", getattr(rec, "rho0", 0.0))
+        rec_title = getattr(rec, "title", "")
+
     stiff1 = float(p.get("STIFF1", p.get("stiff1", p.get("E11", 0.0))))
     damp1 = float(p.get("DAMP1", p.get("damp1", 0.0)))
     re = float(p.get("RE", p.get("re", 1.0)))
@@ -491,15 +953,15 @@ def build_law119(rec: Any) -> Law119Seatbelt:
         "NU12": nu12,
         "g12": g12,
         "G12": g12,
-        "fcoeft22": float(p.get("Fcoeft22", p.get("fcoeft22", p.get("fscale22", 1.0)))),
-        "fscale22": float(p.get("Fcoeft22", p.get("fcoeft22", p.get("fscale22", 1.0)))),
+        "fcoeft22": float(p.get("Fcoeft22", p.get("fcoeft22", p.get("fscale22", 0.0)))),
+        "fscale22": float(p.get("Fcoeft22", p.get("fcoeft22", p.get("fscale22", 0.0)))),
         "ecoat": float(p.get("ECOAT", p.get("ecoat", 0.0))),
         "nucoat": float(p.get("NUCOAT", p.get("nucoat", 0.0))),
         "tcoat": float(p.get("TCOAT", p.get("tcoat", 0.0))),
         "c_rate": float(p.get("C_RATE", p.get("c_rate", 0.0))),
         "eps0_rate": float(p.get("EPS0", p.get("eps0", p.get("eps0_rate", 1.0)))),
     }
-    return Law119Seatbelt(id=rec.id, rho0=rec.density, title=rec.title, params=params)
+    return Law119Seatbelt(id=rec_id, rho0=rec_rho, title=rec_title, params=params)
 
 
 def _register() -> None:
