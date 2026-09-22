@@ -1,3 +1,7 @@
+# C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat102\sigeps102.F
+# Function: SIGEPS102 (lines 28-163)
+# C:\OpenRadioss\source\OpenRadioss-latest-20260520\starter\source\materials\mat\mat102\hm_read_mat102.F
+# Function: HM_READ_MAT102 (lines 38-301)
 r"""LAW102 — Extended Drucker-Prager 2nd formulation material model (/MAT/LAW102, /MAT/DPRAG2).
 
 Fortran origins:
@@ -91,6 +95,13 @@ class DPrag2Params:
     a1: float = 0.0
     a2: float = 0.0
     pstar: float = -float("inf")
+    # Cap plasticity parameters
+    r_cap: float = 0.0
+    pa: float = 0.0
+    k_cap: float = 0.0
+    w_cap: float = 0.0
+    d_cap: float = 0.0
+    pa0: float = 0.0
     extra: Dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -279,6 +290,14 @@ def build_law102(mat: Any = None, **kwargs) -> DPrag2Params:
     a1 = getattr(mat, "a1", mat_dict.get("a1", kwargs.get("a1", 0.0)))
     a2 = getattr(mat, "a2", mat_dict.get("a2", kwargs.get("a2", 0.0)))
 
+    # Cap plasticity parameters
+    r_cap = getattr(mat, "r_cap", mat_dict.get("r_cap", kwargs.get("r_cap", mat_dict.get("R_cap", kwargs.get("R_cap", mat_dict.get("r", kwargs.get("r", mat_dict.get("R", kwargs.get("R", 0.0)))))))))
+    pa = getattr(mat, "pa", mat_dict.get("pa", kwargs.get("pa", mat_dict.get("Pa", kwargs.get("Pa", mat_dict.get("p_a", kwargs.get("p_a", mat_dict.get("P_a", kwargs.get("P_a", 0.0)))))))))
+    pa0 = getattr(mat, "pa0", mat_dict.get("pa0", kwargs.get("pa0", mat_dict.get("Pa0", kwargs.get("Pa0", 0.0)))))
+    k_cap = getattr(mat, "k_cap", mat_dict.get("k_cap", kwargs.get("k_cap", mat_dict.get("K_cap", kwargs.get("K_cap", mat_dict.get("kc", kwargs.get("kc", mat_dict.get("k_c", kwargs.get("k_c", 0.0)))))))))
+    w_cap = getattr(mat, "w_cap", mat_dict.get("w_cap", kwargs.get("w_cap", mat_dict.get("W_cap", kwargs.get("W_cap", mat_dict.get("w", kwargs.get("w", mat_dict.get("W", kwargs.get("W", 0.0)))))))))
+    d_cap = getattr(mat, "d_cap", mat_dict.get("d_cap", kwargs.get("d_cap", mat_dict.get("D_cap", kwargs.get("D_cap", mat_dict.get("d", kwargs.get("d", mat_dict.get("D", kwargs.get("D", 0.0)))))))))
+
     # Check params dictionary fallback
     params = getattr(mat, "params", {})
     if isinstance(params, dict):
@@ -304,6 +323,30 @@ def build_law102(mat: Any = None, **kwargs) -> DPrag2Params:
             a2 = params.get("a2", 0.0)
         if iform == 2 and "iform" in params:
             iform = params.get("iform", 2)
+        if r_cap == 0.0:
+            r_cap = params.get("r_cap", params.get("R_cap", params.get("r", params.get("R", 0.0))))
+        if pa == 0.0:
+            pa = params.get("pa", params.get("Pa", params.get("p_a", params.get("P_a", 0.0))))
+        if pa0 == 0.0:
+            pa0 = params.get("pa0", params.get("Pa0", 0.0))
+        if k_cap == 0.0:
+            k_cap = params.get("k_cap", params.get("K_cap", params.get("kc", params.get("k_c", 0.0))))
+        if w_cap == 0.0:
+            w_cap = params.get("w_cap", params.get("W_cap", params.get("w", params.get("W", 0.0))))
+        if d_cap == 0.0:
+            d_cap = params.get("d_cap", params.get("D_cap", params.get("d", params.get("D", 0.0))))
+
+    r_cap = float(r_cap)
+    pa = float(pa)
+    pa0 = float(pa0)
+    k_cap = float(k_cap)
+    w_cap = float(w_cap)
+    d_cap = float(d_cap)
+
+    if pa0 == 0.0 and pa > 0.0:
+        pa0 = pa
+    if pa == 0.0 and pa0 > 0.0:
+        pa = pa0
 
     g, bulk, phi_rad, k_yield, alpha, a0, a1, a2, pstar, iform_sanitized = compute_dprag2_constants(
         e=e,
@@ -340,17 +383,29 @@ def build_law102(mat: Any = None, **kwargs) -> DPrag2Params:
         a1=a1,
         a2=a2,
         pstar=pstar,
+        r_cap=r_cap,
+        pa=pa,
+        k_cap=k_cap,
+        w_cap=w_cap,
+        d_cap=d_cap,
+        pa0=pa0,
         extra=params if isinstance(params, dict) else {},
     )
 
 
-def init_history(n: int = 1) -> np.ndarray:
+def init_history(n: int = 1, params: Optional[DPrag2Params] = None) -> np.ndarray:
     """Initialize history variables for LAW102 solid elements.
 
     State variables per integration point:
     - Col 0: Cumulative equivalent plastic strain (PLA)
     - Col 1: Previous cycle hydrostatic pressure (POLD)
+    - Col 2: Cap position parameter (Pa) (when cap is active)
+    - Col 3: Cumulative plastic volumetric strain (epspv) (when cap is active)
     """
+    if params is not None and params.r_cap > 0.0 and params.pa > 0.0:
+        hist = np.zeros((n, 4), dtype=np.float64)
+        hist[:, 2] = params.pa0 if params.pa0 > 0.0 else params.pa
+        return hist
     return np.zeros((n, 2), dtype=np.float64)
 
 
@@ -428,6 +483,138 @@ def _solid_update_single_core(
     aj2 = 0.5 * (t1 * t1 + t2 * t2 + t3 * t3) + t4 * t4 + t5 * t5 + t6 * t6
 
     ptot = pnew + psh
+
+    use_cap = (params.r_cap > 0.0 and params.pa > 0.0)
+
+    if use_cap:
+        pa_init = params.pa0 if params.pa0 > 0.0 else params.pa
+        if len(history) >= 4:
+            pa_cur = history[2]
+            epspv_cur = history[3]
+        else:
+            pa_cur = pa_init
+            epspv_cur = 0.0
+        if pa_cur <= 0.0:
+            pa_cur = pa_init
+
+        k_cap = params.k_cap
+        if k_cap <= 0.0:
+            if params.phi_rad > 0.0 or params.c > 0.0:
+                k_cap = math.tan(params.phi_rad) + params.c / max(1.0e-12, pa_cur)
+            elif params.k_yield > 0.0:
+                k_cap = (math.sqrt(3.0) * params.k_yield + 3.0 * math.sqrt(3.0) * params.alpha * pa_cur) / max(1.0e-12, pa_cur)
+            else:
+                k_cap = 1.0
+
+        r_cap = params.r_cap
+        b = k_cap * pa_cur
+        q_tr = math.sqrt(max(0.0, 3.0 * aj2))
+
+        if ptot <= pa_cur:
+            # Shear yield surface: Fs = q - p*tan(phi) - c
+            if params.phi_rad > 0.0 or params.c > 0.0:
+                q_yield = ptot * math.tan(params.phi_rad) + params.c
+            else:
+                g0 = params.a0 + params.a1 * ptot + params.a2 * ptot * ptot
+                q_yield = math.sqrt(max(0.0, 3.0 * g0))
+
+            if ptot <= params.pmin or ptot <= params.pstar:
+                q_yield = 0.0
+            q_yield = max(0.0, q_yield)
+            if params.amax < _DEFAULT_AMAX:
+                q_yield = min(q_yield, math.sqrt(max(0.0, 3.0 * params.amax)))
+
+            fs = q_tr - q_yield
+            if fs <= 0.0 and q_yield > 0.0:
+                ratio = 1.0
+            elif q_yield <= 0.0:
+                ratio = 0.0
+            else:
+                ratio = q_yield / (q_tr + _EM14)
+
+            sign_xx = ratio * t1 * off - pnew
+            sign_yy = ratio * t2 * off - pnew
+            sign_zz = ratio * t3 * off - pnew
+            sign_xy = ratio * t4 * off
+            sign_yz = ratio * t5 * off
+            sign_zx = ratio * t6 * off
+
+            dpla = (1.0 - ratio) * math.sqrt(max(0.0, aj2)) / max(_EM20, 3.0 * g)
+            pla_new = history[0] + dpla
+            pa_new = pa_cur
+            epspv_new = epspv_cur
+            history_new = np.array([pla_new, pnew, pa_new, epspv_new], dtype=np.float64)
+            sig_new = np.array([sign_xx, sign_yy, sign_zz, sign_xy, sign_yz, sign_zx], dtype=np.float64)
+            return sig_new, history_new, ssp
+        else:
+            # Cap yield surface: Fc = (p - Pa)^2 / R^2 + (q / (k*Pa))^2 - 1
+            dp_0 = ptot - pa_cur
+            fc = (dp_0 / r_cap) ** 2 + (q_tr / b) ** 2 - 1.0
+            if fc <= 0.0:
+                # Inside cap (elastic)
+                ratio = 1.0
+                sign_xx = t1 * off - pnew
+                sign_yy = t2 * off - pnew
+                sign_zz = t3 * off - pnew
+                sign_xy = t4 * off
+                sign_yz = t5 * off
+                sign_zx = t6 * off
+                pla_new = history[0]
+                pa_new = pa_cur
+                epspv_new = epspv_cur
+                history_new = np.array([pla_new, pnew, pa_new, epspv_new], dtype=np.float64)
+                sig_new = np.array([sign_xx, sign_yy, sign_zz, sign_xy, sign_yz, sign_zx], dtype=np.float64)
+                return sig_new, history_new, ssp
+            else:
+                # Plastic return projection onto elliptic cap
+                c_p = bulk / (r_cap * r_cap)
+                c_q = (3.0 * g) / (b * b)
+                x = 0.0
+                for _ in range(30):
+                    denom_p = 1.0 + c_p * x
+                    denom_q = 1.0 + c_q * x
+                    term_p = (dp_0 / denom_p) ** 2 / (r_cap * r_cap)
+                    term_q = (q_tr / denom_q) ** 2 / (b * b)
+                    val = term_p + term_q - 1.0
+                    if abs(val) < 1.0e-12:
+                        break
+                    dval = -2.0 * (c_p * term_p / denom_p + c_q * term_q / denom_q)
+                    if abs(dval) < 1.0e-20:
+                        break
+                    dx = -val / dval
+                    x = max(0.0, x + dx)
+
+                dp_fin = dp_0 / (1.0 + c_p * x)
+                ptot_fin = pa_cur + dp_fin
+                p_final = ptot_fin - psh
+                q_final = q_tr / (1.0 + c_q * x)
+
+                ratio = q_final / (q_tr + _EM14) if q_tr > 0.0 else 0.0
+                sign_xx = ratio * t1 * off - p_final
+                sign_yy = ratio * t2 * off - p_final
+                sign_zz = ratio * t3 * off - p_final
+                sign_xy = ratio * t4 * off
+                sign_yz = ratio * t5 * off
+                sign_zx = ratio * t6 * off
+
+                dpla = (1.0 - ratio) * math.sqrt(max(0.0, aj2)) / max(_EM20, 3.0 * g)
+                pla_new = history[0] + dpla
+                depspv = max(0.0, (pnew - p_final) / max(_EM20, bulk))
+                epspv_new = epspv_cur + depspv
+
+                if params.w_cap > 0.0:
+                    if params.d_cap > 0.0:
+                        pa_new = pa_init * (1.0 + params.w_cap * (epspv_new ** params.d_cap))
+                    else:
+                        pa_new = pa_init * math.exp(params.w_cap * epspv_new)
+                else:
+                    pa_new = pa_cur
+
+                history_new = np.array([pla_new, p_final, pa_new, epspv_new], dtype=np.float64)
+                sig_new = np.array([sign_xx, sign_yy, sign_zz, sign_xy, sign_yz, sign_zx], dtype=np.float64)
+                return sig_new, history_new, ssp
+
+    # Standard non-cap formulation (sigeps102.F)
     iform = params.iform
 
     if iform == 4:
@@ -486,7 +673,10 @@ def _solid_update_single_core(
     pla_new = history[0] + dpla
 
     sig_new = np.array([sign_xx, sign_yy, sign_zz, sign_xy, sign_yz, sign_zx], dtype=np.float64)
-    history_new = np.array([pla_new, pnew], dtype=np.float64)
+    if len(history) >= 4:
+        history_new = np.array([pla_new, pnew, history[2], history[3]], dtype=np.float64)
+    else:
+        history_new = np.array([pla_new, pnew], dtype=np.float64)
 
     return sig_new, history_new, ssp
 
@@ -512,20 +702,32 @@ def solid_update_single(
     and low-level Fortran array convention:
       solid_update_single(params, deps, sig_old, history) -> (sig_new, history_new, ssp)
     """
+    use_cap = (params.r_cap > 0.0 and params.pa > 0.0)
+
     if epsp is not None:
         sig_old = np.asarray(sig_or_deps, dtype=np.float64)
         deps = np.asarray(deps_or_sig, dtype=np.float64)
         pold = -(sig_old[0] + sig_old[1] + sig_old[2]) / 3.0
-        hist = np.array([float(epsp), pold], dtype=np.float64)
+        if use_cap:
+            pa_in = float(kwargs.get("pa", params.pa0 if params.pa0 > 0.0 else params.pa))
+            epspv_in = float(kwargs.get("epspv", 0.0))
+            hist = np.array([float(epsp), pold, pa_in, epspv_in], dtype=np.float64)
+        else:
+            hist = np.array([float(epsp), pold], dtype=np.float64)
         sig_new, hist_new, ssp = _solid_update_single_core(
             params, deps, sig_old, hist, rho=rho, rho0=rho0, off=off, pnew=pnew, psh=psh
         )
+        if kwargs.get("return_history", False) or kwargs.get("return_all", False):
+            return sig_new, hist_new
         return sig_new, float(hist_new[0])
 
     if history is not None:
         deps = np.asarray(sig_or_deps, dtype=np.float64)
         sig_old = np.asarray(deps_or_sig, dtype=np.float64)
         hist = np.asarray(history, dtype=np.float64)
+        if use_cap and len(hist) < 4:
+            pa_in = params.pa0 if params.pa0 > 0.0 else params.pa
+            hist = np.array([hist[0], hist[1], pa_in, 0.0], dtype=np.float64)
         return _solid_update_single_core(
             params, deps, sig_old, hist, rho=rho, rho0=rho0, off=off, pnew=pnew, psh=psh
         )
@@ -533,7 +735,11 @@ def solid_update_single(
     sig_old = np.asarray(sig_or_deps, dtype=np.float64)
     deps = np.asarray(deps_or_sig, dtype=np.float64)
     pold = -(sig_old[0] + sig_old[1] + sig_old[2]) / 3.0
-    hist = np.array([0.0, pold], dtype=np.float64)
+    if use_cap:
+        pa_in = params.pa0 if params.pa0 > 0.0 else params.pa
+        hist = np.array([0.0, pold, pa_in, 0.0], dtype=np.float64)
+    else:
+        hist = np.array([0.0, pold], dtype=np.float64)
     return _solid_update_single_core(
         params, deps, sig_old, hist, rho=rho, rho0=rho0, off=off, pnew=pnew, psh=psh
     )
@@ -631,6 +837,30 @@ def solid_update_array(
     dpdm = bulk + (4.0 / 3.0) * g
     ssp = np.sqrt(np.maximum(0.0, dpdm) / rho0_arr)
 
+    if params.r_cap > 0.0 and params.pa > 0.0:
+        sig_new = np.empty((nel, 6), dtype=np.float64)
+        history_new = np.empty((nel, 4), dtype=np.float64)
+        pa_init = params.pa0 if params.pa0 > 0.0 else params.pa
+        for i in range(nel):
+            h_in = history[i]
+            if len(h_in) < 4:
+                h_in = np.array([h_in[0], h_in[1], pa_init, 0.0], dtype=np.float64)
+            s_i, h_i, c_i = _solid_update_single_core(
+                params,
+                deps[i],
+                sig_old[i],
+                h_in,
+                rho=rho[i] if rho is not None else None,
+                rho0=rho0_arr[i],
+                off=off_arr[i],
+                pnew=pnew_arr[i] if pnew is not None else None,
+                psh=psh_arr[i],
+            )
+            sig_new[i] = s_i
+            history_new[i] = h_i
+            ssp[i] = c_i
+        return sig_new, history_new, ssp
+
     # Second invariant J2 (sigeps102.F:107)
     aj2 = 0.5 * (t1 * t1 + t2 * t2 + t3 * t3) + t4 * t4 + t5 * t5 + t6 * t6
 
@@ -683,9 +913,16 @@ def solid_update_array(
 
     # Plastic strain increment (sigeps102.F:157-159)
     dpla = (1.0 - ratio) * np.sqrt(np.maximum(0.0, aj2)) / max(_EM20, 3.0 * g)
-    history_new = np.empty((nel, 2), dtype=np.float64)
-    history_new[:, 0] = history[:, 0] + dpla
-    history_new[:, 1] = pnew_arr
+    if history.shape[1] >= 4:
+        history_new = np.empty((nel, 4), dtype=np.float64)
+        history_new[:, 0] = history[:, 0] + dpla
+        history_new[:, 1] = pnew_arr
+        history_new[:, 2] = history[:, 2]
+        history_new[:, 3] = history[:, 3]
+    else:
+        history_new = np.empty((nel, 2), dtype=np.float64)
+        history_new[:, 0] = history[:, 0] + dpla
+        history_new[:, 1] = pnew_arr
 
     return sig_new, history_new, ssp
 
@@ -747,10 +984,18 @@ def solid_update(
                 hist = extra[k]
                 break
 
+    use_cap = (params.r_cap > 0.0 and params.pa > 0.0)
     if hist is None or len(hist) == 0:
-        hist = init_history(nel)
+        hist = init_history(nel, params=params)
     elif hist.ndim == 1:
         hist = hist[np.newaxis, :]
+
+    if use_cap and hist.shape[1] < 4:
+        pa_init = params.pa0 if params.pa0 > 0.0 else params.pa
+        hist_4 = np.zeros((len(hist), 4), dtype=np.float64)
+        hist_4[:, :min(hist.shape[1], 4)] = hist[:, :min(hist.shape[1], 4)]
+        hist_4[:, 2] = pa_init
+        hist = hist_4
 
     rho_arr = extra.get("rho") if extra else None
     rho0_arr = extra.get("rho0") if extra else None
@@ -774,6 +1019,9 @@ def solid_update(
         extra["uvar102"] = hist_new
         extra["uvar"] = hist_new
         extra["history"] = hist_new
+        if use_cap:
+            extra["pa"] = hist_new[0, 2] if is_1d else hist_new[:, 2]
+            extra["epspv"] = hist_new[0, 3] if is_1d else hist_new[:, 3]
 
     sig_out = sig_new[0] if is_1d else sig_new
     epsp_out = hist_new[0, 0] if is_1d else hist_new[:, 0]
@@ -888,5 +1136,14 @@ def shell_layer_tangent(*args: Any, **kwargs: Any) -> Any:
 
 def extra_shapes(mat: Any = None, nip: Optional[int] = None) -> Dict[str, Tuple[int, ...]]:
     """Extra history shapes needed for LAW102."""
+    if mat is not None:
+        p = mat if isinstance(mat, DPrag2Params) else build_law102(mat)
+        if p.r_cap > 0.0 and p.pa > 0.0:
+            return {"uvar102": (4,)}
     return {"uvar102": (2,)}
+
+
+tangent = solid_tangent
+consistent_solid_tangent = solid_tangent
+
 
