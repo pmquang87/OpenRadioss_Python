@@ -110,7 +110,8 @@ unchanged.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+import math
 
 import numpy as np
 
@@ -520,6 +521,235 @@ class NodalTimeStep:
         return acc
 
     # ------------------------------------------------------------------
+    def apply_rayleigh_damping(
+        self,
+        dampr: Optional[Any] = None,
+        node_groups: Optional[Any] = None,
+        alpha: float = 0.0,
+        beta: float = 0.0,
+        t: float = 0.0,
+        dt1: float = 0.0,
+        dt_min: Optional[float] = None,
+    ) -> None:
+        """Apply Rayleigh damping nodal stiffness scaling matching dtnodarayl.F:
+
+        Upstream Fortran reference:
+            C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\time_step\\dtnodarayl.F
+            SUBROUTINE DTNODARAYL(MS, IN, STIFN, STIFR, DT2T, IGRNOD, DAMPR)
+
+        When Rayleigh mass damping (alpha / DAMPAI) or stiffness damping (beta / DAMPBI)
+        is active on node groups:
+            For each node:
+                dt_0 = sqrt(2 * M_i / K_i)
+                bb = beta / dt_0 + 0.5 * alpha * dt_0
+                fac = sqrt(bb**2 + 1.0) - bb
+                coeff = 1.0 / (fac**2)
+                K_i = K_i * coeff   (stiffness scaling effectively scales dt_i by fac <= 1.0)
+            Rotational DOFs (if present):
+                dt_rot0 = sqrt(2 * I_i / Kr_i)
+                bb_r = beta / dt_rot0 + 0.5 * alpha * dt_rot0
+                fac_r = sqrt(bb_r**2 + 1.0) - bb_r
+                coeff_r = 1.0 / (fac_r**2)
+                Kr_i = Kr_i * coeff_r
+
+        Parameters:
+            dampr: Rayleigh damping definitions. Can be:
+                - None: uses global alpha and beta.
+                - 2D numpy array DAMPR(NRDAMP, NDAMP) as in Fortran dtnodarayl.F.
+                - List of dicts, e.g. [{"alpha": 0.0, "beta": 0.05, "group": 1, "tstart": 0.0, "tstop": 1e20}, ...]
+                - Single dict, e.g. {"alpha": 0.0, "beta": 0.05, "group": 1}
+                - Tuple/list of (alpha, beta).
+            node_groups: Mapping or list of node groups (NodeGroup objects, index arrays, or lists of node IDs/indices).
+                If None, uses self.model.node_groups if available, else applies to all loaded nodes.
+            alpha: Fallback/global mass damping coefficient (alpha / DAMPA).
+            beta: Fallback/global stiffness damping coefficient (beta / DAMPB).
+            t: Current simulation time (for evaluating tstart <= t <= tstop).
+            dt1: Current/previous time step (for DT0 upper bound if positive).
+            dt_min: Target minimum time step for CST floor protection (defaults to self.dt_min).
+        """
+        records: List[Dict[str, Any]] = []
+        if dampr is None:
+            if alpha > 0.0 or beta > 0.0 or (alpha == 0.0 and beta == 0.0 and node_groups is None):
+                records.append({
+                    "alpha": float(alpha),
+                    "beta": float(beta),
+                    "group": None,
+                    "tstart": -float("inf"),
+                    "tstop": float("inf"),
+                })
+        elif isinstance(dampr, (tuple, list)) and len(dampr) == 2 and isinstance(dampr[0], (int, float)) and isinstance(dampr[1], (int, float)):
+            records.append({
+                "alpha": float(dampr[0]),
+                "beta": float(dampr[1]),
+                "group": None,
+                "tstart": -float("inf"),
+                "tstop": float("inf"),
+            })
+        elif isinstance(dampr, np.ndarray) and dampr.ndim == 2:
+            nrdamp, ndamp = dampr.shape
+            for col in range(ndamp):
+                if nrdamp > 18 and dampr[18, col] != 0:
+                    continue
+                itype = int(round(dampr[20, col])) if nrdamp > 20 else 0
+                if itype == 3:  # FL_FREQ_RANGE
+                    continue
+                ts = float(dampr[16, col]) if nrdamp > 16 else -float("inf")
+                te = float(dampr[17, col]) if nrdamp > 17 else float("inf")
+                grp_id = int(round(dampr[1, col])) if nrdamp > 1 else None
+                a_idx = [2, 4, 6, 8, 10, 12]
+                dampa = max([float(dampr[k, col]) for k in a_idx if k < nrdamp] or [0.0])
+                b_idx = [3, 5, 7, 9, 11, 13]
+                dampb = max([float(dampr[k, col]) for k in b_idx if k < nrdamp] or [0.0])
+                records.append({"alpha": dampa, "beta": dampb, "group": grp_id, "tstart": ts, "tstop": te})
+        elif isinstance(dampr, dict):
+            a = float(dampr.get("alpha", dampr.get("damp_a", alpha)))
+            b = float(dampr.get("beta", dampr.get("damp_b", beta)))
+            grp = dampr.get("group", dampr.get("node_group", dampr.get("group_id", None)))
+            ts = float(dampr.get("tstart", -float("inf")))
+            te = float(dampr.get("tstop", float("inf")))
+            records.append({"alpha": a, "beta": b, "group": grp, "tstart": ts, "tstop": te})
+        elif isinstance(dampr, (list, tuple)):
+            for item in dampr:
+                if isinstance(item, dict):
+                    a = float(item.get("alpha", item.get("damp_a", 0.0)))
+                    b = float(item.get("beta", item.get("damp_b", 0.0)))
+                    grp = item.get("group", item.get("node_group", item.get("group_id", None)))
+                    ts = float(item.get("tstart", -float("inf")))
+                    te = float(item.get("tstop", float("inf")))
+                    records.append({"alpha": a, "beta": b, "group": grp, "tstart": ts, "tstop": te})
+                elif hasattr(item, "__dict__") or hasattr(item, "alpha") or hasattr(item, "damp_a"):
+                    a = float(getattr(item, "alpha", getattr(item, "damp_a", 0.0)))
+                    b = float(getattr(item, "beta", getattr(item, "damp_b", 0.0)))
+                    grp = getattr(item, "group", getattr(item, "node_group", getattr(item, "group_id", None)))
+                    ts = float(getattr(item, "tstart", -float("inf")))
+                    te = float(getattr(item, "tstop", float("inf")))
+                    records.append({"alpha": a, "beta": b, "group": grp, "tstart": ts, "tstop": te})
+        elif hasattr(dampr, "__dict__") or hasattr(dampr, "alpha") or hasattr(dampr, "damp_a"):
+            a = float(getattr(dampr, "alpha", getattr(dampr, "damp_a", alpha)))
+            b = float(getattr(dampr, "beta", getattr(dampr, "damp_b", beta)))
+            grp = getattr(dampr, "group", getattr(dampr, "node_group", getattr(dampr, "group_id", None)))
+            ts = float(getattr(dampr, "tstart", -float("inf")))
+            te = float(getattr(dampr, "tstop", float("inf")))
+            records.append({"alpha": a, "beta": b, "group": grp, "tstart": ts, "tstop": te})
+
+        if not records:
+            return
+
+        def _get_target_indices(grp_id: Any) -> Optional[np.ndarray]:
+            if grp_id is None:
+                return None
+            target_grp = None
+            if node_groups is not None:
+                if isinstance(node_groups, dict):
+                    target_grp = node_groups.get(grp_id)
+                    if target_grp is None and isinstance(grp_id, int):
+                        target_grp = node_groups.get(str(grp_id))
+                elif isinstance(node_groups, (list, tuple)):
+                    if isinstance(grp_id, int):
+                        if 0 <= grp_id < len(node_groups):
+                            target_grp = node_groups[grp_id]
+                        elif 1 <= grp_id <= len(node_groups):
+                            target_grp = node_groups[grp_id - 1]
+            if target_grp is None and hasattr(self.model, "node_groups") and self.model.node_groups:
+                if isinstance(grp_id, int) and grp_id in self.model.node_groups:
+                    target_grp = self.model.node_groups[grp_id]
+                elif isinstance(grp_id, str):
+                    for gid, g in self.model.node_groups.items():
+                        if getattr(g, "title", "") == grp_id or str(gid) == grp_id:
+                            target_grp = g
+                            break
+            if target_grp is None and isinstance(grp_id, (list, tuple, np.ndarray)):
+                target_grp = grp_id
+
+            if target_grp is None:
+                return None
+
+            if hasattr(target_grp, "node_idx") and target_grp.node_idx is not None:
+                return np.asarray(target_grp.node_idx, dtype=int)
+            if hasattr(target_grp, "node_ids") and target_grp.node_ids is not None:
+                raw_ids = target_grp.node_ids
+            elif hasattr(target_grp, "entity") and target_grp.entity is not None:
+                raw_ids = target_grp.entity
+            elif hasattr(target_grp, "nodes") and target_grp.nodes is not None:
+                raw_ids = target_grp.nodes
+            else:
+                raw_ids = target_grp
+
+            raw_arr = np.asarray(raw_ids, dtype=int)
+            if len(raw_arr) == 0:
+                return np.zeros(0, dtype=int)
+            numnod = self.model.numnod
+            if hasattr(self.model, "node_ids") and self.model.node_ids is not None and len(self.model.node_ids) == numnod:
+                if hasattr(self.model, "_id2idx") and self.model._id2idx:
+                    mapped = [self.model._id2idx[nid] for nid in raw_arr if nid in self.model._id2idx]
+                    if mapped:
+                        return np.asarray(mapped, dtype=int)
+                if np.all(raw_arr >= 0) and np.all(raw_arr < numnod):
+                    return raw_arr
+                mask = np.isin(self.model.node_ids, raw_arr)
+                return np.where(mask)[0]
+            valid = raw_arr[(raw_arr >= 0) & (raw_arr < numnod)]
+            return valid
+
+        dt_target = dt_min if dt_min is not None else self.dt_min
+        dt_sca = self.dt_sca if self.dt_sca > 0.0 else 0.9
+        dtmi2 = (dt_target / dt_sca) if (dt_target > 0.0 and dt_sca > 0.0) else 0.0
+
+        for rec in records:
+            if t < rec["tstart"] or t > rec["tstop"]:
+                continue
+            dampar_val = rec["alpha"]
+            dampbi_val = rec["beta"]
+
+            if dampar_val == 0.0 and dampbi_val == 0.0:
+                continue
+
+            # Minimum time step factor (dtnodarayl.F lines 130-135)
+            faci = 0.0
+            if dtmi2 > 0.0:
+                bbi_0 = dampbi_val + 0.5 * dampar_val * (dtmi2 ** 2)
+                dtn2 = math.sqrt(dtmi2 ** 2 + 2.0 * bbi_0 * dtmi2)
+                bbi = (dampbi_val / dtn2) + 0.5 * dampar_val * dtn2
+                faci = math.sqrt(bbi ** 2 + 1.0) - bbi
+
+            target_idx = _get_target_indices(rec["group"])
+            if target_idx is None:
+                mask = (self.stifn > EM20) & (self.model.mass > 0.0)
+                nodes_to_scale = np.where(mask)[0]
+            else:
+                if len(target_idx) == 0:
+                    continue
+                valid_mask = (self.stifn[target_idx] > EM20) & (self.model.mass[target_idx] > 0.0)
+                nodes_to_scale = target_idx[valid_mask]
+
+            if len(nodes_to_scale) > 0:
+                dt0 = np.sqrt(2.0 * self.model.mass[nodes_to_scale] / self.stifn[nodes_to_scale])
+                dt0 = np.minimum(1.0e4, dt0)
+                bb = (dampbi_val / np.maximum(dt0, EM20)) + 0.5 * dampar_val * dt0
+                fac = np.sqrt(bb ** 2 + 1.0) - bb
+                if dtmi2 > 0.0:
+                    fac = np.where(fac * dt0 < dtmi2, np.maximum(fac, faci), fac)
+                coeff = 1.0 / np.maximum(fac ** 2, EM20)
+                self.stifn[nodes_to_scale] *= coeff
+
+            # Rotational DOFs (dtnodarayl.F lines 148-163)
+            if self._rot and hasattr(self.model, "inertia") and self.model.inertia is not None:
+                if target_idx is None:
+                    rot_mask = (self.stifr > EM20) & (self.model.inertia > 0.0)
+                    rot_nodes = np.where(rot_mask)[0]
+                else:
+                    valid_rot = (self.stifr[target_idx] > EM20) & (self.model.inertia[target_idx] > 0.0)
+                    rot_nodes = target_idx[valid_rot]
+                if len(rot_nodes) > 0:
+                    dt0_r = np.sqrt(2.0 * self.model.inertia[rot_nodes] / self.stifr[rot_nodes])
+                    dt0_r = np.minimum(1.0e4, dt0_r)
+                    bb_r = (dampbi_val / np.maximum(dt0_r, EM20)) + 0.5 * dampar_val * dt0_r
+                    fac_r = np.sqrt(bb_r ** 2 + 1.0) - bb_r
+                    if dtmi2 > 0.0:
+                        fac_r = np.where(fac_r * dt0_r < dtmi2, np.maximum(fac_r, faci), fac_r)
+                    coeff_r = 1.0 / np.maximum(fac_r ** 2, EM20)
+                    self.stifr[rot_nodes] *= coeff_r
+
     def apply_rayleigh_damping_stiffness(self, alpha: float, beta: float) -> None:
         """Apply Rayleigh damping stiffness scaling matching dtnodarayl.F:
 
@@ -529,21 +759,43 @@ class NodalTimeStep:
             COEFF = 1 / FAC^2
             K = K * COEFF
         """
-        loaded = (self.stifn > EM20) & (self.model.mass > 0.0)
-        if np.any(loaded):
-            dt0 = np.sqrt(2.0 * self.model.mass[loaded] / self.stifn[loaded])
-            bb = (beta / np.maximum(dt0, EM20)) + 0.5 * alpha * dt0
-            fac = np.sqrt(bb**2 + 1.0) - bb
-            coeff = 1.0 / np.maximum(fac**2, EM20)
-            self.stifn[loaded] *= coeff
-        if self._rot and hasattr(self.model, "inertia") and self.model.inertia is not None:
-            rot_loaded = (self.stifr > EM20) & (self.model.inertia > 0.0)
-            if np.any(rot_loaded):
-                dt0_r = np.sqrt(2.0 * self.model.inertia[rot_loaded] / self.stifr[rot_loaded])
-                bb_r = (beta / np.maximum(dt0_r, EM20)) + 0.5 * alpha * dt0_r
-                fac_r = np.sqrt(bb_r**2 + 1.0) - bb_r
-                coeff_r = 1.0 / np.maximum(fac_r**2, EM20)
-                self.stifr[rot_loaded] *= coeff_r
+        self.apply_rayleigh_damping(alpha=alpha, beta=beta)
+
+    def step(
+        self,
+        mass_eff: np.ndarray,
+        inv_mass: np.ndarray,
+        v: np.ndarray,
+        t: float,
+        claims: Optional[Any] = None,
+        dampr: Optional[Any] = None,
+        node_groups: Optional[Any] = None,
+        inertia: Optional[np.ndarray] = None,
+        inv_inertia: Optional[np.ndarray] = None,
+        ams_nodes: Optional[np.ndarray] = None,
+        alpha: float = 0.0,
+        beta: float = 0.0,
+    ) -> float:
+        """Single-call interface: optionally assemble claims, apply Rayleigh damping, and execute apply()."""
+        if claims is not None:
+            self.assemble(claims)
+        if dampr is not None or alpha > 0.0 or beta > 0.0:
+            self.apply_rayleigh_damping(
+                dampr=dampr,
+                node_groups=node_groups,
+                alpha=alpha,
+                beta=beta,
+                t=t,
+            )
+        return self.apply(
+            mass_eff,
+            inv_mass,
+            v,
+            t,
+            inertia=inertia,
+            inv_inertia=inv_inertia,
+            ams_nodes=ams_nodes,
+        )
 
     # ------------------------------------------------------------------
     def get_top_mass_nodes(self, n: int = 5) -> List[Tuple[int, float, float]]:
@@ -655,3 +907,85 @@ def compute_target_dt(
             return float(target_dt)
 
     return float(target_dt)
+
+
+# ----------------------------------------------------------------------
+def apply_rayleigh_damping_nodal(
+    stifn: np.ndarray,
+    mass: np.ndarray,
+    alpha: float = 0.0,
+    beta: float = 0.0,
+    stifr: Optional[np.ndarray] = None,
+    inertia: Optional[np.ndarray] = None,
+    node_indices: Optional[Sequence[int]] = None,
+    dt_min: float = 0.0,
+    dt_scale: float = 0.9,
+) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
+    """Functional interface for Rayleigh damping stiffness reduction matching dtnodarayl.F:
+
+    Upstream Fortran reference:
+        C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\time_step\\dtnodarayl.F
+        SUBROUTINE DTNODARAYL
+
+    Formulation:
+        dt_0 = sqrt(2 * M_i / K_i)
+        bb = beta / dt_0 + 0.5 * alpha * dt_0
+        fac = sqrt(bb**2 + 1.0) - bb
+        coeff = 1.0 / (fac**2)
+        K_i = K_i * coeff
+
+    Returns:
+        (scaled_stifn, scaled_stifr, min_fac)
+    """
+    stifn_out = stifn.copy()
+    stifr_out = stifr.copy() if stifr is not None else None
+    min_fac = 1.0
+
+    if alpha == 0.0 and beta == 0.0:
+        return stifn_out, stifr_out, min_fac
+
+    dtmi2 = (dt_min / dt_scale) if (dt_min > 0.0 and dt_scale > 0.0) else 0.0
+    faci = 0.0
+    if dtmi2 > 0.0:
+        bbi_0 = beta + 0.5 * alpha * (dtmi2 ** 2)
+        dtn2 = math.sqrt(dtmi2 ** 2 + 2.0 * bbi_0 * dtmi2)
+        bbi = (beta / dtn2) + 0.5 * alpha * dtn2
+        faci = math.sqrt(bbi ** 2 + 1.0) - bbi
+
+    if node_indices is not None:
+        idx = np.asarray(node_indices, dtype=int)
+        mask = (stifn_out[idx] > EM20) & (mass[idx] > 0.0)
+        target = idx[mask]
+    else:
+        mask = (stifn_out > EM20) & (mass > 0.0)
+        target = np.where(mask)[0]
+
+    if len(target) > 0:
+        dt0 = np.sqrt(2.0 * mass[target] / stifn_out[target])
+        dt0 = np.minimum(1.0e4, dt0)
+        bb = (beta / np.maximum(dt0, EM20)) + 0.5 * alpha * dt0
+        fac = np.sqrt(bb ** 2 + 1.0) - bb
+        if dtmi2 > 0.0:
+            fac = np.where(fac * dt0 < dtmi2, np.maximum(fac, faci), fac)
+        min_fac = float(np.min(fac))
+        coeff = 1.0 / np.maximum(fac ** 2, EM20)
+        stifn_out[target] *= coeff
+
+    if stifr_out is not None and inertia is not None:
+        if node_indices is not None:
+            r_mask = (stifr_out[idx] > EM20) & (inertia[idx] > 0.0)
+            r_target = idx[r_mask]
+        else:
+            r_mask = (stifr_out > EM20) & (inertia > 0.0)
+            r_target = np.where(r_mask)[0]
+        if len(r_target) > 0:
+            dt0_r = np.sqrt(2.0 * inertia[r_target] / stifr_out[r_target])
+            dt0_r = np.minimum(1.0e4, dt0_r)
+            bb_r = (beta / np.maximum(dt0_r, EM20)) + 0.5 * alpha * dt0_r
+            fac_r = np.sqrt(bb_r ** 2 + 1.0) - bb_r
+            if dtmi2 > 0.0:
+                fac_r = np.where(fac_r * dt0_r < dtmi2, np.maximum(fac_r, faci), fac_r)
+            coeff_r = 1.0 / np.maximum(fac_r ** 2, EM20)
+            stifr_out[r_target] *= coeff_r
+
+    return stifn_out, stifr_out, min_fac
