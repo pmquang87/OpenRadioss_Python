@@ -23,6 +23,18 @@ from .fsi_coupling import (  # noqa: F401
     fsi_pressure_to_force,
     fsi_velocity_compatibility,
     fsi_step,
+    shape_functions_quad,
+    compute_quad_tangents_and_normal,
+    project_point_to_quad,
+    apply_grid_velocity_bcs,
+    FSICouplingPenalty,
+    FSICouplingTied,
+)
+from .ale_porous import (  # noqa: F401
+    PorousProperty15,
+    DarcyForchheimerFlow,
+    compute_porous_face_fluxes,
+    porous_convection_step,
 )
 from .bolt_preload import (  # noqa: F401
     BoltPreloadEngine,

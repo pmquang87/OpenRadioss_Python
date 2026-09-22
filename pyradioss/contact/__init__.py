@@ -39,6 +39,13 @@ from .friction_models import (  # noqa: F401
     compute_friction_coefficient,
     compute_friction_force,
 )
+from .thermal_contact import (  # noqa: F401
+    thermal_contact_type2,
+    thermal_contact_type7,
+    thermal_contact_type11,
+    thermal_contact_type21,
+    thermal_contact_type25,
+)
 
 ContactType4 = ContactType7
 ContactType13 = ContactType7

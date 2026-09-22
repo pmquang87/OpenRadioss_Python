@@ -547,6 +547,117 @@ class ContactType11:
         wrk = float(np.einsum("nb,nb->", Fvec, vrel)) * dt
         return -wrk, dt_int
 
+    def compute_thermal_conduction(
+        self,
+        temp: np.ndarray,
+        dt: float,
+        kthe: Optional[float] = None,
+        frad: Optional[float] = None,
+        drad: Optional[float] = None,
+        iform: Optional[int] = None,
+        tint: Optional[float] = None,
+        mat_cond: Optional[np.ndarray] = None,
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
+        """Compute thermal conduction and radiation for /INTER/TYPE11 edge-to-edge contact.
+
+        Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\interfaces\\int11\\i11therm.F
+
+        Parameters
+        ----------
+        temp : np.ndarray
+            Nodal temperatures.
+        dt : float
+            Time step dt.
+        kthe : Optional[float]
+            Thermal interface conductivity KTHE.
+        frad : Optional[float]
+            Radiation coefficient.
+        drad : Optional[float]
+            Radiation cutoff distance.
+        iform : Optional[int]
+            0 = ambient exchange, 1 = slave-master exchange.
+        tint : Optional[float]
+            Ambient temperature.
+        mat_cond : Optional[np.ndarray]
+            Material conductivity per pair.
+
+        Returns
+        -------
+        fthe : np.ndarray
+            Nodal thermal energy increments [J].
+        condint : np.ndarray
+            Thermal conductance per pair [W/K].
+        heat_transferred : float
+            Total thermal energy transferred across edges [J].
+        """
+        from .thermal_contact import thermal_contact_type11
+
+        itf = self.itf
+        if kthe is None:
+            kthe = getattr(itf, "kthe", 0.0) or getattr(itf, "rstif", 0.0)
+        if frad is None:
+            frad = getattr(itf, "frad", 0.0)
+        if drad is None:
+            drad = getattr(itf, "drad", 0.0)
+        if iform is None:
+            iform = getattr(itf, "iform_th", getattr(itf, "iform", 1))
+        if tint is None:
+            tint = getattr(itf, "tint", 293.15)
+
+        if len(self.pairs_s) == 0:
+            return np.zeros(len(temp), dtype=float), np.zeros(0, dtype=float), 0.0
+
+        live = self.es_alive[self.pairs_s] & self.em_alive[self.pairs_m]
+        ps = self.pairs_s[live]
+        pm = self.pairs_m[live]
+        if len(ps) == 0:
+            return np.zeros(len(temp), dtype=float), np.zeros(0, dtype=float), 0.0
+
+        ea = self.es[ps]
+        eb = self.em[pm]
+        x = getattr(self.model, "x", getattr(self.model, "x0", np.zeros((len(temp), 3))))
+
+        s, t, cA, cB = _closest_points_on_segments(
+            x[ea[:, 0]], x[ea[:, 1]], x[eb[:, 0]], x[eb[:, 1]]
+        )
+        d = norm3(cA - cB)
+
+        if self.itf.igap == 1:
+            gap = self.gap_s[ps] + self.gap_m[pm]
+            if self.gap_min > 0.0:
+                gap = np.maximum(gap, self.gap_min)
+            if self.gap_max < np.inf:
+                gap = np.minimum(gap, self.gap_max)
+        else:
+            gap = np.full(len(ps), self.gap_const)
+
+        penrad = d - gap
+        hs = np.column_stack([1.0 - s, s])
+        hm = np.column_stack([1.0 - t, t])
+
+        # Tributary area: length of edge times gap
+        l_ea = norm3(x[ea[:, 1]] - x[ea[:, 0]])
+        l_eb = norm3(x[eb[:, 1]] - x[eb[:, 0]])
+        areac = 0.5 * (l_ea + l_eb) * gap
+
+        return thermal_contact_type11(
+            temp=temp,
+            slave_edge_nodes=ea,
+            master_edge_nodes=eb,
+            hs=hs,
+            hm=hm,
+            kthe=kthe,
+            dt=dt,
+            areac=areac,
+            penrad=penrad,
+            gapv=gap,
+            frad=frad,
+            drad=drad,
+            iform=iform,
+            tint=tint,
+            mat_cond=mat_cond,
+        )
+
 
 class LagmulType11:
     """One /INTER/LAGMUL/TYPE11 edge-to-edge constraint, engine-side."""

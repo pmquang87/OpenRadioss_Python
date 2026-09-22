@@ -27,7 +27,7 @@ that  a = (fext + fint) / m  (this matches the Fortran A(3,*) accumulation
 where internal forces enter negated).
 """
 
-from . import (beam_fiber, beam_type3, shell_bt4, shell_dkt18, shell_dkt6, shell_qbat, shell_qeph,  # noqa: F401
+from . import (beam_fiber, beam_type3, iga3d, shell_bt4, shell_dkt18, shell_dkt6, shell_qbat, shell_qeph,  # noqa: F401
                shell_thick16, shell_tri3, solid_bric20, solid_cohesive, solid_connect, solid_heph, solid_hexa8,
                solid_hexa8_eas, solid_hexa8_full, solid_hexa8z, solid_penta6, solid_penta6_heph, solid_pyra5,
                solid_quad, solid_quad4_full, solid_shell_ha8, solid_tetra10, solid_tetra4,
@@ -35,6 +35,10 @@ from . import (beam_fiber, beam_type3, shell_bt4, shell_dkt18, shell_dkt6, shell
                thickshell_composite, thickshell_wedge6, truss, nstrand, xfem_shell, xfem_crack)
 
 KERNELS = {
+    # Isogeometric Analysis 3D Solids (NURBS)
+    "iga3d": iga3d,
+    "ige3d": iga3d,
+
     # 3D Solids (8-node hexas, 20-node, wedges, tetras, pyramids, cohesive, solid shells)
     "bricks": solid_hexa8,
     "bricks_full": solid_hexa8_full,

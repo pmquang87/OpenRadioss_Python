@@ -464,3 +464,96 @@ class ContactType21:
         econt_est = float(0.5 * np.sum(K * pene * pene)) + econt_fric
 
         return econt_est, dt_int
+
+    def compute_thermal_conduction(
+        self,
+        temp: np.ndarray,
+        dt: float,
+        kthe: Optional[float] = None,
+        dcond: float = 0.0,
+        fcond: Optional[Any] = None,
+        frad: float = 0.0,
+        drad: float = 0.0,
+        iform: int = 1,
+        fheat: float = 0.0,
+        efrict: Optional[np.ndarray] = None,
+        theaccfact: float = 1.0,
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
+        """Compute thermal conduction and radiation across /INTER/TYPE21 drawbead interface.
+
+        Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\interfaces\\int21\\i21therm.F
+
+        Parameters
+        ----------
+        temp : np.ndarray
+            Nodal temperatures.
+        dt : float
+            Time step dt.
+        kthe : Optional[float]
+            Thermal interface conductivity KTHE.
+        dcond : float
+            Distance decay limit.
+        fcond : Optional[Any]
+            Conductance decay curve.
+        frad : float
+            Radiation coefficient.
+        drad : float
+            Radiation cutoff distance.
+        iform : int
+            1 = update master bead nodes, 0 = secondary only.
+        fheat : float
+            Friction heating partition factor.
+        efrict : Optional[np.ndarray]
+            Friction energy dissipation per pair over dt.
+        theaccfact : float
+            Thermal acceleration factor.
+
+        Returns
+        -------
+        fthe : np.ndarray
+            Nodal thermal energy increments [J].
+        condint : np.ndarray
+            Thermal conductance per pair [W/K].
+        heat_transferred : float
+            Total thermal energy transferred [J].
+        """
+        from .thermal_contact import thermal_contact_type21
+
+        itf = self.itf
+        if kthe is None:
+            kthe = getattr(itf, "kthe", 0.0) or getattr(itf, "rstif", 0.0)
+
+        if len(self.slave_nodes) == 0 or len(self.master_edges) == 0:
+            return np.zeros(len(temp), dtype=float), np.zeros(0, dtype=float), 0.0
+
+        n_pairs = len(self.slave_nodes)
+        weights = np.zeros((n_pairs, 4), dtype=float)
+        weights[:, 0] = 0.5
+        weights[:, 1] = 0.5
+
+        master_segs = np.zeros((n_pairs, 4), dtype=np.int64)
+        master_segs[:, 0] = self.master_edges[0, 0]
+        master_segs[:, 1] = self.master_edges[0, 1]
+        master_segs[:, 2] = master_segs[:, 1]
+        master_segs[:, 3] = master_segs[:, 1]
+
+        areac = np.full(n_pairs, 1.0, dtype=float)
+
+        return thermal_contact_type21(
+            temp=temp,
+            slave_nodes=self.slave_nodes,
+            master_segs=master_segs,
+            weights=weights,
+            kthe=kthe,
+            dt=dt,
+            theaccfact=theaccfact,
+            areac=areac,
+            dcond=dcond,
+            fcond=fcond,
+            frad=frad,
+            drad=drad,
+            iform=iform,
+            fheat=fheat,
+            efrict=efrict,
+        )
+

@@ -513,10 +513,486 @@ def fsi_step(
     return dE_fsi
 
 
+# =============================================================================
+# Quad Shape Functions & Geometry
+# Fortran origin: engine/source/ale/inter/shapeh.F lines 33-60
+# =============================================================================
+
+def shape_functions_quad(s: float | np.ndarray, t: float | np.ndarray) -> np.ndarray:
+    """Evaluate bilinear shape functions on quadrilateral domain [-1, 1] x [-1, 1].
+    
+    Ported from OpenRadioss Fortran:
+    engine/source/ale/inter/shapeh.F lines 33-60
+    
+    H1(s, t) = 0.25 * (1 - s) * (1 - t)
+    H2(s, t) = 0.25 * (1 + s) * (1 - t)
+    H3(s, t) = 0.25 * (1 + s) * (1 + t)
+    H4(s, t) = 0.25 * (1 - s) * (1 + t)
+    
+    Args:
+        s: parametric coordinate in [-1, 1] (scalar or array)
+        t: parametric coordinate in [-1, 1] (scalar or array)
+        
+    Returns:
+        H: (4, ...) array of shape function values summing to 1.
+    """
+    # Ported from engine/source/ale/inter/shapeh.F lines 50-57
+    sp = 1.0 + s
+    sm = 1.0 - s
+    tp = 0.25 * (1.0 + t)
+    tm = 0.25 * (1.0 - t)
+    
+    h1 = tm * sm
+    h2 = tm * sp
+    h3 = tp * sp
+    h4 = tp * sm
+    
+    return np.array([h1, h2, h3, h4], dtype=np.float64)
+
+
+def compute_quad_tangents_and_normal(quad_xyz: np.ndarray,
+                                     s: float = 0.0,
+                                     t: float = 0.0) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute tangent vectors and outward unit normal vector on a quad face at (s, t).
+    
+    Ported from OpenRadioss Fortran:
+    engine/source/ale/ale3d/iqel03.F lines 86-107, 243-250
+    
+    Args:
+        quad_xyz: (4, 3) coordinates of quad nodes [n0, n1, n2, n3] CCW.
+        s: parametric coordinate in [-1, 1]
+        t: parametric coordinate in [-1, 1]
+        
+    Returns:
+        (fs, ft, normal):
+            fs: tangent vector wrt s, dX/ds
+            ft: tangent vector wrt t, dX/dt
+            normal: unit outward normal (fs x ft) / ||fs x ft||
+    """
+    # Ported from engine/source/ale/ale3d/iqel03.F lines 72-106
+    x1, x2, x3, x4 = quad_xyz[0], quad_xyz[1], quad_xyz[2], quad_xyz[3]
+    
+    xx12 = x1 - x2
+    xx14 = x1 - x4
+    xx23 = x2 - x3
+    xx34 = x3 - x4
+    
+    tp = 0.25 * (1.0 + t)
+    tm = 0.25 * (1.0 - t)
+    sp = 0.25 * (1.0 + s)
+    sm = 0.25 * (1.0 - s)
+    
+    fs = tp * xx34 - tm * xx12
+    ft = -sm * xx14 - sp * xx23
+    
+    n = np.cross(fs, ft)
+    norm_n = np.linalg.norm(n)
+    if norm_n > 1e-30:
+        unit_n = n / norm_n
+    else:
+        unit_n = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+        
+    return fs, ft, unit_n
+
+
+def project_point_to_quad(point: np.ndarray,
+                          quad_xyz: np.ndarray,
+                          max_iter: int = 15,
+                          tol: float = 1e-9) -> Tuple[float, float, float, np.ndarray]:
+    """Project a 3D point onto a quadrilateral surface to find parametric coordinates (s, t).
+    
+    Uses 2D Newton-Raphson minimization of || X_quad(s, t) - point ||^2.
+    
+    Ported from OpenRadioss projection principles in:
+    engine/source/ale/inter/iqela1.F lines 124-135 and engine/source/ale/ale3d/iqel03.F lines 57-107
+    
+    Args:
+        point: (3,) coordinates of slave node.
+        quad_xyz: (4, 3) coordinates of master quad face nodes.
+        max_iter: maximum Newton iterations.
+        tol: convergence tolerance.
+        
+    Returns:
+        (s, t, distance, normal):
+            s, t: parametric coordinates clipped to [-1, 1]
+            distance: signed normal distance (positive in outward normal direction)
+            normal: unit normal at projected point
+    """
+    s, t = 0.0, 0.0
+    
+    for _ in range(max_iter):
+        h = shape_functions_quad(s, t)
+        p_surf = np.dot(h, quad_xyz)
+        r = p_surf - point
+        
+        fs, ft, _ = compute_quad_tangents_and_normal(quad_xyz, s, t)
+        
+        j11 = np.dot(fs, fs)
+        j12 = np.dot(fs, ft)
+        j22 = np.dot(ft, ft)
+        
+        rhs1 = -np.dot(fs, r)
+        rhs2 = -np.dot(ft, r)
+        
+        det = j11 * j22 - j12 * j12
+        if abs(det) < 1e-24:
+            break
+            
+        ds = (j22 * rhs1 - j12 * rhs2) / det
+        dt = (j11 * rhs2 - j12 * rhs1) / det
+        
+        s = np.clip(s + ds, -1.0, 1.0)
+        t = np.clip(t + dt, -1.0, 1.0)
+        
+        if abs(ds) < tol and abs(dt) < tol:
+            break
+            
+    h = shape_functions_quad(s, t)
+    p_surf = np.dot(h, quad_xyz)
+    _, _, normal = compute_quad_tangents_and_normal(quad_xyz, s, t)
+    distance = float(np.dot(point - p_surf, normal))
+    
+    return float(s), float(t), distance, normal
+
+
+# =============================================================================
+# Grid Velocity Boundary Conditions (BCS3V)
+# Fortran origin: engine/source/ale/inter/bcs3v.F lines 30-146
+# =============================================================================
+
+def apply_grid_velocity_bcs(w: np.ndarray,
+                            v: np.ndarray,
+                            bcs_codes: np.ndarray,
+                            skew_matrices: Optional[np.ndarray] = None) -> np.ndarray:
+    """Apply kinematic boundary condition constraints to ALE grid velocity W.
+    
+    Ported from OpenRadioss Fortran:
+    engine/source/ale/inter/bcs3v.F lines 54-143
+    
+    In global frame (skew=None):
+    - LCOD 1: Wz = Vz
+    - LCOD 2: Wy = Vy
+    - LCOD 3: Wy = Vy, Wz = Vz
+    - LCOD 4: Wx = Vx
+    - LCOD 5: Wx = Vx, Wz = Vz
+    - LCOD 6: Wx = Vx, Wy = Vy
+    - LCOD 7: W = V (fully Lagrangian node)
+    
+    Args:
+        w: (n_nodes, 3) grid velocities.
+        v: (n_nodes, 3) material velocities.
+        bcs_codes: (n_nodes,) integer constraint code in [0, 7].
+        skew_matrices: optional (n_nodes, 3, 3) local skew coordinate frames.
+        
+    Returns:
+        w_out: (n_nodes, 3) constrained grid velocities.
+    """
+    w_out = w.copy()
+    n_nodes = len(w)
+    
+    for n in range(n_nodes):
+        code = int(bcs_codes[n])
+        if code <= 0:
+            continue
+            
+        if skew_matrices is None or np.allclose(skew_matrices[n], np.eye(3)):
+            # Global Cartesian frame - bcs3v.F lines 62-81
+            if code == 1:
+                w_out[n, 2] = v[n, 2]
+            elif code == 2:
+                w_out[n, 1] = v[n, 1]
+            elif code == 3:
+                w_out[n, 1] = v[n, 1]
+                w_out[n, 2] = v[n, 2]
+            elif code == 4:
+                w_out[n, 0] = v[n, 0]
+            elif code == 5:
+                w_out[n, 0] = v[n, 0]
+                w_out[n, 2] = v[n, 2]
+            elif code == 6:
+                w_out[n, 0] = v[n, 0]
+                w_out[n, 1] = v[n, 1]
+            elif code == 7:
+                w_out[n] = v[n]
+        else:
+            # Oblique / Skew frame - bcs3v.F lines 86-142
+            diff = w_out[n] - v[n]
+            b1 = skew_matrices[n, 0]
+            b2 = skew_matrices[n, 1]
+            b3 = skew_matrices[n, 2]
+            
+            if code == 1:
+                aa = np.dot(b3, diff)
+                w_out[n] -= b3 * aa
+            elif code == 2:
+                aa = np.dot(b2, diff)
+                w_out[n] -= b2 * aa
+            elif code == 3:
+                aa3 = np.dot(b3, diff)
+                w_out[n] -= b3 * aa3
+                diff = w_out[n] - v[n]
+                aa2 = np.dot(b2, diff)
+                w_out[n] -= b2 * aa2
+            elif code == 4:
+                aa = np.dot(b1, diff)
+                w_out[n] -= b1 * aa
+            elif code == 5:
+                aa3 = np.dot(b3, diff)
+                w_out[n] -= b3 * aa3
+                diff = w_out[n] - v[n]
+                aa1 = np.dot(b1, diff)
+                w_out[n] -= b1 * aa1
+            elif code == 6:
+                aa1 = np.dot(b1, diff)
+                w_out[n] -= b1 * aa1
+                diff = w_out[n] - v[n]
+                aa2 = np.dot(b2, diff)
+                w_out[n] -= b2 * aa2
+            elif code == 7:
+                w_out[n] = v[n]
+                
+    return w_out
+
+
+# =============================================================================
+# Penalty FSI Coupling (/INTER/TYPE11 and Penalty FSI)
+# Fortran origin: engine/source/interfaces/int11/i11for3.F lines 237-286
+# =============================================================================
+
+class FSICouplingPenalty:
+    """Penalty-based ALE Fluid-Structure Interaction (FSI) coupling (/INTER/TYPE11).
+    
+    Ported from OpenRadioss Fortran:
+    - engine/source/interfaces/int11/i11for3.F: lines 237-286 (contact force, nonlinear stiffness, energy)
+    - engine/source/ale/inter/iqela1.F: lines 103-164 (force distribution to quad nodes)
+    """
+    
+    def __init__(self,
+                 stiffness: float,
+                 gap: float = 0.0,
+                 damping_ratio: float = 0.05,
+                 nonlinear: bool = False,
+                 name: str = "fsi_penalty") -> None:
+        self.stiffness = float(stiffness)
+        self.gap = float(gap)
+        self.damping_ratio = float(damping_ratio)
+        self.nonlinear = bool(nonlinear)
+        self.name = name
+        self.contact_energy = 0.0
+        
+    def compute_penalty_force(self,
+                              penetration: float,
+                              rel_normal_vel: float,
+                              effective_mass: float = 1.0) -> Tuple[float, float]:
+        """Compute normal penalty contact force and instantaneous contact energy.
+        
+        Ported from engine/source/interfaces/int11/i11for3.F lines 250, 282-286.
+        """
+        if penetration <= 0.0:
+            return 0.0, 0.0
+            
+        k = self.stiffness
+        p = penetration
+        gap = max(self.gap, 1e-6)
+        
+        if self.nonlinear:
+            fac = gap / max(1e-10, gap - p)
+            facm1 = max(1e-10, 1.0 / fac)
+            e_cont = 0.5 * k * (gap ** 2) * (facm1 - 1.0 - np.log(facm1))
+            k_eff = 0.5 * k * fac
+            f_elastic = k_eff * p
+        else:
+            f_elastic = k * p
+            e_cont = 0.5 * k * (p ** 2)
+            
+        c_crit = 2.0 * np.sqrt(max(0.0, k * effective_mass))
+        c_damp = self.damping_ratio * c_crit
+        f_damp = -c_damp * min(0.0, rel_normal_vel)
+        
+        fn = max(0.0, f_elastic + f_damp)
+        return float(fn), float(e_cont)
+
+    def apply_coupling(self,
+                       slave_nodes_x: np.ndarray,
+                       slave_nodes_v: np.ndarray,
+                       slave_masses: np.ndarray,
+                       master_quads_conn: np.ndarray,
+                       master_nodes_x: np.ndarray,
+                       master_nodes_v: np.ndarray,
+                       dt: float) -> Dict[str, Any]:
+        """Apply penalty FSI coupling between fluid boundary nodes and structural shell faces."""
+        n_slave = len(slave_nodes_x)
+        n_master = len(master_nodes_x)
+        
+        f_slave = np.zeros((n_slave, 3), dtype=np.float64)
+        f_master = np.zeros((n_master, 3), dtype=np.float64)
+        
+        n_contacts = 0
+        step_work = 0.0
+        
+        for s_idx in range(n_slave):
+            xs = slave_nodes_x[s_idx]
+            vs = slave_nodes_v[s_idx]
+            ms = slave_masses[s_idx]
+            
+            best_pen = -1.0
+            best_quad = -1
+            best_st = (0.0, 0.0)
+            best_n = np.zeros(3)
+            
+            for q_idx, quad_conn in enumerate(master_quads_conn):
+                q_xyz = master_nodes_x[quad_conn]
+                s_param, t_param, dist, normal = project_point_to_quad(xs, q_xyz)
+                
+                pen = self.gap - dist
+                if pen > 0.0 and pen > best_pen:
+                    best_pen = pen
+                    best_quad = q_idx
+                    best_st = (s_param, t_param)
+                    best_n = normal
+                    
+            if best_pen > 0.0 and best_quad >= 0:
+                n_contacts += 1
+                quad_conn = master_quads_conn[best_quad]
+                q_vel = master_nodes_v[quad_conn]
+                
+                h = shape_functions_quad(best_st[0], best_st[1])
+                v_master_contact = np.dot(h, q_vel)
+                
+                rel_v = vs - v_master_contact
+                rel_vn = float(np.dot(rel_v, best_n))
+                
+                fn, e_cont = self.compute_penalty_force(best_pen, rel_vn, effective_mass=ms)
+                f_contact_vec = fn * best_n
+                
+                f_slave[s_idx] += f_contact_vec
+                for j in range(4):
+                    m_node = quad_conn[j]
+                    f_master[m_node] -= h[j] * f_contact_vec
+                    
+                step_work += fn * max(0.0, best_pen)
+                
+        self.contact_energy += step_work
+        
+        return {
+            "f_slave": f_slave,
+            "f_master": f_master,
+            "contact_energy": self.contact_energy,
+            "step_work": step_work,
+            "n_contacts": n_contacts,
+        }
+
+
+# =============================================================================
+# Tied Kinematic FSI Coupling (/INTER/TYPE12)
+# Fortran origin: engine/source/ale/inter/iqela1.F, iqela2.F, iqela3.F, i12for3.F
+# =============================================================================
+
+class FSICouplingTied:
+    """Tied Kinematic ALE Fluid-Structure Interaction (FSI) coupling (/INTER/TYPE12).
+    
+    Ported from OpenRadioss Fortran:
+    - engine/source/ale/inter/iqela3.F: lines 63-85 (ALE grid velocity = structure velocity)
+    - engine/source/ale/inter/iqela2.F: lines 73-132, 222-232 (kinematic acceleration corrections)
+    - engine/source/interfaces/interf/i12for3.F: lines 79-150 (force and mass transfer to structure)
+    - starter/source/interfaces/int12/hm_read_inter_type12.F: lines 94-200
+    """
+    
+    def __init__(self,
+                 tolerance: float = 0.01,
+                 itied: int = 1,
+                 name: str = "fsi_tied") -> None:
+        self.tolerance = float(tolerance)
+        self.itied = int(itied)
+        self.name = name
+        self.pairs: List[Tuple[int, int, float, float]] = []
+        
+    def find_tied_pairs(self,
+                        slave_nodes_x: np.ndarray,
+                        master_quads_conn: np.ndarray,
+                        master_nodes_x: np.ndarray) -> int:
+        """Identify which slave nodes lie within tolerance of master quad segments."""
+        self.pairs = []
+        n_slave = len(slave_nodes_x)
+        
+        for s_idx in range(n_slave):
+            xs = slave_nodes_x[s_idx]
+            best_dist = float("inf")
+            best_quad = -1
+            best_st = (0.0, 0.0)
+            
+            for q_idx, quad_conn in enumerate(master_quads_conn):
+                q_xyz = master_nodes_x[quad_conn]
+                s_param, t_param, dist, _ = project_point_to_quad(xs, q_xyz)
+                abs_dist = abs(dist)
+                if abs_dist < best_dist and abs_dist <= self.tolerance:
+                    best_dist = abs_dist
+                    best_quad = q_idx
+                    best_st = (s_param, t_param)
+                    
+            if best_quad >= 0:
+                self.pairs.append((s_idx, best_quad, best_st[0], best_st[1]))
+                
+        return len(self.pairs)
+
+    def map_grid_velocities(self,
+                            w_fluid: np.ndarray,
+                            v_struct: np.ndarray,
+                            master_quads_conn: np.ndarray) -> np.ndarray:
+        """Map structural velocities to ALE fluid interface grid velocities.
+        
+        Ported from engine/source/ale/inter/iqela3.F lines 63-85.
+        """
+        w_out = w_fluid.copy()
+        for s_idx, q_idx, s, t in self.pairs:
+            quad_conn = master_quads_conn[q_idx]
+            h = shape_functions_quad(s, t)
+            w_out[s_idx] = np.dot(h, v_struct[quad_conn])
+            
+        return w_out
+
+    def transfer_forces_and_mass(self,
+                                 f_fluid: np.ndarray,
+                                 m_fluid: np.ndarray,
+                                 f_struct: np.ndarray,
+                                 m_struct: np.ndarray,
+                                 master_quads_conn: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Transfer fluid interface forces and mass to structural nodes.
+        
+        Ported from engine/source/interfaces/interf/i12for3.F lines 110-144.
+        """
+        f_s_out = f_struct.copy()
+        m_s_out = m_struct.copy()
+        f_f_out = f_fluid.copy()
+        
+        for s_idx, q_idx, s, t in self.pairs:
+            quad_conn = master_quads_conn[q_idx]
+            h = shape_functions_quad(s, t)
+            
+            f_node = f_fluid[s_idx]
+            m_node = m_fluid[s_idx]
+            
+            for j in range(4):
+                m_nid = quad_conn[j]
+                f_s_out[m_nid] += h[j] * f_node
+                m_s_out[m_nid] += h[j] * m_node
+                
+            f_f_out[s_idx] = 0.0
+            
+        return f_s_out, m_s_out, f_f_out
+
+
 __all__ = [
     "FSIInterface",
     "fsi_compute_slave_normals",
     "fsi_pressure_to_force",
     "fsi_velocity_compatibility",
     "fsi_step",
+    "shape_functions_quad",
+    "compute_quad_tangents_and_normal",
+    "project_point_to_quad",
+    "apply_grid_velocity_bcs",
+    "FSICouplingPenalty",
+    "FSICouplingTied",
 ]
+

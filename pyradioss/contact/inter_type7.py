@@ -727,6 +727,103 @@ class ContactType7:
         wrk = float(np.einsum("nb,nb->", Fvec, vrel)) * dt
         return -wrk, dt_int
 
+    def compute_thermal_conduction(
+        self,
+        temp: np.ndarray,
+        dt: float,
+        theaccfact: float = 1.0,
+        kthe: Optional[float] = None,
+        frad: Optional[float] = None,
+        drad: Optional[float] = None,
+        iform: Optional[int] = None,
+        tint: Optional[float] = None,
+        fheats: Optional[float] = None,
+        fheatm: Optional[float] = None,
+        efrict: Optional[np.ndarray] = None,
+    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, float]]:
+        """Compute thermal conduction, radiation, and friction heating for /INTER/TYPE7.
+
+        Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\interfaces\\int07\\i7therm.F
+
+        Parameters
+        ----------
+        temp : np.ndarray
+            Nodal temperatures.
+        dt : float
+            Time step dt.
+        theaccfact : float
+            Thermal acceleration factor.
+        kthe : Optional[float]
+            Thermal interface conductance KTHE.
+        frad : Optional[float]
+            Radiation coefficient.
+        drad : Optional[float]
+            Radiation cutoff distance.
+        iform : Optional[int]
+            0 = ambient exchange, 1 = slave-master exchange.
+        tint : Optional[float]
+            Ambient temperature.
+        fheats : Optional[float]
+            Friction heating fraction to slave.
+        fheatm : Optional[float]
+            Friction heating fraction to master.
+        efrict : Optional[np.ndarray]
+            Frictional dissipation per pair over dt.
+
+        Returns
+        -------
+        fthe : np.ndarray
+            Nodal thermal energy increments [J].
+        condint : np.ndarray
+            Thermal conductance per pair [W/K].
+        ledger : Dict[str, float]
+            Conduction, radiation, and friction energy breakdown.
+        """
+        from .thermal_contact import thermal_contact_type7
+
+        itf = self.itf
+        if kthe is None:
+            kthe = getattr(itf, "kthe", 0.0) or getattr(itf, "rstif", 0.0)
+        if frad is None:
+            frad = getattr(itf, "frad", 0.0)
+        if drad is None:
+            drad = getattr(itf, "drad", 0.0)
+        if iform is None:
+            iform = getattr(itf, "iform_th", getattr(itf, "iform", 1))
+        if tint is None:
+            tint = getattr(itf, "tint", 293.15)
+        if fheats is None:
+            fheats = getattr(itf, "fheats", 0.0)
+        if fheatm is None:
+            fheatm = getattr(itf, "fheatm", 0.0)
+
+        # If pairs are active from broad/narrow phase
+        if len(self.pairs_node) == 0:
+            return np.zeros(len(temp), dtype=float), np.zeros(0, dtype=float), {"conduction": 0.0, "radiation": 0.0, "friction": 0.0}
+
+        x = getattr(self.model, "x", getattr(self.model, "x0", np.zeros((len(temp), 3))))
+        slave_nodes = self.pairs_node
+        master_segs = self.segs[self.pairs_seg]
+        weights = np.full((len(slave_nodes), 4), 0.25, dtype=float)
+
+        return thermal_contact_type7(
+            x=x,
+            temp=temp,
+            slave_nodes=slave_nodes,
+            master_segs=master_segs,
+            weights=weights,
+            kthe=kthe,
+            dt=dt,
+            theaccfact=theaccfact,
+            iform=iform,
+            tint=tint,
+            frad=frad,
+            drad=drad,
+            fheats=fheats,
+            fheatm=fheatm,
+            efrict=efrict,
+        )
+
 
 class LagmulType7:
     """One /INTER/LAGMUL/TYPE7 constraint, engine-side."""

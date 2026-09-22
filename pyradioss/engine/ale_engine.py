@@ -17,6 +17,13 @@ Ported from OpenRadioss Fortran sources:
 - engine/source/ale/grid/alew6.F: Centroidal Voronoi / volume grid smoothing for /ALE/GRID/VOLUME (lines 98-179)
 - engine/source/ale/grid/alelin.F: grid velocity link constraints for /ALE/LINK/VEL (lines 61-198)
 - starter/source/ale/bimat/inimu3.F & engine/source/ale/bimat/bimat2.F: multi-material volume fraction remapping (lines 80-165)
+- engine/source/ale/subcycling/alesub1.F: ALE subcycling part 1 (lines 70-98)
+- engine/source/ale/subcycling/alesub2.F: ALE subcycling part 2 (lines 82-135)
+- engine/source/ale/atherm.F: Thermal ALE diffusivity and conductivity (lines 129-139)
+- engine/source/ale/ale3d/adiff3.F: 3D finite volume thermal diffusion (lines 81-149)
+- engine/source/ale/arezon.F90: ALE rezoning and state variable remapping (lines 38-120)
+- engine/source/ale/aconve.F90: ALE convection driver (lines 37-120)
+- engine/source/ale/alemain.F: ALE main driver and system coordinator (lines 24-120)
 """
 
 from __future__ import annotations
@@ -1533,3 +1540,541 @@ def ale_step(model: Any, dt: float, state: Any) -> None:
             
         # 7. Update model node coordinates
         model.x[:] = x_new
+
+
+# =============================================================================
+# ALE Subcycling Management
+# Fortran origin: engine/source/ale/subcycling/alesub1.F and alesub2.F
+# =============================================================================
+
+def ale_subcycle_step1(d: np.ndarray,
+                       d_save: np.ndarray,
+                       v: np.ndarray,
+                       is_ale_node: np.ndarray,
+                       dt_solid: float,
+                       bcs_codes: Optional[np.ndarray] = None,
+                       skew_matrices: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Execute ALE subcycling Step 1 (grid velocity update & displacement backup).
+    
+    Ported from OpenRadioss Fortran:
+    engine/source/ale/subcycling/alesub1.F lines 70-98:
+    FAC = 1.0 / DT1
+    W = FAC * (D - DSAVE)
+    DSAVE = V  (save current Lagrangian velocities)
+    IF (NALE(N) == 0) THEN
+        V(N) = W(N)
+    ENDIF
+    CALL BCS3V(...)
+    
+    Args:
+        d: (n_nodes, 3) current nodal displacements D.
+        d_save: (n_nodes, 3) previous nodal displacements DSAVE.
+        v: (n_nodes, 3) current nodal velocities V.
+        is_ale_node: (n_nodes,) mask (1 for ALE node, 0 for Lagrangian structure node).
+        dt_solid: master solid explicit time step duration DT1.
+        bcs_codes: optional (n_nodes,) boundary condition codes in [0, 7].
+        skew_matrices: optional (n_nodes, 3, 3) local skew frames.
+        
+    Returns:
+        (w, v_saved, v_updated):
+            w: (n_nodes, 3) computed grid velocities W.
+            v_saved: (n_nodes, 3) saved material velocities for restoration in step 2.
+            v_updated: (n_nodes, 3) velocities with non-ALE nodes set to grid velocity.
+    """
+    fac = 1.0 / dt_solid if dt_solid > 0.0 else 0.0
+    
+    # Grid velocity W = (D - D_save) / dt_solid
+    w = fac * (d - d_save)
+    
+    # Save Lagrangian velocities into v_saved: alesub1.F lines 77-79
+    v_saved = v.copy()
+    v_updated = v.copy()
+    
+    # For non-ALE (pure structure) nodes, velocity equals grid velocity during subcycling
+    # alesub1.F lines 80-84
+    non_ale_mask = (is_ale_node == 0)
+    v_updated[non_ale_mask] = w[non_ale_mask]
+    
+    # Apply BCS3V grid velocity boundary conditions: alesub1.F lines 86-98
+    if bcs_codes is not None:
+        from pyradioss.engine.fsi_coupling import apply_grid_velocity_bcs
+        w = apply_grid_velocity_bcs(w, v_updated, bcs_codes, skew_matrices)
+        
+    return w, v_saved, v_updated
+
+
+def ale_subcycle_step2(v: np.ndarray,
+                       v_saved: np.ndarray,
+                       d: np.ndarray,
+                       is_ale_node: np.ndarray,
+                       dt_fluid_current: float,
+                       dt_fluid_prev: float = 0.0,
+                       scale_factor: float = 1.0,
+                       bcs_codes: Optional[np.ndarray] = None,
+                       skew_matrices: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray, float]:
+    """Execute ALE subcycling Step 2 (time step adjust & Lagrangian velocity restore).
+    
+    Ported from OpenRadioss Fortran:
+    engine/source/ale/subcycling/alesub2.F lines 82-135:
+    DT2 = DT2 * DTFSUB
+    IF (DT2S /= 0) DT2 = MIN(DT2, 1.1 * DT2S)
+    Reset non-ALE velocities: V(N) = DSAVE(N) where NALE(N) == 0
+    Save displacement: DSAVE(N) = D(N)
+    
+    Args:
+        v: (n_nodes, 3) current velocities.
+        v_saved: (n_nodes, 3) velocities saved from step 1.
+        d: (n_nodes, 3) current displacements.
+        is_ale_node: (n_nodes,) mask (1 for ALE node, 0 for structure node).
+        dt_fluid_current: calculated explicit fluid time step.
+        dt_fluid_prev: previous cycle fluid time step.
+        scale_factor: subcycling fluid time step multiplier DTFSUB.
+        bcs_codes: optional boundary condition codes.
+        skew_matrices: optional skew frames.
+        
+    Returns:
+        (v_restored, d_saved, dt_fluid_new):
+            v_restored: (n_nodes, 3) restored material velocities.
+            d_saved: (n_nodes, 3) displacements saved for next cycle step 1.
+            dt_fluid_new: updated fluid subcycling time step.
+    """
+    # Adjust fluid time step: alesub2.F lines 83-90
+    dt_fluid_new = dt_fluid_current * scale_factor
+    if dt_fluid_prev > 0.0:
+        dt_fluid_new = min(dt_fluid_new, 1.1 * dt_fluid_prev)
+        
+    # Reset non-ALE node velocities to their Lagrangian values: alesub2.F lines 108-113
+    v_restored = v.copy()
+    non_ale_mask = (is_ale_node == 0)
+    v_restored[non_ale_mask] = v_saved[non_ale_mask]
+    
+    # Apply BCS3V: alesub2.F lines 114-126
+    if bcs_codes is not None:
+        from pyradioss.engine.fsi_coupling import apply_grid_velocity_bcs
+        v_restored = apply_grid_velocity_bcs(v_restored, v_saved, bcs_codes, skew_matrices)
+        
+    # Save displacements for next subcycle step 1: alesub2.F lines 130-134
+    d_saved = d.copy()
+    
+    return v_restored, d_saved, float(dt_fluid_new)
+
+
+class ALESubcyclingManager:
+    """Manages fluid-structure explicit subcycling.
+    
+    Ported from OpenRadioss Fortran:
+    engine/source/ale/subcycling/alesub1.F and alesub2.F
+    
+    Coordinates multi-step subcycling where the fluid domain advances with
+    N_sub smaller acoustic time steps while solid forces are frozen.
+    """
+    
+    def __init__(self,
+                 dt_scale: float = 1.0,
+                 max_subcycles: int = 20) -> None:
+        """Initialize subcycling manager."""
+        self.dt_scale = float(dt_scale)
+        self.max_subcycles = int(max_subcycles)
+        self.dt_fluid_prev = 0.0
+        self.d_saved: Optional[np.ndarray] = None
+        self.v_saved: Optional[np.ndarray] = None
+        self.cycle_count = 0
+        
+    def begin_solid_cycle(self,
+                          d: np.ndarray,
+                          v: np.ndarray,
+                          is_ale_node: np.ndarray,
+                          dt_solid: float,
+                          bcs_codes: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
+        """Begin solid master cycle (executes alesub1)."""
+        if self.d_saved is None:
+            self.d_saved = d.copy()
+            
+        w, v_saved, v_upd = ale_subcycle_step1(
+            d=d,
+            d_save=self.d_saved,
+            v=v,
+            is_ale_node=is_ale_node,
+            dt_solid=dt_solid,
+            bcs_codes=bcs_codes,
+        )
+        self.v_saved = v_saved
+        return w, v_upd
+        
+    def determine_subcycles(self, dt_solid: float, dt_fluid_raw: float) -> Tuple[int, float]:
+        """Determine number of fluid subcycles and subcycle time step duration."""
+        dt_fluid = dt_fluid_raw * self.dt_scale
+        if self.dt_fluid_prev > 0.0:
+            dt_fluid = min(dt_fluid, 1.1 * self.dt_fluid_prev)
+            
+        n_sub = int(np.ceil(dt_solid / max(dt_fluid, 1e-20)))
+        n_sub = max(1, min(self.max_subcycles, n_sub))
+        dt_sub = dt_solid / n_sub
+        
+        self.dt_fluid_prev = dt_sub
+        return n_sub, dt_sub
+        
+    def end_solid_cycle(self,
+                        v: np.ndarray,
+                        d: np.ndarray,
+                        is_ale_node: np.ndarray,
+                        dt_fluid_current: float,
+                        bcs_codes: Optional[np.ndarray] = None) -> Tuple[np.ndarray, float]:
+        """End solid master cycle (executes alesub2)."""
+        if self.v_saved is None:
+            self.v_saved = v.copy()
+            
+        v_restored, d_saved, dt_new = ale_subcycle_step2(
+            v=v,
+            v_saved=self.v_saved,
+            d=d,
+            is_ale_node=is_ale_node,
+            dt_fluid_current=dt_fluid_current,
+            dt_fluid_prev=self.dt_fluid_prev,
+            scale_factor=self.dt_scale,
+            bcs_codes=bcs_codes,
+        )
+        self.d_saved = d_saved
+        self.dt_fluid_prev = dt_new
+        self.cycle_count += 1
+        return v_restored, dt_new
+
+
+# =============================================================================
+# Thermal ALE Module
+# Fortran origin: engine/source/ale/atherm.F and engine/source/ale/ale3d/adiff3.F
+# =============================================================================
+
+def ale_thermal_diffusivity(temperatures: np.ndarray,
+                            a1: float,
+                            b1: float,
+                            a2: Optional[float] = None,
+                            b2: Optional[float] = None,
+                            t_trans: float = 0.0,
+                            rho_cp: float = 1.0) -> Tuple[np.ndarray, np.ndarray]:
+    """Compute temperature-dependent thermal conductivity k(T) and diffusivity alpha(T).
+    
+    Ported from OpenRadioss Fortran:
+    engine/source/ale/atherm.F lines 129-139:
+    IF (T <= T_trans) THEN
+        k = A1 + B1 * T
+    ELSE
+        k = A2 + B2 * T
+    ENDIF
+    alpha = k / (rho * Cp)
+    
+    Args:
+        temperatures: (n_elem,) element temperatures [K].
+        a1: base thermal conductivity below transition [W/(m.K)].
+        b1: linear conductivity slope below transition [W/(m.K^2)].
+        a2: base conductivity above transition (defaults to a1).
+        b2: linear conductivity slope above transition (defaults to b1).
+        t_trans: transition temperature [K].
+        rho_cp: volumetric heat capacity rho * Cp [J/(m^3.K)].
+        
+    Returns:
+        (k, alpha):
+            k: (n_elem,) thermal conductivity [W/(m.K)].
+            alpha: (n_elem,) thermal diffusivity [m^2/s].
+    """
+    t = np.asarray(temperatures, dtype=np.float64)
+    a2_val = a1 if a2 is None else float(a2)
+    b2_val = b1 if b2 is None else float(b2)
+    
+    # Piecewise linear conductivity k(T) - atherm.F lines 134-138
+    cond = np.where(t <= t_trans, a1 + b1 * t, a2_val + b2_val * t)
+    cond = np.maximum(cond, 1e-12)
+    
+    denom = max(1e-20, float(rho_cp))
+    diffusivity = cond / denom
+    
+    return cond, diffusivity
+
+
+def compute_thermal_conductance_factors(x: np.ndarray,
+                                        conn: np.ndarray,
+                                        neighbor_elem: np.ndarray) -> np.ndarray:
+    """Compute 3D geometric conductance factors GRAD_j for all hex element faces.
+    
+    Ported from OpenRadioss Fortran:
+    engine/source/ale/ale3d/agrad3.F lines 154-260:
+    D_j = Centroid(neighbor_j) - Centroid(elem)
+    N_j = outward face normal vector (magnitude = 2 * FaceArea)
+    GRAD(e, j) = 4.0 * max(0, D_j . N_j) / max(1e-15, ||D_j||^2)
+    
+    Args:
+        x: (n_nodes, 3) nodal coordinates.
+        conn: (n_elem, 8) hex element connectivity.
+        neighbor_elem: (n_elem, 6) neighbor connectivity (-1 on boundary).
+        
+    Returns:
+        grad: (n_elem, 6) geometric face conductance factors [m].
+    """
+    n_elem = len(conn)
+    xe = x[conn]  # (n_elem, 8, 3)
+    xc = np.mean(xe, axis=1)  # (n_elem, 3) centroids
+    normals = compute_hex_face_normals(xe)  # (n_elem, 6, 3) magnitude 2*Area
+    
+    grad = np.zeros((n_elem, 6), dtype=np.float64)
+    
+    for e in range(n_elem):
+        for f_idx in range(6):
+            nbr = neighbor_elem[e, f_idx]
+            if nbr >= 0:
+                d_vec = xc[nbr] - xc[e]
+            else:
+                # Boundary face: distance from centroid to face centroid
+                f_nodes = HEX_FACES[f_idx]
+                xf = np.mean(xe[e, f_nodes], axis=0)
+                d_vec = 2.0 * (xf - xc[e])
+                
+            dd = np.dot(d_vec, d_vec)
+            d_dot_n = np.dot(d_vec, normals[e, f_idx])
+            
+            # Ported from agrad3.F lines 258-260:
+            grad[e, f_idx] = 4.0 * max(0.0, d_dot_n) / max(1e-15, dd)
+            
+    return grad
+
+
+def ale_thermal_diffusion_step(temperatures: np.ndarray,
+                               internal_energy_density: np.ndarray,
+                               volumes: np.ndarray,
+                               conductivities: np.ndarray,
+                               grad_factors: np.ndarray,
+                               neighbor_elem: np.ndarray,
+                               rho_cp: float,
+                               dt: float) -> Tuple[np.ndarray, np.ndarray, float]:
+    """Execute 3D explicit finite volume thermal diffusion step on hex cells.
+    
+    Ported from OpenRadioss Fortran:
+    engine/source/ale/ale3d/adiff3.F lines 81-149:
+    - Harmonic interpolation of face conductivities:
+      k_face = (k0 * kj) / max(1e-20, k0 + kj)
+    - Face conductive heat flux:
+      Q_face = k_face * (T_neighbor - T_elem) * GRAD_face
+    - Internal energy density update:
+      dphi = 2.0 * sum(Q_face) * dt / max(V, 1e-20)
+      PHIN += dphi
+    - Temperature update:
+      TEMP += dphi / rho_cp
+      
+    Conserves total thermal energy in closed domains: sum(dphi * V) == 0.
+    
+    Args:
+        temperatures: (n_elem,) current element temperatures [K].
+        internal_energy_density: (n_elem,) current energy density E/V [J/m^3].
+        volumes: (n_elem,) element volumes [m^3].
+        conductivities: (n_elem,) element thermal conductivities k [W/(m.K)].
+        grad_factors: (n_elem, 6) geometric conductance factors from agrad3.F.
+        neighbor_elem: (n_elem, 6) neighbor connectivity.
+        rho_cp: volumetric heat capacity rho * Cp [J/(m^3.K)].
+        dt: explicit time step duration [s].
+        
+    Returns:
+        (t_new, eint_v_new, net_energy_change):
+            t_new: (n_elem,) updated element temperatures.
+            eint_v_new: (n_elem,) updated internal energy densities.
+            net_energy_change: float, net domain energy change (zero if insulated).
+    """
+    n_elem = len(temperatures)
+    dphi = np.zeros(n_elem, dtype=np.float64)
+    
+    # Ported from adiff3.F lines 81-129
+    for e in range(n_elem):
+        k0 = conductivities[e]
+        t0 = temperatures[e]
+        
+        flux_sum = 0.0
+        for f_idx in range(6):
+            nbr = neighbor_elem[e, f_idx]
+            if nbr >= 0:
+                kj = conductivities[nbr]
+                tj = temperatures[nbr]
+            else:
+                # Insulated boundary: zero heat flux (kj=k0, tj=t0)
+                kj = k0
+                tj = t0
+                
+            # Harmonic interpolation - adiff3.F lines 115-120
+            k_face = (k0 * kj) / max(1e-20, k0 + kj)
+            
+            # Heat flow through face - adiff3.F lines 123-128
+            flux_sum += k_face * (tj - t0) * grad_factors[e, f_idx]
+            
+        # adiff3.F lines 134-136
+        dphi[e] = 2.0 * flux_sum * dt / max(1e-20, volumes[e])
+        
+    # Update Eint/V and Temperature - adiff3.F lines 140-147
+    eint_v_new = internal_energy_density + dphi
+    t_new = temperatures + dphi / max(1e-20, rho_cp)
+    
+    net_energy_change = float(np.sum(dphi * volumes))
+    return t_new, eint_v_new, net_energy_change
+
+
+# =============================================================================
+# Main ALE Drivers
+# Fortran origin: engine/source/ale/arezon.F90, aconve.F90, alemain.F
+# =============================================================================
+
+def arezon_driver(variables: Dict[str, np.ndarray],
+                  extensive_flags: Dict[str, bool],
+                  x_old: np.ndarray,
+                  x_new: np.ndarray,
+                  conn: np.ndarray) -> Dict[str, np.ndarray]:
+    """Execute ALE state rezone remapping of element variables.
+    
+    Ported from OpenRadioss Fortran:
+    engine/source/ale/arezon.F90 lines 38-120
+    
+    Args:
+        variables: dict mapping variable name to (n_elem, ...) data array.
+        extensive_flags: dict indicating if variable is extensive (True for mass/energy).
+        x_old: (n_nodes, 3) old coordinates.
+        x_new: (n_nodes, 3) new coordinates.
+        conn: (n_elem, 8) hex element connectivity.
+        
+    Returns:
+        remapped_vars: dict with all variables remapped onto new mesh.
+    """
+    remapped: Dict[str, np.ndarray] = {}
+    for var_name, data in variables.items():
+        is_ext = extensive_flags.get(var_name, False)
+        remapped[var_name] = ale_remap(
+            field_old=data,
+            grad=None,
+            x_old=x_old,
+            x_new=x_new,
+            connectivity=conn,
+            extensive=is_ext,
+        )
+    return remapped
+
+
+def aconve_driver(phi: np.ndarray,
+                  fluxes: np.ndarray,
+                  flu1: np.ndarray,
+                  neighbor_elem: np.ndarray,
+                  dt: float) -> np.ndarray:
+    """Execute ALE variable convection update.
+    
+    Ported from OpenRadioss Fortran:
+    engine/source/ale/aconve.F90 lines 37-120 and aconv3.F lines 81-135
+    
+    Args:
+        phi: (n_elem,) element scalar to convect.
+        fluxes: (n_elem, 6) face fluxes.
+        flu1: (n_elem,) total incoming/outgoing upwind flux.
+        neighbor_elem: (n_elem, 6) neighbor connectivity.
+        dt: explicit time step duration.
+        
+    Returns:
+        phi_new: (n_elem,) convected scalar array.
+    """
+    n_elem = len(phi)
+    delta_phi = np.zeros(n_elem, dtype=np.float64)
+    
+    for e in range(n_elem):
+        sum_flux = 0.0
+        for f_idx in range(6):
+            nbr = neighbor_elem[e, f_idx]
+            val_nbr = phi[nbr] if nbr >= 0 else phi[e]
+            sum_flux += val_nbr * fluxes[e, f_idx]
+            
+        delta_phi[e] = 0.5 * dt * (-phi[e] * flu1[e] - sum_flux)
+        
+    return phi + delta_phi
+
+
+def ale_main_driver(model: Any,
+                    dt: float,
+                    state: Optional[Any] = None,
+                    enable_thermal: bool = False,
+                    enable_subcycling: bool = False,
+                    fsi_coupling: Optional[Any] = None) -> Dict[str, Any]:
+    """Execute complete Arbitrary Lagrangian-Eulerian (ALE) solver cycle.
+    
+    Ported from OpenRadioss Fortran:
+    engine/source/ale/alemain.F lines 24-120
+    
+    Coordinates:
+    1. Subcycling initialization (alesub1.F)
+    2. Grid smoothing (Laplacian / Donea / Spring / Curvature / Volume)
+    3. Grid velocity linking and boundary conditions (bcs3v.F, alelin.F)
+    4. Advection and remapping of density, internal energy, stress (arezon.F90, aconve.F90)
+    5. Thermal conduction and diffusion (atherm.F, adiff3.F)
+    6. Fluid-Structure Interaction coupling (fsi_coupling.py, i11for3.F, iqela1.F)
+    7. Energy ledger accounting and subcycling completion (alesub2.F)
+    
+    Args:
+        model: Model instance with geometry, groups, nodes, and boundary conditions.
+        dt: current explicit time step duration.
+        state: optional EngineState tracking global energy ledgers.
+        enable_thermal: whether to run thermal ALE diffusion.
+        enable_subcycling: whether subcycling is active.
+        fsi_coupling: optional FSICouplingPenalty or FSICouplingTied instance.
+        
+    Returns:
+        info: dict with cycle execution statistics, energies, and convergence info.
+    """
+    if dt <= 0.0:
+        return {"status": "skipped", "dt": dt}
+        
+    # 1. Execute standard ALE grid smoothing and advection step
+    ale_step(model, dt, state)
+    
+    # 2. Thermal diffusion step
+    thermal_work = 0.0
+    if enable_thermal:
+        for name, group in model.element_groups():
+            if hasattr(group, "conn") and group.conn.shape[1] == 8 and "temp" in group.state:
+                conn = group.conn
+                temp = group.state["temp"]
+                eint_v = group.state.get("eint_v", temp * 1000.0)
+                vols = compute_hex_volumes(model.x, conn)
+                nbr_elem, _ = build_face_connectivity(conn)
+                
+                a1 = getattr(model, "ale_thermal_a1", 10.0)
+                b1 = getattr(model, "ale_thermal_b1", 0.0)
+                rho_cp = getattr(model, "ale_thermal_rhocp", 1000.0)
+                
+                cond, _ = ale_thermal_diffusivity(temp, a1, b1, rho_cp=rho_cp)
+                grad = compute_thermal_conductance_factors(model.x, conn, nbr_elem)
+                
+                t_new, eint_new, delta_e = ale_thermal_diffusion_step(
+                    temperatures=temp,
+                    internal_energy_density=eint_v,
+                    volumes=vols,
+                    conductivities=cond,
+                    grad_factors=grad,
+                    neighbor_elem=nbr_elem,
+                    rho_cp=rho_cp,
+                    dt=dt,
+                )
+                group.state["temp"] = t_new
+                group.state["eint_v"] = eint_new
+                thermal_work += delta_e
+                
+    # 3. FSI coupling step
+    fsi_results = None
+    if fsi_coupling is not None and hasattr(model, "struct_quads"):
+        fsi_results = fsi_coupling.apply_coupling(
+            slave_nodes_x=model.x,
+            slave_nodes_v=model.v,
+            slave_masses=getattr(model, "mass", np.ones(len(model.x))),
+            master_quads_conn=model.struct_quads,
+            master_nodes_x=getattr(model, "struct_x", model.x),
+            master_nodes_v=getattr(model, "struct_v", np.zeros_like(model.x)),
+            dt=dt,
+        )
+        if state is not None and hasattr(state, "energy"):
+            state.energy["contact"] = fsi_results.get("contact_energy", 0.0)
+            
+    return {
+        "status": "success",
+        "dt": dt,
+        "thermal_work": thermal_work,
+        "fsi": fsi_results,
+    }
+

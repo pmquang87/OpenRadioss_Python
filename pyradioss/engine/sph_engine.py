@@ -11,6 +11,9 @@ Faithful port of OpenRadioss Fortran source:
   - spstab.F  (lines 80-129, 212-250) & spforcp.F (lines 259-277): Monaghan-Gray tensile instability stabilization
   - spcompl.F (lines 156-202, 266-325): zeroth-order Shepard and first-order MLS kernel gradient corrections
   - sphreq.F  (lines 34-40) & mdtsph.F (lines 96-135): critical time step dt = CFL * h / c_s
+  - spsym.F   (lines 34-150: SPSYMP): symmetry plane boundary handling and ghost particles
+  - sptemp.F  (lines 32-231: SPGRADT, lines 241-483: SPLAPLT, lines 657-784: SPGTSYM): SPH thermal conduction
+  - soltosph.F (lines 39-507: SOLTOSPHF, lines 523-1311: SOLTOSPHP), soltospha.F (lines 39-439), soltosph_on1.F: solid-to-SPH adaptive conversion
 """
 
 import numpy as np
@@ -991,3 +994,687 @@ def sph_step(model, dt, state, fint=None):
         w_sph = float(np.sum(f_sph * vel) * dt)
         if hasattr(state, 'e_num'):
             state.e_num = getattr(state, 'e_num', 0.0) + w_sph
+
+
+# ---------------------------------------------------------------------------
+# SPH Symmetry Planes and Ghost Particles
+# ---------------------------------------------------------------------------
+# Ported from C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\elements\sph\spsym.F
+# (lines 34-150: SPSYMP) and sptemp.F (lines 657-784: SPGTSYM)
+
+
+class SPHSymmetryPlane:
+    """SPH symmetry plane boundary.
+
+    Ported from OpenRadioss engine/source/elements/sph/spsym.F (lines 34-150: SPSYMP)
+    and engine/source/elements/sph/sptemp.F (lines 657-784: SPGTSYM).
+
+    Handles planar symmetry boundaries with slip or no-slip condition:
+      - Slip condition (ISLIDE=1, default): normal velocity component is reversed (v_n -> -v_n),
+        tangential velocity component is preserved (v_t -> v_t).
+      - No-slip condition (ISLIDE=0): full velocity vector is reversed (v -> -v).
+    """
+
+    def __init__(self, point, normal, islide: int = 1):
+        """Initialize symmetry plane.
+
+        Args:
+            point: (3,) array-like, point x0 on the symmetry plane.
+            normal: (3,) array-like, normal unit vector n directed into the fluid domain.
+            islide: Boundary slip flag: 1 for slip (default), 0 for no-slip.
+        """
+        self.point = np.asarray(point, dtype=np.float64)
+        n = np.asarray(normal, dtype=np.float64)
+        norm_n = np.linalg.norm(n)
+        if norm_n < 1e-15:
+            raise ValueError("Symmetry plane normal vector must be non-zero.")
+        self.normal = n / norm_n
+        self.islide = int(islide)
+
+    def signed_distance(self, pos: np.ndarray) -> np.ndarray:
+        """Compute signed distance of particles to the symmetry plane.
+
+        d = (x - x0) . n  (spsym.F line 116)
+        Positive distance indicates the particle is on the active domain side.
+
+        Args:
+            pos: Particle positions, shape (N, 3) or (3,).
+
+        Returns:
+            d: Signed distance, shape (N,) or float.
+        """
+        pos_arr = np.asarray(pos, dtype=np.float64)
+        return np.sum((pos_arr - self.point) * self.normal, axis=-1)
+
+    def reflect_position(self, pos: np.ndarray) -> np.ndarray:
+        """Compute position of mirrored ghost particles across the plane.
+
+        x_s = x - 2 * d * n  (spsym.F lines 119-121)
+
+        Args:
+            pos: Particle positions, shape (N, 3) or (3,).
+
+        Returns:
+            pos_sym: Mirrored positions, shape matching pos.
+        """
+        pos_arr = np.asarray(pos, dtype=np.float64)
+        d = self.signed_distance(pos_arr)
+        if pos_arr.ndim == 1:
+            return pos_arr - 2.0 * d * self.normal
+        return pos_arr - 2.0 * d[:, None] * self.normal
+
+    def reflect_velocity(self, vel: np.ndarray) -> np.ndarray:
+        """Compute velocity of mirrored ghost particles across the plane.
+
+        Port of spsym.F lines 122-131:
+          - If ISLIDE == 0 (no-slip): v_s = -v
+          - If ISLIDE == 1 (slip): vn = v . n; v_s = v - 2 * vn * n
+
+        Args:
+            vel: Particle velocities, shape (N, 3) or (3,).
+
+        Returns:
+            vel_sym: Mirrored velocities, shape matching vel.
+        """
+        vel_arr = np.asarray(vel, dtype=np.float64)
+        if self.islide == 0:
+            return -vel_arr
+        vn = np.sum(vel_arr * self.normal, axis=-1)
+        if vel_arr.ndim == 1:
+            return vel_arr - 2.0 * vn * self.normal
+        return vel_arr - 2.0 * vn[:, None] * self.normal
+
+    def reflect_gradient(self, grad: np.ndarray) -> np.ndarray:
+        """Reflect field gradient (e.g. temperature gradient) across symmetry plane.
+
+        Port of OpenRadioss sptemp.F lines 742-751 (SPGTSYM):
+          gn = g . n
+          g_sym = g - 2 * gn * n
+
+        Args:
+            grad: Field gradient vectors, shape (N, 3) or (3,).
+
+        Returns:
+            grad_sym: Reflected gradients, shape matching grad.
+        """
+        g_arr = np.asarray(grad, dtype=np.float64)
+        gn = np.sum(g_arr * self.normal, axis=-1)
+        if g_arr.ndim == 1:
+            return g_arr - 2.0 * gn * self.normal
+        return g_arr - 2.0 * gn[:, None] * self.normal
+
+
+def reflect_sph_gradient(grad: np.ndarray, normal: np.ndarray) -> np.ndarray:
+    """Reflect vector or scalar gradient across a plane with given normal.
+
+    Port of OpenRadioss engine/source/elements/sph/sptemp.F lines 742-751 (SPGTSYM).
+
+    g_sym = g - 2 * (g . n) * n
+
+    Args:
+        grad: Gradient array, shape (N, 3) or (3,).
+        normal: Plane normal, shape (3,).
+
+    Returns:
+        grad_sym: Reflected gradient array.
+    """
+    g_arr = np.asarray(grad, dtype=np.float64)
+    n = np.asarray(normal, dtype=np.float64)
+    n = n / np.linalg.norm(n)
+    gn = np.sum(g_arr * n, axis=-1)
+    if g_arr.ndim == 1:
+        return g_arr - 2.0 * gn * n
+    return g_arr - 2.0 * gn[:, None] * n
+
+
+def create_sph_ghost_particles(pos, vel, mass, rho, h_arr, planes, pressure=None, temp=None, cutoff=None):
+    """Generate mirrored ghost particles near symmetry planes.
+
+    Port of OpenRadioss engine/source/elements/sph/spsym.F lines 97-150.
+    For each symmetry plane, particles within the compact support cutoff (0 < d <= 2h)
+    generate mirror ghost particles with reflected positions and velocities.
+
+    Args:
+        pos: Particle positions, shape (N, 3).
+        vel: Particle velocities, shape (N, 3).
+        mass: Particle masses, shape (N,).
+        rho: Particle densities, shape (N,).
+        h_arr: Smoothing lengths, shape (N,).
+        planes: List of SPHSymmetryPlane instances.
+        pressure: Optional particle pressures, shape (N,).
+        temp: Optional particle temperatures, shape (N,).
+        cutoff: Optional custom cutoff distance array or scalar (default 2*h).
+
+    Returns:
+        ghost_dict: Dictionary containing:
+          - 'pos': Ghost particle positions (M, 3)
+          - 'vel': Ghost particle velocities (M, 3)
+          - 'mass': Ghost particle masses (M,)
+          - 'rho': Ghost particle densities (M,)
+          - 'h': Ghost particle smoothing lengths (M,)
+          - 'pressure': Ghost particle pressures (M,) or None
+          - 'temp': Ghost particle temperatures (M,) or None
+          - 'source_idx': Original particle index for each ghost (M,)
+    """
+    if not planes:
+        return {
+            'pos': np.empty((0, 3)), 'vel': np.empty((0, 3)),
+            'mass': np.empty(0), 'rho': np.empty(0), 'h': np.empty(0),
+            'pressure': None if pressure is None else np.empty(0),
+            'temp': None if temp is None else np.empty(0),
+            'source_idx': np.empty(0, dtype=np.int64),
+        }
+
+    pos_arr = np.asarray(pos, dtype=np.float64)
+    vel_arr = np.asarray(vel, dtype=np.float64)
+    m_arr = np.asarray(mass, dtype=np.float64)
+    rho_arr = np.asarray(rho, dtype=np.float64)
+    h_a = np.asarray(h_arr, dtype=np.float64)
+
+    p_arr = np.asarray(pressure, dtype=np.float64) if pressure is not None else None
+    t_arr = np.asarray(temp, dtype=np.float64) if temp is not None else None
+
+    all_pos, all_vel, all_m, all_rho, all_h, all_idx = [], [], [], [], [], []
+    all_p = [] if p_arr is not None else None
+    all_t = [] if t_arr is not None else None
+
+    for plane in planes:
+        d = plane.signed_distance(pos_arr)
+        max_d = 2.0 * h_a if cutoff is None else cutoff
+        mask = (d > 1e-12) & (d <= max_d)
+        if not np.any(mask):
+            continue
+
+        src_idx = np.where(mask)[0]
+        g_pos = plane.reflect_position(pos_arr[src_idx])
+        g_vel = plane.reflect_velocity(vel_arr[src_idx])
+
+        all_pos.append(g_pos)
+        all_vel.append(g_vel)
+        all_m.append(m_arr[src_idx])
+        all_rho.append(rho_arr[src_idx])
+        all_h.append(h_a[src_idx])
+        all_idx.append(src_idx)
+
+        if p_arr is not None:
+            all_p.append(p_arr[src_idx])
+        if t_arr is not None:
+            all_t.append(t_arr[src_idx])
+
+    if not all_pos:
+        return {
+            'pos': np.empty((0, 3)), 'vel': np.empty((0, 3)),
+            'mass': np.empty(0), 'rho': np.empty(0), 'h': np.empty(0),
+            'pressure': None if pressure is None else np.empty(0),
+            'temp': None if temp is None else np.empty(0),
+            'source_idx': np.empty(0, dtype=np.int64),
+        }
+
+    return {
+        'pos': np.concatenate(all_pos, axis=0),
+        'vel': np.concatenate(all_vel, axis=0),
+        'mass': np.concatenate(all_m, axis=0),
+        'rho': np.concatenate(all_rho, axis=0),
+        'h': np.concatenate(all_h, axis=0),
+        'pressure': np.concatenate(all_p, axis=0) if all_p is not None else None,
+        'temp': np.concatenate(all_t, axis=0) if all_t is not None else None,
+        'source_idx': np.concatenate(all_idx, axis=0),
+    }
+
+
+# ---------------------------------------------------------------------------
+# SPH Thermal Conduction (sptemp.F)
+# ---------------------------------------------------------------------------
+# Ported from C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\elements\sph\sptemp.F
+# (lines 32-231: SPGRADT, lines 241-483: SPLAPLT, lines 657-784: SPGTSYM, lines 790-825: SPTEMPEL)
+
+
+def sph_temperature_gradient(pos, temp, mass, rho, h_arr, planes=None):
+    """Compute SPH temperature gradient grad(T) for thermal conduction.
+
+    Port of OpenRadioss engine/source/elements/sph/sptemp.F lines 32-231 (SPGRADT).
+
+    Discretization:
+      grad(T)_i = sum_j (m_j / rho_j) * (T_j - T_i) * grad_i W_ij
+
+    Args:
+        pos: Particle positions, shape (N, 3).
+        temp: Particle temperatures, shape (N,).
+        mass: Particle masses, shape (N,).
+        rho: Particle densities, shape (N,).
+        h_arr: Smoothing lengths, shape (N,).
+        planes: Optional list of SPHSymmetryPlane instances.
+
+    Returns:
+        grad_t: Temperature gradient vectors, shape (N, 3).
+    """
+    pos_arr = np.asarray(pos, dtype=np.float64)
+    t_arr = np.asarray(temp, dtype=np.float64)
+    m_arr = np.asarray(mass, dtype=np.float64)
+    rho_arr = np.asarray(rho, dtype=np.float64)
+    h_a = np.asarray(h_arr, dtype=np.float64)
+
+    n = len(pos_arr)
+    grad_t = np.zeros((n, 3), dtype=np.float64)
+    if n <= 1:
+        return grad_t
+
+    # Internal pair interactions
+    max_h = float(np.max(h_a))
+    tree = cKDTree(pos_arr)
+    pairs = tree.query_pairs(r=2.0 * max_h, output_type='ndarray')
+
+    if len(pairs) > 0:
+        i_idx = pairs[:, 0]
+        j_idx = pairs[:, 1]
+        rij = pos_arr[i_idx] - pos_arr[j_idx]
+        r = np.linalg.norm(rij, axis=1)
+        hij = 0.5 * (h_a[i_idx] + h_a[j_idx])
+
+        valid = (r <= 2.0 * hij) & (r > 1e-30)
+        if np.any(valid):
+            i_v = i_idx[valid]
+            j_v = j_idx[valid]
+            rij_v = rij[valid]
+            hij_v = hij[valid]
+
+            grad_w = cubic_bspline_grad(rij_v, hij_v)
+            v_j = m_arr[j_v] / np.maximum(rho_arr[j_v], 1e-20)
+            v_i = m_arr[i_v] / np.maximum(rho_arr[i_v], 1e-20)
+            dt_ij = t_arr[j_v] - t_arr[i_v]
+
+            term_i = (v_j * dt_ij)[:, None] * grad_w
+            term_j = (v_i * (-dt_ij))[:, None] * (-grad_w)
+
+            np.add.at(grad_t, i_v, term_i)
+            np.add.at(grad_t, j_v, term_j)
+
+    # Symmetry plane ghost particle interactions
+    if planes:
+        ghosts = create_sph_ghost_particles(pos_arr, np.zeros_like(pos_arr), m_arr, rho_arr, h_a, planes, temp=t_arr)
+        if len(ghosts['pos']) > 0:
+            tree_g = cKDTree(ghosts['pos'])
+            g_pairs = tree.query_ball_tree(tree_g, r=2.0 * max_h)
+            for i_p, g_indices in enumerate(g_pairs):
+                if not g_indices:
+                    continue
+                g_idx = np.array(g_indices, dtype=np.int64)
+                rij_g = pos_arr[i_p] - ghosts['pos'][g_idx]
+                r_g = np.linalg.norm(rij_g, axis=1)
+                hij_g = 0.5 * (h_a[i_p] + ghosts['h'][g_idx])
+                val_g = (r_g <= 2.0 * hij_g) & (r_g > 1e-30)
+                if np.any(val_g):
+                    sel_g = g_idx[val_g]
+                    rij_sel = rij_g[val_g]
+                    hij_sel = hij_g[val_g]
+                    grad_wg = cubic_bspline_grad(rij_sel, hij_sel)
+                    v_g = ghosts['mass'][sel_g] / np.maximum(ghosts['rho'][sel_g], 1e-20)
+                    dt_g = ghosts['temp'][sel_g] - t_arr[i_p]
+                    np.add.at(grad_t, i_p, np.sum((v_g * dt_g)[:, None] * grad_wg, axis=0))
+
+    return grad_t
+
+
+def sph_thermal_conduction(pos, temp, mass, rho, h_arr, conductivity, specific_heat, dt=None, planes=None):
+    """Compute SPH thermal conduction rate and update temperature.
+
+    Faithful port of OpenRadioss engine/source/elements/sph/sptemp.F lines 241-483 (SPLAPLT).
+    Discretizes heat diffusion equation:
+      rho * c_v * dT/dt = div(k * grad(T))
+    using the conservative Cleary & Monaghan (1999) / Brookshaw formulation:
+      dT_i/dt = (1 / (rho_i * c_v,i)) * sum_j (m_j / rho_j) * (4 * k_i * k_j / (k_i + k_j))
+                * (T_i - T_j) * (rij . grad_i W_ij) / (|rij|^2 + 0.01 * hij^2)
+
+    Conservation properties:
+      The pairwise heat exchange q_ij = - q_ji, guaranteeing exact thermal energy conservation:
+        sum_i m_i * c_v,i * dT_i/dt = 0
+
+    Args:
+        pos: Particle positions, shape (N, 3).
+        temp: Particle temperatures, shape (N,).
+        mass: Particle masses, shape (N,).
+        rho: Particle densities, shape (N,).
+        h_arr: Smoothing lengths, shape (N,).
+        conductivity: Thermal conductivity k (float or (N,)).
+        specific_heat: Specific heat capacity c_v (float or (N,)).
+        dt: Optional time step increment to advance temperature: T_new = T + dt * dT_dt.
+        planes: Optional list of SPHSymmetryPlane instances.
+
+    Returns:
+        dT_dt: Temperature time derivative, shape (N,).
+        q_rates: Heat rate on each particle dQ/dt = m * c_v * dT/dt, shape (N,).
+        temp_new: Updated temperature array (if dt is provided) or current temp.
+        e_exchange: Total rate of heat energy transferred across particle pairs.
+    """
+    pos_arr = np.asarray(pos, dtype=np.float64)
+    t_arr = np.asarray(temp, dtype=np.float64)
+    m_arr = np.asarray(mass, dtype=np.float64)
+    rho_arr = np.asarray(rho, dtype=np.float64)
+    h_a = np.asarray(h_arr, dtype=np.float64)
+
+    n = len(pos_arr)
+    dT_dt = np.zeros(n, dtype=np.float64)
+    q_rates = np.zeros(n, dtype=np.float64)
+    if n <= 1:
+        t_new = t_arr.copy() if dt is not None else t_arr
+        return dT_dt, q_rates, t_new, 0.0
+
+    k_arr = np.asarray(conductivity, dtype=np.float64)
+    if k_arr.ndim == 0:
+        k_arr = np.full(n, float(k_arr))
+
+    cv_arr = np.asarray(specific_heat, dtype=np.float64)
+    if cv_arr.ndim == 0:
+        cv_arr = np.full(n, float(cv_arr))
+
+    max_h = float(np.max(h_a))
+    tree = cKDTree(pos_arr)
+    pairs = tree.query_pairs(r=2.0 * max_h, output_type='ndarray')
+
+    e_exchange = 0.0
+
+    if len(pairs) > 0:
+        i_idx = pairs[:, 0]
+        j_idx = pairs[:, 1]
+        rij = pos_arr[i_idx] - pos_arr[j_idx]
+        r = np.linalg.norm(rij, axis=1)
+        hij = 0.5 * (h_a[i_idx] + h_a[j_idx])
+
+        valid = (r <= 2.0 * hij) & (r > 1e-30)
+        if np.any(valid):
+            i_v = i_idx[valid]
+            j_v = j_idx[valid]
+            rij_v = rij[valid]
+            r_v = r[valid]
+            hij_v = hij[valid]
+
+            grad_w = cubic_bspline_grad(rij_v, hij_v)
+            r_dot_grad = np.sum(rij_v * grad_w, axis=1)
+
+            # Harmonic mean thermal conductivity: 4 * ki * kj / (ki + kj) (sptemp.F line 406)
+            k_eff = 4.0 * k_arr[i_v] * k_arr[j_v] / np.maximum(k_arr[i_v] + k_arr[j_v], 1e-20)
+            vol_i = m_arr[i_v] / np.maximum(rho_arr[i_v], 1e-20)
+            vol_j = m_arr[j_v] / np.maximum(rho_arr[j_v], 1e-20)
+
+            # Pairwise heat rate from particle j to particle i:
+            # Note r_dot_grad < 0. When Ti > Tj, Ti - Tj > 0, so (Ti - Tj) * r_dot_grad < 0.
+            # Heat leaves particle i: q_ij = vol_i * vol_j * k_eff * (Ti - Tj) * r_dot_grad / (r^2 + 0.01*h^2)
+            denom = r_v * r_v + 0.01 * hij_v * hij_v
+            q_ij = vol_i * vol_j * k_eff * (t_arr[i_v] - t_arr[j_v]) * r_dot_grad / denom
+
+            np.add.at(q_rates, i_v, q_ij)
+            np.add.at(q_rates, j_v, -q_ij)
+            e_exchange += float(np.sum(np.abs(q_ij)))
+
+    # Symmetry plane interactions
+    if planes:
+        ghosts = create_sph_ghost_particles(pos_arr, np.zeros_like(pos_arr), m_arr, rho_arr, h_a, planes, temp=t_arr)
+        if len(ghosts['pos']) > 0:
+            tree_g = cKDTree(ghosts['pos'])
+            g_pairs = tree.query_ball_tree(tree_g, r=2.0 * max_h)
+            for i_p, g_indices in enumerate(g_pairs):
+                if not g_indices:
+                    continue
+                g_idx = np.array(g_indices, dtype=np.int64)
+                rij_g = pos_arr[i_p] - ghosts['pos'][g_idx]
+                r_g = np.linalg.norm(rij_g, axis=1)
+                hij_g = 0.5 * (h_a[i_p] + ghosts['h'][g_idx])
+                val_g = (r_g <= 2.0 * hij_g) & (r_g > 1e-30)
+                if np.any(val_g):
+                    sel_g = g_idx[val_g]
+                    rij_sel = rij_g[val_g]
+                    r_sel = r_g[val_g]
+                    hij_sel = hij_g[val_g]
+                    grad_wg = cubic_bspline_grad(rij_sel, hij_sel)
+                    r_dot_g = np.sum(rij_sel * grad_wg, axis=1)
+
+                    k_eff_g = 4.0 * k_arr[i_p] * k_arr[ghosts['source_idx'][sel_g]] / np.maximum(
+                        k_arr[i_p] + k_arr[ghosts['source_idx'][sel_g]], 1e-20
+                    )
+                    vol_i = m_arr[i_p] / np.maximum(rho_arr[i_p], 1e-20)
+                    vol_g = ghosts['mass'][sel_g] / np.maximum(ghosts['rho'][sel_g], 1e-20)
+                    denom_g = r_sel * r_sel + 0.01 * hij_sel * hij_sel
+                    q_g = vol_i * vol_g * k_eff_g * (t_arr[i_p] - ghosts['temp'][sel_g]) * r_dot_g / denom_g
+                    q_rates[i_p] += np.sum(q_g)
+
+    # Temperature rate of change: dT/dt = (dQ/dt) / (m * cv)
+    heat_capacity = m_arr * cv_arr
+    dT_dt = q_rates / np.maximum(heat_capacity, 1e-20)
+
+    t_new = t_arr.copy()
+    if dt is not None and dt > 0.0:
+        t_new += dt * dT_dt
+
+    return dT_dt, q_rates, t_new, e_exchange
+
+
+# ---------------------------------------------------------------------------
+# Solid-to-SPH Adaptive Conversion (soltosph*.F)
+# ---------------------------------------------------------------------------
+# Ported from C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\elements\sph\soltosph.F
+# (lines 39-507: SOLTOSPHF, lines 523-1311: SOLTOSPHP)
+# and soltospha.F (lines 39-439: SOLTOSPHA), soltosph_on1.F (lines 37-275: SOLTOSPH_ON1)
+
+
+# Gauss / sub-particle coordinate matrix for Hexahedron (soltosph.F lines 93-120)
+# A_GAUSS(particle_index, n_dir): coordinate in [-1, 1]
+HEX_GAUSS_COORDS = {
+    1: np.array([0.0]),
+    2: np.array([-0.5, 0.5]),
+    3: np.array([-2.0 / 3.0, 0.0, 2.0 / 3.0]),
+}
+
+# Barycentric coordinate distribution for Tetrahedron (soltosph.F lines 122-150)
+TET_BARYCENTRIC_COORDS = {
+    1: np.array([[0.25, 0.25, 0.25, 0.25]]),
+    2: np.array([
+        [0.583333333333333, 0.138888888888889, 0.138888888888889, 0.138888888888889],
+        [0.138888888888889, 0.583333333333333, 0.138888888888889, 0.138888888888889],
+        [0.138888888888889, 0.138888888888889, 0.583333333333333, 0.138888888888889],
+        [0.138888888888889, 0.138888888888889, 0.138888888888889, 0.583333333333333],
+    ]),
+}
+
+
+def hex8_shape_functions(xi: float, eta: float, zeta: float) -> np.ndarray:
+    """Evaluate 8-node trilinear hexahedron shape functions at reference coords (xi, eta, zeta).
+
+    Port of OpenRadioss engine/source/elements/sph/soltosph.F lines 282-289:
+      phi_k = (1/8) * (1 +- xi) * (1 +- eta) * (1 +- zeta)
+    """
+    signs = np.array([
+        [-1, -1, -1],  # node 1
+        [-1, -1,  1],  # node 2
+        [ 1, -1,  1],  # node 3
+        [ 1, -1, -1],  # node 4
+        [-1,  1, -1],  # node 5
+        [-1,  1,  1],  # node 6
+        [ 1,  1,  1],  # node 7
+        [ 1,  1, -1],  # node 8
+    ], dtype=np.float64)
+
+    phi = 0.125 * (1.0 + signs[:, 0] * xi) * (1.0 + signs[:, 1] * eta) * (1.0 + signs[:, 2] * zeta)
+    return phi
+
+
+def tet4_shape_functions(xi: float, eta: float, zeta: float) -> np.ndarray:
+    """Evaluate 4-node linear tetrahedron shape functions.
+
+    Port of OpenRadioss engine/source/elements/sph/soltosph.F lines 221-224:
+      phi_1 = xi, phi_2 = eta, phi_3 = zeta, phi_4 = 1 - xi - eta - zeta
+    """
+    return np.array([xi, eta, zeta, 1.0 - xi - eta - zeta], dtype=np.float64)
+
+
+def interpolate_solid_field(solid_type: str, node_values: np.ndarray, xi: float, eta: float, zeta: float) -> np.ndarray:
+    """Interpolate nodal values (coordinates, velocities) inside solid element to sub-particle point.
+
+    Port of OpenRadioss engine/source/elements/sph/soltospha.F lines 245-247 and 318-323.
+
+    Args:
+        solid_type: 'hex8' (or 'brick') or 'tet4' (or 'tetra').
+        node_values: Nodal values, shape (8, D) or (4, D).
+        xi, eta, zeta: Reference coordinates in parent element.
+
+    Returns:
+        val: Interpolated value, shape (D,).
+    """
+    vals = np.asarray(node_values, dtype=np.float64)
+    stype = solid_type.lower()
+    if 'hex' in stype or 'brick' in stype:
+        phi = hex8_shape_functions(xi, eta, zeta)
+    elif 'tet' in stype:
+        phi = tet4_shape_functions(xi, eta, zeta)
+    else:
+        raise ValueError(f"Unsupported solid element type for SPH conversion: {solid_type}")
+    return np.tensordot(phi, vals, axes=(0, 0))
+
+
+class SolidToSPHConverter:
+    """Solid-to-SPH adaptive element conversion manager.
+
+    Ported from OpenRadioss Fortran sources:
+      - engine/source/elements/sph/soltosph.F (SOLTOSPHF, SOLTOSPHP)
+      - engine/source/elements/sph/soltospha.F (SOLTOSPHA)
+      - engine/source/elements/sph/soltosph_on1.F (SOLTOSPH_ON1)
+
+    When solid elements (bricks or tetrahedra) undergo extreme deformation, failure,
+    or contact penetration, they are adaptively replaced by clouds of active SPH particles.
+    Preserves:
+      - Total mass: sum(m_p) = M_solid
+      - Total momentum: sum(m_p * v_p) = P_solid
+      - Internal energy and stress state
+    Dissipated kinetic energy from remeshing is booked into hourglass/numerical dissipation (EN ledger):
+      E_hour += 0.5 * M_solid * v_solid^2 - E_k,sph (soltosph_on1.F line 265).
+    """
+
+    def __init__(self, n_dir: int = 2, h_factor: float = 1.2):
+        """Initialize converter.
+
+        Args:
+            n_dir: Particles per spatial direction (default 2 -> 2^3=8 particles per hex).
+            h_factor: Smoothing length multiplier wrt particle spacing (default 1.2).
+        """
+        self.n_dir = int(n_dir)
+        self.h_factor = float(h_factor)
+        self.converted_solids: set = set()
+        self.accumulated_e_hour: float = 0.0
+
+    def convert_element(
+        self,
+        solid_id: int,
+        solid_type: str,
+        node_coords: np.ndarray,
+        node_velocities: np.ndarray,
+        solid_mass: float,
+        solid_rho: float,
+        solid_energy: float = 0.0,
+        solid_stress: Optional[np.ndarray] = None,
+        solid_plastic_strain: float = 0.0,
+        node_masses: Optional[np.ndarray] = None,
+    ) -> Dict[str, Any]:
+        """Convert a single solid element into an active SPH particle cloud.
+
+        Port of soltosph.F lines 212-330, soltospha.F lines 212-329, and soltosph_on1.F lines 185-265.
+
+        Args:
+            solid_id: Element identifier.
+            solid_type: 'hex8' or 'tet4'.
+            node_coords: Element corner coordinates, shape (8, 3) or (4, 3).
+            node_velocities: Element nodal velocities, shape (8, 3) or (4, 3).
+            solid_mass: Total solid element mass.
+            solid_rho: Solid density.
+            solid_energy: Element internal energy.
+            solid_stress: Optional Cauchy stress tensor (6,) or (3, 3).
+            solid_plastic_strain: Effective plastic strain.
+            node_masses: Optional lumped nodal masses for exact kinetic energy accounting.
+
+        Returns:
+            particle_data: Dictionary containing created SPH particle arrays:
+              - 'pos': Positions (N_p, 3)
+              - 'vel': Velocities (N_p, 3)
+              - 'mass': Masses (N_p,)
+              - 'rho': Densities (N_p,)
+              - 'h': Smoothing lengths (N_p,)
+              - 'energy': Internal energies (N_p,)
+              - 'stress': Stresses (N_p, 6)
+              - 'plastic_strain': Plastic strains (N_p,)
+              - 'delta_e_hour': Discretization kinetic energy loss booked to numerical dissipation
+        """
+        stype = solid_type.lower()
+        coords = np.asarray(node_coords, dtype=np.float64)
+        vels = np.asarray(node_velocities, dtype=np.float64)
+
+        if 'hex' in stype or 'brick' in stype:
+            n_pts_1d = HEX_GAUSS_COORDS.get(self.n_dir, HEX_GAUSS_COORDS[2])
+            n_p = len(n_pts_1d) ** 3
+            ref_pts = []
+            for xi in n_pts_1d:
+                for eta in n_pts_1d:
+                    for zeta in n_pts_1d:
+                        ref_pts.append((xi, eta, zeta))
+        elif 'tet' in stype:
+            b_coords = TET_BARYCENTRIC_COORDS.get(self.n_dir, TET_BARYCENTRIC_COORDS[1])
+            n_p = len(b_coords)
+            ref_pts = [(b[0], b[1], b[2]) for b in b_coords]
+        else:
+            raise ValueError(f"Unknown solid type {solid_type}")
+
+        # Sub-particle positions and velocities
+        pos_p = np.zeros((n_p, 3), dtype=np.float64)
+        vel_p = np.zeros((n_p, 3), dtype=np.float64)
+
+        for i, (xi, eta, zeta) in enumerate(ref_pts):
+            pos_p[i] = interpolate_solid_field(stype, coords, xi, eta, zeta)
+            vel_p[i] = interpolate_solid_field(stype, vels, xi, eta, zeta)
+
+        # Mass conservation: sum(m_p) = M_solid (soltosph_on1.F line 211)
+        m_particle = solid_mass / n_p
+        masses = np.full(n_p, m_particle, dtype=np.float64)
+        densities = np.full(n_p, solid_rho, dtype=np.float64)
+
+        # Characteristic volume and smoothing length
+        vol_solid = solid_mass / max(solid_rho, 1e-20)
+        vol_p = vol_solid / n_p
+        dp = vol_p ** (1.0 / 3.0)
+        h_particles = np.full(n_p, self.h_factor * dp, dtype=np.float64)
+
+        # State transfer: internal energy, stress, plastic strain (soltosph.F lines 1105-1275)
+        e_p = np.full(n_p, solid_energy / n_p, dtype=np.float64)
+        pl_p = np.full(n_p, solid_plastic_strain, dtype=np.float64)
+
+        if solid_stress is not None:
+            s_arr = np.asarray(solid_stress, dtype=np.float64)
+            if s_arr.shape == (3, 3):
+                s6 = np.array([s_arr[0, 0], s_arr[1, 1], s_arr[2, 2], s_arr[0, 1], s_arr[1, 2], s_arr[0, 2]])
+            else:
+                s6 = s_arr.reshape(-1)[:6]
+            stresses = np.tile(s6, (n_p, 1))
+        else:
+            stresses = np.zeros((n_p, 6), dtype=np.float64)
+
+        # Kinetic energy accounting (soltosph_on1.F lines 196-200, 263-265)
+        # E_k,solid = sum 0.5 * m_node * v_node^2
+        if node_masses is not None:
+            m_nod = np.asarray(node_masses, dtype=np.float64)
+            e_k_solid = 0.5 * float(np.sum(m_nod[:, None] * (vels ** 2)))
+        else:
+            e_k_solid = 0.5 * float(np.sum((solid_mass / len(coords)) * (vels ** 2)))
+
+        e_k_sph = 0.5 * float(np.sum(masses[:, None] * (vel_p ** 2)))
+        delta_e_hour = max(0.0, e_k_solid - e_k_sph)
+        self.accumulated_e_hour += delta_e_hour
+        self.converted_solids.add(solid_id)
+
+        return {
+            'pos': pos_p,
+            'vel': vel_p,
+            'mass': masses,
+            'rho': densities,
+            'h': h_particles,
+            'energy': e_p,
+            'stress': stresses,
+            'plastic_strain': pl_p,
+            'delta_e_hour': delta_e_hour,
+        }
+

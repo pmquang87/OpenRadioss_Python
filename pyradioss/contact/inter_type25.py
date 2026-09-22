@@ -400,3 +400,112 @@ class ContactType25:
                             dt_min = min(dt_min, float(dt_cand))
 
         return -total_work, dt_min
+
+    def compute_thermal_conduction(
+        self,
+        temp: np.ndarray,
+        dt: float,
+        kthe: Optional[float] = None,
+        dcond: float = 0.0,
+        fcond: Optional[Any] = None,
+        frad: float = 0.0,
+        drad: float = 0.0,
+        iform: int = 1,
+        tint: float = 293.15,
+        cond_slave: Optional[np.ndarray] = None,
+        cond_master: Optional[np.ndarray] = None,
+        fheats: float = 0.0,
+        fheatm: float = 0.0,
+        efrict: Optional[np.ndarray] = None,
+        theaccfact: float = 1.0,
+    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, float]]:
+        """Compute general interface thermal contact conduction and radiation for /INTER/TYPE25.
+
+        Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\interfaces\\int25\\i25therm.F
+
+        Parameters
+        ----------
+        temp : np.ndarray
+            Nodal temperatures.
+        dt : float
+            Time step dt.
+        kthe : Optional[float]
+            Thermal interface conductivity KTHE.
+        dcond : float
+            Distance decay threshold.
+        fcond : Optional[Any]
+            Decay curve.
+        frad : float
+            Radiation coefficient.
+        drad : float
+            Radiation distance cutoff.
+        iform : int
+            0 = ambient exchange, 1 = slave-master exchange.
+        tint : float
+            Ambient temperature.
+        cond_slave : Optional[np.ndarray]
+            Thermal conductivity of slave elements.
+        cond_master : Optional[np.ndarray]
+            Thermal conductivity of master elements.
+        fheats : float
+            Fraction of friction heat to slave.
+        fheatm : float
+            Fraction of friction heat to master.
+        efrict : Optional[np.ndarray]
+            Friction energy dissipation per pair over dt.
+        theaccfact : float
+            Thermal acceleration factor.
+
+        Returns
+        -------
+        fthe : np.ndarray
+            Nodal thermal energy increments [J].
+        condint : np.ndarray
+            Thermal conductance per pair [W/K].
+        ledger : Dict[str, float]
+            Conduction, radiation, and friction energy breakdown.
+        """
+        from .thermal_contact import thermal_contact_type25
+
+        itf = self.itf
+        if kthe is None:
+            kthe = getattr(itf, "kthe", 0.0) or getattr(itf, "rstif", 0.0)
+
+        x = getattr(self.model, "x", getattr(self.model, "x0", np.zeros((len(temp), 3))))
+
+        if len(self.segs_s) == 0 or len(self.segs_m) == 0:
+            return np.zeros(len(temp), dtype=float), np.zeros(0, dtype=float), {"conduction": 0.0, "radiation": 0.0, "friction": 0.0}
+
+        s_nodes = np.unique(self.segs_s.ravel())
+        n_pairs = len(s_nodes)
+        if self.segs_m.shape[1] == 3:
+            m_segs = np.column_stack([self.segs_m, self.segs_m[:, 2]])
+        else:
+            m_segs = self.segs_m
+
+        m_segs_pair = np.tile(m_segs[0], (n_pairs, 1))
+        weights = np.full((n_pairs, 4), 0.25, dtype=float)
+
+        return thermal_contact_type25(
+            x=x,
+            temp=temp,
+            slave_nodes=s_nodes,
+            master_segs=m_segs_pair,
+            weights=weights,
+            kthe=kthe,
+            dt=dt,
+            theaccfact=theaccfact,
+            iform=iform,
+            tint=tint,
+            gapv=np.full(n_pairs, self.gap),
+            dcond=dcond,
+            fcond=fcond,
+            frad=frad,
+            drad=drad,
+            cond_slave=cond_slave,
+            cond_master=cond_master,
+            fheats=fheats,
+            fheatm=fheatm,
+            efrict=efrict,
+        )
+
