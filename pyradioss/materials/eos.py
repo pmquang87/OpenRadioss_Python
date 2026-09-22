@@ -418,7 +418,7 @@ def _coefficients_nasg(eos, mu: np.ndarray):
     p = eos.params
     b = p.get("b", 0.0)
     gamma = p.get("gamma", 1.4)
-    p_star = p.get("p_star", 0.0)
+    p_star = p.get("p_star", p.get("pstar", 0.0))
     q = p.get("q", 0.0)
     psh = p.get("psh", 0.0)
     rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
@@ -799,7 +799,7 @@ def coefficients(eos, mu: np.ndarray, e: np.ndarray | float | None = None, time:
         return _coefficients_murnaghan(eos, mu)
     if kind in ("NOBLE-ABEL", "NOBLE_ABEL"):
         return _coefficients_noble_abel(eos, mu)
-    if kind == "NASG":
+    if kind in ("NASG", "NOBLE-ABEL-STIFFENED-GAS", "NOBLE_ABEL_STIFFENED_GAS"):
         return _coefficients_nasg(eos, mu)
     if kind == "PUFF":
         return _coefficients_puff(eos, mu, e)
@@ -1015,10 +1015,10 @@ def update(eos, mu: np.ndarray, dv: np.ndarray, e_old: np.ndarray,
         c2 = dpdm / rho0
         return p_new, e_new, np.maximum(c2, 0.0)
 
-    if kind == "NASG":
+    if kind in ("NASG", "NOBLE-ABEL-STIFFENED-GAS", "NOBLE_ABEL_STIFFENED_GAS"):
         b = p.get("b", 0.0)
         gamma = p.get("gamma", 1.4)
-        p_star = p.get("p_star", 0.0)
+        p_star = p.get("p_star", p.get("pstar", 0.0))
         q = p.get("q", 0.0)
         psh = p.get("psh", 0.0)
         pmin = p.get("pmin", -1e30)
@@ -1507,12 +1507,12 @@ def pressure(eos, mu: np.ndarray | float, e: np.ndarray | float, time: float = 0
         p_val = A + B * e_arr
         return float(p_val) if is_scalar else p_val
 
-    if kind == "NASG":
+    if kind in ("NASG", "NOBLE-ABEL-STIFFENED-GAS", "NOBLE_ABEL_STIFFENED_GAS"):
         A, B = _coefficients_nasg(eos, mu_arr)
         psh = eos.params.get("psh", 0.0)
         pmin = eos.params.get("pmin", -1e30)
         gamma = eos.params.get("gamma", 1.4)
-        p_star = eos.params.get("p_star", 0.0)
+        p_star = eos.params.get("p_star", eos.params.get("pstar", 0.0))
         p_val = np.maximum(A + B * e_arr + psh, np.maximum(pmin, -gamma * p_star)) - psh
         return float(p_val) if is_scalar else p_val
 
@@ -1727,10 +1727,10 @@ def initial_state(eos):
         p0 = pressure(eos, 0.0, e0)
         return e0, p0
 
-    if kind == "NASG":
+    if kind in ("NASG", "NOBLE-ABEL-STIFFENED-GAS", "NOBLE_ABEL_STIFFENED_GAS"):
         b = p.get("b", 0.0)
         gamma = p.get("gamma", 1.4)
-        p_star = p.get("p_star", 0.0)
+        p_star = p.get("p_star", p.get("pstar", 0.0))
         q = p.get("q", 0.0)
         p0_param = p.get("p0", 0.0)
         rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
