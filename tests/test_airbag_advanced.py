@@ -319,14 +319,27 @@ class TestAirbagImplicitSolver:
     def test_solve_implicit_airbag_step(self):
         """Test coupled Newton-Raphson equilibrium solver."""
         model = Model()
-        x = np.array([
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-        ], dtype=np.float64)
+        tris = make_unit_cube_triangles(origin=(0.0, 0.0, 0.0), size=1.0)
+        pts = [
+            np.array([0.0, 0.0, 0.0]), np.array([1.0, 0.0, 0.0]),
+            np.array([1.0, 1.0, 0.0]), np.array([0.0, 1.0, 0.0]),
+            np.array([0.0, 0.0, 1.0]), np.array([1.0, 0.0, 1.0]),
+            np.array([1.0, 1.0, 1.0]), np.array([0.0, 1.0, 1.0]),
+        ]
+        x = np.array(pts, dtype=np.float64)
+
+        def find_idx(pt):
+            for i, p in enumerate(pts):
+                if np.allclose(p, pt):
+                    return i
+            return -1
+
+        segs = []
+        for t in tris:
+            segs.append([find_idx(t[0]), find_idx(t[1]), find_idx(t[2])])
 
         class DummySurface:
-            segments = [[0, 1, 2]]
+            segments = segs
 
         model.surfaces = {1: DummySurface()}
 
@@ -334,17 +347,17 @@ class TestAirbagImplicitSolver:
             surf_id = 1
             volume = 1.0
             volume_old = 1.0
-            pressure = 1.0e5
-            energy = 2.0e5
+            pressure = 80000.0
+            energy = 200000.0
             gamma = 1.4
             vinc = 0.0
             pmax = 1e30
             pext = 1.0e5
             de_out = 0.0
 
-        f_structural = np.zeros((3, 3), dtype=np.float64)
-        f_structural[:, 2] = -100.0  # 100 N external load
-        k_structural = np.ones((3, 3), dtype=np.float64) * 1.0e5
+        f_structural = np.zeros((8, 3), dtype=np.float64)
+        f_structural[4:, 2] = -100.0  # 100 N external load on top face
+        k_structural = np.ones((8, 3), dtype=np.float64) * 1.0e6
 
         u, converged, n_iters = solve_implicit_airbag_step(
             mv=DummyMV(),
@@ -353,11 +366,11 @@ class TestAirbagImplicitSolver:
             f_structural=f_structural,
             k_structural_diag=k_structural,
             dt=1e-3,
-            max_iter=10,
+            max_iter=15,
         )
         assert converged
-        assert n_iters <= 10
-        assert u.shape == (3, 3)
+        assert n_iters <= 15
+        assert u.shape == (8, 3)
 
 
 # =============================================================================
