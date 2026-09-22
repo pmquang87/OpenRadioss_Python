@@ -1836,6 +1836,15 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
                     "MASS INIT")
         model.mass[massless] = 1e30  # infinite mass = frozen node
 
+    # /INISTA initial stress, strain, and state mapping (hm_read_inista.F, lec_inistate_yfile.F)
+    from .inista import apply_inista
+    apply_inista(model, log=log)
+
+    # /INITEMP initial temperature field (hm_read_initemp.F, initemp_shell.F90, sinit3.F)
+    from .initemp import apply_initemp
+    apply_initemp(model, log=log)
+
+
 
 # ----------------------------------------------------------------------------
 # Rigid bodies (/RBODY, /RBE2): mass, COG, inertia tensor  (M5)

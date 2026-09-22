@@ -20189,6 +20189,129 @@ def read_inista(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             blank_slots=block.blank_slots,
         )
         read_iniqua(mod_block, model, log)
+    elif sub in ("PART", "PART_STRESS"):
+        part_id = None
+        if block.user_id is not None:
+            part_id = block.user_id
+        elif len(block.parts) > 2 and block.parts[2].isdigit():
+            part_id = int(block.parts[2])
+
+        from ..starter.inista import InistaRecord
+        valid_cards = [c for c in block.cards if not c.is_blank and not c.raw.strip().startswith("#")]
+        if not valid_cards:
+            log.error(f"/INISTA/{sub}: missing data card", block.source)
+            return
+
+        c_idx = 0
+        while c_idx < len(valid_cards):
+            c = valid_cards[c_idx]
+            toks = c.tokens() if not block.fixed or len(c.tokens()) > 1 else [f for f in c.fields(10) if f]
+            if not toks:
+                c_idx += 1
+                continue
+
+            cur_part = part_id
+            t_vals = toks
+            if cur_part is None:
+                try:
+                    cur_part = int(float(toks[0]))
+                    t_vals = toks[1:]
+                except ValueError:
+                    c_idx += 1
+                    continue
+
+            vals = []
+            for v in t_vals:
+                try:
+                    vals.append(float(v))
+                except ValueError:
+                    vals.append(0.0)
+
+            sxx = vals[0] if len(vals) > 0 else 0.0
+            syy = vals[1] if len(vals) > 1 else 0.0
+            szz = vals[2] if len(vals) > 2 else 0.0
+            sxy = vals[3] if len(vals) > 3 else 0.0
+            syz = vals[4] if len(vals) > 4 else 0.0
+            szx = vals[5] if len(vals) > 5 else 0.0
+            epsp = vals[6] if len(vals) > 6 else 0.0
+
+            sb_xx, sb_yy, sb_xy = 0.0, 0.0, 0.0
+            c_idx += 1
+            if c_idx < len(valid_cards):
+                next_c = valid_cards[c_idx]
+                next_toks = next_c.tokens() if not block.fixed or len(next_c.tokens()) > 1 else [f for f in next_c.fields(10) if f]
+                if part_id is not None and len(next_toks) in (1, 2, 3):
+                    b_vals = []
+                    for v in next_toks:
+                        try:
+                            b_vals.append(float(v))
+                        except ValueError:
+                            b_vals.append(0.0)
+                    sb_xx = b_vals[0] if len(b_vals) > 0 else 0.0
+                    sb_yy = b_vals[1] if len(b_vals) > 1 else 0.0
+                    sb_xy = b_vals[2] if len(b_vals) > 2 else 0.0
+                    c_idx += 1
+
+            rec = InistaRecord(
+                part_id=cur_part,
+                sigma_xx=sxx, sigma_yy=syy, sigma_zz=szz,
+                sigma_xy=sxy, sigma_yz=syz, sigma_zx=szx,
+                sigma_b_xx=sb_xx, sigma_b_yy=sb_yy, sigma_b_xy=sb_xy,
+                epsp=epsp,
+            )
+            model.inista_records.append(rec)
+        return
+
+    elif sub in ("STRESS", "STRS"):
+        from ..starter.inista import InistaRecord
+        valid_cards = [c for c in block.cards if not c.is_blank and not c.raw.strip().startswith("#")]
+        for c in valid_cards:
+            toks = c.tokens() if not block.fixed or len(c.tokens()) > 1 else [f for f in c.fields(10) if f]
+            if not toks:
+                continue
+            try:
+                elem_id = int(float(toks[0]))
+            except ValueError:
+                continue
+            vals = []
+            for v in toks[1:]:
+                try:
+                    vals.append(float(v))
+                except ValueError:
+                    vals.append(0.0)
+            sxx = vals[0] if len(vals) > 0 else 0.0
+            syy = vals[1] if len(vals) > 1 else 0.0
+            szz = vals[2] if len(vals) > 2 else 0.0
+            sxy = vals[3] if len(vals) > 3 else 0.0
+            syz = vals[4] if len(vals) > 4 else 0.0
+            szx = vals[5] if len(vals) > 5 else 0.0
+            epsp = vals[6] if len(vals) > 6 else None
+            model.inista_records.append(InistaRecord(
+                elem_id=elem_id,
+                sigma_xx=sxx, sigma_yy=syy, sigma_zz=szz,
+                sigma_xy=sxy, sigma_yz=syz, sigma_zx=szx,
+                epsp=epsp,
+            ))
+        return
+
+    elif sub in ("EPSP",):
+        from ..starter.inista import InistaRecord
+        valid_cards = [c for c in block.cards if not c.is_blank and not c.raw.strip().startswith("#")]
+        for c in valid_cards:
+            toks = c.tokens() if not block.fixed or len(c.tokens()) > 1 else [f for f in c.fields(10) if f]
+            if not toks:
+                continue
+            try:
+                elem_id = int(float(toks[0]))
+                epsp = float(toks[1]) if len(toks) > 1 else 0.0
+            except ValueError:
+                continue
+            model.inista_records.append(InistaRecord(
+                elem_id=elem_id,
+                epsp=epsp,
+            ))
+        return
+
     else:
         read_inishe(block, model, log)
 

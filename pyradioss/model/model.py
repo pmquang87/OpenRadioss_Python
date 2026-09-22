@@ -959,6 +959,9 @@ class Model:
         self.impflux_loads: List[ImposedFlux] = []      # /IMPFLUX (M95)
         self.impfluxes: Dict[int, ImposedFlux] = {}     # /IMPFLUX (M95/M152)
         self.initemp: List[InitialTemperature] = []    # /INITEMP (M95)
+        self.initemp_records: List[Any] = []          # /INITEMP records list
+        self.temperature: Optional[np.ndarray] = None # nodal temperatures (numnod,)
+        self.temperatures: Optional[np.ndarray] = None # alias to temperature
         self.inivol: List[InitialVolume] = []          # /INIVOL  (M94)
         self.ploads: List[PressureLoad] = []           # /PLOAD   (M5)
         self.def_inter: Dict[str, Any] = {}            # /DEF_INTER (M99/M101)
@@ -1148,6 +1151,7 @@ class Model:
         self.inivols: Dict[int, Inivol] = {}               # /INIVOL (M151)
         self.inigrav_loads: Dict[int, InigravLoad] = {}    # /INIGRAV (M151)
         self.inistas: Dict[int, Inista] = {}               # /INISTA, /INISTATE (M151)
+        self.inista_records: List[Any] = []                # /INISTA records (M619)
         self.bem_controls: Dict[int, BemControl] = {}      # /BEM/FLOW, /BEM/DAA (M151)
         self.perturb_controls: Dict[int, PerturbControl] = {} # /PERTURB (M151)
         self.ebcs_inips: Dict[int, EbcsInip] = {}          # /EBCS/INIP (M152)
