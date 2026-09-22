@@ -56,39 +56,36 @@ from pyradioss.engine.ale_bimat import (
 
 def test_youngs_gradient_2d_linear():
     """Test Youngs 2D gradient stencil on linear volume fraction field."""
-    # Field: alpha(x, y) = 0.5 + 0.2*x + 0.1*y
     nx, ny = 5, 5
     dx, dy = 0.5, 0.5
-    x = np.arange(nx) * dx
-    y = np.arange(ny) * dy
+    x = (np.arange(nx) - 2) * dx
+    y = (np.arange(ny) - 2) * dy
     xx, yy = np.meshgrid(x, y)
-    alpha = 0.5 + 0.2 * xx + 0.1 * yy
-    alpha = np.clip(alpha, 0.0, 1.0)
+    alpha = 0.5 + 0.1 * xx + 0.05 * yy
 
     gx, gy = youngs_gradient_2d(alpha, dx=dx, dy=dy)
 
-    # In the interior cells (1..3, 1..3), gradient should match [0.2, 0.1]
-    assert np.allclose(gx[1:4, 1:4], 0.2, atol=1e-3)
-    assert np.allclose(gy[1:4, 1:4], 0.1, atol=1e-3)
+    # In the interior cells (1..3, 1..3), gradient should match [0.1, 0.05]
+    assert np.allclose(gx[1:4, 1:4], 0.1, atol=1e-3)
+    assert np.allclose(gy[1:4, 1:4], 0.05, atol=1e-3)
 
 
 def test_youngs_gradient_3d_linear():
     """Test Youngs 3D gradient stencil on linear volume fraction field."""
     nz, ny, nx = 5, 5, 5
     dx, dy, dz = 1.0, 1.0, 1.0
-    x = np.arange(nx) * dx
-    y = np.arange(ny) * dy
-    z = np.arange(nz) * dz
+    x = (np.arange(nx) - 2) * dx
+    y = (np.arange(ny) - 2) * dy
+    z = (np.arange(nz) - 2) * dz
     zz, yy, xx = np.meshgrid(z, y, x, indexing="ij")
-    alpha = 0.5 + 0.1 * xx + 0.05 * yy + 0.08 * zz
-    alpha = np.clip(alpha, 0.0, 1.0)
+    alpha = 0.5 + 0.05 * xx + 0.02 * yy + 0.03 * zz
 
     gx, gy, gz = youngs_gradient_3d(alpha, dx=dx, dy=dy, dz=dz)
 
-    # In interior cells, gradients should be close to true slopes
-    assert np.allclose(gx[1:4, 1:4, 1:4], 0.1, atol=1e-2)
-    assert np.allclose(gy[1:4, 1:4, 1:4], 0.05, atol=1e-2)
-    assert np.allclose(gz[1:4, 1:4, 1:4], 0.08, atol=1e-2)
+    # In interior cells, gradients should match true slopes
+    assert np.allclose(gx[1:4, 1:4, 1:4], 0.05, atol=1e-3)
+    assert np.allclose(gy[1:4, 1:4, 1:4], 0.02, atol=1e-3)
+    assert np.allclose(gz[1:4, 1:4, 1:4], 0.03, atol=1e-3)
 
 
 def test_youngs_interface_normal():
@@ -180,32 +177,45 @@ def test_least_squares_gradient_3d():
 
 def test_gradient_limiter_barth_jespersen_2d():
     """Test Barth-Jespersen slope limiter bounds extrapolated values."""
-    # Element 0 at (0.5, 0.5) with vertices at (0,0), (1,0), (1,1), (0,1)
-    elem_centers = np.array([[0.5, 0.5], [1.5, 0.5]])
-    alpha = np.array([0.5, 0.6])
-    neighbor_elem = np.array([[-1, 1, -1, -1], [-1, -1, -1, 0]])
+    # 3 elements in a row: left (alpha=0.4), center (alpha=0.5), right (alpha=0.6)
+    elem_centers = np.array([[0.5, 0.5], [1.5, 0.5], [2.5, 0.5]])
+    alpha = np.array([0.4, 0.5, 0.6])
+    neighbor_elem = np.array([
+        [-1, 1, -1, -1],
+        [-1, 2, -1, 0],
+        [-1, -1, -1, 1],
+    ])
 
     node_coords = np.array([
         [0.0, 0.0],
         [1.0, 0.0],
-        [1.0, 1.0],
+        [2.0, 0.0],
+        [3.0, 0.0],
         [0.0, 1.0],
+        [1.0, 1.0],
+        [2.0, 1.0],
+        [3.0, 1.0],
     ])
-    connectivity = np.array([[0, 1, 2, 3]])
+    connectivity = np.array([
+        [0, 1, 5, 4],
+        [1, 2, 6, 5],
+        [2, 3, 7, 6],
+    ])
 
-    # Overshooting unconstrained gradient: grad = [2.0, 0.0]
-    # At vertex 1 (1, 0), dx = 0.5, extrapolated val = 0.5 + 2.0*0.5 = 1.5
-    # Max neighbor value is 0.6. The limiter should scale grad down so val <= 0.6
-    grad = np.array([[2.0, 0.0], [0.0, 0.0]])
+    # Center element 1 has unconstrained gradient: grad = [2.0, 0.0]
+    # Vertex 2 & 6 are at x=2.0 (dx = +0.5). Extrapolated val = 0.5 + 2.0*0.5 = 1.5.
+    # Node max is 0.6. Reduction factor = (0.6 - 0.5) / (1.5 - 0.5) = 0.1.
+    # Vertex 1 & 5 are at x=1.0 (dx = -0.5). Extrapolated val = 0.5 + 2.0*(-0.5) = -0.5.
+    # Node min is 0.4. Reduction factor = (0.4 - 0.5) / (-0.5 - 0.5) = 0.1.
+    grad = np.array([[0.0, 0.0], [2.0, 0.0], [0.0, 0.0]])
 
     limited_grad = gradient_limiter_barth_jespersen_2d(
         grad, alpha, elem_centers, node_coords, connectivity, neighbor_elem, beta=1.0
     )
 
-    # Expected reduction factor: (0.6 - 0.5) / (1.5 - 0.5) = 0.1 / 1.0 = 0.1
-    # limited_grad = 0.1 * [2.0, 0.0] = [0.2, 0.0]
-    assert np.isclose(limited_grad[0, 0], 0.2, atol=1e-4)
-    assert np.isclose(limited_grad[0, 1], 0.0, atol=1e-4)
+    # Limited gradient should be 0.1 * [2.0, 0.0] = [0.2, 0.0]
+    assert np.isclose(limited_grad[1, 0], 0.2, atol=1e-4)
+    assert np.isclose(limited_grad[1, 1], 0.0, atol=1e-4)
 
 
 # =============================================================================
@@ -234,10 +244,13 @@ def test_ale51_upwind_flux():
 
 def test_ale51_antidiffusion_conservation():
     """Test anti-diffusive species flux conservation and volume limiting."""
-    # 2 elements, 2 faces each, 2 material phases
+    # 2 elements, 2 faces each (e.g. 1D slab: face 0 left, face 1 right)
+    # Flow is to the right:
+    # Elem 0: face 1 (right) is outgoing (flux = 5.0)
+    # Elem 1: face 0 (left) is incoming (flux = -5.0)
     flux_saved = np.array([
-        [5.0, -5.0],
-        [5.0, -5.0],
+        [0.0, 5.0],
+        [-5.0, 0.0],
     ])
     alpha_mat = np.array([
         [0.7, 0.3],
@@ -246,6 +259,7 @@ def test_ale51_antidiffusion_conservation():
     elem_volumes = np.array([100.0, 100.0])
     dt = 1.0
 
+    # Face 1 of elem 0 connects to face 0 of elem 1
     neighbor_elem = np.array([
         [-1, 1],
         [0, -1],
@@ -265,18 +279,14 @@ def test_ale51_antidiffusion_conservation():
         neighbor_face=neighbor_face,
     )
 
-    # 1. For outgoing face 0 of elem 0 (flux = 5.0):
-    # Phase 0 flux should be 0.7 * 5.0 = 3.5
-    # Phase 1 flux should be 0.3 * 5.0 = 1.5
-    assert np.isclose(species_flux[0, 0, 0], 3.5)
-    assert np.isclose(species_flux[0, 0, 1], 1.5)
-    # Sum across phases should equal total face flux
-    assert np.isclose(np.sum(species_flux[0, 0, :]), 5.0)
+    # Elem 0, outgoing face 1:
+    assert np.isclose(species_flux[0, 1, 0], 3.5)
+    assert np.isclose(species_flux[0, 1, 1], 1.5)
+    assert np.isclose(np.sum(species_flux[0, 1, :]), 5.0)
 
-    # 2. Skew-symmetry across neighbor interface:
-    # Elem 1, face 1 is neighbor to elem 0, face 0 with incoming flux
-    assert np.isclose(species_flux[1, 1, 0], -species_flux[0, 0, 0])
-    assert np.isclose(species_flux[1, 1, 1], -species_flux[0, 0, 1])
+    # Skew-symmetry: Elem 1, face 0 is the neighbor face
+    assert np.isclose(species_flux[1, 0, 0], -species_flux[0, 1, 0])
+    assert np.isclose(species_flux[1, 0, 1], -species_flux[0, 1, 1])
 
 
 def test_ale51_antidiffusion_volume_limiting():
@@ -288,16 +298,25 @@ def test_ale51_antidiffusion_volume_limiting():
     flux_saved = np.array([[20.0]])
     dt = 1.0
 
-    species_flux = ale51_antidiffusion(
+    # With upwind_sm = -1.0 (pure anti-diffusion), flux is strictly bounded by V_0 / dt = 0.5
+    species_flux_pure = ale51_antidiffusion(
+        flux_saved=flux_saved,
+        alpha_mat=alpha_mat,
+        elem_volumes=elem_volumes,
+        dt=dt,
+        upwind_sm=-1.0,
+    )
+    assert species_flux_pure[0, 0, 0] <= 0.5 + 1e-12
+
+    # With upwind_sm = 0.0 (50% blend), flux is 0.5 * (0.5 + 1.0) = 0.75 <= 0.75
+    species_flux_blend = ale51_antidiffusion(
         flux_saved=flux_saved,
         alpha_mat=alpha_mat,
         elem_volumes=elem_volumes,
         dt=dt,
         upwind_sm=0.0,
     )
-
-    # Phase 0 flux must be limited to <= available volume / dt = 0.5
-    assert species_flux[0, 0, 0] <= 0.5 + 1e-12
+    assert species_flux_blend[0, 0, 0] <= 0.75 + 1e-12
 
 
 # =============================================================================

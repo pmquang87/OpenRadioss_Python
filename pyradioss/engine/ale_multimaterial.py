@@ -411,35 +411,54 @@ def gradient_limiter_barth_jespersen_2d(
         grad_limited: (n_elem, 2) limited gradients.
     """
     n_elem = len(alpha)
+    n_nodes = len(node_coords)
     grad_limited = np.copy(grad)
 
+    # Ported from ale51_gradient_reconstruction2.F lines 191-207:
+    # NODE_MAX_VALUE and NODE_MIN_VALUE for each node from connected elements
+    node_min = np.full(n_nodes, np.inf, dtype=np.float64)
+    node_max = np.full(n_nodes, -np.inf, dtype=np.float64)
+
+    for e in range(n_elem):
+        for j in range(connectivity.shape[1]):
+            nid = connectivity[e, j]
+            if nid < n_nodes:
+                node_min[nid] = min(node_min[nid], alpha[e])
+                node_max[nid] = max(node_max[nid], alpha[e])
+
+    # If any neighbor is provided outside the element list, incorporate into node bounds
+    if neighbor_elem is not None:
+        for e in range(n_elem):
+            for k in range(connectivity.shape[1]):
+                nbr = neighbor_elem[e, k]
+                if 0 <= nbr < n_elem:
+                    for j in range(connectivity.shape[1]):
+                        nid = connectivity[e, j]
+                        node_min[nid] = min(node_min[nid], alpha[nbr])
+                        node_max[nid] = max(node_max[nid], alpha[nbr])
+
+    # Ported from gradient_limitation2.F lines 71-114
     for i in range(n_elem):
         if np.linalg.norm(grad[i]) < 1e-14:
             continue
 
         val_elem = alpha[i]
         xk = elem_centers[i]
-
-        # Determine local min and max among element and its neighbors
-        phi_min = val_elem
-        phi_max = val_elem
-        for k in range(4):
-            vois = neighbor_elem[i, k]
-            if vois >= 0:
-                phi_min = min(phi_min, alpha[vois])
-                phi_max = max(phi_max, alpha[vois])
-
         reduc = 1.0
-        for j in range(4):
+
+        for j in range(connectivity.shape[1]):
             node_id = connectivity[i, j]
             xn = node_coords[node_id]
             dx = xn - xk
             val_node = val_elem + np.dot(grad[i], dx)
             diff = val_node - val_elem
+
             if diff > 1e-14:
-                r = min(beta * (phi_max - val_elem) / diff, 1.0)
+                n_max = node_max[node_id]
+                r = min(beta * (n_max - val_elem) / diff, 1.0)
             elif diff < -1e-14:
-                r = min(beta * (phi_min - val_elem) / diff, 1.0)
+                n_min = node_min[node_id]
+                r = min(beta * (n_min - val_elem) / diff, 1.0)
             else:
                 r = 1.0
             reduc = min(reduc, max(0.0, r))
