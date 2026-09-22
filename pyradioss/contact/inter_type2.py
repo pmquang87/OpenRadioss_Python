@@ -449,6 +449,55 @@ class ContactType2:
         x[sn] = x_new
         self.x_prev[act] = x_new
 
+    def compute_thermal_conduction(
+        self,
+        temp: np.ndarray,
+        dt: float,
+        kthe: Optional[float] = None,
+        theaccfact: float = 1.0,
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
+        """Compute thermal conduction across the tied contact interface.
+
+        Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\interfaces\\interf\\i2therm.F
+
+        Parameters
+        ----------
+        temp : np.ndarray
+            Nodal temperatures.
+        dt : float
+            Time step dt.
+        kthe : Optional[float]
+            Thermal contact conductivity KTHE. If None, uses itf.kthe.
+        theaccfact : float
+            Thermal acceleration factor (default 1.0).
+
+        Returns
+        -------
+        fthe : np.ndarray
+            Nodal heat increments [J].
+        condn : np.ndarray
+            Nodal conductance [W/K].
+        heat_transferred : float
+            Total heat transferred across interface [J].
+        """
+        from .thermal_contact import thermal_contact_type2
+
+        if kthe is None:
+            kthe = getattr(self.itf, "kthe", 0.0) or getattr(self.itf, "cond", 0.0)
+
+        x = getattr(self.model, "x", getattr(self.model, "x0", np.zeros((len(temp), 3))))
+        return thermal_contact_type2(
+            x=x,
+            temp=temp,
+            slave_nodes=self.snode,
+            master_segs=self.seg,
+            weights=self.w,
+            kthe=kthe,
+            dt=dt,
+            theaccfact=theaccfact,
+            active_mask=getattr(self, "alive", None),
+        )
+
 
 class LagmulType2:
     """One /INTER/LAGMUL/TYPE2 tied constraint, engine-side.

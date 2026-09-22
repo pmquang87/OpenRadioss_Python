@@ -676,6 +676,25 @@ def test_contact_class_thermal_methods():
     from pyradioss.contact.inter_type21 import ContactType21
     from pyradioss.contact.inter_type25 import ContactType25
 
+    class MockModel:
+        def __init__(self, **kwargs):
+            self.impvel = []
+            self.delpart = []
+            self.parts = {}
+            self.curves = {}
+            self.functions = {}
+            self.surfaces = {}
+            self.lines = {}
+            self.node_groups = {}
+            self.element_groups = lambda: []
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+            self.numnod = len(self.x) if hasattr(self, "x") and self.x is not None else 0
+            if not hasattr(self, "x0") or self.x0 is None:
+                self.x0 = np.copy(self.x) if hasattr(self, "x") and self.x is not None else None
+            if not hasattr(self, "mass0") or self.mass0 is None:
+                self.mass0 = np.copy(self.mass) if hasattr(self, "mass") and self.mass is not None else None
+
     # 1. ContactType2
     itf2 = type("Itf", (), {
         "id": 2,
@@ -688,23 +707,23 @@ def test_contact_class_thermal_methods():
         "sec_id": 1,
         "spotflag": 0,
     })()
-    model2 = type("Model", (), {
-        "x": np.array([
+    model2 = MockModel(
+        x=np.array([
             [0.0, 0.0, 0.0],
             [1.0, 0.0, 0.0],
             [1.0, 1.0, 0.0],
             [0.0, 1.0, 0.0],
             [0.5, 0.5, 0.0],
         ]),
-        "mass": np.ones(5),
-        "surfaces": {1: type("Surf", (), {
+        mass=np.ones(5),
+        surfaces={1: type("Surf", (), {
             "segments": np.array([[0, 1, 2, 3]]),
             "seg_gtype": np.array(["QUAD"]),
             "seg_elem": np.array([1]),
         })()},
-        "node_groups": {1: type("NodeGroup", (), {"node_idx": np.array([4])})()},
-        "log": type("Log", (), {"warning": lambda *a: None, "info": lambda *a: None, "error": lambda *a: None})(),
-    })()
+        node_groups={1: type("NodeGroup", (), {"node_idx": np.array([4])})()},
+        log=type("Log", (), {"warning": lambda *a: None, "info": lambda *a: None, "error": lambda *a: None})(),
+    )
     ct2 = ContactType2(itf2, model2, model2.log)
     temp2 = np.array([400.0, 400.0, 400.0, 400.0, 300.0])
     fthe2, condn2, h2 = ct2.compute_thermal_conduction(temp2, dt=0.01)
@@ -735,17 +754,17 @@ def test_contact_class_thermal_methods():
         "istf": 0,
         "stfac": 1.0,
     })()
-    model7 = type("Model", (), {
-        "x": np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.5, 0.5, 0.002]]),
-        "mass": np.ones(5),
-        "surfaces": {1: type("Surf", (), {
+    model7 = MockModel(
+        x=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.5, 0.5, 0.002]]),
+        mass=np.ones(5),
+        surfaces={1: type("Surf", (), {
             "segments": np.array([[0, 1, 2, 3]]),
             "seg_gtype": np.array(["QUAD"]),
             "seg_elem": np.array([1]),
         })()},
-        "node_groups": {1: type("NodeGroup", (), {"node_idx": np.array([4])})()},
-        "log": type("Log", (), {"warning": lambda *a: None, "info": lambda *a: None, "error": lambda *a: None})(),
-    })()
+        node_groups={1: type("NodeGroup", (), {"node_idx": np.array([4])})()},
+        log=type("Log", (), {"warning": lambda *a: None, "info": lambda *a: None, "error": lambda *a: None})(),
+    )
     ct7 = ContactType7(itf7, model7, model7.log)
     ct7.pairs_node = np.array([4])
     ct7.pairs_seg = np.array([0])
@@ -773,15 +792,15 @@ def test_contact_class_thermal_methods():
         "istf": 0,
         "stfac": 1.0,
     })()
-    model11 = type("Model", (), {
-        "x": np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.5, -0.5, 0.005], [0.5, 0.5, 0.005]]),
-        "mass": np.ones(4),
-        "lines": {
+    model11 = MockModel(
+        x=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.5, -0.5, 0.005], [0.5, 0.5, 0.005]]),
+        mass=np.ones(4),
+        lines={
             1: type("Line", (), {"segments": np.array([[0, 1]]), "seg_gtype": np.array(["BEAM"]), "seg_elem": np.array([1])})(),
             2: type("Line", (), {"segments": np.array([[2, 3]]), "seg_gtype": np.array(["BEAM"]), "seg_elem": np.array([2])})(),
         },
-        "log": type("Log", (), {"warning": lambda *a: None, "info": lambda *a: None, "error": lambda *a: None})(),
-    })()
+        log=type("Log", (), {"warning": lambda *a: None, "info": lambda *a: None, "error": lambda *a: None})(),
+    )
     ct11 = ContactType11(itf11, model11, model11.log)
     ct11.pairs_s = np.array([0])
     ct11.pairs_m = np.array([0])
@@ -800,15 +819,15 @@ def test_contact_class_thermal_methods():
         "stfac": 1.0,
         "dist": 1.0,
     })()
-    model21 = type("Model", (), {
-        "x": np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.5, 0.0, 0.0]]),
-        "mass": np.ones(3),
-        "surfaces": {
+    model21 = MockModel(
+        x=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.5, 0.0, 0.0]]),
+        mass=np.ones(3),
+        surfaces={
             1: type("Surf", (), {"segments": np.array([[0, 1]]), "seg_gtype": np.array(["LINE"]), "seg_elem": np.array([1])})(),
             2: type("Surf", (), {"segments": np.array([[2, 2]]), "seg_gtype": np.array(["POINT"]), "seg_elem": np.array([2])})(),
         },
-        "log": type("Log", (), {"warning": lambda *a: None, "info": lambda *a: None, "error": lambda *a: None})(),
-    })()
+        log=type("Log", (), {"warning": lambda *a: None, "info": lambda *a: None, "error": lambda *a: None})(),
+    )
     ct21 = ContactType21(itf21, model21, model21.log)
     temp21 = np.array([400.0, 400.0, 300.0])
     fthe21, cond21, h21 = ct21.compute_thermal_conduction(temp21, dt=0.01)
@@ -826,17 +845,16 @@ def test_contact_class_thermal_methods():
         "sigmaxadh": 0.0,
         "fric": 0.0,
     })()
-    model25 = type("Model", (), {
-        "x": np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.5, 0.5, 0.0]]),
-        "mass": np.ones(5),
-        "surfaces": {
+    model25 = MockModel(
+        x=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.5, 0.5, 0.0]]),
+        mass=np.ones(5),
+        surfaces={
             1: type("Surf", (), {"segments": np.array([[0, 1, 2, 3]]), "seg_gtype": np.array(["QUAD"]), "seg_elem": np.array([1])})(),
             2: type("Surf", (), {"segments": np.array([[4, 4, 4, 4]]), "seg_gtype": np.array(["POINT"]), "seg_elem": np.array([2])})(),
         },
-        "log": type("Log", (), {"warning": lambda *a: None, "info": lambda *a: None, "error": lambda *a: None})(),
-    })()
+        log=type("Log", (), {"warning": lambda *a: None, "info": lambda *a: None, "error": lambda *a: None})(),
+    )
     ct25 = ContactType25(itf25, model25, model25.log)
     temp25 = np.array([400.0, 400.0, 400.0, 400.0, 300.0])
     fthe25, cond25, ledger25 = ct25.compute_thermal_conduction(temp25, dt=0.01)
     assert abs(np.sum(fthe25)) < 1e-12
-

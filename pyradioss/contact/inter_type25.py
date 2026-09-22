@@ -161,10 +161,15 @@ class ContactType25:
     def _init_entities(self) -> None:
         """Resolve secondary and master entities."""
         params = getattr(self.itf, "params", {}) or {}
-        # 1. Secondary nodes
+        # 1. Surface IDs
+        surf_m = getattr(self.itf, "surf_id", getattr(self.itf, "main_id", 0))
         surf_s = getattr(self.itf, "grnod_id", getattr(self.itf, "grnd_id", 0))
-        if not surf_s and hasattr(self.itf, "surf_id2"):
-            surf_s = self.itf.surf_id2
+        if not surf_s:
+            for s_cand in ("surf_id2", "surf_id1", "sec_id"):
+                val = getattr(self.itf, s_cand, 0)
+                if val and val != surf_m:
+                    surf_s = val
+                    break
 
         if "secondary_nodes" in params and params["secondary_nodes"] is not None:
             self.secondary_nodes = np.asarray(params["secondary_nodes"], dtype=np.int64)
@@ -185,7 +190,6 @@ class ContactType25:
                     self.secondary_nodes = np.unique(s.segments.reshape(-1))
 
         # 2. Master segments
-        surf_m = getattr(self.itf, "surf_id", getattr(self.itf, "surf_id1", 0))
         if "master_segments" in params and params["master_segments"] is not None:
             self.master_segments = np.asarray(params["master_segments"], dtype=np.int64)
         elif hasattr(self.itf, "master_segments") and self.itf.master_segments is not None:
@@ -473,18 +477,26 @@ class ContactType25:
 
         x = getattr(self.model, "x", getattr(self.model, "x0", np.zeros((len(temp), 3))))
 
-        if len(self.segs_s) == 0 or len(self.segs_m) == 0:
+        segs_s = getattr(self, "segs_s", None)
+        segs_m = getattr(self, "segs_m", getattr(self, "master_segments", np.zeros((0, 4), dtype=np.int64)))
+        if segs_s is not None and len(segs_s) > 0:
+            s_nodes = np.unique(segs_s.ravel())
+        else:
+            s_nodes = getattr(self, "secondary_nodes", np.zeros(0, dtype=np.int64))
+
+        if len(s_nodes) == 0 or len(segs_m) == 0:
             return np.zeros(len(temp), dtype=float), np.zeros(0, dtype=float), {"conduction": 0.0, "radiation": 0.0, "friction": 0.0}
 
-        s_nodes = np.unique(self.segs_s.ravel())
         n_pairs = len(s_nodes)
-        if self.segs_m.shape[1] == 3:
-            m_segs = np.column_stack([self.segs_m, self.segs_m[:, 2]])
+        if segs_m.shape[1] == 3:
+            m_segs = np.column_stack([segs_m, segs_m[:, 2]])
         else:
-            m_segs = self.segs_m
+            m_segs = segs_m
 
         m_segs_pair = np.tile(m_segs[0], (n_pairs, 1))
         weights = np.full((n_pairs, 4), 0.25, dtype=float)
+
+        gap_val = getattr(self, "gap", getattr(itf, "gap", 0.01))
 
         return thermal_contact_type25(
             x=x,
@@ -497,7 +509,7 @@ class ContactType25:
             theaccfact=theaccfact,
             iform=iform,
             tint=tint,
-            gapv=np.full(n_pairs, self.gap),
+            gapv=np.full(n_pairs, gap_val),
             dcond=dcond,
             fcond=fcond,
             frad=frad,

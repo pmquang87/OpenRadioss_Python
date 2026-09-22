@@ -523,17 +523,20 @@ class ContactType21:
         if kthe is None:
             kthe = getattr(itf, "kthe", 0.0) or getattr(itf, "rstif", 0.0)
 
-        if len(self.slave_nodes) == 0 or len(self.master_edges) == 0:
+        slave_nodes = getattr(self, "slave_nodes", getattr(self, "nodes", np.zeros(0, dtype=np.int64)))
+        master_edges = getattr(self, "master_edges", getattr(self, "bead_edges", np.zeros((0, 2), dtype=np.int64)))
+
+        if len(slave_nodes) == 0 or len(master_edges) == 0:
             return np.zeros(len(temp), dtype=float), np.zeros(0, dtype=float), 0.0
 
-        n_pairs = len(self.slave_nodes)
+        n_pairs = len(slave_nodes)
         weights = np.zeros((n_pairs, 4), dtype=float)
         weights[:, 0] = 0.5
         weights[:, 1] = 0.5
 
         master_segs = np.zeros((n_pairs, 4), dtype=np.int64)
-        master_segs[:, 0] = self.master_edges[0, 0]
-        master_segs[:, 1] = self.master_edges[0, 1]
+        master_segs[:, 0] = master_edges[0, 0]
+        master_segs[:, 1] = master_edges[0, 1]
         master_segs[:, 2] = master_segs[:, 1]
         master_segs[:, 3] = master_segs[:, 1]
 
@@ -541,7 +544,7 @@ class ContactType21:
 
         return thermal_contact_type21(
             temp=temp,
-            slave_nodes=self.slave_nodes,
+            slave_nodes=slave_nodes,
             master_segs=master_segs,
             weights=weights,
             kthe=kthe,
