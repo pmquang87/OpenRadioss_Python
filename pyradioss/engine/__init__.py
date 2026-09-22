@@ -219,3 +219,10 @@ from .ale_cut_cells import (  # noqa: F401
     stack_secondary_cell_updates,
 )
 
+from .flex_body import (  # noqa: F401
+    FlexBody,
+    ModalEnergy,
+    init_flex_bodies,
+    flex_body_forces,
+)
+

@@ -194,8 +194,20 @@ def select_backend(name=None, log=None) -> str:
             if log is not None:
                 log.warning(msg, "BACKEND")
             _state.update(name="numpy", mod=None, forced=True)
-    elif name == "numpy":
-        _state.update(name="numpy", mod=None, forced=True)
+    elif name == "cupy":
+        try:
+            import cupy
+            if hasattr(cupy, "cuda") and hasattr(cupy.cuda, "is_available"):
+                if not cupy.cuda.is_available():
+                    raise RuntimeError("No CUDA-capable device detected")
+            _state.update(name="cupy", mod=cupy, forced=True)
+        except (ImportError, RuntimeError, Exception):
+            msg = ("cupy backend requested but cupy is not installed or "
+                   "CUDA is unavailable — falling back to NumPy (pip install cupy)")
+            warnings.warn(msg, stacklevel=2)
+            if log is not None:
+                log.warning(msg, "BACKEND")
+            _state.update(name="numpy", mod=None, forced=True)
     elif name == "jax":
         msg = ("JAX backend is deferred (see the M7 notes in "
                "PORTING_GUIDE.md §5) — falling back to NumPy")
@@ -304,3 +316,7 @@ def get(kernel: str):
         select_backend()
     mod = _state["mod"]
     return getattr(mod, kernel, None) if mod is not None else None
+
+
+from .gpu_transfer import GPUArrayManager  # noqa: E402
+
