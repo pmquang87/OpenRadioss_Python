@@ -1151,26 +1151,83 @@ def parse_stitch(block: KeywordBlock, log: MessageLog) -> Property:
 
 
 def parse_predit(block: KeywordBlock, log: MessageLog) -> Property:
-    """/PROP/PREDIT (TYPE36) — Progressive Damage Interface Property (M149).
+    """/PROP/PREDIT (TYPE36) — Progressive Damage Interface Property.
 
-    Fortran origin: starter/source/properties/p36_predit/hm_read_prop36.F
-    CFG: prop_predit.cfg
+    Fortran origin:
+      starter/source/properties/spring/hm_read_prop36.F
+      config/CFG/radioss110/PROP/prop_p36_predit.cfg
     """
     title, cards, fixed = _data_cards(block)
     params = _universal_geo_params()
 
-    itype = 0
+    lutype = 1
     if len(cards) > 0 and not cards[0].is_blank:
         if fixed:
             f0 = cards[0].cut("PROP_PREDIT_1")
-            itype = _iv(f0[0]) if len(f0) > 0 else 0
+            lutype = _iv(f0[0]) if len(f0) > 0 else 1
         else:
             t0 = cards[0].tokens()
-            itype = _iv(t0[0]) if len(t0) > 0 else 0
+            lutype = _iv(t0[0]) if len(t0) > 0 else 1
 
-    params["itype"] = itype
+    params["lutype"] = lutype
+    params["itype"] = lutype
 
-    if itype == 0:
+    if lutype == 1:
+        skew_id, prop_id1, prop_id2 = 0, 0, 0
+        xk = 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            if fixed:
+                f1 = cards[1].cut("PROP_PREDIT_2A")
+                skew_id = _iv(f1[0]) if len(f1) > 0 else 0
+                prop_id1 = _iv(f1[1]) if len(f1) > 1 else 0
+                prop_id2 = _iv(f1[2]) if len(f1) > 2 else 0
+            else:
+                t1 = cards[1].tokens()
+                skew_id = _iv(t1[0]) if len(t1) > 0 else 0
+                prop_id1 = _iv(t1[1]) if len(t1) > 1 else 0
+                prop_id2 = _iv(t1[2]) if len(t1) > 2 else 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            if fixed:
+                f2 = cards[2].cut("PROP_PREDIT_3A")
+                xk = _fv(f2[0]) if len(f2) > 0 else 0.0
+            else:
+                t2 = cards[2].tokens()
+                xk = _fv(t2[0]) if len(t2) > 0 else 0.0
+        params.update({
+            "skew_csid": skew_id, "skew_id": skew_id,
+            "prop_id1": prop_id1, "prop_id2": prop_id2,
+            "xk": xk,
+        })
+    elif lutype == 2:
+        mat_id = 0
+        area, ixx, iyy, izz, ray = 0.0, 0.0, 0.0, 0.0, 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            if fixed:
+                f1 = cards[1].cut("PROP_PREDIT_2B")
+                mat_id = _iv(f1[0]) if len(f1) > 0 else 0
+            else:
+                t1 = cards[1].tokens()
+                mat_id = _iv(t1[0]) if len(t1) > 0 else 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            if fixed:
+                f2 = cards[2].cut("PROP_PREDIT_3B")
+                area = _fv(f2[0]) if len(f2) > 0 else 0.0
+                ixx = _fv(f2[1]) if len(f2) > 1 else 0.0
+                iyy = _fv(f2[2]) if len(f2) > 2 else 0.0
+                izz = _fv(f2[3]) if len(f2) > 3 else 0.0
+                ray = _fv(f2[4]) if len(f2) > 4 else 0.0
+            else:
+                t2 = cards[2].tokens()
+                area = _fv(t2[0]) if len(t2) > 0 else 0.0
+                ixx = _fv(t2[1]) if len(t2) > 1 else 0.0
+                iyy = _fv(t2[2]) if len(t2) > 2 else 0.0
+                izz = _fv(t2[3]) if len(t2) > 3 else 0.0
+                ray = _fv(t2[4]) if len(t2) > 4 else 0.0
+        params.update({
+            "mat_id": mat_id, "area": area, "ixx": ixx, "iyy": iyy, "izz": izz, "ray": ray,
+        })
+    else:
+        # Legacy/direct fallback
         fct_id1, fct_id2, fct_id3 = 0, 0, 0
         k_init = 0.0
         if len(cards) > 1 and not cards[1].is_blank:
@@ -1192,32 +1249,6 @@ def parse_predit(block: KeywordBlock, log: MessageLog) -> Property:
                 t2 = cards[2].tokens()
                 k_init = _fv(t2[0]) if len(t2) > 0 else 0.0
         params.update({"fct_id1": fct_id1, "fct_id2": fct_id2, "fct_id3": fct_id3, "k_init": k_init})
-    else:
-        itype_sub = 0
-        p1, p2, p3, p4, p5 = 0.0, 0.0, 0.0, 0.0, 0.0
-        if len(cards) > 1 and not cards[1].is_blank:
-            if fixed:
-                f1 = cards[1].cut("PROP_PREDIT_2B")
-                itype_sub = _iv(f1[0]) if len(f1) > 0 else 0
-            else:
-                t1 = cards[1].tokens()
-                itype_sub = _iv(t1[0]) if len(t1) > 0 else 0
-        if len(cards) > 2 and not cards[2].is_blank:
-            if fixed:
-                f2 = cards[2].cut("PROP_PREDIT_3B")
-                p1 = _fv(f2[0]) if len(f2) > 0 else 0.0
-                p2 = _fv(f2[1]) if len(f2) > 1 else 0.0
-                p3 = _fv(f2[2]) if len(f2) > 2 else 0.0
-                p4 = _fv(f2[3]) if len(f2) > 3 else 0.0
-                p5 = _fv(f2[4]) if len(f2) > 4 else 0.0
-            else:
-                t2 = cards[2].tokens()
-                p1 = _fv(t2[0]) if len(t2) > 0 else 0.0
-                p2 = _fv(t2[1]) if len(t2) > 1 else 0.0
-                p3 = _fv(t2[2]) if len(t2) > 2 else 0.0
-                p4 = _fv(t2[3]) if len(t2) > 3 else 0.0
-                p5 = _fv(t2[4]) if len(t2) > 4 else 0.0
-        params.update({"itype_sub": itype_sub, "p1": p1, "p2": p2, "p3": p3, "p4": p4, "p5": p5})
 
     return Property(id=block.user_id, type=36, title=title, params=params)
 

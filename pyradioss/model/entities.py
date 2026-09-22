@@ -13022,9 +13022,9 @@ PropKinematicJoint2 = PropType45
 
 @dataclass
 class PropType36:
-    """``/PROP/TYPE36`` or ``/PROP/PREDIT``: Progressive delamination interface property."""
+    """``/PROP/TYPE36`` or ``/PROP/PREDIT``: Progressive damage interface spring property."""
     id: int = 0
-    lutype: int = 0
+    lutype: int = 1
     skew_csid: int = 0
     prop_id1: int = 0
     prop_id2: int = 0
@@ -13035,7 +13035,29 @@ class PropType36:
     iyy: float = 0.0
     izz: float = 0.0
     ray: float = 0.0
+    # Direct / inherited material & failure parameters
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    g: float = 0.0
+    sig0: float = 0.0
+    hpla: float = 0.0
+    m: float = 1.0
+    sfac: float = 1.0
+    ay: float = 1.0
+    az: float = 1.0
+    by: float = 1.0
+    bz: float = 1.0
+    cx: float = 1.0
+    dc: float = 0.99999
+    pr: float = 1.0e30
+    ps: float = 1.0e30
+    ifunc: int = 0
     title: str = ""
+
+    @property
+    def type(self) -> int:
+        return 36
 
 
 PropPredit = PropType36

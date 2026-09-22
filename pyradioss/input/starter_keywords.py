@@ -41150,7 +41150,8 @@ def read_prop_type36(block: KeywordBlock, model: Model, log: MessageLog) -> None
         log.error(f"/PROP/TYPE36/{prop_id}: missing data card", block.source)
         return
 
-    lutype, skew_csid, prop_id1, prop_id2 = 0, 0, 0, 0
+    lutype = 1
+    skew_csid, prop_id1, prop_id2 = 0, 0, 0
     xk = 0.0
     mat_id = 0
     area, ixx, iyy, izz, ray = 0.0, 0.0, 0.0, 0.0, 0.0
@@ -41159,10 +41160,59 @@ def read_prop_type36(block: KeywordBlock, model: Model, log: MessageLog) -> None
     k_init = 0.0
     p1, p2, p3, p4, p5 = 0.0, 0.0, 0.0, 0.0, 0.0
 
-    if block.fixed and not (len(valid_cards) > 0 and len(valid_cards[0].tokens()) == 1):
+    # Determine layout: standard 3-card CFG format (Card 1: Iutype) or 2-card composite format
+    t0 = valid_cards[0].tokens()
+    if len(t0) == 1 or (block.fixed and len(valid_cards[0].raw.strip()) <= 10):
+        # Standard OpenRadioss 3-card layout (hm_read_prop36.F, prop_p36_predit.cfg)
+        lutype = _safe_int(t0[0]) if len(t0) > 0 else 1
+        if lutype == 0:
+            lutype = 1
+        if lutype == 1:
+            if len(valid_cards) > 1:
+                if block.fixed:
+                    c1 = valid_cards[1].cut("PROP_PREDIT_2A")
+                    skew_csid = _safe_int(c1[0]) if len(c1) > 0 else 0
+                    prop_id1 = _safe_int(c1[1]) if len(c1) > 1 else 0
+                    prop_id2 = _safe_int(c1[2]) if len(c1) > 2 else 0
+                else:
+                    t1 = valid_cards[1].tokens()
+                    skew_csid = _safe_int(t1[0]) if len(t1) > 0 else 0
+                    prop_id1 = _safe_int(t1[1]) if len(t1) > 1 else 0
+                    prop_id2 = _safe_int(t1[2]) if len(t1) > 2 else 0
+            if len(valid_cards) > 2:
+                if block.fixed:
+                    c2 = valid_cards[2].cut("PROP_PREDIT_3A")
+                    xk = _safe_float(c2[0]) if len(c2) > 0 else 0.0
+                else:
+                    t2 = valid_cards[2].tokens()
+                    xk = _safe_float(t2[0]) if len(t2) > 0 else 0.0
+        elif lutype == 2:
+            if len(valid_cards) > 1:
+                if block.fixed:
+                    c1 = valid_cards[1].cut("PROP_PREDIT_2B")
+                    mat_id = _safe_int(c1[0]) if len(c1) > 0 else 0
+                else:
+                    t1 = valid_cards[1].tokens()
+                    mat_id = _safe_int(t1[0]) if len(t1) > 0 else 0
+            if len(valid_cards) > 2:
+                if block.fixed:
+                    c2 = valid_cards[2].cut("PROP_PREDIT_3B")
+                    area = _safe_float(c2[0]) if len(c2) > 0 else 0.0
+                    ixx = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+                    iyy = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+                    izz = _safe_float(c2[3]) if len(c2) > 3 else 0.0
+                    ray = _safe_float(c2[4]) if len(c2) > 4 else 0.0
+                else:
+                    t2 = valid_cards[2].tokens()
+                    area = _safe_float(t2[0]) if len(t2) > 0 else 0.0
+                    ixx = _safe_float(t2[1]) if len(t2) > 1 else 0.0
+                    iyy = _safe_float(t2[2]) if len(t2) > 2 else 0.0
+                    izz = _safe_float(t2[3]) if len(t2) > 3 else 0.0
+                    ray = _safe_float(t2[4]) if len(t2) > 4 else 0.0
+    elif block.fixed:
         if len(valid_cards) > 0:
             c0 = valid_cards[0].cut("PROP_PREDIT_DELAM_1")
-            lutype = _safe_int(c0[0]) if len(c0) > 0 else 0
+            lutype = _safe_int(c0[0]) if len(c0) > 0 else 1
             skew_csid = _safe_int(c0[1]) if len(c0) > 1 else 0
             prop_id1 = _safe_int(c0[2]) if len(c0) > 2 else 0
             prop_id2 = _safe_int(c0[3]) if len(c0) > 3 else 0
@@ -41176,39 +41226,20 @@ def read_prop_type36(block: KeywordBlock, model: Model, log: MessageLog) -> None
             izz = _safe_float(c1[4]) if len(c1) > 4 else 0.0
             ray = _safe_float(c1[5]) if len(c1) > 5 else 0.0
     else:
-        t0 = valid_cards[0].tokens()
-        if len(t0) == 1 and len(valid_cards) >= 2:
-            itype_val = _safe_int(t0[0])
+        # Free-format multi-token card 1
+        lutype = _safe_int(t0[0]) if len(t0) > 0 else 1
+        skew_csid = _safe_int(t0[1]) if len(t0) > 1 else 0
+        prop_id1 = _safe_int(t0[2]) if len(t0) > 2 else 0
+        prop_id2 = _safe_int(t0[3]) if len(t0) > 3 else 0
+        xk = _safe_float(t0[4]) if len(t0) > 4 else 0.0
+        if len(valid_cards) > 1:
             t1 = valid_cards[1].tokens()
-            if itype_val == 1 and len(valid_cards) >= 3:
-                itype_sub = _safe_int(t1[0]) if len(t1) > 0 else 0
-                t2 = valid_cards[2].tokens()
-                p1 = _safe_float(t2[0]) if len(t2) > 0 else 0.0
-                p2 = _safe_float(t2[1]) if len(t2) > 1 else 0.0
-                p3 = _safe_float(t2[2]) if len(t2) > 2 else 0.0
-                p4 = _safe_float(t2[3]) if len(t2) > 3 else 0.0
-                p5 = _safe_float(t2[4]) if len(t2) > 4 else 0.0
-            elif itype_val == 0:
-                fct_id1 = _safe_int(t1[0]) if len(t1) > 0 else 0
-                fct_id2 = _safe_int(t1[1]) if len(t1) > 1 else 0
-                fct_id3 = _safe_int(t1[2]) if len(t1) > 2 else 0
-                if len(valid_cards) >= 3:
-                    t2 = valid_cards[2].tokens()
-                    k_init = _safe_float(t2[0]) if len(t2) > 0 else 0.0
-        else:
-            lutype = _safe_int(t0[0]) if len(t0) > 0 else 0
-            skew_csid = _safe_int(t0[1]) if len(t0) > 1 else 0
-            prop_id1 = _safe_int(t0[2]) if len(t0) > 2 else 0
-            prop_id2 = _safe_int(t0[3]) if len(t0) > 3 else 0
-            xk = _safe_float(t0[4]) if len(t0) > 4 else 0.0
-            if len(valid_cards) > 1:
-                t1 = valid_cards[1].tokens()
-                mat_id = _safe_int(t1[0]) if len(t1) > 0 else 0
-                area = _safe_float(t1[1]) if len(t1) > 1 else 0.0
-                ixx = _safe_float(t1[2]) if len(t1) > 2 else 0.0
-                iyy = _safe_float(t1[3]) if len(t1) > 3 else 0.0
-                izz = _safe_float(t1[4]) if len(t1) > 4 else 0.0
-                ray = _safe_float(t1[5]) if len(t1) > 5 else 0.0
+            mat_id = _safe_int(t1[0]) if len(t1) > 0 else 0
+            area = _safe_float(t1[1]) if len(t1) > 1 else 0.0
+            ixx = _safe_float(t1[2]) if len(t1) > 2 else 0.0
+            iyy = _safe_float(t1[3]) if len(t1) > 3 else 0.0
+            izz = _safe_float(t1[4]) if len(t1) > 4 else 0.0
+            ray = _safe_float(t1[5]) if len(t1) > 5 else 0.0
 
     p36 = PropType36(
         id=prop_id, lutype=lutype, skew_csid=skew_csid, prop_id1=prop_id1, prop_id2=prop_id2,
@@ -41218,10 +41249,11 @@ def read_prop_type36(block: KeywordBlock, model: Model, log: MessageLog) -> None
     model.properties[prop_id] = Property(
         id=prop_id, type=36, title=title,
         params={
-            "lutype": lutype, "skew_csid": skew_csid, "prop_id1": prop_id1, "prop_id2": prop_id2,
+            "lutype": lutype, "skew_csid": skew_csid, "skew_id": skew_csid,
+            "prop_id1": prop_id1, "prop_id2": prop_id2,
             "xk": xk, "mat_id": mat_id, "area": area, "ixx": ixx, "iyy": iyy, "izz": izz, "ray": ray,
-            # M149 format compatibility
-            "itype": itype_val, "itype_sub": itype_sub,
+            # Compatibility aliases
+            "itype": lutype, "itype_val": lutype, "itype_sub": itype_sub,
             "fct_id1": fct_id1, "fct_id2": fct_id2, "fct_id3": fct_id3, "k_init": k_init,
             "p1": p1, "p2": p2, "p3": p3, "p4": p4, "p5": p5,
         }

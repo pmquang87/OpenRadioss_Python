@@ -34,7 +34,7 @@ from ..common.constants import EM20, EP30
 from ..common.fastmath import norm3
 
 #: Advanced spring property type numbers
-ADVANCED_SPRING_PROP_TYPES = frozenset({12, 19, 25, 26, 27, 35, 44, 46})
+ADVANCED_SPRING_PROP_TYPES = frozenset({12, 19, 25, 26, 27, 35, 36, 44, 46})
 
 
 def _safe_param(params: dict, key: str, default: float = 0.0) -> float:
@@ -1735,6 +1735,703 @@ def forces_stitch_type35(group, x, v, dt, fint, idx35):
 
 
 # ============================================================================
+# TYPE36: Progressive Damage Interface Spring (/PROP/TYPE36, /PROP/PREDIT)
+# ============================================================================
+
+def _eval_user_func_and_deriv(func, x_val: float, default_val: float = 0.0) -> Tuple[float, float]:
+    """Safely evaluate user hardening function and its derivative."""
+    if func is None:
+        return default_val, 0.0
+    try:
+        if hasattr(func, "evaluate"):
+            y = float(func.evaluate(x_val))
+            eps = 1e-6
+            y_plus = float(func.evaluate(x_val + eps))
+            return y, (y_plus - y) / eps
+        if hasattr(func, "eval"):
+            y = float(func.eval(x_val))
+            eps = 1e-6
+            y_plus = float(func.eval(x_val + eps))
+            return y, (y_plus - y) / eps
+        if callable(func):
+            y = float(func(x_val))
+            eps = 1e-6
+            y_plus = float(func(x_val + eps))
+            return y, (y_plus - y) / eps
+    except Exception:
+        pass
+    return default_val, 0.0
+
+
+def init_predit_type36(group, model, log, idx36, massn, inertn):
+    """Initialize state arrays for TYPE36 progressive damage interface springs.
+
+    Fortran origin:
+      - starter/source/properties/spring/hm_read_prop36.F (HM_READ_PROP36, RINI36)
+      - engine/source/elements/spring/ruser36.F
+      - engine/source/elements/spring/rforc3.F
+    """
+    st = group.state
+    n = group.n
+    if idx36 is None or len(idx36) == 0:
+        return
+
+    if "t36_area" not in st:
+        st["t36_area"] = np.zeros(n)
+        st["t36_rho"] = np.zeros(n)
+        st["t36_ixx"] = np.zeros(n)
+        st["t36_iyy"] = np.zeros(n)
+        st["t36_izz"] = np.zeros(n)
+        st["t36_rx"] = np.zeros(n)
+        st["t36_ry"] = np.zeros(n)
+        st["t36_rz"] = np.zeros(n)
+        st["t36_e"] = np.zeros(n)
+        st["t36_g"] = np.zeros(n)
+        st["t36_sig0"] = np.full(n, 1.0e30)
+        st["t36_hpla"] = np.zeros(n)
+        st["t36_m"] = np.ones(n)
+        st["t36_sfac"] = np.ones(n)
+        st["t36_ay"] = np.ones(n)
+        st["t36_az"] = np.ones(n)
+        st["t36_by"] = np.ones(n)
+        st["t36_bz"] = np.ones(n)
+        st["t36_cx"] = np.ones(n)
+        st["t36_dc"] = np.ones(n)
+        st["t36_pr"] = np.full(n, 1.0e30)
+        st["t36_ps"] = np.full(n, 1.0e30)
+        st["t36_ifunc"] = np.zeros(n, dtype=np.int64)
+        st["t36_mass"] = np.zeros(n)
+        st["t36_xiner"] = np.zeros(n)
+        st["t36_stifm"] = np.zeros(n)
+        st["t36_stifr"] = np.zeros(n)
+
+        # State history variables (ruser36.F lines 173-174, 199-202):
+        # UVAR(11): equivalent plastic deformation EPS_P (init 0.0)
+        # UVAR(12): yield stress SY0 (init EP30)
+        # UVAR(13): plastic curvature X (torsion) (init 0.0)
+        # UVAR(14): plastic curvature Y/Z (bending) (init 0.0)
+        # UVAR(15): damage variable D (init 0.0)
+        st["t36_uvar1"] = np.zeros(n)
+        st["t36_uvar2"] = np.full(n, EP30)
+        st["t36_uvar3"] = np.zeros(n)
+        st["t36_uvar4"] = np.zeros(n)
+        st["t36_uvar5"] = np.zeros(n)
+        st["t36_ey"] = np.zeros((n, 3))
+        st["t36_ez"] = np.zeros((n, 3))
+        st["t36_forces"] = np.zeros((n, 6))  # [Fx, Fy, Fz, Mx, My, Mz]
+
+    pos = {int(e): j for j, e in enumerate(idx36)}
+    for sl, mat, prop in st["slices"]:
+        ptype = getattr(prop, "type", 0)
+        pname = type(prop).__name__.upper()
+        if ptype != 36 and "PREDIT" not in pname and "TYPE36" not in pname:
+            continue
+
+        rng = np.arange(group.n)[sl]
+        local = [e for e in rng if int(e) in pos]
+        if not len(local):
+            continue
+
+        p = getattr(prop, "params", {}) or {}
+        lutype = int(getattr(prop, "lutype", p.get("lutype", 1)))
+
+        area1 = float(getattr(prop, "area", p.get("area", 0.0)))
+        ixx1 = float(getattr(prop, "ixx", p.get("ixx", 0.0)))
+        iyy1 = float(getattr(prop, "iyy", p.get("iyy", 0.0)))
+        izz1 = float(getattr(prop, "izz", p.get("izz", 0.0)))
+        ray1 = float(getattr(prop, "ray", p.get("ray", 0.0)))
+        area2, ixx2, iyy2, izz2, ray2 = area1, ixx1, iyy1, izz1, ray1
+
+        mid1 = int(getattr(prop, "mat_id", p.get("mat_id", 0)))
+        mid2 = mid1
+
+        if lutype == 1:
+            pid1 = int(getattr(prop, "prop_id1", p.get("prop_id1", 0)))
+            pid2 = int(getattr(prop, "prop_id2", p.get("prop_id2", 0)))
+            sub1 = (getattr(model, "prop_type36s", {}).get(pid1) if hasattr(model, "prop_type36s") else None) or \
+                   (getattr(model, "properties", {}).get(pid1) if hasattr(model, "properties") else None)
+            sub2 = (getattr(model, "prop_type36s", {}).get(pid2) if hasattr(model, "prop_type36s") else None) or \
+                   (getattr(model, "properties", {}).get(pid2) if hasattr(model, "properties") else None)
+            if sub1 is not None:
+                sp1 = getattr(sub1, "params", {}) or {}
+                area1 = float(getattr(sub1, "area", sp1.get("area", area1)))
+                ixx1 = float(getattr(sub1, "ixx", sp1.get("ixx", ixx1)))
+                iyy1 = float(getattr(sub1, "iyy", sp1.get("iyy", iyy1)))
+                izz1 = float(getattr(sub1, "izz", sp1.get("izz", izz1)))
+                ray1 = float(getattr(sub1, "ray", sp1.get("ray", ray1)))
+                mid1 = int(getattr(sub1, "mat_id", sp1.get("mat_id", mid1)))
+            if sub2 is not None:
+                sp2 = getattr(sub2, "params", {}) or {}
+                area2 = float(getattr(sub2, "area", sp2.get("area", area2)))
+                ixx2 = float(getattr(sub2, "ixx", sp2.get("ixx", ixx2)))
+                iyy2 = float(getattr(sub2, "iyy", sp2.get("iyy", iyy2)))
+                izz2 = float(getattr(sub2, "izz", sp2.get("izz", izz2)))
+                ray2 = float(getattr(sub2, "ray", sp2.get("ray", ray2)))
+                mid2 = int(getattr(sub2, "mat_id", sp2.get("mat_id", mid2)))
+
+        # Material lookup
+        rho1 = float(getattr(prop, "rho", p.get("rho", p.get("rho0", p.get("MAT_RHO", 0.0)))))
+        e1 = float(getattr(prop, "e", p.get("e", p.get("young", p.get("MAT_E", 0.0)))))
+        nu1 = float(getattr(prop, "nu", p.get("nu", p.get("MAT_NU", 0.0))))
+        g1 = float(getattr(prop, "g", p.get("g", 0.0)))
+        if g1 == 0.0 and e1 > 0.0:
+            g1 = e1 / (2.0 * (1.0 + nu1)) if nu1 > -1.0 else e1 / 2.0
+        ay1 = float(getattr(prop, "ay", p.get("ay", p.get("MAT_Ay", 1.0))))
+        az1 = float(getattr(prop, "az", p.get("az", p.get("MAT_Az", 1.0))))
+        by1 = float(getattr(prop, "by", p.get("by", p.get("MAT_By", 1.0))))
+        bz1 = float(getattr(prop, "bz", p.get("bz", p.get("MAT_Bz", 1.0))))
+        cx1 = float(getattr(prop, "cx", p.get("cx", p.get("MAT_Cx", 1.0))))
+        dc1 = float(getattr(prop, "dc", p.get("dc", p.get("MAT_Dc", 1.0))))
+        pr1 = float(getattr(prop, "pr", p.get("pr", p.get("rc", p.get("MAT_Rc", 1.0e30)))))
+        ps1 = float(getattr(prop, "ps", p.get("ps", p.get("eps_max", p.get("MAT_EPS", 1.0e30)))))
+        sig01 = float(getattr(prop, "sig0", p.get("sig0", p.get("a", p.get("MAT_A", 1.0e30)))))
+        h1 = float(getattr(prop, "hpla", p.get("hpla", p.get("b", p.get("MAT_B", 0.0)))))
+        m1 = float(getattr(prop, "m", p.get("m", p.get("n", p.get("MAT_N", 1.0)))))
+        sfac1 = float(getattr(prop, "sfac", p.get("sfac", p.get("MAT_Sfac_Yield", 1.0))))
+        ifunc1 = int(getattr(prop, "ifunc", p.get("ifunc", p.get("func", 0))))
+
+        rho2, e2, nu2, g2 = rho1, e1, nu1, g1
+        ay2, az2, by2, bz2, cx2 = ay1, az1, by1, bz1, cx1
+        dc2, pr2, ps2 = dc1, pr1, ps1
+        sig02, h2, m2, sfac2, ifunc2 = sig01, h1, m1, sfac1, ifunc1
+
+        if mid1 > 0 and hasattr(model, "materials"):
+            mat1 = model.materials.get(mid1) or getattr(model, "mat_law54s", {}).get(mid1)
+            if mat1 is not None:
+                mp1 = getattr(mat1, "params", {}) or {}
+                rho1 = float(getattr(mat1, "rho0", getattr(mat1, "rho", mp1.get("MAT_RHO", rho1))))
+                e1 = float(getattr(mat1, "e", mp1.get("MAT_E", e1)))
+                nu1 = float(getattr(mat1, "nu", mp1.get("MAT_NU", nu1)))
+                g1 = e1 / (2.0 * (1.0 + nu1)) if nu1 > -1.0 else e1 / 2.0
+                ay1 = float(getattr(mat1, "ay", mp1.get("MAT_Ay", ay1)))
+                az1 = float(getattr(mat1, "az", mp1.get("MAT_Az", az1)))
+                by1 = float(getattr(mat1, "by", mp1.get("MAT_By", by1)))
+                bz1 = float(getattr(mat1, "bz", mp1.get("MAT_Bz", bz1)))
+                cx1 = float(getattr(mat1, "cx", mp1.get("MAT_Cx", cx1)))
+                dc1 = float(getattr(mat1, "dc", mp1.get("MAT_Dc", dc1)))
+                pr1 = float(getattr(mat1, "rc", mp1.get("MAT_Rc", pr1)))
+                ps1 = float(getattr(mat1, "eps_max", mp1.get("MAT_EPS", ps1)))
+                sig01 = float(getattr(mat1, "a", mp1.get("MAT_A", sig01)))
+                h1 = float(getattr(mat1, "b", mp1.get("MAT_B", h1)))
+                m1 = float(getattr(mat1, "n", mp1.get("MAT_N", m1)))
+                sfac1 = float(getattr(mat1, "sfac", mp1.get("MAT_Sfac_Yield", sfac1)))
+                ifunc1 = int(getattr(mat1, "ifunc", mp1.get("FUNC", ifunc1)))
+
+        if mid2 > 0 and hasattr(model, "materials"):
+            mat2 = model.materials.get(mid2) or getattr(model, "mat_law54s", {}).get(mid2)
+            if mat2 is not None:
+                mp2 = getattr(mat2, "params", {}) or {}
+                rho2 = float(getattr(mat2, "rho0", getattr(mat2, "rho", mp2.get("MAT_RHO", rho2))))
+                e2 = float(getattr(mat2, "e", mp2.get("MAT_E", e2)))
+                nu2 = float(getattr(mat2, "nu", mp2.get("MAT_NU", nu2)))
+                g2 = e2 / (2.0 * (1.0 + nu2)) if nu2 > -1.0 else e2 / 2.0
+                ay2 = float(getattr(mat2, "ay", mp2.get("MAT_Ay", ay2)))
+                az2 = float(getattr(mat2, "az", mp2.get("MAT_Az", az2)))
+                by2 = float(getattr(mat2, "by", mp2.get("MAT_By", by2)))
+                bz2 = float(getattr(mat2, "bz", mp2.get("MAT_Bz", bz2)))
+                cx2 = float(getattr(mat2, "cx", mp2.get("MAT_Cx", cx2)))
+                dc2 = float(getattr(mat2, "dc", mp2.get("MAT_Dc", dc2)))
+                pr2 = float(getattr(mat2, "rc", mp2.get("MAT_Rc", pr2)))
+                ps2 = float(getattr(mat2, "eps_max", mp2.get("MAT_EPS", ps2)))
+                sig02 = float(getattr(mat2, "a", mp2.get("MAT_A", sig02)))
+                h2 = float(getattr(mat2, "b", mp2.get("MAT_B", h2)))
+                m2 = float(getattr(mat2, "n", mp2.get("MAT_N", m2)))
+                sfac2 = float(getattr(mat2, "sfac", mp2.get("MAT_Sfac_Yield", sfac2)))
+                ifunc2 = int(getattr(mat2, "ifunc", mp2.get("FUNC", ifunc2)))
+
+        # Fortran defaults per hm_read_mat54.F lines 143-151
+        if dc1 <= 0.0 or dc1 >= 1.0:
+            dc1 = 0.99999
+        if pr1 <= 0.0:
+            pr1 = 1.0e30
+        if ps1 <= 0.0:
+            ps1 = 1.0e30
+        if dc2 <= 0.0 or dc2 >= 1.0:
+            dc2 = 0.99999
+        if pr2 <= 0.0:
+            pr2 = 1.0e30
+        if ps2 <= 0.0:
+            ps2 = 1.0e30
+
+        # Area and inertia from ray if area <= 0 (hm_read_prop36.F lines 187-200)
+        if area1 <= 0.0 and ray1 > 0.0:
+            area1 = math.pi * ray1 * ray1
+            ixx1 = 0.5 * area1 * ray1 * ray1
+            iyy1 = 0.5 * ixx1
+            izz1 = iyy1
+            ry1 = ray1
+            rz1 = ray1
+        else:
+            ry1 = math.sqrt(4.0 * iyy1 / area1) if (area1 > 0.0 and iyy1 > 0.0) else (ray1 if ray1 > 0.0 else 0.5)
+            rz1 = math.sqrt(4.0 * izz1 / area1) if (area1 > 0.0 and izz1 > 0.0) else (ray1 if ray1 > 0.0 else 0.5)
+
+        if area2 <= 0.0 and ray2 > 0.0:
+            area2 = math.pi * ray2 * ray2
+            ixx2 = 0.5 * area2 * ray2 * ray2
+            iyy2 = 0.5 * ixx2
+            izz2 = iyy2
+            ry2 = ray2
+            rz2 = ray2
+        else:
+            ry2 = math.sqrt(4.0 * iyy2 / area2) if (area2 > 0.0 and iyy2 > 0.0) else (ray2 if ray2 > 0.0 else 0.5)
+            rz2 = math.sqrt(4.0 * izz2 / area2) if (area2 > 0.0 and izz2 > 0.0) else (ray2 if ray2 > 0.0 else 0.5)
+
+        # Mean values (RINI36 lines 413-424, RUSER36 lines 142-171)
+        area = 0.5 * (area1 + area2)
+        rho = 0.5 * (rho1 + rho2)
+        ixx = 0.5 * (ixx1 + ixx2)
+        iyy = 0.5 * (iyy1 + iyy2)
+        izz = 0.5 * (izz1 + izz2)
+        ry = 0.5 * (ry1 + ry2)
+        rz = 0.5 * (rz1 + rz2)
+        rx = 0.5 * (ry + rz)
+        young = 0.5 * (e1 + e2)
+        g = 0.5 * (g1 + g2)
+        imyz = max(iyy, izz)
+
+        ay = 0.5 * (ay1 + ay2)
+        az = 0.5 * (az1 + az2)
+        by = 0.5 * (by1 + by2)
+        bz = 0.5 * (bz1 + bz2)
+        cx = 0.5 * (cx1 + cx2)
+        dc = 0.5 * (dc1 + dc2)
+        pr = 0.5 * (pr1 + pr2)
+        ps = 0.5 * (ps1 + ps2)
+        sig0 = 0.5 * (sig01 + sig02)
+        hpla = 0.5 * (h1 + h2)
+        m = 0.5 * (m1 + m2)
+        sfac = 0.5 * (sfac1 + sfac2)
+        ifunc = ifunc1 or ifunc2
+
+        # Initial geometry & length
+        conn_local = group.conn[local, :2]
+        L0_arr = norm3(model.x0[conn_local[:, 1]] - model.x0[conn_local[:, 0]])
+        L0_safe = np.maximum(L0_arr, EM20)
+
+        # Mass & Inertia per RINI36 lines 437-438
+        mass_elem = L0_safe * area * rho
+        iner_elem = L0_safe * rho * np.maximum(ixx, imyz + area * (L0_safe ** 2) / 12.0)
+
+        st["t36_mass"][local] = mass_elem
+        st["t36_xiner"][local] = iner_elem
+        st["t36_area"][local] = area
+        st["t36_rho"][local] = rho
+        st["t36_ixx"][local] = ixx
+        st["t36_iyy"][local] = iyy
+        st["t36_izz"][local] = izz
+        st["t36_rx"][local] = rx
+        st["t36_ry"][local] = ry
+        st["t36_rz"][local] = rz
+        st["t36_e"][local] = young
+        st["t36_g"][local] = g
+        st["t36_ay"][local] = ay
+        st["t36_az"][local] = az
+        st["t36_by"][local] = by
+        st["t36_bz"][local] = bz
+        st["t36_cx"][local] = cx
+        st["t36_dc"][local] = dc
+        st["t36_pr"][local] = pr
+        st["t36_ps"][local] = ps
+        st["t36_sig0"][local] = sig0
+        st["t36_hpla"][local] = hpla
+        st["t36_m"][local] = m
+        st["t36_sfac"][local] = sfac
+        st["t36_ifunc"][local] = ifunc
+
+        # Initial stiffnesses for time step (RINI36 lines 447-453)
+        xl2 = (L0_safe ** 2) / 12.0
+        atmp = young / max(EM20, g * area)
+        ary = 1.0 / (atmp + xl2 / max(EM20, iyy))
+        arz = 1.0 / (atmp + xl2 / max(EM20, izz))
+        ktran = np.maximum(area, np.maximum(ary, arz)) / L0_safe
+        krot = 4.0 * np.maximum(iyy / L0_safe, izz / L0_safe)
+        stifm = young * ktran
+        stifr = np.maximum(g * ixx / L0_safe, young * krot)
+
+        st["t36_stifm"][local] = stifm
+        st["t36_stifr"][local] = stifr
+        st["k"][local] = stifm
+        st["mass"][local] = mass_elem
+
+        # Nodal lumped mass and inertia distribution (half and half)
+        if massn is not None and np.any(mass_elem > 0.0):
+            for e, me in zip(local, mass_elem):
+                if 2 * e + 1 < len(massn):
+                    massn[2 * e] += me / 2.0
+                    massn[2 * e + 1] += me / 2.0
+        if inertn is not None and np.any(iner_elem > 0.0):
+            for e, ie in zip(local, iner_elem):
+                if 2 * e + 1 < len(inertn):
+                    inertn[2 * e] += ie / 2.0
+                    inertn[2 * e + 1] += ie / 2.0
+
+        # Initial transverse orientation vectors e2, e3
+        xe = model.x0[conn_local]
+        d = xe[:, 1] - xe[:, 0]
+        L = norm3(d)
+        good = (L > EM20)
+        e1 = np.tile(np.array([1.0, 0.0, 0.0]), (len(local), 1))
+        if np.any(good):
+            e1[good] = d[good] / L[good, None]
+
+        ax = np.tile(np.array([0.0, 0.0, 1.0]), (len(local), 1))
+        near_z = np.abs(e1[:, 2]) > 0.9
+        ax[near_z] = np.array([1.0, 0.0, 0.0])
+        e2 = np.cross(ax, e1)
+        e2 /= np.maximum(norm3(e2), EM20)[:, None]
+        e3 = np.cross(e1, e2)
+        e3 /= np.maximum(norm3(e3), EM20)[:, None]
+
+        st["t36_ey"][local] = e2
+        st["t36_ez"][local] = e3
+
+
+def forces_predit_type36(group, x, v, vr, dt, fint, mint, idx36):
+    """Compute forces and moments for TYPE36 progressive damage interface springs.
+
+    Fortran origin:
+      - engine/source/elements/spring/rforc3.F (lines 1176-1282)
+      - engine/source/elements/spring/r5evec3.F (convected frame tracking)
+      - engine/source/elements/spring/r5def3.F (convected rates and energy)
+      - engine/source/elements/spring/ruser36.F (plasticity & progressive damage)
+      - engine/source/elements/spring/r5cum3.F (force & moment scatter)
+    """
+    if idx36 is None or len(idx36) == 0:
+        return np.empty(0)
+
+    st = group.state
+    conn = group.conn[idx36, :2]
+    n_elem = len(idx36)
+    dt_val = dt if (dt is not None and dt > 0.0) else 0.0
+    model = st.get("model")
+
+    dt_res = np.full(n_elem, EP30)
+
+    for i in range(n_elem):
+        e_idx = idx36[i]
+        n1, n2 = conn[i, 0], conn[i, 1]
+        x1, x2 = x[n1], x[n2]
+        v1, v2 = v[n1], v[n2]
+        w1 = vr[n1] if vr is not None else np.zeros(3)
+        w2 = vr[n2] if vr is not None else np.zeros(3)
+
+        d = x2 - x1
+        L = float(norm3(d))
+        if L <= 1e-15:
+            e1 = np.array([1.0, 0.0, 0.0])
+        else:
+            e1 = d / L
+
+        # Convected frame tracking (r5evec3.F lines 98-152)
+        e2_old = st["t36_ey"][e_idx].copy()
+        e3 = np.cross(e1, e2_old)
+        norm_e3 = norm3(e3)
+        if norm_e3 > 1e-15:
+            e3 = e3 / norm_e3
+        else:
+            ref = np.array([0.0, 0.0, 1.0]) if abs(e1[2]) < 0.9 else np.array([1.0, 0.0, 0.0])
+            e3 = np.cross(e1, ref)
+            e3 /= max(norm3(e3), EM20)
+
+        e2 = np.cross(e3, e1)
+        norm_e2 = norm3(e2)
+        if norm_e2 > 1e-15:
+            e2 = e2 / norm_e2
+
+        # Incremental twist rotation theta about local axis e1 (r5evec3.F lines 118-132)
+        rxx1 = float(np.dot(e1, w1))
+        rxx2 = float(np.dot(e1, w2))
+        theta = 0.5 * (rxx1 + rxx2) * dt_val
+        if abs(theta) > 1e-15:
+            e2_rot = e2 * math.cos(theta) + e3 * math.sin(theta)
+            e2 = e2_rot / max(norm3(e2_rot), EM20)
+            e3 = np.cross(e1, e2)
+            e3 /= max(norm3(e3), EM20)
+
+        st["t36_ey"][e_idx] = e2
+        st["t36_ez"][e_idx] = e3
+
+        # Convected rotational velocities (r5def3.F lines 81-87)
+        rx2l = float(np.dot(e1, w2 - w1))
+        ry1l = float(np.dot(e2, w1))
+        ry2l = float(np.dot(e2, w2))
+        rz1l = float(np.dot(e3, w1))
+        rz2l = float(np.dot(e3, w2))
+
+        # Convected translational velocities (r5def3.F lines 88-106)
+        dv = v2 - v1
+        vx2l = float(np.dot(e1, dv))
+        vy2l = float(np.dot(e2, dv))
+        vz2l = float(np.dot(e3, dv))
+
+        # Shear-coupling correction on rotations & axial rate (r5def3.F lines 94-106)
+        l_mid = L - 0.5 * vx2l * dt_val
+        xsign = 1.0 if l_mid >= 0.0 else -1.0
+        xldemi = xsign / max(1e-15, abs(l_mid))
+        theta_y = vy2l * xldemi
+        rz1l -= theta_y
+        rz2l -= theta_y
+        theta_z = vz2l * xldemi
+        ry1l += theta_z
+        ry2l += theta_z
+        vx2l -= 0.5 * dt_val * xldemi * (vy2l * vy2l + vz2l * vz2l)
+
+        # Generalized deformation rates (ruser36.F lines 180-186)
+        dtemp = 1.0 / max(L, EM20)
+        epsvxx = vx2l * dtemp
+        epsvxy = -0.5 * (rz1l + rz2l)
+        epsvxz = 0.5 * (ry1l + ry2l)
+
+        rx = float(st["t36_rx"][e_idx])
+        ry = float(st["t36_ry"][e_idx])
+        rz = float(st["t36_rz"][e_idx])
+        epscbx = rx * rx2l * dtemp
+        epscby = ry * (ry2l - ry1l) * dtemp
+        epscbz = rz * (rz2l - rz1l) * dtemp
+
+        # Damage and degraded moduli (ruser36.F lines 177-178)
+        d_curr = float(st["t36_uvar5"][e_idx])
+        young = float(st["t36_e"][e_idx])
+        g = float(st["t36_g"][e_idx])
+        young_m = young * (1.0 - d_curr)
+        gm = g * (1.0 - d_curr)
+
+        # Section geometric parameters & Timoshenko shear areas (ruser36.F lines 159-163, 189-190)
+        area = float(st["t36_area"][e_idx])
+        ixx = float(st["t36_ixx"][e_idx])
+        iyy = float(st["t36_iyy"][e_idx])
+        izz = float(st["t36_izz"][e_idx])
+        facx = rx / max(ixx, EM20)
+        facy = ry / max(iyy, EM20)
+        facz = rz / max(izz, EM20)
+        tempy = g * area / max(12.0 * young * iyy, EM20)
+        tempz = g * area / max(12.0 * young * izz, EM20)
+        area_y = area / (1.0 + tempy * L * L)
+        area_z = area / (1.0 + tempz * L * L)
+
+        # Generalized trial stresses (ruser36.F lines 191-196)
+        f_old = st["t36_forces"][e_idx].copy()
+        signxx = f_old[0] / max(area, EM20) + young_m * epsvxx * dt_val
+        signxy = f_old[1] / max(area_y, EM20) + gm * epsvxy * dt_val
+        signxz = f_old[2] / max(area_z, EM20) + gm * epsvxz * dt_val
+        momnxx = f_old[3] * facx + gm * epscbx * dt_val
+        momnyy = f_old[4] * facy + young_m * epscby * dt_val
+        momnzz = f_old[5] * facz + young_m * epscbz * dt_val
+
+        # Hardening and yield stress evaluation (ruser36.F lines 204-215)
+        eps_p = float(st["t36_uvar1"][e_idx])
+        ifunc_id = int(st["t36_ifunc"][e_idx])
+        sig0 = float(st["t36_sig0"][e_idx])
+        hpla = float(st["t36_hpla"][e_idx])
+        m_exp = float(st["t36_m"][e_idx])
+        sfac = float(st["t36_sfac"][e_idx])
+
+        func_obj = None
+        if ifunc_id > 0 and model is not None and hasattr(model, "functions"):
+            func_obj = model.functions.get(ifunc_id)
+
+        if ifunc_id != 0 and func_obj is not None:
+            y1_raw, y2_raw = _eval_user_func_and_deriv(func_obj, eps_p)
+            y1 = sfac * y1_raw
+            y2 = sfac * y2_raw
+            yld = max(y1, EM20)
+            m_exp = 1.0
+        else:
+            y1 = sig0 + hpla * (eps_p ** m_exp)
+            y2 = hpla
+            yld = max(y1, EM20)
+
+        h_val = max(y2, 0.0)
+        st["t36_uvar2"][e_idx] = min(yld, float(st["t36_uvar2"][e_idx]))
+        sy0 = float(st["t36_uvar2"][e_idx])
+
+        # Plastic interaction coefficients (ruser36.F lines 217-224)
+        cx = float(st["t36_cx"][e_idx])
+        by = float(st["t36_by"][e_idx])
+        bz = float(st["t36_bz"][e_idx])
+        ay = float(st["t36_ay"][e_idx])
+        az = float(st["t36_az"][e_idx])
+        dc = float(st["t36_dc"][e_idx])
+        pr = float(st["t36_pr"][e_idx])
+        ps = float(st["t36_ps"][e_idx])
+
+        pc1 = abs(6.0 * young_m * (float(st["t36_uvar3"][e_idx]) / max(sy0, EM20)))
+        c1_gam = 1.0 - 0.25 * math.exp(-pc1)
+        gamac = cx * 0.75 / max(c1_gam, EM20)
+
+        pc2 = 6.0 * young_m * (float(st["t36_uvar4"][e_idx]) / max(sy0, EM20))
+        cc1 = (3.0 * math.pi / 16.0) ** 2
+        c2_gam = 1.0 - (1.0 - cc1) * math.exp(-pc2)
+        gama = cc1 / max(c2_gam, EM20)
+
+        # Scaled generalized stresses and Von-Mises equivalent (ruser36.F lines 226-234)
+        nx = signxx
+        ny = ay * signxy
+        nz = az * signxz
+        mx = gamac * momnxx
+        my = by * gama * momnyy
+        mz = bz * gama * momnzz
+        svm = math.sqrt(nx * nx + 3.0 * (ny * ny + nz * nz + mx * mx) + my * my + mz * mz)
+
+        off = float(st.get("off", np.ones(group.n))[e_idx])
+
+        # Plastic return mapping (ruser36.F lines 263-380)
+        if svm > yld and off > 0.0:
+            g3 = 3.0 * g
+            dpla = (svm - yld) / max(EM20, g3 + h_val)
+            err = 2.0 * 1e-4
+            n_iter = 0
+            n_max = 10
+            while err > 1e-4 and n_iter < n_max:
+                if ifunc_id != 0 and func_obj is not None:
+                    yld_i = yld + h_val * dpla
+                    dsigy = -h_val * yld_i * 2.0
+                elif eps_p > EM20:
+                    yld_i = yld + h_val * m_exp * dpla * ((eps_p + dpla) ** (m_exp - 1.0))
+                    dsigy = -(h_val * yld_i * m_exp * ((dpla + eps_p) ** (m_exp - 1.0))) * 2.0
+                else:
+                    yld_i = yld
+                    dsigy = 0.0
+
+                dre = young_m * dpla / max(EM20, yld_i)
+                drg = g * dpla / max(EM20, yld_i)
+                pnx = 1.0 / (1.0 + dre)
+                pny = 1.0 / (1.0 + 3.0 * drg * (ay ** 2))
+                pnz = 1.0 / (1.0 + 3.0 * drg * (az ** 2))
+                pmx = 1.0 / (1.0 + 3.0 * drg * (gamac ** 2))
+                pmy = 1.0 / (1.0 + dre * ((by * gama) ** 2))
+                pmz = 1.0 / (1.0 + dre * ((bz * gama) ** 2))
+
+                pnx2 = pnx * pnx
+                pny2 = pny * pny
+                pnz2 = pnz * pnz
+                pmx2 = pmx * pmx
+                pmy2 = pmy * pmy
+                pmz2 = pmz * pmz
+
+                fn = nx * nx * pnx2 + 3.0 * (ny * ny * pny2 + nz * nz * pnz2)
+                fm = 3.0 * mx * mx * pmx2 + my * my * pmy2 + mz * mz * pmz2
+                f_val = fn + fm - yld_i * yld_i
+
+                dfe = (nx * nx * pnx2 * pnx +
+                       my * my * pmy2 * pmy * ((by * gama) ** 2) +
+                       mz * mz * pmz2 * pmz * ((bz * gama) ** 2))
+                dfg = (ny * ny * pny2 * pny * (ay ** 2) +
+                       nz * nz * pnz2 * pnz * (az ** 2) +
+                       mx * mx * pmx2 * pmx * (gamac ** 2))
+
+                df = (-dfe * (young_m - dre * h_val) / max(EM20, yld_i) -
+                      9.0 * dfg * (g - drg * h_val) / max(EM20, yld_i)) * 2.0 + dsigy
+
+                if abs(df) > EM20:
+                    err = abs(f_val / df)
+                    dpla = max(0.0, dpla - f_val / df)
+                else:
+                    break
+                n_iter += 1
+
+            # Admissible plastic stress update (ruser36.F lines 333-364)
+            eps_p += dpla
+            st["t36_uvar1"][e_idx] = eps_p
+
+            if ifunc_id != 0 and func_obj is not None:
+                yld_i = yld + h_val * dpla
+            elif eps_p > EM20:
+                yld_i = yld + h_val * m_exp * dpla * (eps_p ** (m_exp - 1.0))
+            else:
+                yld_i = yld
+
+            c1 = dpla / max(EM20, yld_i)
+            dre = young_m * c1
+            drg = g * c1
+            pnx = 1.0 / (1.0 + dre)
+            pny = 1.0 / (1.0 + 3.0 * drg * (ay ** 2))
+            pnz = 1.0 / (1.0 + 3.0 * drg * (az ** 2))
+            pmx = 1.0 / (1.0 + 3.0 * drg * (gamac ** 2))
+            pmy = 1.0 / (1.0 + dre * ((by * gama) ** 2))
+            pmz = 1.0 / (1.0 + dre * ((bz * gama) ** 2))
+
+            signxx *= pnx
+            signxy *= pny
+            signxz *= pnz
+            momnxx *= pmx
+            momnyy *= pmy
+            momnzz *= pmz
+
+            st["t36_uvar3"][e_idx] += 3.0 * c1 * (gamac ** 2) * abs(momnxx)
+            ueq = c1 * math.sqrt(signxx * signxx + (gama ** 4) * ((by ** 4) * (momnyy ** 2) + (bz ** 4) * (momnzz ** 2)))
+            st["t36_uvar4"][e_idx] += ueq
+
+            # Progressive damage evolution (ruser36.F lines 368-379)
+            if eps_p > ps:
+                devol = dc * dpla / max(EM20, pr - ps)
+            else:
+                devol = 0.0
+
+            d_curr += devol
+            if eps_p >= pr or d_curr >= dc:
+                off = 0.0
+                d_curr = dc
+
+            st["t36_uvar5"][e_idx] = d_curr
+            st["off"][e_idx] = off
+
+        # Translate stresses to forces and moments (ruser36.F lines 386-391)
+        fx_elem = signxx * area * off
+        fy_elem = signxy * area_y * off
+        fz_elem = signxz * area_z * off
+        mx_elem = momnxx * off / facx
+        my_elem = momnyy * off / facy
+        mz_elem = momnzz * off / facz
+
+        st["t36_forces"][e_idx] = [fx_elem, fy_elem, fz_elem, mx_elem, my_elem, mz_elem]
+
+        # Nodal assembly (r5cum3.F lines 78-140)
+        f_vec = fx_elem * e1 + fy_elem * e2 + fz_elem * e3
+        if fint is not None:
+            np.add.at(fint, n1, f_vec)
+            np.add.at(fint, n2, -f_vec)
+
+        # Nodal moments satisfying exact moment equilibrium (r5cum3.F lines 107-139)
+        ymom1 = my_elem - 0.5 * L * fz_elem
+        zmom1 = mz_elem + 0.5 * L * fy_elem
+        m1_vec = mx_elem * e1 + ymom1 * e2 + zmom1 * e3
+
+        ymom2 = my_elem + 0.5 * L * fz_elem
+        zmom2 = mz_elem - 0.5 * L * fy_elem
+        m2_vec = mx_elem * e1 + ymom2 * e2 + zmom2 * e3
+
+        if mint is not None:
+            np.add.at(mint, n1, m1_vec)
+            np.add.at(mint, n2, -m2_vec)
+
+        # Internal energy work integration (r5def3.F lines 111-118 + r5len3.F lines 97-105)
+        if dt_val > 0.0 and "eint" in st:
+            d_eint = 0.5 * dt_val * (
+                vx2l * (f_old[0] + fx_elem) +
+                rx2l * (f_old[3] + mx_elem) +
+                (ry2l - ry1l) * (f_old[4] + my_elem) +
+                (rz2l - rz1l) * (f_old[5] + mz_elem) +
+                0.5 * (ry2l + ry1l) * (f_old[2] + fz_elem) * L -
+                0.5 * (rz2l + rz1l) * (f_old[1] + fy_elem) * L
+            )
+            st["eint"][e_idx] += d_eint
+
+        # Critical time step (ruser36.F lines 241-246)
+        fac2 = g / max(EM20, young)
+        ktran = max(area, fac2 * area_y, fac2 * area_z) / L
+        krot = 4.0 * max(iyy / L, izz / L)
+        stifm = young_m * ktran
+        mass_elem = float(st["t36_mass"][e_idx])
+        m_half = 0.5 * max(mass_elem, EM20)
+        omega = 2.0 * math.sqrt(stifm / m_half)
+        dt_crit = 2.0 / omega if omega > 0.0 else EP30
+        dt_res[i] = dt_crit if off > 0.0 else EP30
+
+    return dt_res
+
+
+# ============================================================================
 # TYPE44: Crushing Spring with Energy Absorption
 # ============================================================================
 
@@ -2384,7 +3081,7 @@ def forces_muscle_type46(group, x, v, dt, fint, idx46):
 # Combined Dispatch for spring.py and Standalone Element Kernel
 # ============================================================================
 
-def init_advanced(group, model, log, *pos_args, idx12=None, idx19=None, idx25=None, idx26=None, idx27=None, idx35=None, idx44=None, idx46=None, massn=None, inertn=None, **kwargs):
+def init_advanced(group, model, log, *pos_args, idx12=None, idx19=None, idx25=None, idx26=None, idx27=None, idx35=None, idx36=None, idx44=None, idx46=None, massn=None, inertn=None, **kwargs):
     """Dispatcher called by spring.py init_group for advanced spring types."""
     if len(pos_args) == 5:
         idx19, idx44, idx46, massn, inertn = pos_args
@@ -2396,6 +3093,11 @@ def init_advanced(group, model, log, *pos_args, idx12=None, idx19=None, idx25=No
         idx19, idx25, idx26, idx27, idx44, idx46, massn, inertn = pos_args
     elif len(pos_args) == 9:
         idx19, idx25, idx26, idx27, idx35, idx44, idx46, massn, inertn = pos_args
+    elif len(pos_args) == 10:
+        idx19, idx25, idx26, idx27, idx35, idx36, idx44, idx46, massn, inertn = pos_args
+
+    if idx36 is None:
+        idx36 = kwargs.get("idx36") or group.state.get("idx36")
 
     if idx12 is not None and len(idx12):
         init_pulley_type12(group, model, log, idx12, massn, inertn)
@@ -2409,6 +3111,8 @@ def init_advanced(group, model, log, *pos_args, idx12=None, idx19=None, idx25=No
         init_bdamp_type27(group, model, log, idx27, massn, inertn)
     if idx35 is not None and len(idx35):
         init_stitch_type35(group, model, log, idx35, massn, inertn)
+    if idx36 is not None and len(idx36):
+        init_predit_type36(group, model, log, idx36, massn, inertn)
     if idx44 is not None and len(idx44):
         init_crushing_type44(group, model, log, idx44, massn, inertn)
     if idx46 is not None and len(idx46):
@@ -2551,6 +3255,16 @@ def local_stiffness(group, x=None):
             elastif = float(getattr(prop, "elastif", 0.0) or p.get("elastif", 0.0) or p.get("stiff", 0.0) or p.get("k", 0.0))
             L_sl = np.maximum(L0[sl], EM20)
             k_ax[sl] = elastif / L_sl if elastif > 0.0 else float(p.get("k", 1.0))
+
+        elif ptype == 36:  # /PROP/TYPE36, /PROP/PREDIT
+            E = float(getattr(prop, "e", p.get("e", p.get("young", 0.0))))
+            area = float(getattr(prop, "area", p.get("area", 1.0)))
+            L_sl = np.maximum(L0[sl], EM20)
+            k_ax[sl] = E * area / L_sl if (E > 0.0 and area > 0.0) else float(p.get("k", 1.0))
+            ixx = float(getattr(prop, "ixx", p.get("ixx", 0.0)))
+            g_mod = float(getattr(prop, "g", p.get("g", 0.0)))
+            if g_mod > 0.0 and ixx > 0.0:
+                k_tor[sl] = g_mod * ixx / L_sl
 
         elif ptype == 23 or getattr(prop, "prop_name", "") == "SPR_MAT":  # /PROP/SPR_MAT
             E = float(getattr(mat, "E", 0.0) or 0.0)

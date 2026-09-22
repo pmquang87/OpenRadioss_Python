@@ -25,6 +25,7 @@ from .entities import (  # noqa: F401
     RigidWall, Interface, Line, THRequest, Box,
     PropType12, PropSprPul, PropPulley,
     PropType35, PropStitch, PropSew,
+    PropType36, PropPredit,
     MatLaw25, MatCompPlas, MatCompsh, MatTsaiWu, MatCrasurv, MatCompositePlas,
     MatLaw58, MatFabrA, MatFabricA,
     MatLaw52, MatGurson, MatPlasGurs,
