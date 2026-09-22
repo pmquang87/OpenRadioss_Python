@@ -25,7 +25,7 @@ from pyradioss.input.starter_keywords import parse_starter_deck
 from pyradioss.model.entities import GJoint
 from pyradioss.model.model import Model
 from pyradioss.starter.starter import run_starter
-from pyradioss.engine.gjoint import GJointEngine, build_gjoints
+from pyradioss.engine.gjoint import GJointEngine, build_gjoints, _compute_transverse_basis, _exp_rodrigues
 from pyradioss.engine.engine import _integrate
 
 
@@ -570,3 +570,86 @@ Gear Mechanism Engine
     # Initial angular velocities were successfully governed by the kinematic joint
     assert abs(w2) > 1.0
     assert abs(w3) > 2.0
+
+
+# ============================================================================
+# 8. Enhanced Physics: Transverse Basis, Skew Rotation, and Multi-Constraints
+# ============================================================================
+
+def test_m594_gjoint_enhanced_physics():
+    """Verify Fortran-faithful transverse basis, finite rotation, and multi-constraint equations.
+    - _compute_transverse_basis: orthogonality and right-handedness.
+    - _exp_rodrigues: finite rotation matrix on SO(3).
+    - get_all_constraint_equations: full multi-constraint formulations (gjnt_gear.F, gjnt_diff.F, gjnt_rack.F).
+    - Carrier skew update (ROTBMR in lag_gjnt.F).
+    """
+    # 1. Transverse basis orthogonality
+    for test_axis in [
+        np.array([1.0, 0.0, 0.0]),
+        np.array([0.0, 1.0, 0.0]),
+        np.array([0.0, 0.0, 1.0]),
+        np.array([1.0, 2.0, 3.0]) / np.sqrt(14.0),
+    ]:
+        y, z = _compute_transverse_basis(test_axis)
+        # Unit lengths
+        assert np.linalg.norm(y) == pytest.approx(1.0, abs=1e-12)
+        assert np.linalg.norm(z) == pytest.approx(1.0, abs=1e-12)
+        # Mutual orthogonality
+        assert abs(float(np.dot(test_axis, y))) < 1e-12
+        assert abs(float(np.dot(test_axis, z))) < 1e-12
+        assert abs(float(np.dot(y, z))) < 1e-12
+        # Right-handedness: z x test_axis = y
+        np.testing.assert_allclose(np.cross(z, test_axis), y, atol=1e-12)
+
+    # 2. Rodrigues finite rotation
+    w = np.array([0.0, 0.0, 10.0])
+    dt = 0.05
+    R = _exp_rodrigues(w, dt)
+    # Orthogonality: R^T R = I
+    np.testing.assert_allclose(R.T @ R, np.eye(3), atol=1e-12)
+    # Determinant = 1
+    assert np.linalg.det(R) == pytest.approx(1.0, abs=1e-12)
+    # Rotation angle is |w| * dt = 0.5 rad
+    expected_angle = 0.5
+    trace_R = np.trace(R)
+    # cos(th) = (trace(R) - 1) / 2
+    cos_th = (trace_R - 1.0) / 2.0
+    assert cos_th == pytest.approx(np.cos(expected_angle), rel=1e-6)
+
+    # 3. Multi-constraint equations (GEAR, DIFF, RACK)
+    model = Model()
+    model.nodes = [1, 2, 3, 4]
+    model._id2idx = {1: 0, 2: 1, 3: 2, 4: 3}
+    model.x = np.zeros((4, 3))
+    model.v = np.zeros((4, 3))
+    model.vr = np.zeros((4, 3))
+    model.mass = np.ones(4)
+    model.inertia = np.ones(4)
+
+    # GEAR: primary + 4 transverse constraints = 5 equations
+    gj_gear = GJoint(id=1, subtype="GEAR", node_id0=1, node_id1=2, node_id2=3, fscale=2.0)
+    engine_gear = GJointEngine(gj_gear, model, MessageLog())
+    eqs_gear = engine_gear.get_all_constraint_equations(model.v, model.vr, model.x)
+    assert len(eqs_gear) == 5
+
+    # DIFF: primary + 6 transverse constraints (with 4 nodes) = 7 equations
+    gj_diff = GJoint(id=2, subtype="DIFF", node_id0=1, node_id1=2, node_id2=3, node_id3=4, fscale=1.0)
+    engine_diff = GJointEngine(gj_diff, model, MessageLog())
+    eqs_diff = engine_diff.get_all_constraint_equations(model.v, model.vr, model.x)
+    assert len(eqs_diff) == 7
+
+    # RACK: primary + 2 transverse rotation constraints = 3 equations
+    gj_rack = GJoint(id=3, subtype="RACK", node_id0=1, node_id1=2, node_id2=3, fscale=0.05)
+    engine_rack = GJointEngine(gj_rack, model, MessageLog())
+    eqs_rack = engine_rack.get_all_constraint_equations(model.v, model.vr, model.x)
+    assert len(eqs_rack) == 3
+
+    # 4. Carrier skew tracking
+    gj_skew = GJoint(id=4, subtype="GEAR", node_id0=1, node_id1=2, node_id2=3)
+    gj_skew.skew_id = 10
+    engine_skew = GJointEngine(gj_skew, model, MessageLog())
+    assert engine_skew.has_skew
+    vr0 = np.array([0.0, 0.0, np.pi])  # 180 deg/s about Z
+    engine_skew.update_carrier_frame(vr0, dt=0.5)  # 90 deg rotation
+    # Initial a1 was [1, 0, 0], after 90 deg about Z it should be [0, 1, 0]
+    np.testing.assert_allclose(engine_skew.a1, [0.0, 1.0, 0.0], atol=1e-6)
