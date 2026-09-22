@@ -54,4 +54,17 @@ try:
 except ImportError:
     pass
 
+from .refsta import (  # noqa: F401
+    RefstaData,
+    RefstaManager,
+    compute_deformation_gradient_3d,
+    compute_total_deformation_gradient,
+    compute_green_lagrange_strain,
+    compute_engineering_strain_from_ref,
+    compute_refsta_strains,
+    compute_membrane_refsta_strain,
+    parse_refsta_card,
+)
+
+
 
