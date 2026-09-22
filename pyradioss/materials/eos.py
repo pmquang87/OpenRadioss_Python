@@ -769,6 +769,17 @@ def _coefficients_polynomial(eos, mu: np.ndarray):
     return A, B
 
 
+def _coefficients_stiffgas(eos, mu: np.ndarray):
+    """A(mu), B(mu) for Stiffened Gas EOS (common_source/eos/stiffgas.F)."""
+    p = eos.params
+    gamma = p.get("gamma", 1.4)
+    p_star = p.get("p_star", p.get("pstar", 0.0))
+    psh = p.get("psh", 0.0)
+    A = np.full_like(mu, -gamma * p_star - psh, dtype=float)
+    B = (gamma - 1.0) * (1.0 + mu)
+    return A, B
+
+
 def coefficients(eos, mu: np.ndarray, e: np.ndarray | float | None = None, time: float = 0.0):
     """A(mu), B(mu) of p = A + B E (see module docstring)."""
     kind = eos.kind.upper()
@@ -792,14 +803,8 @@ def coefficients(eos, mu: np.ndarray, e: np.ndarray | float | None = None, time:
         return _coefficients_nasg(eos, mu)
     if kind == "PUFF":
         return _coefficients_puff(eos, mu, e)
-    if kind in ("STIFF-GAS", "STIFF_GAS", "STIFFENED_GAS"):
-        p = eos.params
-        gamma = p.get("gamma", 1.4)
-        p_star = p.get("p_star", 0.0)
-        psh = p.get("psh", 0.0)
-        A = -gamma * p_star - psh
-        B = (gamma - 1.0) * (1.0 + mu)
-        return A, B
+    if kind in ("STIFF-GAS", "STIFF_GAS", "STIFFENED_GAS", "STIFFGAS", "SG"):
+        return _coefficients_stiffgas(eos, mu)
     if kind in ("OSBORNE", "OSBORN"):
         return _coefficients_osborne(eos, mu, e)
     if kind == "LSZK":
@@ -838,18 +843,20 @@ def update(eos, mu: np.ndarray, dv: np.ndarray, e_old: np.ndarray,
     p = eos.params
     rho0 = getattr(eos, "rho0", None) or p.get("rho0_card", 1.0)
 
-    if kind in ("STIFF-GAS", "STIFF_GAS", "STIFFENED_GAS"):
-        gamma = p["gamma"]
-        p_star = p["p_star"]
-        psh = p["psh"]
-        A = -gamma * p_star - psh
-        B = (gamma - 1.0) * (1.0 + mu)
+    if kind in ("STIFF-GAS", "STIFF_GAS", "STIFFENED_GAS", "STIFFGAS", "SG"):
+        gamma = p.get("gamma", 1.4)
+        p_star = p.get("p_star", p.get("pstar", 0.0))
+        psh = p.get("psh", 0.0)
+        pmin = p.get("pmin", -1e30)
+        A, B = _coefficients_stiffgas(eos, mu)
         denom = 1.0 + 0.5 * B * dv
         e_new = (e_old + de_other - 0.5 * dv * (p_old + A + 2.0 * psh)) / np.maximum(denom, 1e-6)
-        p_new = A + B * e_new
-        p_new = np.maximum(p_new, -psh)
-        dpdmu = (gamma - 1.0) * e_new
-        c2 = (dpdmu + B * (p_new + psh) / (1.0 + mu) ** 2) / rho0
+        p_raw = A + B * e_new
+        p_new = np.maximum(p_raw, pmin - psh)
+        eta = 1.0 + mu
+        df = 1.0 / np.maximum(eta, 1e-12)
+        dpdm = (gamma - 1.0) * e_new + (gamma - 1.0) * (df ** 2) * eta * (p_new + psh)
+        c2 = dpdm / rho0
         return p_new, e_new, np.maximum(c2, 0.0)
 
     if kind == "GRUNEISEN":
@@ -1459,14 +1466,11 @@ def pressure(eos, mu: np.ndarray | float, e: np.ndarray | float, time: float = 0
     e_arr = np.asarray(e, dtype=float)
     kind = eos.kind.upper()
 
-    if kind in ("STIFF-GAS", "STIFF_GAS", "STIFFENED_GAS"):
-        p = eos.params
-        gamma = p["gamma"]
-        p_star = p["p_star"]
-        psh = p.get("psh", 0.0)
-        A = -gamma * p_star - psh
-        B = (gamma - 1.0) * (1.0 + mu_arr)
-        p_val = np.maximum(A + B * e_arr, -psh)
+    if kind in ("STIFF-GAS", "STIFF_GAS", "STIFFENED_GAS", "STIFFGAS", "SG"):
+        A, B = _coefficients_stiffgas(eos, mu_arr)
+        psh = eos.params.get("psh", 0.0)
+        pmin = eos.params.get("pmin", -1e30)
+        p_val = np.maximum(A + B * e_arr, pmin - psh)
         return float(p_val) if is_scalar else p_val
 
     if kind == "GRUNEISEN":
@@ -1677,10 +1681,15 @@ def initial_state(eos):
     kind = eos.kind.upper()
     p = eos.params
 
-    if kind in ("STIFF-GAS", "STIFF_GAS", "STIFFENED_GAS"):
-        gamma = p["gamma"]
-        e0 = (p["p0"] + gamma * p["p_star"]) / (gamma - 1.0)
-        p0 = p["p0"] - p.get("psh", 0.0)
+    if kind in ("STIFF-GAS", "STIFF_GAS", "STIFFENED_GAS", "STIFFGAS", "SG"):
+        gamma = p.get("gamma", 1.4)
+        p_star = p.get("p_star", p.get("pstar", 0.0))
+        p0_param = p.get("p0", 0.0)
+        psh = p.get("psh", 0.0)
+        e0 = p.get("e0")
+        if e0 is None:
+            e0 = (p0_param + gamma * p_star) / (gamma - 1.0) if gamma > 1.0 else 0.0
+        p0 = p0_param - psh if p0_param > 0.0 else (gamma - 1.0) * e0 - gamma * p_star - psh
         return e0, p0
 
     if kind == "GRUNEISEN":
