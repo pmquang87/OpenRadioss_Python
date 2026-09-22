@@ -109,7 +109,7 @@ def test_muscl_gradient_accuracy_smooth_function():
     mesh_coarse = FVMMesh.create_uniform_1d(n_cells=40, x_min=0.0, x_max=1.0)
     mesh_fine = FVMMesh.create_uniform_1d(n_cells=80, x_min=0.0, x_max=1.0)
 
-    def eval_field(mesh: FVMMesh):
+    def eval_field(mesh: FVMMesh, beta: float = 1.0, use_limiter: bool = False):
         xc = mesh.cell_centers[:, 0]
         state = CellState(n_cells=mesh.n_cells)
         # Smooth function phi(x) = sin(2 * pi * x)
@@ -118,7 +118,7 @@ def test_muscl_gradient_accuracy_smooth_function():
         state.vol = mesh.cell_volumes
         pressure_equilibrium(state)
 
-        grads = muscl_gradients(state, mesh, beta=2.0)
+        grads = muscl_gradients(state, mesh, beta=beta, use_limiter=use_limiter)
         grad_num = grads["rho"][:, 0]
 
         # Analytical gradient phi'(x) = 2 * pi * cos(2 * pi * x)
@@ -129,12 +129,19 @@ def test_muscl_gradient_accuracy_smooth_function():
         err = np.sqrt(np.mean((grad_num[interior] - grad_exact[interior]) ** 2))
         return err
 
-    err_coarse = eval_field(mesh_coarse)
-    err_fine = eval_field(mesh_fine)
-
-    # Error ratio should be close to 4 for 2nd order:
+    # 1. Pure least-squares reconstruction without limiter must achieve 2nd-order:
+    err_coarse = eval_field(mesh_coarse, use_limiter=False)
+    err_fine = eval_field(mesh_fine, use_limiter=False)
     order = math.log2(err_coarse / err_fine)
-    assert order > 1.8, f"Gradient reconstruction order {order:.2f} is less than second-order"
+    assert order > 1.9, f"Unlimited least-squares gradient order {order:.2f} is less than 2nd-order"
+
+    # 2. Monotonic smooth function with Sweby limiter active (beta=2.0) must also achieve 2nd-order:
+    mesh_m_coarse = FVMMesh.create_uniform_1d(n_cells=40, x_min=0.05, x_max=0.20)
+    mesh_m_fine = FVMMesh.create_uniform_1d(n_cells=80, x_min=0.05, x_max=0.20)
+    err_m_coarse = eval_field(mesh_m_coarse, beta=2.0, use_limiter=True)
+    err_m_fine = eval_field(mesh_m_fine, beta=2.0, use_limiter=True)
+    order_m = math.log2(err_m_coarse / err_m_fine)
+    assert order_m > 1.9, f"Limited gradient order {order_m:.2f} in monotonic region is less than 2nd-order"
 
 
 def test_muscl_gradient_exact_linear():

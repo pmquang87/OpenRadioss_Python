@@ -45,17 +45,17 @@ def test_seg_intersect():
     """Verify 2D line segment intersection calculations."""
     # Classic X intersection at (1, 1)
     ok, xint, yint = seg_intersect(0.0, 0.0, 2.0, 2.0, 0.0, 2.0, 2.0, 0.0)
-    assert ok is True
+    assert ok == True
     assert xint == pytest.approx(1.0)
     assert yint == pytest.approx(1.0)
 
     # Parallel lines: no intersection
     ok, _, _ = seg_intersect(0.0, 0.0, 2.0, 0.0, 0.0, 1.0, 2.0, 1.0)
-    assert ok is False
+    assert ok == False
 
     # Lines intersect outside segment bounds
     ok, _, _ = seg_intersect(0.0, 0.0, 1.0, 0.0, 2.0, 1.0, 2.0, 2.0)
-    assert ok is False
+    assert ok == False
 
 
 def test_failwave_mode1_isotropic_tri_and_quad():
@@ -142,13 +142,13 @@ def test_johnson_cook_beam_step():
     dama = np.array([0.0])
 
     broken = beam_step(fail, svm, pressure, d_epsp, deps, dt, dama)
-    assert broken[0] is False or broken[0] == (dama[0] >= 1.0)
+    assert broken[0] == False or broken[0] == (dama[0] >= 1.0)
     assert dama[0] > 0.0
 
     # Large plastic strain exceeding failure strain -> break
     d_epsp_large = np.array([1.0])
     broken2 = beam_step(fail, svm, pressure, d_epsp_large, deps, dt, dama)
-    assert broken2[0] is True
+    assert broken2[0] == True
     assert dama[0] == pytest.approx(1.0)
 
 
@@ -163,7 +163,7 @@ def test_biquad_beam_step():
     dama = np.array([0.0])
 
     broken = beam_step(fail, svm, pressure, d_epsp, deps, dt, dama)
-    assert broken[0] is False
+    assert broken[0] == False
     assert dama[0] == pytest.approx(0.1 / 0.2)  # eps_f at triax=1/3 is c3 = 0.2
 
     # Add remaining plastic strain -> D >= 1.0
@@ -187,14 +187,14 @@ def test_energy_beam_step():
     area = 1.0
 
     broken = beam_step(fail, svm, pressure, d_epsp, deps, dt, dama, forces=forces, strains=strains, area=area)
-    assert broken[0] is False
+    assert broken[0] == False
     # (150 - 100) / (200 - 100) = 0.5
     assert dama[0] == pytest.approx(0.5)
 
     # Exceed failure energy 200.0
     strains_high = np.array([[0.25, 0.0, 0.0]])  # work = 250.0
     broken2 = beam_step(fail, svm, pressure, d_epsp, deps, dt, dama, forces=forces, strains=strains_high, area=area)
-    assert broken2[0] is True
+    assert broken2[0] == True
     assert dama[0] == pytest.approx(1.0)
 
 
@@ -205,12 +205,12 @@ def test_tensstrain_beam_step():
     strains = np.array([[0.10]])
 
     broken = beam_step(fail, None, None, np.array([0.10]), None, 1e-3, dama, strains=strains)
-    assert broken[0] is False
+    assert broken[0] == False
     assert dama[0] == pytest.approx(0.5)
 
     strains_rupt = np.array([[0.20]])
     broken2 = beam_step(fail, None, None, np.array([0.20]), None, 1e-3, dama, strains=strains_rupt)
-    assert broken2[0] is True
+    assert broken2[0] == True
     assert dama[0] == pytest.approx(1.0)
 
 
@@ -220,14 +220,14 @@ def test_gene1_and_visual_beam_step():
     fail_g = _FailStub("GENE1", mat_sigvm=300.0, mat_maxeps=0.2, mat_ncs=1)
     dama_g = np.array([0.0])
     broken_g = beam_step(fail_g, np.array([350.0]), np.array([100.0]), np.array([0.05]), None, 1e-3, dama_g)
-    assert broken_g[0] is True
+    assert broken_g[0] == True
     assert dama_g[0] == pytest.approx(1.0)
 
     # Visual (diagnostic only: never broken)
     fail_v = _FailStub("VISUAL", c_min=0.0, c_max=500.0)
     dama_v = np.array([0.0])
     broken_v = beam_step(fail_v, np.array([250.0]), np.array([0.0]), np.array([0.0]), None, 1e-3, dama_v)
-    assert broken_v[0] is False
+    assert broken_v[0] == False
     assert dama_v[0] == pytest.approx(0.5)
 
 
@@ -238,14 +238,14 @@ def test_inievo_and_tab2_beam_step():
     fail_ini = _FailStub("INIEVO", crv_ini=crv)
     dama_ini = np.array([0.0])
     broken_ini = beam_step(fail_ini, np.array([100.0]), np.array([0.0]), np.array([0.15]), None, 1e-3, dama_ini)
-    assert broken_ini[0] is False
+    assert broken_ini[0] == False
     assert dama_ini[0] == pytest.approx(0.5)
 
     # Tab2
     fail_tab = _FailStub("TAB2", fcrit=0.2, dcrit=1.0, n=1.0)
     dama_tab = np.array([0.0])
     broken_tab = beam_step(fail_tab, np.array([100.0]), np.array([0.0]), np.array([0.1]), None, 1e-3, dama_tab)
-    assert broken_tab[0] is False
+    assert broken_tab[0] == False
     assert dama_tab[0] == pytest.approx(0.5)
 
 
@@ -262,14 +262,14 @@ def test_integrated_beam_steps():
     d_epsp = np.array([0.05])
     dama_jc = np.array([0.0])
     broken_jc = integrated_beam_step(fail_jc, sig, d_epsp, sig, 1e-3, dama_jc, ip=1, npg=4)
-    assert broken_jc[0] is False
+    assert broken_jc[0] == False
     assert dama_jc[0] > 0.0
 
     # Bi-quadratic at integration point
     fail_bq = _FailStub("BIQUAD", c3=0.2, m_flag=1)
     dama_bq = np.array([0.0])
     broken_bq = integrated_beam_step(fail_bq, sig, d_epsp, sig, 1e-3, dama_bq, ip=1, npg=4)
-    assert broken_bq[0] is False
+    assert broken_bq[0] == False
     assert dama_bq[0] > 0.0
 
     # Specific energy at integration point
@@ -278,7 +278,7 @@ def test_integrated_beam_steps():
     dama_en = np.array([0.0])
     broken_en = integrated_beam_step(fail_en, np.array([[200.0, 0.0, 0.0]]), d_epsp, deps, 1e-3, dama_en)
     # work = 200 * 0.1 = 20.0 -> (20 - 10) / (30 - 10) = 0.5
-    assert broken_en[0] is False
+    assert broken_en[0] == False
     assert dama_en[0] == pytest.approx(0.5)
 
 
@@ -296,7 +296,7 @@ def test_fld_thick_shell_step():
     deps = np.array([[0.15, 0.0, 0.0]])
     dama = np.array([0.0])
     broken = thick_shell_step(fail, None, np.array([0.15]), deps, 1e-3, dama)
-    assert broken[0] is False
+    assert broken[0] == False
     # at emin=0.0, EM=0.3 -> dam = 0.15 / 0.3 = 0.5
     assert dama[0] == pytest.approx(0.5)
     assert hasattr(fail, "fld_zone")
@@ -333,7 +333,7 @@ def test_xfem_step_johnson_and_fld():
 
     # Crack initiation test: elcrkini transitions 0 -> -1
     broken = xfem_step(fail_jc, sig, d_epsp, deps, dt, dama, elcrkini, dadv=0.8)
-    assert broken[0] is True
+    assert broken[0] == True
     assert elcrkini[0] == -1  # Initiated!
 
     # Crack advancement test: element adjacent to crack (elcrkini = 2)
@@ -341,10 +341,10 @@ def test_xfem_step_johnson_and_fld():
     dama_adv = np.array([0.0])
     d_epsp_sub = np.array([0.085])  # damage = 0.085 / 0.1 = 0.85 >= dadv=0.8
     broken_adv = xfem_step(fail_jc, sig, d_epsp_sub, deps, dt, dama_adv, elcrkini_adv, dadv=0.8)
-    assert broken_adv[0] is True
+    assert broken_adv[0] == True
     assert elcrkini_adv[0] == 1  # Advanced!
 
     # Phantom element test
     dama_ph = np.array([0.0])
     broken_ph = xfem_step(fail_jc, sig, d_epsp, deps, dt, dama_ph, np.array([0]), is_phantom=True)
-    assert broken_ph[0] is True
+    assert broken_ph[0] == True

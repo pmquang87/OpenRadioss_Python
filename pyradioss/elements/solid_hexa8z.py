@@ -120,8 +120,9 @@ def _corotational_frame(xe: np.ndarray) -> np.ndarray:
     e3 = e3_raw / np.maximum(norm3(e3_raw), EM20)[:, None]
     e2 = cross3(e3, e1)
 
-    # Assemble R where columns are [e1, e2, e3]
-    R = np.stack([e1, e2, e3], axis=-1)  # (n, 3, 3)
+    # Assemble R where columns are [e3, e1, e2] matching srcoor3.F lines 281-283
+    # (JHBE=14/24 passes R12, R13, R11 so dir1=e3, dir2=e1, dir3=e2)
+    R = np.stack([e3, e1, e2], axis=-1)  # (n, 3, 3)
     return R
 
 
@@ -341,13 +342,35 @@ def forces(group, x: np.ndarray, v: np.ndarray, vr: np.ndarray, dt: float,
     hcoef = np.full(n, 0.1)
 
     for sl, mat, prop in st["slices"]:
-        materials.stress_update(
-            mat, sig[sl], st["epsp"][sl], deps[sl], dt,
-            rho[sl], st.get("mat_extra", {}), sl, trD[sl]
-        )
+        extra = {}
+        if hasattr(mat, "solid_update"):
+            sig_new, epsp_new, c_new = mat.solid_update(sig[sl], deps[sl], st["epsp"][sl], dt)
+            sig[sl] = sig_new
+            st["epsp"][sl] = epsp_new
+            if c_new is not None:
+                c[sl] = c_new
+        elif hasattr(materials, "solid_update") and getattr(mat, "law", None) is not None:
+            _, _, c_new = materials.solid_update(
+                mat, sig[sl], deps[sl], st["epsp"][sl], dt, extra or None
+            )
+            if c_new is not None:
+                c[sl] = c_new
+        else:
+            # Linear elastic isotropic Hooke's law fallback
+            K = getattr(mat, "K", 0.0)
+            G = getattr(mat, "G", 0.0)
+            lam = K - 2.0 * G / 3.0
+            tr_eps = deps[sl, 0] + deps[sl, 1] + deps[sl, 2]
+            sig[sl, 0] += lam * tr_eps + 2.0 * G * deps[sl, 0]
+            sig[sl, 1] += lam * tr_eps + 2.0 * G * deps[sl, 1]
+            sig[sl, 2] += lam * tr_eps + 2.0 * G * deps[sl, 2]
+            sig[sl, 3] += G * deps[sl, 3]
+            sig[sl, 4] += G * deps[sl, 4]
+            sig[sl, 5] += G * deps[sl, 5]
+
         if hasattr(mat, "sound_speed_solid"):
             c[sl] = mat.sound_speed_solid()
-        else:
+        elif c[sl] == 0.0:
             K = getattr(mat, "K", 0.0)
             G = getattr(mat, "G", 0.0)
             c[sl] = np.sqrt(np.maximum((K + 4.0 * G / 3.0) / np.maximum(rho[sl], EM20), 0.0))
@@ -378,11 +401,11 @@ def forces(group, x: np.ndarray, v: np.ndarray, vr: np.ndarray, dt: float,
 
     # Hourglass stabilization in local frame (shour3.F)
     # gamma_ai = h_ai - (sum_j h_aj x_j) . gradN_i
-    hx = np.einsum("ai,nia->na", _H, xe_loc)
-    gamma = _H[None, :, :] - np.einsum("na,nib->naib", hx, dndx).sum(axis=-1)
-    q_hg = np.einsum("naib,nib->na", gamma, ve_loc)
-    chg = 0.5 * hcoef[:, None, None] * (rho * c * lc)[:, None, None]
-    f_hg_loc = np.einsum("na,naib->nib", q_hg, gamma) * (-chg[:, 0, :])
+    hx = _H @ xe_loc                                            # (n, 4, 3)
+    gamma = _H[None, :, :] - hx @ dndx.transpose(0, 2, 1)        # (n, 4, 8)
+    qdot = gamma @ ve_loc                                       # (n, 4, 3) modal velocities
+    ah = hcoef * rho * c * vol ** (2.0 / 3.0) / 4.0 * alive     # (n,)
+    f_hg_loc = (gamma.transpose(0, 2, 1) @ qdot) * (-ah)[:, None, None]  # (n, 8, 3)
     fe_loc += f_hg_loc
 
     # 9. Transform local nodal forces back to global coordinates:

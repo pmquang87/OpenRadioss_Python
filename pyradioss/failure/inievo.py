@@ -102,7 +102,7 @@ def _eval_curve(curve: Any, x: np.ndarray | float) -> np.ndarray:
 
 def _evaluate_initiation_strain(p: Dict[str, Any], triax: np.ndarray) -> np.ndarray:
     """Interpolate failure strain eps_f(eta) from table or fallback."""
-    table = p.get("table", p.get("tab_id", p.get("fct_id_tab", p.get("curve"))))
+    table = p.get("table", p.get("tab_id", p.get("fct_id_tab", p.get("curve", p.get("crv_ini", p.get("fct_id1"))))))
     fscale = _get_param(p, ["fscale", "FSCALE", "f_scale", "xscale1"], 1.0)
     default_eps_f = _get_param(p, ["eps_f", "EPS_F", "eps_init", "fcrit"], 0.2)
 

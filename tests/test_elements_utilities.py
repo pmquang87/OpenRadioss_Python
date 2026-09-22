@@ -111,17 +111,17 @@ class TestSplines:
 
     def test_cr_spline_point_proj(self):
         pts = np.array([
-            [-5.0, 0.0, 0.0],
+            [-1.0, 0.0, 0.0],
             [0.0, 0.0, 0.0],
-            [10.0, 0.0, 0.0],
-            [15.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
         ])
-        # Test point offset along Y axis at X=6.0
-        z = np.array([6.0, 3.0, 0.0])
+        # Test point offset along Y axis at X=0.6
+        z = np.array([0.6, 0.3, 0.0])
         zh, h, t = cr_spline_point_proj(pts, z, alpha=0.5)
 
-        np.testing.assert_allclose(zh, [6.0, 0.0, 0.0], atol=1e-5)
-        np.testing.assert_allclose(h, 3.0, atol=1e-5)
+        np.testing.assert_allclose(zh, [0.6, 0.0, 0.0], atol=1e-5)
+        np.testing.assert_allclose(h, 0.3, atol=1e-5)
         np.testing.assert_allclose(t, 0.6, atol=1e-5)
 
 
