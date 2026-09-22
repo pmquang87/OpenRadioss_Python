@@ -529,3 +529,19 @@ def apply_leak_flow(
         mv.de_out = getattr(mv, "de_out", 0.0) + de_out / dt
 
     return dm
+
+
+# =======================================================================
+# /MONVOL/COMMU1 — Communicating airbag chambers (re-exported)
+# =======================================================================
+from pyradioss.engine.airbag_commu import (  # noqa: E402
+    MonvolCommu1,
+    CommuStepResult,
+    critical_pressure_ratio,
+    choked_flow_function,
+    subsonic_flow_function,
+    flow_function,
+    compute_orifice_flow,
+    step_airbag_commu,
+    apply_airbag_communications,
+)
