@@ -13,7 +13,7 @@ exactly like the Fortran ``USR2SYS`` machinery.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Union, Any, Tuple, Sequence
 
 import math
 
@@ -1864,6 +1864,20 @@ class InitialTemperature:
     fld_type: int = 0       # 0 = uniform on group, 1 = nodal table
     nodal_temps: Dict[int, float] = field(default_factory=dict)  # node_id -> temp
     title: str = ""
+    part_id: Optional[int] = None
+    element_set_id: Optional[int] = None
+    node_ids: Optional[Sequence[int]] = None
+    gradient: Optional[Tuple[float, float, float]] = None
+    x0: Optional[Tuple[float, float, float]] = None
+    t_top: Optional[float] = None
+    t_mid: Optional[float] = None
+    t_bot: Optional[float] = None
+    layer_temperatures: Optional[Sequence[float]] = None
+    additive: bool = False
+
+
+InitempRecordEntity = InitialTemperature
+InitempParamsEntity = InitialTemperature
 
 
 @dataclass
