@@ -2045,4 +2045,166 @@ def test_audit_wave2_verifier2_directional_derivative_consistency_all_states():
     _verify_state(mat_b0, deps_plas, np.zeros(1), extra={"ipla": 0})
 
 
+# ============================================================================
+# Grüneisen EOS Tests for LAW04 (/EOS/GRUNEISEN, common_source/eos/gruneisen.F)
+# ============================================================================
 
+def test_law04_gruneisen_eos_construction():
+    """Verify build_law04 properly creates EquationOfState(kind='GRUNEISEN')."""
+    mat = _make_law04(
+        eos_kind="GRUNEISEN",
+        c_sound=4500.0,
+        s1=1.49,
+        s2=0.0,
+        s3=0.0,
+        gamma0=2.02,
+        a_grun=0.47,
+        e0=0.0,
+    )
+    assert mat.eos is not None
+    assert mat.eos.kind == "GRUNEISEN"
+    assert mat.eos.params["c"] == pytest.approx(4500.0)
+    assert mat.eos.params["s1"] == pytest.approx(1.49)
+    assert mat.eos.params["gamma0"] == pytest.approx(2.02)
+    assert mat.eos.params["a"] == pytest.approx(0.47)
+
+
+def test_law04_gruneisen_hydrostatic_compression():
+    """Verify hydrostatic compression pressure matches Grüneisen EOS formulation."""
+    from pyradioss.materials import eos as eos_mod
+    rho0 = 8.96e-3  # copper density g/cm^3 or kg/dm^3
+    c0 = 3940.0
+    s1 = 1.489
+    gamma0 = 2.02
+    a = 0.47
+    mat = _make_law04(
+        rho0=rho0,
+        eos_kind="GRUNEISEN",
+        c_sound=c0,
+        s1=s1,
+        gamma0=gamma0,
+        a_grun=a,
+        e0=0.0,
+    )
+    # Volumetric compression eps_xx = eps_yy = eps_zz = -0.01 -> mu = -tr(deps) = 0.03
+    deps = np.array([[-0.01, -0.01, -0.01, 0.0, 0.0, 0.0]])
+    sig_init = np.zeros((1, 6))
+
+    sig_upd, epsp_upd, c_upd = law04_hyd_jcook.solid_update(
+        mat, sig_init, deps, epsp=np.zeros(1), dt=1e-6
+    )
+
+    # In pure volumetric strain, deviatoric strain is 0, so stress is purely hydrostatic: sig = -P * I
+    assert sig_upd[0, 3] == pytest.approx(0.0)
+    assert sig_upd[0, 4] == pytest.approx(0.0)
+    assert sig_upd[0, 5] == pytest.approx(0.0)
+    assert sig_upd[0, 0] == pytest.approx(sig_upd[0, 1])
+    assert sig_upd[0, 1] == pytest.approx(sig_upd[0, 2])
+
+    p_actual = -sig_upd[0, 0]
+    mu = 0.03
+    p_grun_isothermal = eos_mod.pressure(mat.eos, mu, 0.0)
+    assert p_actual > p_grun_isothermal  # PdV compression work adds thermal energy, increasing P
+    p_eos, e_eos, _ = eos_mod.update(mat.eos, np.array([mu]), np.array([-mu]), np.array([0.0]), np.array([0.0]), np.array([0.0]))
+    assert p_actual == pytest.approx(p_eos[0], rel=1e-3)
+
+
+def test_law04_gruneisen_coupled_with_johnson_cook_plasticity():
+    """Verify coupled Johnson-Cook yield and Grüneisen hydrostatic EOS response."""
+    rho0 = 7.85e-3
+    mat = _make_law04(
+        rho0=rho0,
+        a=300.0,
+        b=450.0,
+        n=0.35,
+        c=0.03,
+        eps0=1.0,
+        m=1.0,
+        t0=300.0,
+        tmelt=1800.0,
+        eos_kind="GRUNEISEN",
+        c_sound=4500.0,
+        s1=1.5,
+        gamma0=2.0,
+        a_grun=0.0,
+    )
+    # Strain increment with both volumetric and deviatoric components
+    deps = np.array([[-0.02, 0.01, 0.005, 0.01, 0.0, 0.0]])
+    sig_init = np.zeros((1, 6))
+
+    sig_upd, epsp_upd, c_upd = law04_hyd_jcook.solid_update(
+        mat, sig_init, deps, epsp=np.zeros(1), dt=1e-5
+    )
+
+    # Plastic strain accumulated
+    assert epsp_upd[0] > 0.0
+
+    # Mean stress is positive pressure in compression
+    p_mean = -(sig_upd[0, 0] + sig_upd[0, 1] + sig_upd[0, 2]) / 3.0
+    assert p_mean > 0.0
+
+    # von Mises equivalent stress on yield surface
+    s_dev = sig_upd[0].copy()
+    s_dev[0] += p_mean
+    s_dev[1] += p_mean
+    s_dev[2] += p_mean
+    j2 = 0.5 * (s_dev[0]**2 + s_dev[1]**2 + s_dev[2]**2) + s_dev[3]**2 + s_dev[4]**2 + s_dev[5]**2
+    vm = np.sqrt(3.0 * j2)
+
+    # Under radial return (m4law.F IPLA=0 lines 154, 168-188):
+    # Trial stress is scaled to yield stress at beginning of step (epsp=0 -> CH = A):
+    # AK = A * CE * CT
+    ep_dot = max(abs(-0.02), abs(0.01), abs(0.005), 0.5 * 0.01) / 1e-5
+    ce = 1.0 + 0.03 * np.log(ep_dot / 1.0)
+    expected_yield = 300.0 * ce
+    assert vm == pytest.approx(expected_yield, rel=1e-3)
+
+
+def test_law04_gruneisen_sound_speed():
+    """Verify sound speed combines Grüneisen bulk stiffness and shear modulus (m4law.F line 100)."""
+    from pyradioss.materials import eos as eos_mod
+    rho0 = 7.85e-3
+    mat = _make_law04(
+        rho0=rho0,
+        e=200000.0,
+        nu=0.3,
+        eos_kind="GRUNEISEN",
+        c_sound=4500.0,
+        s1=1.5,
+        gamma0=2.0,
+        a_grun=0.0,
+    )
+    deps = np.array([[-0.01, -0.01, -0.01, 0.0, 0.0, 0.0]])
+    sig_init = np.zeros((1, 6))
+
+    sig_upd, epsp_upd, c_upd = law04_hyd_jcook.solid_update(
+        mat, sig_init, deps, epsp=np.zeros(1), dt=1e-6
+    )
+
+    G = mat.params["G"]
+    c_eos = eos_mod.sound_speed(mat.eos, 0.03, 0.0)
+    expected_c = np.sqrt(c_eos**2 + (4.0 / 3.0) * G / rho0)
+    assert c_upd[0] == pytest.approx(expected_c, rel=0.05)
+
+
+def test_law04_gruneisen_consistent_tangent():
+    """Verify algorithmic consistent tangent with Grüneisen EOS bulk modulus."""
+    mat = _make_law04(
+        rho0=7.85e-3,
+        e=210000.0,
+        nu=0.3,
+        eos_kind="GRUNEISEN",
+        c_sound=4500.0,
+        s1=1.5,
+        gamma0=2.0,
+    )
+    sig = np.array([[100.0, -50.0, -50.0, 20.0, 0.0, 0.0]])
+    D = law04_hyd_jcook.consistent_solid_tangent(
+        mat, sig, epsp=np.array([0.01]), epsp_incr=np.array([0.001])
+    )
+    assert D.shape == (1, 6, 6)
+    # Check symmetry
+    assert np.allclose(D[0], D[0].T, atol=1e-8)
+    # Check positive definiteness
+    eigvals = np.linalg.eigvalsh(D[0])
+    assert np.all(eigvals > 0.0)
