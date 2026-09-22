@@ -780,7 +780,7 @@ def coefficients(eos, mu: np.ndarray, e: np.ndarray | float | None = None, time:
         A = -gamma * p_star - psh
         B = (gamma - 1.0) * (1.0 + mu)
         return A, B
-    if kind == "OSBORNE":
+    if kind in ("OSBORNE", "OSBORN"):
         return _coefficients_osborne(eos, mu, e)
     if kind == "LSZK":
         return _coefficients_lszk(eos, mu)
@@ -1103,7 +1103,7 @@ def update(eos, mu: np.ndarray, dv: np.ndarray, e_old: np.ndarray,
         c2 = dpdm / rho0
         return p_new, e_new, np.maximum(c2, 0.0)
 
-    if kind == "OSBORNE":
+    if kind in ("OSBORNE", "OSBORN"):
         a1 = p.get("a1", 0.0)
         a2 = p.get("a2", 0.0)
         b0 = p.get("b0", 0.0)
@@ -1485,7 +1485,7 @@ def pressure(eos, mu: np.ndarray | float, e: np.ndarray | float, time: float = 0
         p_val = np.maximum(A + B * e_arr + psh, pmin) - psh
         return float(p_val) if is_scalar else p_val
 
-    if kind == "OSBORNE":
+    if kind in ("OSBORNE", "OSBORN"):
         p = eos.params
         a1 = p.get("a1", 0.0)
         a2 = p.get("a2", 0.0)
@@ -1694,18 +1694,22 @@ def initial_state(eos):
         p0 = pressure(eos, 0.0, e0)
         return e0, p0
 
-    if kind == "OSBORNE":
+    if kind in ("OSBORNE", "OSBORN"):
         p0_param = p.get("p0", 0.0)
-        b0 = p.get("b0", 0.0)
-        c0 = p.get("c0", 1e-10)
-        d0 = p.get("d0", 1.0)
-        # Root of C0*E0^2 + (B0 - P0)*E0 - P0*D0 = 0
-        delta = (b0 - p0_param) ** 2 + 4.0 * c0 * d0 * p0_param
-        if delta >= 0.0 and c0 > 0.0:
-            e0 = (- (b0 - p0_param) + math.sqrt(delta)) / (2.0 * c0)
-        else:
-            e0 = 0.0
-        return e0, p0_param
+        psh = p.get("psh", 0.0)
+        e0 = p.get("e0")
+        if e0 is None or e0 == 0.0:
+            b0 = p.get("b0", 0.0)
+            c0 = p.get("c0", 1e-10)
+            d0 = p.get("d0", 1.0)
+            # Root of C0*E0^2 + (B0 - P0)*E0 - P0*D0 = 0
+            delta = (b0 - p0_param) ** 2 + 4.0 * c0 * d0 * p0_param
+            if delta >= 0.0 and c0 > 0.0:
+                e0 = (- (b0 - p0_param) + math.sqrt(delta)) / (2.0 * c0)
+            else:
+                e0 = 0.0
+        p0 = p0_param - psh if p0_param > 0.0 else float(pressure(eos, 0.0, e0))
+        return e0, p0
 
     if kind == "LSZK":
         p0_param = p.get("p0", 0.0)
