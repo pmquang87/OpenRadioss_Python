@@ -220,3 +220,76 @@ def shell_step(
             dama[i] = min(1.0, dama[i] + 0.5 * d_evo)
 
     return dama >= 1.0
+
+
+def beam_step(fail, svm, pressure, d_epsp, deps, dt, dama, length=None, tstar=None, **kwargs):
+    """INIEVO failure step for standard beams (TYPE 3).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\inievo\\fail_inievo_b.F90
+    Subroutine: FAIL_INIEVO_B
+    """
+    p = fail.params
+    if np.ndim(svm) == 2:
+        sig_arr = np.asarray(svm, dtype=float)
+        if sig_arr.shape[1] >= 6:
+            pressure = (sig_arr[:, 0] + sig_arr[:, 1] + sig_arr[:, 2]) / 3.0
+            s0, s1, s2 = sig_arr[:, 0] - pressure, sig_arr[:, 1] - pressure, sig_arr[:, 2] - pressure
+            svm = np.sqrt(1.5 * (s0**2 + s1**2 + s2**2) + 3.0 * (sig_arr[:, 3]**2 + sig_arr[:, 4]**2 + sig_arr[:, 5]**2))
+        else:
+            pressure = sig_arr[:, 0] / 3.0
+            svm = np.abs(sig_arr[:, 0])
+
+    svm_arr = np.asarray(svm, dtype=float)
+    p_arr = np.asarray(pressure, dtype=float)
+    triax = np.clip(p_arr / np.maximum(svm_arr, _TINY), -1.0, 1.0)
+
+    eps_f = _evaluate_initiation_strain(p, triax)
+    d_epsp_arr = np.maximum(0.0, np.asarray(d_epsp, dtype=float))
+
+    disp = _get_param(p, ["disp", "DISP", "u_p"], 0.0)
+    ener = _get_param(p, ["ener", "ENER", "g_f"], 0.0)
+    has_evolution = disp > 0.0 or ener > 0.0
+    l0 = float(length[0] if isinstance(length, np.ndarray) and len(length) > 0 else (length or 1.0))
+
+    if not has_evolution:
+        d_ini = d_epsp_arr / np.maximum(eps_f, _TINY)
+        dama[:] = np.minimum(1.0, dama + d_ini)
+        return dama >= 1.0
+
+    for i in range(len(dama)):
+        if dama[i] < 0.5:
+            d_ini = d_epsp_arr[i] / max(float(eps_f[i] if np.ndim(eps_f) > 0 else eps_f), _TINY)
+            dama[i] = min(0.5, dama[i] + 0.5 * d_ini)
+        else:
+            if disp > 0.0:
+                d_evo = (l0 * d_epsp_arr[i]) / max(disp, _TINY)
+            else:
+                svm_i = svm_arr[i] if np.ndim(svm_arr) > 0 else float(svm_arr)
+                d_evo = (svm_i * l0 * d_epsp_arr[i]) / max(2.0 * ener, _TINY)
+            dama[i] = min(1.0, dama[i] + 0.5 * d_evo)
+
+    return dama >= 1.0
+
+
+def integrated_beam_step(fail, sig, d_epsp, deps, dt, dama, length=None, tstar=None, ip=0, npg=1, **kwargs):
+    """INIEVO failure step for integrated beam integration point (TYPE 18).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\inievo\\fail_inievo_ib.F90
+    Subroutine: FAIL_INIEVO_IB
+    """
+    sig_arr = np.asarray(sig, dtype=float)
+    if sig_arr.ndim == 2 and sig_arr.shape[1] >= 3:
+        sig_xx, sig_xy, sig_xz = sig_arr[:, 0], sig_arr[:, 1], sig_arr[:, 2]
+    elif sig_arr.ndim == 2:
+        sig_xx = sig_arr[:, 0]
+        sig_xy = np.zeros_like(sig_xx)
+        sig_xz = np.zeros_like(sig_xx)
+    else:
+        sig_xx = sig_arr
+        sig_xy = np.zeros_like(sig_xx)
+        sig_xz = np.zeros_like(sig_xx)
+
+    pressure = sig_xx / 3.0
+    svm = np.sqrt(sig_xx**2 + 3.0 * (sig_xy**2 + sig_xz**2))
+    return beam_step(fail, svm, pressure, d_epsp, deps, dt, dama, length=length, tstar=tstar, **kwargs)
+

@@ -29,10 +29,10 @@ where internal forces enter negated).
 
 from . import (beam_fiber, beam_type3, shell_bt4, shell_dkt18, shell_dkt6, shell_qbat, shell_qeph,  # noqa: F401
                shell_thick16, shell_tri3, solid_bric20, solid_cohesive, solid_connect, solid_heph, solid_hexa8,
-               solid_hexa8_eas, solid_hexa8_full, solid_penta6, solid_penta6_heph, solid_pyra5,
+               solid_hexa8_eas, solid_hexa8_full, solid_hexa8z, solid_penta6, solid_penta6_heph, solid_pyra5,
                solid_quad, solid_quad4_full, solid_shell_ha8, solid_tetra10, solid_tetra4,
                solid_tetra4_sfem, solid_tria3, solid_tshell8, spring, spring_advanced, spring_mat,
-               thickshell_composite, thickshell_wedge6, truss, nstrand)
+               thickshell_composite, thickshell_wedge6, truss, nstrand, xfem_shell, xfem_crack)
 
 KERNELS = {
     # 3D Solids (8-node hexas, 20-node, wedges, tetras, pyramids, cohesive, solid shells)
@@ -40,6 +40,7 @@ KERNELS = {
     "bricks_full": solid_hexa8_full,
     "bricks_eas": solid_hexa8_eas,
     "bricks_heph": solid_heph,
+    "bricks_hexa8z": solid_hexa8z,
     "solid_shells_ha8": solid_shell_ha8,
     "cohesives": solid_cohesive,
     "solid_connect": solid_connect,
@@ -58,13 +59,14 @@ KERNELS = {
     "thickshell_wedges": thickshell_wedge6,
     "thickshell_composites": thickshell_composite,
 
-    # Thin Shells (4-node & 3-node & rotation-free)
+    # Thin Shells (4-node & 3-node & rotation-free & XFEM)
     "shells": shell_bt4,
     "shells_qbat": shell_qbat,
     "shells_qeph": shell_qeph,
     "sh3n": shell_tri3,
     "sh3n_dkt18": shell_dkt18,
     "shells_dkt6": shell_dkt6,
+    "xfem_shell": xfem_shell,
 
     # 2D Continuum Solids (quads & triangles)
     "quads": solid_quad,

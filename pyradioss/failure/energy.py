@@ -91,3 +91,74 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     d_norm = np.where(current_work <= e1, 0.0, (current_work - e1) / (e2 - e1))
     dama[:] = np.clip(d_norm, 0.0, 1.0)
     return dama >= 1.0
+
+
+def beam_step(fail, svm, pressure, d_epsp, deps, dt, dama, length=None, tstar=None, forces=None, moments=None, strains=None, curvatures=None, area=None, epsd=None, **kwargs):
+    """Specific energy failure step for standard beams (TYPE 3).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\energy\\fail_energy_b.F
+    Subroutine: FAIL_ENERGY_B
+    """
+    p = fail.params
+    e1 = _get_param(p, ["e1", "E1", "e_init"], 1.0e20)
+    e2 = _get_param(p, ["e2", "E2", "e_fail"], 2.0e20)
+    if e2 <= e1:
+        e2 = e1 + _TINY
+
+    if forces is not None and strains is not None:
+        f_arr = np.asarray(forces, dtype=float)
+        s_arr = np.asarray(strains, dtype=float)
+        dW = f_arr[:, 0] * s_arr[:, 0]
+        if f_arr.shape[1] > 1 and s_arr.shape[1] > 1:
+            dW = dW + f_arr[:, 1] * s_arr[:, 1]
+        if f_arr.shape[1] > 2 and s_arr.shape[1] > 2:
+            dW = dW + f_arr[:, 2] * s_arr[:, 2]
+        if moments is not None and curvatures is not None:
+            m_arr = np.asarray(moments, dtype=float)
+            k_arr = np.asarray(curvatures, dtype=float)
+            dW = dW + m_arr[:, 0] * k_arr[:, 0]
+            if m_arr.shape[1] > 1 and k_arr.shape[1] > 1:
+                dW = dW + m_arr[:, 1] * k_arr[:, 1]
+            if m_arr.shape[1] > 2 and k_arr.shape[1] > 2:
+                dW = dW + m_arr[:, 2] * k_arr[:, 2]
+        area_val = max(float(area), _TINY) if area is not None else 1.0
+        d_work = dW / area_val
+    else:
+        svm_arr = np.asarray(svm, dtype=float) if np.ndim(svm) > 0 or not np.isnan(svm) else np.zeros(len(dama))
+        d_work = svm_arr * np.asarray(d_epsp, dtype=float)
+
+    current_work = dama * e2 + d_work
+    d_norm = np.where(current_work <= e1, 0.0, (current_work - e1) / (e2 - e1))
+    dama[:] = np.clip(d_norm, 0.0, 1.0)
+    return dama >= 1.0
+
+
+def integrated_beam_step(fail, sig, d_epsp, deps, dt, dama, length=None, tstar=None, epsd=None, ip=0, npg=1, **kwargs):
+    """Specific energy failure step for integrated beam integration point (TYPE 18).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\energy\\fail_energy_ib.F
+    Subroutine: FAIL_ENERGY_IB
+    """
+    p = fail.params
+    e1 = _get_param(p, ["e1", "E1", "e_init"], 1.0e20)
+    e2 = _get_param(p, ["e2", "E2", "e_fail"], 2.0e20)
+    if e2 <= e1:
+        e2 = e1 + _TINY
+
+    sig_arr = np.asarray(sig, dtype=float)
+    deps_arr = np.asarray(deps, dtype=float)
+    if sig_arr.ndim == 2 and deps_arr.ndim == 2 and sig_arr.shape[1] >= 3 and deps_arr.shape[1] >= 3:
+        d_work = (sig_arr[:, 0] * deps_arr[:, 0] +
+                  sig_arr[:, 1] * deps_arr[:, 1] +
+                  sig_arr[:, 2] * deps_arr[:, 2])
+    elif sig_arr.ndim == 2 and deps_arr.ndim == 2:
+        d_work = np.sum(sig_arr * deps_arr, axis=1)
+    else:
+        svm = np.abs(sig_arr.ravel())
+        d_work = svm * np.asarray(d_epsp, dtype=float)
+
+    current_work = dama * e2 + d_work
+    d_norm = np.where(current_work <= e1, 0.0, (current_work - e1) / (e2 - e1))
+    dama[:] = np.clip(d_norm, 0.0, 1.0)
+    return dama >= 1.0
+

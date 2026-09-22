@@ -68,3 +68,44 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     d = np.clip((sig_max - c_min) / denom, 0.0, 1.0)
     dama[:] = np.maximum(dama, d)
     return np.zeros(len(dama), dtype=bool)
+
+
+def beam_step(fail, svm, pressure, d_epsp, deps, dt, dama, length=None, tstar=None, eps_xx=None, **kwargs):
+    """Visual failure indicator step for standard beams (TYPE 3); returns all False (no deletion).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\visual\\fail_visual_b.F90
+    Subroutine: FAIL_VISUAL_B
+    """
+    p = fail.params
+    c_min = _get_param(p, ["c_min", "C_min", "cmin"], 0.0)
+    c_max = _get_param(p, ["c_max", "C_max", "cmax"], 1.0e8)
+
+    svm_arr = np.abs(np.asarray(svm, dtype=float))
+    denom = max(c_max - c_min, _TINY)
+    d = np.clip((svm_arr - c_min) / denom, 0.0, 1.0)
+    dama[:] = np.maximum(dama, d)
+    return np.zeros(len(dama), dtype=bool)
+
+
+def integrated_beam_step(fail, sig, d_epsp, deps, dt, dama, length=None, tstar=None, eps_xx=None, ip=0, npg=1, **kwargs):
+    """Visual failure indicator step for integrated beam (TYPE 18); returns all False (no deletion).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\visual\\fail_visual_ib.F90
+    Subroutine: FAIL_VISUAL_IB
+    """
+    p = fail.params
+    c_min = _get_param(p, ["c_min", "C_min", "cmin"], 0.0)
+    c_max = _get_param(p, ["c_max", "C_max", "cmax"], 1.0e8)
+
+    sig_arr = np.asarray(sig, dtype=float)
+    if sig_arr.ndim == 2 and sig_arr.shape[1] >= 3:
+        sig_xx, sig_xy, sig_xz = sig_arr[:, 0], sig_arr[:, 1], sig_arr[:, 2]
+        sig_max = 0.5 * sig_xx + np.sqrt(0.25 * sig_xx**2 + sig_xy**2 + sig_xz**2)
+    else:
+        sig_max = np.abs(sig_arr.ravel())
+
+    denom = max(c_max - c_min, _TINY)
+    d = np.clip((sig_max - c_min) / denom, 0.0, 1.0)
+    dama[:] = np.maximum(dama, d)
+    return np.zeros(len(dama), dtype=bool)
+

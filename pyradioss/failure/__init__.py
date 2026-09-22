@@ -52,6 +52,7 @@ from . import (  # noqa: F401
     fail_gurson,
     fail_ladeveze,
     fail_rtcl,
+    failwave,
     fld,
     fractal,
     gene1,
@@ -280,6 +281,57 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")
 
 
+def beam_step(fail, svm, pressure, d_epsp, deps, dt, dama, length=None, tstar=None, **kwargs):
+    """Advance the damage of a beam element slice; returns the broken mask.
+
+    Fortran origin: engine/source/elements/beam/fail_beam3.F
+    """
+    ftype = fail.type.upper()
+    mod = FAILURE_MODELS.get(ftype)
+    if mod is not None and hasattr(mod, "beam_step"):
+        return mod.beam_step(fail, svm, pressure, d_epsp, deps, dt, dama, length=length, tstar=tstar, **kwargs)
+    raise NotImplementedError(f"/FAIL/{fail.type} beam failure not ported")
+
+
+def integrated_beam_step(fail, sig, d_epsp, deps, dt, dama, length=None, tstar=None, ip=0, npg=1, **kwargs):
+    """Advance the damage of an integrated beam integration point; returns broken mask.
+
+    Fortran origin: engine/source/elements/beam/fail_beam18.F
+    """
+    ftype = fail.type.upper()
+    mod = FAILURE_MODELS.get(ftype)
+    if mod is not None and hasattr(mod, "integrated_beam_step"):
+        return mod.integrated_beam_step(fail, sig, d_epsp, deps, dt, dama, length=length, tstar=tstar, ip=ip, npg=npg, **kwargs)
+    raise NotImplementedError(f"/FAIL/{fail.type} integrated beam failure not ported")
+
+
+def thick_shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None, pla=None):
+    """Advance the damage of a thick shell layer; returns the broken mask.
+
+    Fortran origin: engine/source/materials/fail/fld/fail_fld_tsh.F
+    """
+    ftype = fail.type.upper()
+    if ftype == "FLD":
+        return fld.thick_shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot, pla=pla)
+    mod = FAILURE_MODELS.get(ftype)
+    if mod is not None and hasattr(mod, "thick_shell_step"):
+        return mod.thick_shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot, pla=pla)
+    return shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+
+
+def xfem_step(fail, sig, d_epsp, deps, dt, dama, elcrkini, tstar=None, eps_tot=None, dadv=1.0, is_phantom=False):
+    """Advance damage and update crack propagation state for XFEM.
+
+    Fortran origin: engine/source/materials/fail/*/*_xfem.F
+    """
+    ftype = fail.type.upper()
+    mod = FAILURE_MODELS.get(ftype)
+    if mod is not None and hasattr(mod, "xfem_step"):
+        return mod.xfem_step(fail, sig, d_epsp, deps, dt, dama, elcrkini, tstar=tstar, eps_tot=eps_tot, dadv=dadv, is_phantom=is_phantom)
+    raise NotImplementedError(f"/FAIL/{fail.type} XFEM failure not ported")
+
+
+
 FAILURE_MODELS: dict[str, object] = {
     "ALTER": alter,
     "WINDSHIELD": alter,
@@ -304,6 +356,7 @@ FAILURE_MODELS: dict[str, object] = {
     "LAD_DAMA": fail_ladeveze,
     "RTCL": fail_rtcl,
     "RTCL_MODEL": fail_rtcl,
+    "FAILWAVE": failwave,
     "FLD": fld,
     "FRACTAL": fractal,
     "GENE1": gene1,

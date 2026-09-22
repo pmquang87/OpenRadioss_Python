@@ -181,3 +181,62 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     dama += np.maximum(d_epsp, 0.0) / eps_f(fail, triax)
     np.minimum(dama, 1.0, out=dama)
     return dama >= 1.0
+
+
+def beam_step(fail, svm, pressure, d_epsp, deps, dt, dama, length=None, tstar=None, **kwargs):
+    """Bi-quadratic failure step for standard beams (TYPE 3).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\biquad\\fail_biquad_b.F
+    Subroutine: FAIL_BIQUAD_B
+    """
+    if np.ndim(svm) == 2:
+        sig_arr = np.asarray(svm, dtype=float)
+        if sig_arr.shape[1] >= 6:
+            pressure = (sig_arr[:, 0] + sig_arr[:, 1] + sig_arr[:, 2]) / 3.0
+            s0, s1, s2 = sig_arr[:, 0] - pressure, sig_arr[:, 1] - pressure, sig_arr[:, 2] - pressure
+            svm = np.sqrt(1.5 * (s0**2 + s1**2 + s2**2) + 3.0 * (sig_arr[:, 3]**2 + sig_arr[:, 4]**2 + sig_arr[:, 5]**2))
+        else:
+            pressure = sig_arr[:, 0] / 3.0
+            svm = np.abs(sig_arr[:, 0])
+
+    svm_arr = np.asarray(svm, dtype=float)
+    p_arr = np.asarray(pressure, dtype=float)
+    triax = p_arr / np.maximum(svm_arr, _TINY)
+    triax = np.clip(triax, -2.0 / 3.0, 2.0 / 3.0)
+    dama += np.maximum(d_epsp, 0.0) / eps_f(fail, triax)
+    np.minimum(dama, 1.0, out=dama)
+    return dama >= 1.0
+
+
+def integrated_beam_step(fail, sig, d_epsp, deps, dt, dama, length=None, tstar=None, ip=0, npg=1, **kwargs):
+    """Bi-quadratic failure step for integrated beam integration point (TYPE 18).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\biquad\\fail_biquad_ib.F
+    Subroutine: FAIL_BIQUAD_IB
+    """
+    sig_arr = np.asarray(sig, dtype=float)
+    if sig_arr.ndim == 1:
+        sig_xx = sig_arr
+        sig_xy = np.zeros_like(sig_xx)
+        sig_xz = np.zeros_like(sig_xx)
+    elif sig_arr.shape[1] == 1:
+        sig_xx = sig_arr[:, 0]
+        sig_xy = np.zeros_like(sig_xx)
+        sig_xz = np.zeros_like(sig_xx)
+    elif sig_arr.shape[1] == 3:
+        sig_xx = sig_arr[:, 0]
+        sig_xy = sig_arr[:, 1]
+        sig_xz = sig_arr[:, 2]
+    else:
+        sig_xx = sig_arr[:, 0]
+        sig_xy = sig_arr[:, 3]
+        sig_xz = sig_arr[:, 5]
+
+    pressure = sig_xx / 3.0
+    svm = np.sqrt(3.0 * (0.5 * sig_xx**2 + sig_xy**2 + sig_xz**2))
+    triax = pressure / np.maximum(svm, _TINY)
+    triax = np.clip(triax, -2.0 / 3.0, 2.0 / 3.0)
+    dama += np.maximum(d_epsp, 0.0) / eps_f(fail, triax)
+    np.minimum(dama, 1.0, out=dama)
+    return dama >= 1.0
+

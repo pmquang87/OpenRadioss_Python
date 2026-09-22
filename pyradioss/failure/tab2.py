@@ -97,3 +97,38 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
 
     dama[:] = np.minimum(dcrit, dama + d_inc)
     return dama >= dcrit
+
+
+def beam_step(fail, svm, pressure, d_epsp, deps, dt, dama, length=None, tstar=None, **kwargs):
+    """Tab2 failure step for standard beams (TYPE 3).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\tabulated\\fail_tab2_b.F90
+    Subroutine: FAIL_TAB2_B
+    """
+    p = fail.params
+    fcrit = _get_param(p, ["fcrit", "FCRIT", "eps_f"], 1.0)
+    dcrit = _get_param(p, ["dcrit", "DCRIT", "d_crit"], 1.0)
+    exp_n = _get_param(p, ["n", "N", "exp_n"], 1.0)
+
+    eps_f = max(fcrit, _TINY)
+    d_epsp_arr = np.asarray(d_epsp, dtype=float)
+    delta_p = d_epsp_arr / eps_f
+
+    if abs(exp_n - 1.0) < 1e-4:
+        d_inc = delta_p
+    else:
+        d_prev = np.maximum(dama, 1e-6)
+        d_inc = delta_p * exp_n * (d_prev ** (1.0 - 1.0 / exp_n))
+
+    dama[:] = np.minimum(dcrit, dama + d_inc)
+    return dama >= dcrit
+
+
+def integrated_beam_step(fail, sig, d_epsp, deps, dt, dama, length=None, tstar=None, ip=0, npg=1, **kwargs):
+    """Tab2 failure step for integrated beam integration point (TYPE 18).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\tabulated\\fail_tab2_ib.F90
+    Subroutine: FAIL_TAB2_IB
+    """
+    return beam_step(fail, sig, None, d_epsp, deps, dt, dama, length=length, tstar=tstar, **kwargs)
+

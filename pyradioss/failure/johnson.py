@@ -149,3 +149,103 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
         * _thermal_factor(fail, tstar)
     _accumulate(fail, dama, d_epsp, eps_f)
     return dama >= 1.0
+
+
+def beam_step(fail, svm, pressure, d_epsp, deps, dt, dama, length=None, tstar=None, epsd=None, **kwargs):
+    """Johnson-Cook failure step for standard beams (TYPE 3).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\johnson_cook\\fail_johnson_b.F
+    Subroutine: FAIL_JOHNSON_B
+    """
+    p = fail.params
+    if np.ndim(svm) == 2:
+        sig_arr = np.asarray(svm, dtype=float)
+        if sig_arr.shape[1] >= 6:
+            pressure = (sig_arr[:, 0] + sig_arr[:, 1] + sig_arr[:, 2]) / 3.0
+            s0, s1, s2 = sig_arr[:, 0] - pressure, sig_arr[:, 1] - pressure, sig_arr[:, 2] - pressure
+            svm = np.sqrt(1.5 * (s0**2 + s1**2 + s2**2) + 3.0 * (sig_arr[:, 3]**2 + sig_arr[:, 4]**2 + sig_arr[:, 5]**2))
+        else:
+            pressure = sig_arr[:, 0] / 3.0
+            svm = np.abs(sig_arr[:, 0])
+
+    svm_arr = np.asarray(svm, dtype=float)
+    p_arr = np.asarray(pressure, dtype=float)
+    triax = p_arr / np.maximum(svm_arr, _TINY)
+
+    d1 = float(p.get("D1", p.get("d1", 0.1)))
+    d2 = float(p.get("D2", p.get("d2", 0.5)))
+    d3 = float(p.get("D3", p.get("d3", -1.5)))
+
+    eps_f = (d1 + d2 * np.exp(np.clip(d3 * triax, -100.0, 100.0))) \
+        * _rate_factor(fail, deps, dt, False, d_epsp=d_epsp, epsd=epsd) \
+        * _thermal_factor(fail, tstar)
+    _accumulate(fail, dama, d_epsp, eps_f)
+    return dama >= 1.0
+
+
+def integrated_beam_step(fail, sig, d_epsp, deps, dt, dama, length=None, tstar=None, epsd=None, ip=0, npg=1, **kwargs):
+    """Johnson-Cook failure step for integrated beam integration point (TYPE 18).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\johnson_cook\\fail_johnson_ib.F
+    Subroutine: FAIL_JOHNSON_IB
+    """
+    p = fail.params
+    sig_arr = np.asarray(sig, dtype=float)
+    if sig_arr.ndim == 1:
+        sig_xx = sig_arr
+        sig_xy = np.zeros_like(sig_xx)
+        sig_xz = np.zeros_like(sig_xx)
+    elif sig_arr.shape[1] == 1:
+        sig_xx = sig_arr[:, 0]
+        sig_xy = np.zeros_like(sig_xx)
+        sig_xz = np.zeros_like(sig_xx)
+    elif sig_arr.shape[1] == 3:
+        sig_xx = sig_arr[:, 0]
+        sig_xy = sig_arr[:, 1]
+        sig_xz = sig_arr[:, 2]
+    else:
+        sig_xx = sig_arr[:, 0]
+        sig_xy = sig_arr[:, 3]
+        sig_xz = sig_arr[:, 5]
+
+    pressure = sig_xx / 3.0
+    svm = np.sqrt(sig_xx**2 + 3.0 * (sig_xy**2 + sig_xz**2))
+    triax = pressure / np.maximum(svm, _TINY)
+
+    d1 = float(p.get("D1", p.get("d1", 0.1)))
+    d2 = float(p.get("D2", p.get("d2", 0.5)))
+    d3 = float(p.get("D3", p.get("d3", -1.5)))
+
+    eps_f = (d1 + d2 * np.exp(np.clip(d3 * triax, -100.0, 100.0))) \
+        * _rate_factor(fail, deps, dt, False, d_epsp=d_epsp, epsd=epsd) \
+        * _thermal_factor(fail, tstar)
+    _accumulate(fail, dama, d_epsp, eps_f)
+    return dama >= 1.0
+
+
+def xfem_step(fail, sig, d_epsp, deps, dt, dama, elcrkini, tstar=None, eps_tot=None, dadv=1.0, is_phantom=False):
+    """Johnson-Cook failure step with XFEM crack tracking.
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\johnson_cook\\fail_johnson_xfem.F
+    Subroutine: FAIL_JOHNSON_XFEM
+    """
+    shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=tstar, eps_tot=eps_tot)
+
+    elcrkini_arr = np.asarray(elcrkini, dtype=int)
+    broken = np.zeros(len(dama), dtype=bool)
+    for i in range(len(dama)):
+        if is_phantom:
+            if dama[i] >= 1.0:
+                broken[i] = True
+        else:
+            if elcrkini_arr[i] == 0 and dama[i] >= 1.0:
+                elcrkini[i] = -1
+                broken[i] = True
+            elif elcrkini_arr[i] == 2 and dama[i] >= dadv:
+                elcrkini[i] = 1
+                broken[i] = True
+            elif dama[i] >= 1.0:
+                broken[i] = True
+
+    return broken
+

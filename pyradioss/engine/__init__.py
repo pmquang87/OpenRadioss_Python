@@ -111,5 +111,51 @@ from .load_centri import (  # noqa: F401
     build_load_centri,
 )
 
+from .airbag import (  # noqa: F401
+    update_airbag_thermodynamics,
+    update_airbag_volume,
+    apply_airbag_forces,
+    update_monvol_gas,
+    update_monvol_pres,
+    apply_leak_flow,
+    update_monvol_liquid_fluid,
+    compute_porosity_porfor4,
+    compute_porosity_porfor6,
+)
 
+from .airbag_mesh import (  # noqa: F401
+    polygon_clip_plane,
+    clip_triangle_to_box,
+    point_in_polyhedron,
+    compute_polyhedron_volume,
+    generate_fvm_airbag_mesh,
+    rezone_airbag_mesh,
+    FvmPolyhedron,
+    FvmFacet,
+)
 
+from .airbag_implicit import (  # noqa: F401
+    compute_implicit_pressure_increment,
+    compute_airbag_tangent_stiffness,
+    apply_airbag_matvec,
+    solve_implicit_airbag_step,
+)
+
+from .airbag_fvm import (  # noqa: F401
+    compute_upwind_face_flux,
+    compute_gas_viscosity_and_cfl,
+    compute_membrane_hourglass_viscosity,
+)
+
+from .thermal_solver import (  # noqa: F401
+    GlobTherm,
+    get_glob_therm,
+    update_nodal_temperatures,
+    apply_imposed_temperatures,
+    apply_imposed_flux,
+    compute_thermal_balance,
+    compute_thermal_dt,
+    compute_1d_bar_conduction,
+    apply_conduction,
+    solve_thermal_step,
+)

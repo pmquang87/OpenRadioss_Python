@@ -1037,3 +1037,278 @@ def apply_injector_jetting_forces(
                 if 0 <= nid < len(fext):
                     fext[nid] += fn_node
 
+
+# =============================================================================
+# 7. Shock-Capturing Upwind Flux Limiter (from fv_up_switch.F)
+# =============================================================================
+
+# Ported from C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\airbag\fv_up_switch.F: lines 905-1008
+def compute_upwind_face_flux(
+    rho1: float,
+    re1: float,
+    u1: np.ndarray,
+    gamma1: float,
+    cp_poly1: Tuple[float, float, float, float, float, float],
+    r_spec1: float,
+    rho2: float,
+    re2: float,
+    u2: np.ndarray,
+    gamma2: float,
+    cp_poly2: Tuple[float, float, float, float, float, float],
+    r_spec2: float,
+    normal: np.ndarray,
+    area: float,
+    v_grid: np.ndarray = np.zeros(3),
+    porosity: float = 1.0,
+) -> Tuple[float, np.ndarray, float, Tuple[float, float, float, float, float, float], float]:
+    """Compute shock-capturing upwind advective fluxes across a cell face.
+
+    Matches OpenRadioss ``fv_up_switch.F`` (lines 905-1008):
+    Computes relative velocity between gas and moving boundary mesh:
+    V_gas = 0.5*(u1 + u2)
+    V_rel = V_gas - V_grid
+    ss_ = dot(normal, V_rel)
+    alpha = 1.0 if ss_ > 0 else 0.0 (upwind direction)
+    rho_m = alpha*rho1 + (1-alpha)*rho2
+    rem = alpha*gamma1*re1 + (1-alpha)*gamma2*re2
+
+    Args:
+        rho1: Density of left cell (+normal).
+        re1: Volumetric internal energy (E/V) of left cell.
+        u1: (3,) velocity of left cell.
+        gamma1: Ratio of specific heats for left cell.
+        cp_poly1: (cpa, cpb, cpc, cpd, cpe, cpf) for left cell.
+        r_spec1: Gas constant for left cell.
+        rho2: Density of right cell (-normal).
+        re2: Volumetric internal energy (E/V) of right cell.
+        u2: (3,) velocity of right cell.
+        gamma2: Ratio of specific heats for right cell.
+        cp_poly2: (cpa, cpb, cpc, cpd, cpe, cpf) for right cell.
+        r_spec2: Gas constant for right cell.
+        normal: (3,) unit outward normal from cell 1 to cell 2.
+        area: Geometric surface area of the face.
+        v_grid: (3,) velocity of the face mesh (grid velocity).
+        porosity: Effective porosity ratio (0 to 1).
+
+    Returns:
+        (mass_flux, momentum_flux, energy_flux, cp_flux, rgas_flux):
+            - mass_flux: kg/s transferred across face.
+            - momentum_flux: (3,) N momentum vector transferred.
+            - energy_flux: W total enthalpy/energy transferred.
+            - cp_flux: 6-tuple of Cp polynomial fluxes.
+            - rgas_flux: Gas constant flux.
+    """
+    if area <= 0.0 or porosity <= 0.0:
+        return 0.0, np.zeros(3), 0.0, (0.0, 0.0, 0.0, 0.0, 0.0, 0.0), 0.0
+
+    eff_area = area * max(0.0, min(1.0, porosity))
+
+    # Gas velocity at face: average of left and right cells
+    v_gas = 0.5 * (u1 + u2)
+    # Relative velocity: v_gas - v_grid (fv_up_switch.F line 964)
+    v_rel = v_gas - v_grid
+    ss_ = float(np.dot(normal, v_rel))
+
+    # Directional upwind switch: alpha = 1 if flowing 1 -> 2, 0 if flowing 2 -> 1
+    alpha = 1.0 if ss_ > 0.0 else 0.0
+
+    # Upwind state reconstruction
+    rho_m = alpha * rho1 + (1.0 - alpha) * rho2
+    ux_m = alpha * rho1 * u1[0] + (1.0 - alpha) * rho2 * u2[0]
+    uy_m = alpha * rho1 * u1[1] + (1.0 - alpha) * rho2 * u2[1]
+    uz_m = alpha * rho1 * u1[2] + (1.0 - alpha) * rho2 * u2[2]
+    re_m = alpha * gamma1 * re1 + (1.0 - alpha) * gamma2 * re2
+
+    # Fluxes: MASSFLOW = rho_m * ss_ * eff_area
+    mass_flow = rho_m * ss_ * eff_area
+    mom_flux = np.array([ux_m, uy_m, uz_m]) * ss_ * eff_area
+    energy_flux = re_m * ss_ * eff_area
+
+    # Cp polynomial interpolation
+    cpa_m = alpha * cp_poly1[0] + (1.0 - alpha) * cp_poly2[0]
+    cpb_m = alpha * cp_poly1[1] + (1.0 - alpha) * cp_poly2[1]
+    cpc_m = alpha * cp_poly1[2] + (1.0 - alpha) * cp_poly2[2]
+    cpd_m = alpha * cp_poly1[3] + (1.0 - alpha) * cp_poly2[3]
+    cpe_m = alpha * cp_poly1[4] + (1.0 - alpha) * cp_poly2[4]
+    cpf_m = alpha * cp_poly1[5] + (1.0 - alpha) * cp_poly2[5]
+    rgas_m = alpha * r_spec1 + (1.0 - alpha) * r_spec2
+
+    cp_flux = (
+        mass_flow * cpa_m,
+        mass_flow * cpb_m,
+        mass_flow * cpc_m,
+        mass_flow * cpd_m,
+        mass_flow * cpe_m,
+        mass_flow * cpf_m,
+    )
+    rgas_flux = mass_flow * rgas_m
+
+    return float(mass_flow), mom_flux, float(energy_flux), cp_flux, float(rgas_flux)
+
+
+# =============================================================================
+# 8. Artificial Gas Bulk Viscosity & CFL Time Step (from fv_up_switch.F)
+# =============================================================================
+
+# Ported from C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\airbag\fv_up_switch.F: lines 1208-1220, 1255-1262
+def compute_gas_viscosity_and_cfl(
+    volume: float,
+    mass: float,
+    energy: float,
+    gamma: float,
+    dm: float,
+    dt: float,
+    u_gas: np.ndarray,
+    char_length: float,
+    qa: float = 1.5,
+    qb: float = 0.06,
+    cfl_coef: float = 0.9,
+    u_grid: Optional[np.ndarray] = None,
+) -> Tuple[float, float, float]:
+    """Compute artificial gas bulk viscosity QVISC and CFL-stable time step.
+
+    Matches OpenRadioss ``fv_up_switch.F``:
+    AL = VOLU^(1/3)
+    DD = max(0, DM / MASS)
+    SSP = sqrt((gamma - 1)*gamma * ENERGY / MASS)
+    QVISC = RHO * DD * AL * (QA^2 * AL * DD + QB * SSP)
+    QX = QB * SSP + AL * QA^2 * DD
+    SSP_eff = QX + sqrt(QX^2 + SSP^2)
+    V_rel = |u_gas - u_grid|
+    DT_CFL = CFL_COEF * char_length / (SSP_eff + V_rel)
+
+    Args:
+        volume: Polyhedron volume.
+        mass: Gas mass in cell.
+        energy: Internal energy in cell.
+        gamma: Ratio of specific heats.
+        dm: Mass increment / change during step.
+        dt: Current time step.
+        u_gas: (3,) Gas velocity vector in cell.
+        char_length: Characteristic length of cell.
+        qa: Quadratic bulk viscosity coefficient (default 1.5).
+        qb: Linear bulk viscosity coefficient (default 0.06).
+        cfl_coef: Courant number multiplier (default 0.9).
+        u_grid: Optional (3,) grid velocity vector.
+
+    Returns:
+        (q_visc, ssp_eff, dt_cfl): Artificial viscosity pressure, effective wave speed, and CFL time step.
+    """
+    if volume <= 0.0 or mass <= 0.0 or energy <= 0.0 or gamma <= 1.0:
+        return 0.0, 340.0, 1e-3
+
+    rho = mass / volume
+    al = volume ** (1.0 / 3.0)
+    dd = max(0.0, abs(dm) / mass)
+
+    # Sound speed: c_s = sqrt((gamma - 1) * gamma * E / m)
+    ssp_sq = max(1e-6, (gamma - 1.0) * gamma * energy / mass)
+    ssp = math.sqrt(ssp_sq)
+
+    # Artificial bulk viscosity: QVISC = rho * DD * AL * (QA^2 * AL * DD + QB * SSP)
+    q_visc = rho * dd * al * ((qa ** 2) * al * dd + qb * ssp)
+
+    # Wave speed shift with artificial damping
+    qx = qb * ssp + al * (qa ** 2) * dd
+    ssp_eff = qx + math.sqrt(qx * qx + ssp * ssp)
+
+    # Relative velocity
+    if u_grid is not None:
+        v_rel = float(np.linalg.norm(u_gas - u_grid))
+    else:
+        v_rel = float(np.linalg.norm(u_gas))
+
+    # CFL time step bound
+    denom = max(1e-12, ssp_eff + v_rel)
+    dt_cfl = cfl_coef * char_length / denom
+
+    return float(q_visc), float(ssp_eff), float(dt_cfl)
+
+
+# =============================================================================
+# 9. Membrane Anti-Hourglass Viscosity for Fabric Shells (from mhvis3.F)
+# =============================================================================
+
+# Ported from C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\airbag\mhvis3.F: lines 109-364
+def compute_membrane_hourglass_viscosity(
+    nodes_v: np.ndarray,
+    thk0: float,
+    rho: float,
+    area: float,
+    sound_speed: float,
+    dt: float,
+    h4: float = 0.1,
+    hvisc: float = 1.0,
+) -> Tuple[np.ndarray, float]:
+    """Compute anti-hourglass damping forces and dissipated energy for fabric membranes.
+
+    Matches OpenRadioss ``mhvis3.F`` for 4-node quadrilateral fabric membrane elements:
+    Calculates in-plane and hyperbolic/V-shape out-of-plane anti-hourglass modes,
+    linear and quadratic viscous forces, and accumulates dissipated hourglass energy.
+
+    Args:
+        nodes_v: (4, 3) velocity vectors of the 4 membrane nodes.
+        thk0: Initial shell thickness.
+        rho: Fabric density.
+        area: Element area.
+        sound_speed: Dilatational wave speed in fabric continuum.
+        dt: Time step size.
+        h4: Hourglass parameter (GEO 17 or PM 91, default 0.1).
+        hvisc: Viscosity scale (HVISC, default 1.0).
+
+    Returns:
+        (f_hour, e_hour):
+            - f_hour: (4, 3) anti-hourglass damping forces on the 4 nodes.
+            - e_hour: Dissipated hourglass energy increment dE = dt * sum(v_i . f_i).
+    """
+    if len(nodes_v) < 4 or area <= 0.0 or thk0 <= 0.0 or rho <= 0.0:
+        return np.zeros((4, 3), dtype=np.float64), 0.0
+
+    vx1, vx2, vx3, vx4 = nodes_v[0, 0], nodes_v[1, 0], nodes_v[2, 0], nodes_v[3, 0]
+    vy1, vy2, vy3, vy4 = nodes_v[0, 1], nodes_v[1, 1], nodes_v[2, 1], nodes_v[3, 1]
+    vz1, vz2, vz3, vz4 = nodes_v[0, 2], nodes_v[1, 2], nodes_v[2, 2], nodes_v[3, 2]
+
+    # In-plane membrane hourglass velocity modes (mhvis3.F lines 235-236)
+    hg1 = vx1 - vx2 + vx3 - vx4
+    hg2 = vy1 - vy2 + vy3 - vy4
+
+    # Out-of-plane V-shape bending hourglass modes (mhvis3.F lines 310-332)
+    hg4_1 = +vz1 + vz2 - vz3 - vz4
+    hg4_2 = +vz1 - vz2 - vz3 + vz4
+
+    # Viscous coefficients (mhvis3.F lines 145-153)
+    fac = 0.25 * rho * thk0
+    h4l = fac * math.sqrt(max(1e-20, hvisc * h4 * area)) * sound_speed
+    h4q = math.sqrt(max(1e-20, hvisc * h4)) * h4l * 100.0
+
+    # Linear and quadratic damping forces
+    f_hour = np.zeros((4, 3), dtype=np.float64)
+
+    # In-plane damping
+    f_inplane_x = hg1 * (h4l + h4q * abs(hg1))
+    f_inplane_y = hg2 * (h4l + h4q * abs(hg2))
+    f_hour[0, 0] += f_inplane_x;  f_hour[0, 1] += f_inplane_y
+    f_hour[1, 0] -= f_inplane_x;  f_hour[1, 1] -= f_inplane_y
+    f_hour[2, 0] += f_inplane_x;  f_hour[2, 1] += f_inplane_y
+    f_hour[3, 0] -= f_inplane_x;  f_hour[3, 1] -= f_inplane_y
+
+    # V-shape mode 1 (mhvis3.F lines 315-320)
+    f_v1 = hg4_1 * (h4l + h4q * abs(hg4_1))
+    f_hour[0, 2] += f_v1
+    f_hour[1, 2] += f_v1
+    f_hour[2, 2] -= f_v1
+    f_hour[3, 2] -= f_v1
+
+    # V-shape mode 2 (mhvis3.F lines 327-332)
+    f_v2 = hg4_2 * (h4l + h4q * abs(hg4_2))
+    f_hour[0, 2] += f_v2
+    f_hour[1, 2] -= f_v2
+    f_hour[2, 2] -= f_v2
+    f_hour[3, 2] += f_v2
+
+    # Hourglass work / energy dissipation rate: dE = dt * sum(v_i . f_i) (mhvis3.F line 347)
+    e_hour = dt * float(np.sum(nodes_v * f_hour))
+
+    return f_hour, float(max(0.0, e_hour))
+
+

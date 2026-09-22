@@ -89,3 +89,53 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
 
     dama[:] = np.where(broken, 1.0, np.maximum(dama, count / max(ncs, 1)))
     return dama >= 1.0
+
+
+def beam_step(fail, svm, pressure, d_epsp, deps, dt, dama, tstar=None, **kwargs):
+    """Gene1 failure step for standard beams (TYPE 3).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\gene1\\fail_gene1_b.F90
+    Subroutine: FAIL_GENE1_B
+    """
+    p = fail.params
+    sig_vm_max = _get_param(p, ["mat_sigvm", "MAT_SIGVM", "sig_vm_max"], _INF)
+    max_eps = _get_param(p, ["mat_maxeps", "MAT_MAXEPS", "max_eps"], _INF)
+    ncs = int(_get_param(p, ["mat_ncs", "MAT_NCS", "ncs"], 1))
+
+    svm_arr = np.asarray(svm, dtype=float) if np.ndim(svm) > 0 else np.full(len(dama), float(svm))
+    crit_vm = svm_arr >= sig_vm_max
+    crit_eps = np.asarray(d_epsp, dtype=float) >= max_eps
+
+    count = crit_vm.astype(int) + crit_eps.astype(int)
+    broken = count >= ncs
+    dama[:] = np.where(broken, 1.0, np.maximum(dama, count / max(ncs, 1)))
+    return dama >= 1.0
+
+
+def integrated_beam_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, ip=0, npg=1, **kwargs):
+    """Gene1 failure step for integrated beam integration point (TYPE 18).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\gene1\\fail_gene1_ib.F90
+    Subroutine: FAIL_GENE1_IB
+    """
+    p = fail.params
+    sig_vm_max = _get_param(p, ["mat_sigvm", "MAT_SIGVM", "sig_vm_max"], _INF)
+    max_eps = _get_param(p, ["mat_maxeps", "MAT_MAXEPS", "max_eps"], _INF)
+    ncs = int(_get_param(p, ["mat_ncs", "MAT_NCS", "ncs"], 1))
+
+    sig_arr = np.asarray(sig, dtype=float)
+    if sig_arr.ndim == 2 and sig_arr.shape[1] >= 3:
+        von_mises = np.sqrt(sig_arr[:, 0]**2 + 3.0 * (sig_arr[:, 1]**2 + sig_arr[:, 2]**2))
+    elif sig_arr.ndim == 2:
+        von_mises = np.abs(sig_arr[:, 0])
+    else:
+        von_mises = np.abs(sig_arr)
+
+    crit_vm = von_mises >= sig_vm_max
+    crit_eps = np.asarray(d_epsp, dtype=float) >= max_eps
+
+    count = crit_vm.astype(int) + crit_eps.astype(int)
+    broken = count >= ncs
+    dama[:] = np.where(broken, 1.0, np.maximum(dama, count / max(ncs, 1)))
+    return dama >= 1.0
+

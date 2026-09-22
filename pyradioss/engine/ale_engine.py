@@ -12,6 +12,9 @@ Ported from OpenRadioss Fortran sources:
 - engine/source/ale/alemuscl/gradient_limitation.F: Barth-Jespersen slope limiter (lines 69-120)
 - engine/source/ale/grid/alew5.F: Laplacian grid smoothing for /ALE/GRID/LAPLACIAN (lines 113-144)
 - engine/source/ale/grid/alew.F: Donea distance-weighted smoothing for /ALE/GRID/DONEA (lines 98-180)
+- engine/source/ale/grid/alew2.F: Spring network grid smoothing for /ALE/GRID/SPRING (lines 83-295, 371-385)
+- engine/source/ale/grid/alew4.F: Curvature grid smoothing for /ALE/GRID/STANDARD (lines 191-387, 464-478)
+- engine/source/ale/grid/alew6.F: Centroidal Voronoi / volume grid smoothing for /ALE/GRID/VOLUME (lines 98-179)
 - engine/source/ale/grid/alelin.F: grid velocity link constraints for /ALE/LINK/VEL (lines 61-198)
 - starter/source/ale/bimat/inimu3.F & engine/source/ale/bimat/bimat2.F: multi-material volume fraction remapping (lines 80-165)
 """
@@ -904,6 +907,341 @@ def ale_grid_smooth_donea(x: np.ndarray,
     return w_grid, x_new
 
 
+# -----------------------------------------------------------------------------
+# 24 springs per hex8 element for /ALE/GRID/SPRING (alew2.F lines 93-107)
+# 12 edges + 12 face diagonals
+# -----------------------------------------------------------------------------
+HEX_SPRINGS_24 = np.array([
+    # 12 edges (ITR 1..12)
+    [0, 1], [1, 2], [2, 3], [3, 0],
+    [4, 5], [5, 6], [6, 7], [7, 4],
+    [0, 4], [1, 5], [2, 6], [3, 7],
+    # 12 face diagonals (ITR 13..24)
+    [0, 2], [1, 3], [4, 6], [5, 7],
+    [0, 5], [1, 4], [1, 6], [2, 5],
+    [2, 7], [3, 6], [0, 7], [3, 4],
+], dtype=np.int64)
+
+
+def ale_grid_smooth_spring(x: np.ndarray,
+                           disp: np.ndarray,
+                           vel: np.ndarray,
+                           bcs_ale_nodes: Union[Set[int], List[int], np.ndarray],
+                           connectivity: np.ndarray,
+                           dt: float = 1e-4,
+                           alpha: float = 1.0,
+                           gamma: float = 1.0,
+                           vgx: float = 1.0,
+                           vgy: float = 1.0) -> Tuple[np.ndarray, np.ndarray]:
+    """Spring network grid smoothing for /ALE/GRID/SPRING.
+
+    Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\ale\\grid\\alew2.F
+    lines 83-295 & 371-385:
+      Constructs a 24-spring elastic network per hex cell (12 edges + 12 diagonals).
+      For each spring between nodes J1 and J2:
+        XX = (X_J2 - D_J2) - (X_J1 - D_J1)
+        XL = ||XX||
+        DX = D_J2 - D_J1
+        DDX = (W_J2 - W_J1) * dt
+        DL = (XX . DX) / XL
+        DDL = (XX . DDX) / XL
+        DL1 = gamma + 0.5 * (gamma - 1) * min(DL / XL, 0)
+        DL_force = (FAC / XL) / (alpha^2) * DDL * DL1
+        DDL_force = (FAC / XL) * (vgx / alpha) * DDL
+      Accumulates internal forces into WB and WA, and updates grid velocities:
+        W_i = W_i + (WB_i * dt + WA_i) / BETA
+        where BETA = 6 * (1 + 2 * VGY).
+
+    Args:
+        x: (n_nodes, 3) current nodal coordinates.
+        disp: (n_nodes, 3) cumulative displacement vector.
+        vel: (n_nodes, 3) material velocity vector V.
+        bcs_ale_nodes: collection or boolean mask of fixed/Lagrangian boundary nodes.
+        connectivity: (n_elem, 8) hex8 element connectivity.
+        dt: current time step duration.
+        alpha: spring stiffness parameter ALE%GRID%ALPHA (default 1.0).
+        gamma: spring relaxation parameter ALE%GRID%GAMMA (default 1.0).
+        vgx: velocity scaling factor ALE%GRID%VGX (default 1.0).
+        vgy: diagonal spring factor ALE%GRID%VGY (default 1.0).
+
+    Returns:
+        w_grid: (n_nodes, 3) ALE grid velocity.
+        x_new: (n_nodes, 3) updated grid coordinates.
+    """
+    n_nodes = len(x)
+    n_elem = len(connectivity)
+    if n_nodes == 0 or n_elem == 0:
+        return vel.copy(), x.copy()
+
+    is_fixed = np.zeros(n_nodes, dtype=bool)
+    if isinstance(bcs_ale_nodes, np.ndarray) and bcs_ale_nodes.dtype == bool:
+        is_fixed[:min(n_nodes, len(bcs_ale_nodes))] = bcs_ale_nodes[:min(n_nodes, len(bcs_ale_nodes))]
+    else:
+        for idx in bcs_ale_nodes:
+            i = int(idx)
+            if 0 <= i < n_nodes:
+                is_fixed[i] = True
+            elif 1 <= i <= n_nodes:
+                is_fixed[i - 1] = True
+
+    dt_eff = max(dt, 1e-12)
+    alpha_safe = max(alpha, 1e-6)
+    gam1 = 0.5 * (gamma - 1.0)
+    beta = 6.0 * (1.0 + 2.0 * vgy)
+
+    # Spring factors: 1..12 have FAC=1.0, 13..24 have FAC=vgy (alew2.F lines 113-115)
+    fac = np.ones(24, dtype=np.float64)
+    fac[12:24] = vgy
+
+    w_grid = vel.copy()
+    wa = np.zeros((n_nodes, 3), dtype=np.float64)
+    wb = np.zeros((n_nodes, 3), dtype=np.float64)
+
+    for itr in range(24):
+        n1_local = HEX_SPRINGS_24[itr, 0]
+        n2_local = HEX_SPRINGS_24[itr, 1]
+        j1 = connectivity[:, n1_local]
+        j2 = connectivity[:, n2_local]
+
+        # Undeformed length vector XX = X_init(j2) - X_init(j1) (alew2.F lines 197-206)
+        dx_d = disp[j2] - disp[j1]
+        xx = (x[j2] - x[j1]) - dx_d
+        xl = np.linalg.norm(xx, axis=1)
+        xl_safe = np.maximum(xl, 1e-20)
+
+        ddx = (w_grid[j2] - w_grid[j1]) * dt_eff
+
+        dl = np.sum(xx * dx_d, axis=1) / xl_safe
+        ddl = np.sum(xx * ddx, axis=1) / xl_safe
+
+        dl_ratio = dl / xl_safe
+        dl1 = gamma + gam1 * np.minimum(dl_ratio, 0.0)
+
+        fac_itr = fac[itr]
+        dl_force = (fac_itr / xl_safe) / (alpha_safe * alpha_safe) * dl * dl1
+        ddl_force = (fac_itr / xl_safe) * (vgx / alpha_safe) * ddl
+
+        force_b = dl_force[:, None] * xx
+        force_a = ddl_force[:, None] * xx
+
+        # Assemble onto nodes (alew2.F lines 217-234)
+        for e in range(n_elem):
+            idx1 = j1[e]
+            idx2 = j2[e]
+            if not is_fixed[idx1]:
+                wb[idx1] += force_b[e]
+                wa[idx1] += force_a[e]
+            if not is_fixed[idx2]:
+                wb[idx2] -= force_b[e]
+                wa[idx2] -= force_a[e]
+
+    # Update grid velocity (alew2.F lines 371-385)
+    for i in range(n_nodes):
+        if not is_fixed[i]:
+            w_grid[i] += (wb[i] * dt_eff + wa[i]) / beta
+        else:
+            w_grid[i] = vel[i]
+
+    x_new = x + w_grid * dt
+    return w_grid, x_new
+
+
+def ale_grid_smooth_curvature(x: np.ndarray,
+                              disp: np.ndarray,
+                              vel: np.ndarray,
+                              bcs_ale_nodes: Union[Set[int], List[int], np.ndarray],
+                              connectivity: np.ndarray,
+                              dt: float = 1e-4,
+                              alpha: float = 1.0,
+                              gamma: float = 1.0) -> Tuple[np.ndarray, np.ndarray]:
+    """Curvature-based grid smoothing for /ALE/GRID/STANDARD.
+
+    Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\ale\\grid\\alew4.F
+    lines 191-387 & 464-478:
+      Computes face normal vectors across opposite face pairs, determines
+      local surface curvature factors DLF and stretch rates DDLF, and
+      smooths interior nodes with curvature weighting.
+
+    Args:
+        x: (n_nodes, 3) current nodal coordinates.
+        disp: (n_nodes, 3) cumulative displacements.
+        vel: (n_nodes, 3) material velocities V.
+        bcs_ale_nodes: collection or boolean mask of fixed boundary nodes.
+        connectivity: (n_elem, 8) hex8 element connectivity.
+        dt: time step duration.
+        alpha: relaxation factor (default 1.0).
+        gamma: curvature smoothing exponent (default 1.0).
+
+    Returns:
+        w_grid: (n_nodes, 3) ALE grid velocity.
+        x_new: (n_nodes, 3) updated grid coordinates.
+    """
+    n_nodes = len(x)
+    n_elem = len(connectivity)
+    if n_nodes == 0 or n_elem == 0:
+        return vel.copy(), x.copy()
+
+    is_fixed = np.zeros(n_nodes, dtype=bool)
+    if isinstance(bcs_ale_nodes, np.ndarray) and bcs_ale_nodes.dtype == bool:
+        is_fixed[:min(n_nodes, len(bcs_ale_nodes))] = bcs_ale_nodes[:min(n_nodes, len(bcs_ale_nodes))]
+    else:
+        for idx in bcs_ale_nodes:
+            i = int(idx)
+            if 0 <= i < n_nodes:
+                is_fixed[i] = True
+            elif 1 <= i <= n_nodes:
+                is_fixed[i - 1] = True
+
+    dt_eff = max(dt, 1e-12)
+    gam1 = gamma - 1.0
+
+    w_grid = vel.copy()
+    wa = np.zeros((n_nodes, 3), dtype=np.float64)
+    wb = np.zeros((n_nodes, 3), dtype=np.float64)
+    wma = np.zeros(n_nodes, dtype=np.float64)
+
+    xe = x[connectivity]  # (n_elem, 8, 3)
+    normals = compute_hex_face_normals(xe)  # (n_elem, 6, 3)
+
+    # 3 pairs of opposite faces: (0, 2), (3, 1), (5, 4)
+    opposite_face_pairs = [(0, 2), (3, 1), (5, 4)]
+
+    for f1, f2 in opposite_face_pairs:
+        # Direction unit vector between opposite face centroids
+        nodes1 = HEX_FACES[f1]
+        nodes2 = HEX_FACES[f2]
+        xc1 = np.mean(xe[:, nodes1], axis=1)  # (n_elem, 3)
+        xc2 = np.mean(xe[:, nodes2], axis=1)  # (n_elem, 3)
+        dir_vec = xc2 - xc1
+        dir_norm = np.linalg.norm(dir_vec, axis=1, keepdims=True)
+        unit_dir = dir_vec / np.maximum(dir_norm, 1e-20)  # (n_elem, 3)
+
+        # Opposite face node pairs along this axis
+        for k in range(4):
+            n1_local = nodes1[k]
+            n2_local = nodes2[k]
+            j1 = connectivity[:, n1_local]
+            j2 = connectivity[:, n2_local]
+
+            xx = x[j2] - x[j1]
+            ddx = (w_grid[j2] - w_grid[j1]) * dt_eff
+
+            ddlf = np.sum(unit_dir * ddx, axis=1)
+            dlf0 = np.abs(np.sum(unit_dir * xx, axis=1))
+
+            vgy = np.maximum(np.mean(dir_norm), 1e-12)
+            dlf = np.minimum((dlf0 - vgy) / vgy, 0.0)
+            dlf = gamma + gam1 * (dlf ** 3)
+            dlf = np.minimum(dlf, 1.0)
+            if np.any(ddlf > 0.0):
+                dlf = np.where(ddlf > 0.0, gamma, dlf)
+
+            dl = dlf / (vgy * vgy)
+            ddl = 1.0 / vgy
+
+            f_b = ddx * dl[:, None]
+            f_a = ddx * ddl
+
+            for e in range(n_elem):
+                idx1 = j1[e]
+                idx2 = j2[e]
+                if not is_fixed[idx1]:
+                    wb[idx1] += f_b[e]
+                    wa[idx1] += f_a[e]
+                    wma[idx1] += 1.0
+                if not is_fixed[idx2]:
+                    wb[idx2] -= f_b[e]
+                    wa[idx2] -= f_a[e]
+                    wma[idx2] += 1.0
+
+    # alew4.F lines 464-478
+    for i in range(n_nodes):
+        if not is_fixed[i] and wma[i] > 0.0:
+            w_grid[i] += (wb[i] * dt_eff + wa[i]) / wma[i]
+        else:
+            w_grid[i] = vel[i]
+
+    x_new = x + w_grid * dt
+    return w_grid, x_new
+
+
+def ale_grid_smooth_volume(x: np.ndarray,
+                           vel: np.ndarray,
+                           bcs_ale_nodes: Union[Set[int], List[int], np.ndarray],
+                           connectivity: np.ndarray,
+                           dt: float = 1e-4) -> Tuple[np.ndarray, np.ndarray]:
+    """Centroidal Voronoi / volume grid smoothing for /ALE/GRID/VOLUME.
+
+    Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\ale\\grid\\alew6.F
+    lines 98-179:
+      Computes cell centroids and element volumes.
+      For each unconstrained interior ALE node i:
+        X_new(i) = sum_{e in connected(i)} (V_e * X_c,e) / sum_{e in connected(i)} V_e
+      Grid velocity:
+        W_i = (X_new(i) - X(i)) / dt
+      Fixed / boundary nodes remain stationary (W_i = 0 or V_i).
+
+    Args:
+        x: (n_nodes, 3) nodal coordinates.
+        vel: (n_nodes, 3) material velocity vector.
+        bcs_ale_nodes: collection or boolean mask of fixed boundary nodes.
+        connectivity: (n_elem, 8) hex element connectivity.
+        dt: current time step duration.
+
+    Returns:
+        w_grid: (n_nodes, 3) ALE grid velocity.
+        x_new: (n_nodes, 3) updated grid coordinates.
+    """
+    n_nodes = len(x)
+    n_elem = len(connectivity)
+    if n_nodes == 0 or n_elem == 0:
+        return vel.copy(), x.copy()
+
+    is_fixed = np.zeros(n_nodes, dtype=bool)
+    if isinstance(bcs_ale_nodes, np.ndarray) and bcs_ale_nodes.dtype == bool:
+        is_fixed[:min(n_nodes, len(bcs_ale_nodes))] = bcs_ale_nodes[:min(n_nodes, len(bcs_ale_nodes))]
+    else:
+        for idx in bcs_ale_nodes:
+            i = int(idx)
+            if 0 <= i < n_nodes:
+                is_fixed[i] = True
+            elif 1 <= i <= n_nodes:
+                is_fixed[i - 1] = True
+
+    # 1. Compute element centroids and volumes (alew6.F lines 105-138)
+    xe = x[connectivity]  # (n_elem, 8, 3)
+    xc = np.mean(xe, axis=1)  # (n_elem, 3)
+    vols = compute_hex_volumes(x, connectivity)  # (n_elem,)
+
+    # 2. Accumulate volume-weighted centroids onto nodes (alew6.F lines 155-168)
+    sum_vx = np.zeros((n_nodes, 3), dtype=np.float64)
+    sum_vol = np.zeros(n_nodes, dtype=np.float64)
+
+    for e in range(n_elem):
+        ve = vols[e]
+        xce = xc[e]
+        for n_local in range(8):
+            n_global = connectivity[e, n_local]
+            sum_vx[n_global] += ve * xce
+            sum_vol[n_global] += ve
+
+    # 3. New coordinates and grid velocity (alew6.F lines 169-178)
+    dt_eff = max(dt, 1e-12)
+    x_new = x.copy()
+    w_grid = vel.copy()
+
+    for i in range(n_nodes):
+        if not is_fixed[i] and sum_vol[i] > 1e-30:
+            x_target = sum_vx[i] / sum_vol[i]
+            w_grid[i] = (x_target - x[i]) / dt_eff
+            x_new[i] = x_target
+        else:
+            w_grid[i] = vel[i]
+            x_new[i] = x[i]
+
+    return w_grid, x_new
+
+
 def ale_link_velocity(w: np.ndarray,
                       links: List[Dict[str, Any]]) -> np.ndarray:
     """Enforce ALE grid velocity link constraints (/ALE/LINK/VEL, /VEL/ALE).
@@ -1109,7 +1447,7 @@ def ale_step(model: Any, dt: float, state: Any) -> None:
                     for n_local in HEX_FACES[f_idx]:
                         bcs_nodes.add(int(conn[e, n_local]))
                         
-        # 2. Grid smoothing (Laplacian or Donea distance-weighted)
+        # 2. Grid smoothing (Laplacian, Donea, Spring, Curvature, or Volume)
         x_old = model.x.copy()
         grid_type = getattr(model, "ale_grid_type", "laplacian").lower()
         if grid_type == "donea":
@@ -1119,6 +1457,29 @@ def ale_step(model: Any, dt: float, state: Any) -> None:
                 x_old, disp, vel, bcs_nodes, conn, dt=dt,
                 alpha=getattr(model, "ale_grid_alpha", 0.5),
                 gamma=getattr(model, "ale_grid_gamma", 0.5),
+            )
+        elif grid_type == "spring":
+            disp = getattr(model, "disp", np.zeros_like(x_old))
+            vel = getattr(model, "v", np.zeros_like(x_old))
+            w_grid, x_new = ale_grid_smooth_spring(
+                x_old, disp, vel, bcs_nodes, conn, dt=dt,
+                alpha=getattr(model, "ale_grid_alpha", 1.0),
+                gamma=getattr(model, "ale_grid_gamma", 1.0),
+                vgx=getattr(model, "ale_grid_vgx", 1.0),
+                vgy=getattr(model, "ale_grid_vgy", 1.0),
+            )
+        elif grid_type in ("curvature", "standard"):
+            disp = getattr(model, "disp", np.zeros_like(x_old))
+            vel = getattr(model, "v", np.zeros_like(x_old))
+            w_grid, x_new = ale_grid_smooth_curvature(
+                x_old, disp, vel, bcs_nodes, conn, dt=dt,
+                alpha=getattr(model, "ale_grid_alpha", 1.0),
+                gamma=getattr(model, "ale_grid_gamma", 1.0),
+            )
+        elif grid_type in ("volume", "voronoi", "centroidal"):
+            vel = getattr(model, "v", np.zeros_like(x_old))
+            w_grid, x_new = ale_grid_smooth_volume(
+                x_old, vel, bcs_nodes, conn, dt=dt,
             )
         else:
             x_new = ale_grid_smooth_laplacian(x_old, bcs_nodes, conn, iterations=1, alpha=0.5)

@@ -85,3 +85,50 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
 
     dama[:] = np.minimum(1.0, np.maximum(dama, d))
     return dama >= 1.0
+
+
+def beam_step(fail, svm, pressure, d_epsp, deps, dt, dama, length=None, tstar=None, strains=None, epsd=None, **kwargs):
+    """Tensile strain failure step for standard beams (TYPE 3).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\tensstrain\\fail_tensstrain_b.F
+    Subroutine: FAIL_TENSSTRAIN_B
+    """
+    p = fail.params
+    eps_t1 = _get_param(p, ["eps_t1", "Epsilon_t1", "epst1", "et1"], _INF)
+    eps_t2 = _get_param(p, ["eps_t2", "Epsilon_t2", "epst2", "et2"], eps_t1 * 1.5 if eps_t1 < _INF else _INF)
+
+    if strains is not None:
+        eps_xx = np.asarray(strains, dtype=float)[:, 0] if np.asarray(strains).ndim == 2 else np.asarray(strains, dtype=float)
+    elif deps is not None:
+        eps_xx = np.asarray(deps, dtype=float)[:, 0] if np.asarray(deps).ndim == 2 else np.asarray(deps, dtype=float)
+    else:
+        eps_xx = np.asarray(d_epsp, dtype=float)
+
+    eps_eq = np.abs(eps_xx)
+    d = np.where(eps_eq <= eps_t1, 0.0,
+                 np.where(eps_eq >= eps_t2, 1.0, (eps_eq - eps_t1) / max(eps_t2 - eps_t1, _TINY)))
+    dama[:] = np.minimum(1.0, np.maximum(dama, d))
+    return dama >= 1.0
+
+
+def integrated_beam_step(fail, sig, d_epsp, deps, dt, dama, length=None, tstar=None, epsd=None, ip=0, npg=1, **kwargs):
+    """Tensile strain failure step for integrated beam integration point (TYPE 18).
+
+    # Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\fail\\tensstrain\\fail_tensstrain_ib.F
+    Subroutine: FAIL_TENSSTRAIN_IB
+    """
+    p = fail.params
+    eps_t1 = _get_param(p, ["eps_t1", "Epsilon_t1", "epst1", "et1"], _INF)
+    eps_t2 = _get_param(p, ["eps_t2", "Epsilon_t2", "epst2", "et2"], eps_t1 * 1.5 if eps_t1 < _INF else _INF)
+
+    if deps is not None:
+        eps_xx = np.asarray(deps, dtype=float)[:, 0] if np.asarray(deps).ndim == 2 else np.asarray(deps, dtype=float)
+    else:
+        eps_xx = np.asarray(d_epsp, dtype=float)
+
+    eps_eq = np.abs(eps_xx)
+    d = np.where(eps_eq <= eps_t1, 0.0,
+                 np.where(eps_eq >= eps_t2, 1.0, (eps_eq - eps_t1) / max(eps_t2 - eps_t1, _TINY)))
+    dama[:] = np.minimum(1.0, np.maximum(dama, d))
+    return dama >= 1.0
+

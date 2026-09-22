@@ -545,3 +545,235 @@ from pyradioss.engine.airbag_commu import (  # noqa: E402
     step_airbag_commu,
     apply_airbag_communications,
 )
+
+
+# =======================================================================
+# /MONVOL/LFLUID — Liquid Fluid Monitored Volume (from volp_lfluid.F)
+# =======================================================================
+
+# Ported from C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\airbag\volp_lfluid.F: VOLP_LFLUID (lines 32-173)
+def update_monvol_liquid_fluid(
+    mv: Any,
+    model: Model,
+    dt: float,
+    current_time: float,
+) -> None:
+    """Update pressure, mass, and work for /MONVOL/LFLUID liquid fluid volume.
+
+    Matches OpenRadioss ``volp_lfluid.F``:
+    Models compressible liquid bulk modulus with logarithmic compression law:
+    VOL0 = GMASS / RHO_FLUID
+    XFUN = (VOL0 - VINC) / (VOL - VINC)
+    PRES = BULK * max(0.0, ln(XFUN)) + P0
+    PRES = min(PRES, PMAX)
+
+    Accounts for mass in/out flow and work done:
+    dW = 0.5 * (PRES + POLD) * (VOL - VOLD)
+    WFEXT += dW (booked into mv.work)
+
+    Args:
+        mv: MonvolLFluid or compatible monitored volume object.
+        model: Model containing functions and curves.
+        dt: Time step size.
+        current_time: Current simulation time.
+    """
+    dt = max(float(dt), 1e-12)
+    rho_fluid = max(float(getattr(mv, "rho_fluid", 1000.0)), 1e-6)
+    v_inc = float(getattr(mv, "vinc", 0.0))
+    v_eps = float(getattr(mv, "veps", 0.0))
+    pext = float(getattr(mv, "pext", getattr(mv, "p_ext", 0.0)))
+
+    # Initial state setup
+    if not getattr(mv, "_initialized", False) or getattr(mv, "mass", None) is None:
+        v_curr = float(getattr(mv, "volume", 0.0))
+        if v_curr <= 0.0:
+            x_arr = getattr(model, "x", getattr(model, "x0", np.zeros((1, 3))))
+            update_airbag_volume(mv, model, x_arr)
+            v_curr = float(getattr(mv, "volume", 1e-6))
+        v0 = max(v_curr, 1e-9)
+        mv.volume = v0
+        mv.volume_old = v0
+        m0 = float(getattr(mv, "mass", getattr(mv, "mini", rho_fluid * max(v0 - v_inc, 1e-9))))
+        mv.mass = m0
+        p_init = float(getattr(mv, "pini", getattr(mv, "fscale_padd", pext)))
+        mv.pressure = p_init
+        mv.p_old = p_init
+        mv.work = getattr(mv, "work", 0.0)
+        mv._initialized = True
+
+    p_old = float(getattr(mv, "pressure", pext))
+    vol_old = float(getattr(mv, "volume_old", getattr(mv, "volume", 1e-9)))
+    gmass = float(getattr(mv, "mass", 1.0))
+
+    # Helper for function evaluation
+    def eval_fct(fct_id: int, scale: float, x_val: float) -> float:
+        if fct_id > 0 and hasattr(model, "functions") and fct_id in model.functions:
+            return float(scale * float(model.functions[fct_id].eval(x_val)))
+        return float(scale)
+
+    # 1. Bulk modulus: BULK
+    bulk = eval_fct(getattr(mv, "fct_k", 0), getattr(mv, "fscale_k", 2.2e9), current_time)
+
+    # 2. Fluid mass in: DMASS_in (active only if fct_mtin > 0 or has_mtin)
+    fct_mtin = getattr(mv, "fct_mtin", 0)
+    if fct_mtin > 0 or getattr(mv, "has_mtin", False):
+        dm_in = eval_fct(fct_mtin, getattr(mv, "fscale_mtin", 0.0), current_time) * dt
+    else:
+        dm_in = 0.0
+    gmass += dm_in
+
+    # 3. Fluid mass out vs time: DMASS_out (time) (active only if fct_mtout > 0 or has_mtout)
+    fct_mtout = getattr(mv, "fct_mtout", 0)
+    if fct_mtout > 0 or getattr(mv, "has_mtout", False):
+        dm_out_t = eval_fct(fct_mtout, getattr(mv, "fscale_mtout", 0.0), current_time) * dt
+    else:
+        dm_out_t = 0.0
+    gmass -= dm_out_t
+
+    # 4. Fluid mass out vs pressure: DMASS_out (pressure) (active only if fct_mpout > 0 or has_mpout)
+    fct_mpout = getattr(mv, "fct_mpout", 0)
+    if fct_mpout > 0 or getattr(mv, "has_mpout", False):
+        dm_out_p = eval_fct(fct_mpout, getattr(mv, "fscale_mpout", 0.0), p_old) * dt
+    else:
+        dm_out_p = 0.0
+    gmass -= dm_out_p
+
+    gmass = max(gmass, 1e-12)
+
+    # 5. Reference pressure P0 and Max pressure PMAX
+    p0 = eval_fct(getattr(mv, "fct_padd", 0), getattr(mv, "fscale_padd", pext), current_time)
+    pmax = eval_fct(getattr(mv, "fct_pmax", 0), getattr(mv, "fscale_pmax", 1e30), current_time)
+
+    # 6. Pressure calculation: XFUN = (VOL0 - VINC) / (VOL - VINC)
+    vol0 = gmass / rho_fluid
+    v_curr = float(getattr(mv, "volume", vol_old)) + v_eps
+    v_eff = max(v_curr - v_inc, 1e-12)
+    v0_eff = max(vol0 - v_inc, 1e-12)
+
+    xfun = v0_eff / v_eff
+    if xfun > 1.0 and bulk > 0.0:
+        pres = bulk * math.log(xfun) + p0
+    else:
+        pres = p0
+
+    if pmax > 0.0:
+        pres = min(pres, pmax)
+
+    # 7. Energy / Volume Work accounting: dW = 0.5 * (PRES + POLD) * (VOL - VOLD)
+    dv = v_curr - vol_old
+    dw = 0.5 * (pres + p_old) * dv
+    mv.work = getattr(mv, "work", 0.0) + dw
+
+    mv.pressure = pres
+    mv.p_old = pres
+    mv.mass = gmass
+    mv.volume_old = v_curr
+
+
+# =======================================================================
+# Extended Fabric Porosity Models (from porfor4.F and porfor6.F)
+# =======================================================================
+
+# Ported from C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\airbag\porfor4.F: PORFOR4 / PORFORM4 (lines 30-131)
+def compute_porosity_porfor4(
+    p: float,
+    pext: float,
+    area: float,
+    area0: float,
+    fpora: float = 1.0,
+    fporp: float = 1.0,
+    func_area: Any = None,
+    func_pres: Any = None,
+    eps_xx: Optional[float] = None,
+    eps_yy: Optional[float] = None,
+) -> float:
+    """Tabulated pressure-drop and area-stretch porosity factor SVTFAC.
+
+    Matches OpenRadioss ``porfor4.F``:
+    RS = 1 + eps_xx + eps_yy + eps_xx*eps_yy = Area / Area0
+    RP = min(Pext / P, 1.0)
+    FLC = fpora * func_area(RS)
+    FAC = fporp * func_pres(RP)
+    SVTFAC = FLC * FAC
+
+    Args:
+        p: Internal airbag chamber pressure.
+        pext: External ambient pressure.
+        area: Current facet area.
+        area0: Initial facet area.
+        fpora: Scale factor for area stretch function.
+        fporp: Scale factor for pressure ratio function.
+        func_area: Function or callable evaluating stretch factor vs RS.
+        func_pres: Function or callable evaluating pressure factor vs RP.
+        eps_xx: Optional direct in-plane strain component eps_xx.
+        eps_yy: Optional direct in-plane strain component eps_yy.
+
+    Returns:
+        svtfac: Effective leakage area fraction (A_eff = Area * SVTFAC).
+    """
+    if p <= 0.0 or p <= pext:
+        return 0.0
+
+    if eps_xx is not None and eps_yy is not None:
+        rs = 1.0 + eps_xx + eps_yy + eps_xx * eps_yy
+    elif area0 > 0.0:
+        rs = area / area0
+    else:
+        rs = 1.0
+
+    rp = min(pext / p, 1.0) if p > 0.0 else 1.0
+
+    flc = fpora * float(func_area(rs)) if callable(func_area) else (fpora if func_area is not None else 1.0)
+    fac = fporp * float(func_pres(rp)) if callable(func_pres) else (fporp if func_pres is not None else 1.0)
+
+    svtfac = max(0.0, flc * fac)
+    return float(svtfac)
+
+
+# Ported from C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\airbag\porfor6.F: PORFOR6 / PORFORM6 (lines 28-103)
+def compute_porosity_porfor6(
+    p: float,
+    pext: float,
+    area: float,
+    area0: float,
+    x0: float = 0.0,
+    x1: float = 0.0,
+    x2: float = 0.0,
+    x3: float = 0.0,
+    eps_xx: Optional[float] = None,
+    eps_yy: Optional[float] = None,
+) -> float:
+    """Anagonye-Wang biaxial strain coupled porosity formulation.
+
+    Matches OpenRadioss ``porfor6.F``:
+    RS = max(1 + eps_xx + eps_yy + eps_xx*eps_yy, 1.0) = max(Area / Area0, 1.0)
+    RP = min(Pext / P, 1.0)
+    SVTFAC = (X0 + X2 * RP) / RS + X1 + X3 * RP
+
+    Args:
+        p: Internal chamber pressure.
+        pext: External ambient pressure.
+        area: Current facet area.
+        area0: Initial facet area.
+        x0, x1, x2, x3: Anagonye-Wang material porosity parameters (PM 164..167).
+        eps_xx: Optional direct in-plane strain component eps_xx.
+        eps_yy: Optional direct in-plane strain component eps_yy.
+
+    Returns:
+        svtfac: Effective leakage area fraction (A_eff = Area * SVTFAC).
+    """
+    if p <= 0.0 or p <= pext:
+        return 0.0
+
+    if eps_xx is not None and eps_yy is not None:
+        rs = max(1.0 + eps_xx + eps_yy + eps_xx * eps_yy, 1.0)
+    elif area0 > 0.0:
+        rs = max(area / area0, 1.0)
+    else:
+        rs = 1.0
+
+    rp = min(pext / p, 1.0) if p > 0.0 else 1.0
+
+    svtfac = (x0 + x2 * rp) / rs + x1 + x3 * rp
+    return float(max(0.0, svtfac))
+
