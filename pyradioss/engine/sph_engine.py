@@ -8,6 +8,8 @@ Faithful port of OpenRadioss Fortran source:
   - spdens.F  (lines 101-167, 373-376): density summation rho_a = sum_b m_b W_ab
   - spdefo3.F (lines 63-70) & spdens.F (lines 188-202): rate of deformation D_ab
   - sppro3.F  (lines 72-118) & spforcp.F (lines 240-304): SPH forces (pressure + Monaghan 1992 artificial viscosity)
+  - spstab.F  (lines 80-129, 212-250) & spforcp.F (lines 259-277): Monaghan-Gray tensile instability stabilization
+  - spcompl.F (lines 156-202, 266-325): zeroth-order Shepard and first-order MLS kernel gradient corrections
   - sphreq.F  (lines 34-40) & mdtsph.F (lines 96-135): critical time step dt = CFL * h / c_s
 """
 
@@ -114,6 +116,445 @@ def cubic_bspline_grad(rij, h):
     if is_1d:
         return grad[0]
     return grad
+
+
+def wendland_c2_kernel(r, h):
+    """Wendland C2 smoothing kernel in 3D with compact support radius 2h.
+
+    Normalisation in 3D:
+      alpha_3D = 21 / (16 * pi * h^3)
+    For q = r / h:
+      W(r, h) = alpha_3D * (1 - q/2)^4 * (1 + 2q)    if 0 <= q <= 2
+              = 0                                    if q > 2
+
+    Args:
+        r: Inter-particle distance (float or np.ndarray >= 0).
+        h: Smoothing length (float or np.ndarray > 0).
+
+    Returns:
+        Kernel value W(r, h).
+    """
+    r_arr = np.asarray(r, dtype=np.float64)
+    h_arr = np.asarray(h, dtype=np.float64)
+    q = r_arr / h_arr
+    alpha = 21.0 / (16.0 * np.pi * (h_arr ** 3))
+
+    w = np.zeros_like(q, dtype=np.float64)
+    mask = (q >= 0.0) & (q <= 2.0)
+    if np.any(mask):
+        qm = q[mask]
+        alpha_m = alpha[mask] if np.ndim(h_arr) > 0 else alpha
+        term1 = (1.0 - 0.5 * qm) ** 4
+        term2 = 1.0 + 2.0 * qm
+        w[mask] = alpha_m * term1 * term2
+
+    if np.ndim(r) == 0 and np.ndim(h) == 0:
+        return float(w)
+    return w
+
+
+def wendland_c2_grad(rij, h):
+    """Gradient of Wendland C2 kernel in 3D with respect to r_i.
+
+    grad_i W_ij = (1/r * dW/dr) * rij
+    where dW/dr = - (105 / (16 * pi * h^4)) * q * (1 - q/2)^3
+    and 1/r * dW/dr = - (105 / (16 * pi * h^5)) * (1 - q/2)^3   for 0 <= q <= 2
+
+    Args:
+        rij: Vector x_i - x_j (shape (3,) or (N, 3)).
+        h: Smoothing length (float or np.ndarray of shape (N,)).
+
+    Returns:
+        grad_i W_ij (shape matching rij: (3,) or (N, 3)).
+    """
+    rij_arr = np.asarray(rij, dtype=np.float64)
+    is_1d = (rij_arr.ndim == 1)
+    if is_1d:
+        rij_arr = rij_arr.reshape(1, 3)
+
+    h_arr = np.asarray(h, dtype=np.float64)
+    if h_arr.ndim == 0:
+        h_arr = np.full(len(rij_arr), float(h_arr))
+
+    r = np.linalg.norm(rij_arr, axis=1)
+    q = r / h_arr
+    coeff = np.zeros(len(rij_arr), dtype=np.float64)
+
+    mask = (q >= 0.0) & (q <= 2.0)
+    if np.any(mask):
+        qm = q[mask]
+        hm = h_arr[mask]
+        factor = -105.0 / (16.0 * np.pi * (hm ** 5))
+        coeff[mask] = factor * ((1.0 - 0.5 * qm) ** 3)
+
+    grad = coeff[:, None] * rij_arr
+    if is_1d:
+        return grad[0]
+    return grad
+
+
+def quintic_spline_kernel(r, h):
+    """Quintic B-spline SPH kernel in 3D with compact support radius 3h.
+
+    Normalisation in 3D:
+      alpha_3D = 1 / (120 * pi * h^3)
+    For q = r / h:
+      W(r, h) = alpha_3D * ((3-q)^5 - 6*(2-q)^5 + 15*(1-q)^5)  if 0 <= q <= 1
+              = alpha_3D * ((3-q)^5 - 6*(2-q)^5)               if 1 < q <= 2
+              = alpha_3D * (3-q)^5                             if 2 < q <= 3
+              = 0                                              if q > 3
+
+    Args:
+        r: Inter-particle distance (float or np.ndarray >= 0).
+        h: Smoothing length (float or np.ndarray > 0).
+
+    Returns:
+        Kernel value W(r, h).
+    """
+    r_arr = np.asarray(r, dtype=np.float64)
+    h_arr = np.asarray(h, dtype=np.float64)
+    q = r_arr / h_arr
+    alpha = 1.0 / (120.0 * np.pi * (h_arr ** 3))
+
+    w = np.zeros_like(q, dtype=np.float64)
+
+    m1 = (q >= 0.0) & (q <= 1.0)
+    if np.any(m1):
+        q1 = q[m1]
+        a1 = alpha[m1] if np.ndim(h_arr) > 0 else alpha
+        w[m1] = a1 * ((3.0 - q1)**5 - 6.0 * (2.0 - q1)**5 + 15.0 * (1.0 - q1)**5)
+
+    m2 = (q > 1.0) & (q <= 2.0)
+    if np.any(m2):
+        q2 = q[m2]
+        a2 = alpha[m2] if np.ndim(h_arr) > 0 else alpha
+        w[m2] = a2 * ((3.0 - q2)**5 - 6.0 * (2.0 - q2)**5)
+
+    m3 = (q > 2.0) & (q <= 3.0)
+    if np.any(m3):
+        q3 = q[m3]
+        a3 = alpha[m3] if np.ndim(h_arr) > 0 else alpha
+        w[m3] = a3 * ((3.0 - q3)**5)
+
+    if np.ndim(r) == 0 and np.ndim(h) == 0:
+        return float(w)
+    return w
+
+
+def quintic_spline_grad(rij, h):
+    """Gradient of Quintic B-spline SPH kernel in 3D with respect to r_i.
+
+    Args:
+        rij: Vector x_i - x_j (shape (3,) or (N, 3)).
+        h: Smoothing length (float or np.ndarray of shape (N,)).
+
+    Returns:
+        grad_i W_ij (shape matching rij: (3,) or (N, 3)).
+    """
+    rij_arr = np.asarray(rij, dtype=np.float64)
+    is_1d = (rij_arr.ndim == 1)
+    if is_1d:
+        rij_arr = rij_arr.reshape(1, 3)
+
+    h_arr = np.asarray(h, dtype=np.float64)
+    if h_arr.ndim == 0:
+        h_arr = np.full(len(rij_arr), float(h_arr))
+
+    r = np.linalg.norm(rij_arr, axis=1)
+    q = r / h_arr
+    alpha = 1.0 / (120.0 * np.pi * (h_arr ** 3))
+
+    dw_dq = np.zeros(len(rij_arr), dtype=np.float64)
+
+    m1 = (q >= 0.0) & (q <= 1.0)
+    if np.any(m1):
+        q1 = q[m1]
+        dw_dq[m1] = -5.0 * (3.0 - q1)**4 + 30.0 * (2.0 - q1)**4 - 75.0 * (1.0 - q1)**4
+
+    m2 = (q > 1.0) & (q <= 2.0)
+    if np.any(m2):
+        q2 = q[m2]
+        dw_dq[m2] = -5.0 * (3.0 - q2)**4 + 30.0 * (2.0 - q2)**4
+
+    m3 = (q > 2.0) & (q <= 3.0)
+    if np.any(m3):
+        q3 = q[m3]
+        dw_dq[m3] = -5.0 * (3.0 - q3)**4
+
+    r_safe = np.maximum(r, 1e-30)
+    coeff = (alpha / (h_arr * r_safe)) * dw_dq
+    coeff[r < 1e-30] = 0.0
+
+    grad = coeff[:, None] * rij_arr
+    if is_1d:
+        return grad[0]
+    return grad
+
+
+def sph_shepard_correction(pos, h_arr, mass, rho):
+    """Compute Shepard (order 0) kernel correction factors c_i = sum_j V_j W_ij.
+
+    Port of OpenRadioss engine/source/elements/sph/spcompl.F lines 156-202 (NZERO).
+    Restores zeroth-order consistency: sum_j V_j W_ij^corr = 1.0.
+
+    Args:
+        pos: Particle positions, shape (N, 3).
+        h_arr: Smoothing lengths, shape (N,) or float.
+        mass: Particle masses, shape (N,) or float.
+        rho: Particle densities, shape (N,) or float.
+
+    Returns:
+        c_i: Shepard normalisation factor for each particle, shape (N,).
+    """
+    pos_arr = np.asarray(pos, dtype=np.float64)
+    n = len(pos_arr)
+    if n == 0:
+        return np.zeros(0, dtype=np.float64)
+
+    m = np.asarray(mass, dtype=np.float64)
+    if m.ndim == 0:
+        m = np.full(n, float(m))
+    r_rho = np.asarray(rho, dtype=np.float64)
+    if r_rho.ndim == 0:
+        r_rho = np.full(n, float(r_rho))
+    h = np.asarray(h_arr, dtype=np.float64)
+    if h.ndim == 0:
+        h = np.full(n, float(h))
+
+    vols = m / np.maximum(r_rho, 1e-20)
+    # Self-contribution
+    c = vols * (1.0 / (np.pi * (h ** 3)))
+
+    if n <= 1:
+        return c
+
+    tree = cKDTree(pos_arr)
+    pairs = tree.query_pairs(r=2.0 * float(np.max(h)), output_type='ndarray')
+    if len(pairs) > 0:
+        i_idx = pairs[:, 0]
+        j_idx = pairs[:, 1]
+        rij = pos_arr[i_idx] - pos_arr[j_idx]
+        r = np.linalg.norm(rij, axis=1)
+        hij = 0.5 * (h[i_idx] + h[j_idx])
+        valid = r <= 2.0 * hij
+        if np.any(valid):
+            iv = i_idx[valid]
+            jv = j_idx[valid]
+            w = cubic_bspline_kernel(r[valid], hij[valid])
+            np.add.at(c, iv, vols[jv] * w)
+            np.add.at(c, jv, vols[iv] * w)
+
+    return np.maximum(c, 1e-12)
+
+
+def sph_mls_gradient_correction(pos, h_arr, mass, rho):
+    """Compute Moving Least Squares (order 1) gradient correction matrix M_i.
+
+    Port of OpenRadioss engine/source/elements/sph/spcompl.F lines 266-325 (NUN).
+    Correction matrix:
+      M_i = - sum_j V_j (grad_i W_ij) (x) (x_i - x_j)
+    Corrected gradient:
+      grad_tilde_i W_ij = M_i^{-1} grad_i W_ij
+    Restores linear consistency: sum_j V_j (x_j - x_i) . grad_tilde_i W_ij = I (3x3 identity).
+
+    Args:
+        pos: Particle positions, shape (N, 3).
+        h_arr: Smoothing lengths, shape (N,) or float.
+        mass: Particle masses, shape (N,) or float.
+        rho: Particle densities, shape (N,) or float.
+
+    Returns:
+        M_inv: Inverse correction matrix array, shape (N, 3, 3).
+    """
+    pos_arr = np.asarray(pos, dtype=np.float64)
+    n = len(pos_arr)
+    if n == 0:
+        return np.zeros((0, 3, 3), dtype=np.float64)
+
+    m = np.asarray(mass, dtype=np.float64)
+    if m.ndim == 0:
+        m = np.full(n, float(m))
+    r_rho = np.asarray(rho, dtype=np.float64)
+    if r_rho.ndim == 0:
+        r_rho = np.full(n, float(r_rho))
+    h = np.asarray(h_arr, dtype=np.float64)
+    if h.ndim == 0:
+        h = np.full(n, float(h))
+
+    vols = m / np.maximum(r_rho, 1e-20)
+    M = np.zeros((n, 3, 3), dtype=np.float64)
+
+    if n <= 1:
+        return np.repeat(np.eye(3)[None, :, :], n, axis=0)
+
+    tree = cKDTree(pos_arr)
+    pairs = tree.query_pairs(r=2.0 * float(np.max(h)), output_type='ndarray')
+    if len(pairs) > 0:
+        i_idx = pairs[:, 0]
+        j_idx = pairs[:, 1]
+        rij = pos_arr[i_idx] - pos_arr[j_idx]
+        r = np.linalg.norm(rij, axis=1)
+        hij = 0.5 * (h[i_idx] + h[j_idx])
+        valid = (r <= 2.0 * hij) & (r > 1e-30)
+        if np.any(valid):
+            iv = i_idx[valid]
+            jv = j_idx[valid]
+            rij_v = rij[valid]
+            hij_v = hij[valid]
+            grad_w = cubic_bspline_grad(rij_v, hij_v)
+
+            outer_i = grad_w[:, :, None] * rij_v[:, None, :]
+            term_i = -vols[jv, None, None] * outer_i
+            term_j = -vols[iv, None, None] * outer_i
+
+            np.add.at(M, iv, term_i)
+            np.add.at(M, jv, term_j)
+
+    M_inv = np.zeros_like(M)
+    for i in range(n):
+        mat = M[i]
+        det = np.linalg.det(mat)
+        if abs(det) > 1e-4:
+            M_inv[i] = np.linalg.inv(mat)
+        else:
+            reg = mat + 1e-3 * np.eye(3)
+            det_reg = np.linalg.det(reg)
+            if abs(det_reg) > 1e-6:
+                M_inv[i] = np.linalg.inv(reg)
+            else:
+                M_inv[i] = np.eye(3)
+
+    return M_inv
+
+
+def sph_tensile_stabilization(pos, vel, mass, rho, stress, h_arr, zstab=1.0, dp=None, dt=1e-6):
+    """Compute Monaghan-Gray tensile instability stabilization forces.
+
+    Faithful port of OpenRadioss Fortran:
+      - spstab.F lines 80-129 (SPSTABW): STAB(7, N) = zstab / max(1e-30, W0(dp)^4)
+      - spstab.F lines 212-250 (SPSTABS): Principal tensile stress projection C_ij
+      - spforcp.F lines 259-277: Stabilization pair forces T_ij
+
+    When particles are under tensile stress (sigma_k > 0), standard SPH exhibits
+    unphysical particle clumping / clustering (tensile instability). This algorithm
+    introduces an artificial repulsive force along the tensile principal directions
+    scaled by (W(r)/W(dp))^4.
+
+    Args:
+        pos: Particle positions, shape (N, 3).
+        vel: Particle velocities, shape (N, 3).
+        mass: Particle masses, shape (N,) or float.
+        rho: Particle densities, shape (N,) or float.
+        stress: Particle Cauchy stress tensors, shape (N, 3, 3) or (N, 6) [xx, yy, zz, xy, yz, zx].
+        h_arr: Smoothing lengths, shape (N,) or float.
+        zstab: Tensile stabilization parameter (default 1.0, from /PROP/SPH ZSTAB).
+        dp: Initial particle spacing (if None, defaults to 2/3 * h as in spstab.F line 123).
+        dt: Time step increment for energy accounting.
+
+    Returns:
+        f_stab: Stabilization force array, shape (N, 3).
+        w_stab: Numerical work / energy done by stabilization forces.
+    """
+    pos_arr = np.asarray(pos, dtype=np.float64)
+    n = len(pos_arr)
+    if n <= 1 or zstab <= 0.0:
+        return np.zeros((n, 3), dtype=np.float64), 0.0
+
+    m = np.asarray(mass, dtype=np.float64)
+    if m.ndim == 0:
+        m = np.full(n, float(m))
+    r_rho = np.asarray(rho, dtype=np.float64)
+    if r_rho.ndim == 0:
+        r_rho = np.full(n, float(r_rho))
+    h = np.asarray(h_arr, dtype=np.float64)
+    if h.ndim == 0:
+        h = np.full(n, float(h))
+
+    # Convert stress to (N, 3, 3)
+    stress_arr = np.asarray(stress, dtype=np.float64)
+    if stress_arr.ndim == 2 and stress_arr.shape[1] == 6:
+        sig_tensor = np.zeros((n, 3, 3), dtype=np.float64)
+        sig_tensor[:, 0, 0] = stress_arr[:, 0]
+        sig_tensor[:, 1, 1] = stress_arr[:, 1]
+        sig_tensor[:, 2, 2] = stress_arr[:, 2]
+        sig_tensor[:, 0, 1] = sig_tensor[:, 1, 0] = stress_arr[:, 3]
+        sig_tensor[:, 1, 2] = sig_tensor[:, 2, 1] = stress_arr[:, 4]
+        sig_tensor[:, 0, 2] = sig_tensor[:, 2, 0] = stress_arr[:, 5]
+    elif stress_arr.ndim == 3 and stress_arr.shape[1:] == (3, 3):
+        sig_tensor = stress_arr
+    else:
+        sig_tensor = np.zeros((n, 3, 3), dtype=np.float64)
+
+    # 1. Compute principal stresses and tensile projection tensor C (spstab.F lines 234-250)
+    C_tensor = np.zeros((n, 3, 3), dtype=np.float64)
+    stab_active = np.zeros(n, dtype=bool)
+
+    for i in range(n):
+        evals, evecs = np.linalg.eigh(sig_tensor[i])
+        if np.any(evals > 0.0):
+            stab_active[i] = True
+            for k in range(3):
+                if evals[k] > 0.0:
+                    rk = -evals[k]
+                    vk = evecs[:, k]
+                    C_tensor[i] += rk * np.outer(vk, vk)
+
+    if not np.any(stab_active):
+        return np.zeros((n, 3), dtype=np.float64), 0.0
+
+    # 2. Reference kernel value at initial interparticle distance W0(dp) (spstab.F lines 121-126)
+    stab7 = np.zeros(n, dtype=np.float64)
+    for i in range(n):
+        if stab_active[i]:
+            dd = (dp / h[i]) if (dp is not None and dp > 1e-30) else (2.0 / 3.0)
+            w0 = cubic_bspline_kernel(dd, 1.0)
+            stab7[i] = zstab / max(1e-30, w0 ** 4)
+
+    # 3. Inter-particle stabilization forces (spforcp.F lines 259-277)
+    forces = np.zeros((n, 3), dtype=np.float64)
+    tree = cKDTree(pos_arr)
+    pairs = tree.query_pairs(r=2.0 * float(np.max(h)), output_type='ndarray')
+
+    if len(pairs) > 0:
+        i_idx = pairs[:, 0]
+        j_idx = pairs[:, 1]
+        active_pairs = (stab7[i_idx] > 0.0) & (stab7[j_idx] > 0.0)
+        if np.any(active_pairs):
+            iv = i_idx[active_pairs]
+            jv = j_idx[active_pairs]
+            rij = pos_arr[iv] - pos_arr[jv]
+            r = np.linalg.norm(rij, axis=1)
+            hij = 0.5 * (h[iv] + h[jv])
+            valid = (r <= 2.0 * hij) & (r > 1e-30)
+            if np.any(valid):
+                iv = iv[valid]
+                jv = jv[valid]
+                rij_v = rij[valid]
+                hij_v = hij[valid]
+                r_v = r[valid]
+
+                grad_w = cubic_bspline_grad(rij_v, hij_v)
+                w_val = cubic_bspline_kernel(r_v, hij_v)
+
+                vol_i = m[iv] / np.maximum(r_rho[iv], 1e-20)
+                vol_j = m[jv] / np.maximum(r_rho[jv], 1e-20)
+                vij_vol = vol_i * vol_j
+
+                ww = w_val * (hij_v ** 3)
+                wr = 0.5 * (stab7[iv] + stab7[jv])
+                wi = (ww ** 4) * wr
+
+                cx = np.einsum('ijk,ik->ij', C_tensor[iv], grad_w)
+                dx = np.einsum('ijk,ik->ij', C_tensor[jv], grad_w)
+
+                t_force = (vij_vol * wi)[:, None] * (cx + dx)
+
+                np.add.at(forces, iv, t_force)
+                np.subtract.at(forces, jv, t_force)
+
+    vel_arr = np.asarray(vel, dtype=np.float64)
+    w_stab = float(np.sum(forces * vel_arr) * dt)
+    return forces, w_stab
 
 
 def sph_density_sum(pos, mass, h_arr):
@@ -263,11 +704,11 @@ def sph_defo_rate(pos, vel, mass, rho, h_arr):
     return D
 
 
-def sph_forces(pos, vel, mass, rho, pressure, h_arr, alpha_visc=1.0, beta_visc=2.0, c_s=None, gamma=1.4):
-    """Compute SPH force array (pressure gradient + Monaghan 1992 artificial viscosity).
+def sph_forces(pos, vel, mass, rho, pressure, h_arr, alpha_visc=1.0, beta_visc=2.0, c_s=None, gamma=1.4, stress=None, zstab=0.0, dp=None):
+    """Compute SPH force array (pressure gradient + Monaghan 1992 artificial viscosity + optional tensile stabilization).
 
-    Port of OpenRadioss engine/source/elements/sph/sppro3.F (lines 72-118)
-    and spforcp.F (lines 240-304).
+    Port of OpenRadioss engine/source/elements/sph/sppro3.F (lines 72-118),
+    spforcp.F (lines 240-304), and spstab.F (lines 234-277).
 
     Pressure force (spforcp.F lines 251-256):
       F_p,ij = - (m_i * m_j / (rho_i * rho_j)) * (p_i + p_j) * grad_i W_ij
@@ -277,8 +718,11 @@ def sph_forces(pos, vel, mass, rho, pressure, h_arr, alpha_visc=1.0, beta_visc=2
       Pi_ij = (beta_visc * mu_ij^2 - alpha_visc * c_s_bar * mu_ij) * 2 / (rho_i + rho_j)
       F_v,ij = - m_i * m_j * Pi_ij * grad_i W_ij
 
+    Tensile stabilization (spstab.F lines 234-277, spforcp.F lines 259-277):
+      T_ij = V_i * V_j * W_I * (C_i + C_j) . grad_i W_ij  (if zstab > 0 and stress tensile)
+
     Total force:
-      F_i = sum_j (F_p,ij + F_v,ij)
+      F_i = sum_j (F_p,ij + F_v,ij + T_ij)
       By Newton's third law, F_ji = - F_ij, guaranteeing exact momentum conservation.
 
     Args:
@@ -292,6 +736,9 @@ def sph_forces(pos, vel, mass, rho, pressure, h_arr, alpha_visc=1.0, beta_visc=2
         beta_visc: Monaghan quadratic viscosity coefficient (default 2.0).
         c_s: Sound speed array, shape (N,) or None (computed from EOS if None).
         gamma: Ratio of specific heats for ideal gas (default 1.4).
+        stress: Cauchy stress tensor array (N, 3, 3) or (N, 6) for tensile stabilization.
+        zstab: Tensile stabilization parameter (default 0.0, disabled).
+        dp: Initial particle spacing (default 2/3 * h).
 
     Returns:
         forces: Force array, shape (N, 3).
@@ -392,6 +839,11 @@ def sph_forces(pos, vel, mass, rho, pressure, h_arr, alpha_visc=1.0, beta_visc=2
             f_total = f_p + f_v
             np.add.at(forces, i_v, f_total)
             np.subtract.at(forces, j_v, f_total)
+
+    # 3. Monaghan-Gray tensile instability stabilization (spstab.F lines 234-277, spforcp.F lines 259-277)
+    if zstab > 0.0 and stress is not None:
+        f_stab, _ = sph_tensile_stabilization(pos, vel, mass, rho, stress, h_arr, zstab=zstab, dp=dp, dt=0.0)
+        forces += f_stab
 
     return forces
 
@@ -510,8 +962,21 @@ def sph_step(model, dt, state, fint=None):
     alpha = getattr(cells, 'alpha_visc', 1.0)
     beta = getattr(cells, 'beta_visc', 2.0)
 
+    # Tensile stabilization parameters (spstab.F)
+    stress = getattr(cells, 'stress', None)
+    if stress is None and hasattr(cells, 'state') and "stress" in cells.state:
+        stress = cells.state["stress"]
+    zstab = getattr(cells, 'zstab', 0.0)
+    if zstab == 0.0 and hasattr(cells, 'state') and "zstab" in cells.state:
+        zstab = float(cells.state["zstab"])
+    dp = getattr(cells, 'dp', None)
+
     # Compute SPH forces
-    f_sph = sph_forces(pos, vel, mass, rho, pressure, h_arr, alpha_visc=alpha, beta_visc=beta, gamma=gamma)
+    f_sph = sph_forces(
+        pos, vel, mass, rho, pressure, h_arr,
+        alpha_visc=alpha, beta_visc=beta, gamma=gamma,
+        stress=stress, zstab=zstab, dp=dp,
+    )
 
     # Assemble into fint
     if fint is None:
