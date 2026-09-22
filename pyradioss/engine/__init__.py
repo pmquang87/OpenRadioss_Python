@@ -24,16 +24,13 @@ from .fsi_coupling import (  # noqa: F401
     fsi_velocity_compatibility,
     fsi_step,
 )
-try:
-    from .bolt_preload import (  # noqa: F401
-        BoltPreloadEngine,
-        BoltPreloadParams,
-        PreloadMethod,
-        PreloadPhase,
-        build_bolt_preloads,
-    )
-except ImportError:
-    pass
+from .bolt_preload import (  # noqa: F401
+    BoltPreloadEngine,
+    BoltPreloadParams,
+    PreloadMethod,
+    PreloadPhase,
+    build_bolt_preloads,
+)
 
 from .thermal_loads import (  # noqa: F401
     ConvecLoad,
@@ -50,3 +47,25 @@ from .thermal_loads import (  # noqa: F401
     radiation_subroutine,
     simulate_lumped_cooling,
 )
+try:
+    from .accel_filter import (  # noqa: F401
+        AccelFilter,
+        FilterCoefficients,
+        accel1,
+        compute_filter_coefficients,
+        CFC_CUTOFF_FREQUENCIES,
+        parse_cfc,
+    )
+except ImportError:
+    pass
+
+from .pfluid import (  # noqa: F401
+    PfluidEngine,
+    PfluidLoad,
+    PfluidLoadParams,
+    PfluidSegmentResult,
+    PfluidStepResult,
+    compute_segment_normal_and_area,
+    pfluid_subroutine,
+)
+
