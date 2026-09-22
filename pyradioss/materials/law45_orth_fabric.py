@@ -1,7 +1,8 @@
 # Ported from OpenRadioss Fortran:
-# Upstream Fortran origins:
-# - engine: engine/source/materials/mat/mat045/sigeps45.F (SUBROUTINE SIGEPS45, lines 31-338) [solids]
-# - engine: engine/source/materials/mat/mat045/sigeps45c.F (SUBROUTINE SIGEPS45C, lines 30-397) [shells]
+# Source: engine/source/materials/mat/mat045/sigeps45.F
+# Function: SIGEPS45 (lines 31-338)
+# Source: engine/source/materials/mat/mat045/sigeps45c.F
+# Function: SIGEPS45C (lines 30-397)
 #
 # Context:
 # In OpenRadioss / Radioss input specifications, LAW45 is an orthotropic fabric / membrane
@@ -75,6 +76,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 
+from pyradioss.materials.law01_elastic import solid_update as _elastic_solid_update
 from pyradioss.model.entities import Material
 
 _EM20 = 1e-20
@@ -227,6 +229,36 @@ class Law45Params:
 
         h = max(0.0, qh1 + qh2)
         return sigy, h
+
+    def to_uparam(self) -> np.ndarray:
+        """Construct the 19-element UPARAM array matching sigeps45.F / sigeps45c.F.
+
+        UPARAM indices:
+        1: YOUNG, 2: ANU, 3: G, 4: CA, 5: CB, 6: CN, 7: EPSM, 8: SIGM,
+        9: CC, 10: CD, 11: CM, 12: EPS0, 13: CE, 14: CK, 15: C1 (bulk K),
+        16: C14G3 (K + 4/3 G), 17: A1 (E/(1-nu^2)), 18: A2 (nu*A1), 19: CUTFRE
+        """
+        up = np.zeros(19, dtype=float)
+        up[0] = self.e
+        up[1] = self.nu
+        up[2] = self.g
+        up[3] = self.ca
+        up[4] = self.cb
+        up[5] = self.cn
+        up[6] = self.epsm
+        up[7] = self.sigm
+        up[8] = self.cc
+        up[9] = self.cd
+        up[10] = self.cm
+        up[11] = self.eps0
+        up[12] = self.ce
+        up[13] = self.ck
+        up[14] = self.k
+        up[15] = self.c14g3
+        up[16] = self.a1
+        up[17] = self.a2
+        up[18] = self.cutfre
+        return up
 
 
 def _extract_param(d: Dict[str, Any], keys: Tuple[str, ...], default: Any = 0.0) -> Any:
@@ -492,8 +524,8 @@ def solid_update(
     as well as element-group fallback interface:
         solid_update(group, x, u, ur, dt, fint, mint)
     """
-    # Group-based fallback
-    if deps is None and hasattr(mat, "mat"):
+    # Group-based fallback interface: solid_update(group, x, u, ur, dt, fint, mint)
+    if hasattr(mat, "mat") and (deps is None or not isinstance(extra, dict)):
         group = mat
         p = resolve(getattr(group, "mat", None))
         c_val = sound_speed(p)

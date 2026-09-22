@@ -345,3 +345,72 @@ def test_law45_dispatcher_registration():
     deps = np.array([1e-4, 0.0, 0.0, 0.0, 0.0, 0.0])
     s_out, ep_out, _ = mat_solid_update(mat, sig, deps, dt=1e-5)
     assert s_out[0] > 0.0
+
+
+def test_law45_to_uparam():
+    """Verify to_uparam matches the 19-parameter array in sigeps45.F / sigeps45c.F."""
+    p = law45_orth_fabric.Law45Params(
+        e=200000.0,
+        nu=0.3,
+        g=76923.0,
+        ca=250.0,
+        cb=500.0,
+        cn=0.4,
+        epsm=0.2,
+        sigm=800.0,
+        cc=30.0,
+        cd=10.0,
+        cm=0.8,
+        eps0=0.001,
+        ce=0.5,
+        ck=0.2,
+        cutfre=500.0,
+    )
+    up = p.to_uparam()
+    assert up.shape == (19,)
+    assert up[0] == 200000.0   # UPARAM(1): YOUNG
+    assert up[1] == 0.3        # UPARAM(2): ANU
+    assert up[2] == 76923.0    # UPARAM(3): G
+    assert up[3] == 250.0      # UPARAM(4): CA
+    assert up[4] == 500.0      # UPARAM(5): CB
+    assert up[5] == 0.4        # UPARAM(6): CN
+    assert up[6] == 0.2        # UPARAM(7): EPSM
+    assert up[7] == 800.0      # UPARAM(8): SIGM
+    assert up[8] == 30.0       # UPARAM(9): CC
+    assert up[9] == 10.0       # UPARAM(10): CD
+    assert up[10] == 0.8       # UPARAM(11): CM
+    assert up[11] == 0.001     # UPARAM(12): EPS0
+    assert up[12] == 0.5       # UPARAM(13): CE
+    assert up[13] == 0.2       # UPARAM(14): CK
+    assert abs(up[14] - p.k) < 1e-6       # UPARAM(15): C1
+    assert abs(up[15] - p.c14g3) < 1e-6   # UPARAM(16): C14G3
+    assert abs(up[16] - p.a1) < 1e-6      # UPARAM(17): A1
+    assert abs(up[17] - p.a2) < 1e-6      # UPARAM(18): A2
+    assert up[18] == 500.0     # UPARAM(19): CUTFRE
+
+
+def test_law45_fabric_membrane_alias():
+    """Verify pyradioss.materials.law45_fabric_membrane re-exports match law45_orth_fabric."""
+    from pyradioss.materials import law45_fabric_membrane
+    assert law45_fabric_membrane.Law45Params is law45_orth_fabric.Law45Params
+    assert law45_fabric_membrane.solid_update is law45_orth_fabric.solid_update
+    assert law45_fabric_membrane.shell_update is law45_orth_fabric.shell_update
+    assert law45_fabric_membrane.tangent is law45_orth_fabric.tangent
+
+
+def test_law45_element_group_full_template_signature():
+    """Verify solid_update(group, x, u, ur, dt, fint, mint) per template interface."""
+    p = law45_orth_fabric.Law45Params(e=120000.0, nu=0.3)
+    group = SimpleNamespace(mat=p)
+    x = np.zeros((8, 3))
+    u = np.zeros((8, 3))
+    ur = np.zeros((8, 3))
+    dt = 1e-5
+    fint = np.zeros((8, 3))
+    mint = np.zeros((8, 3))
+    res = law45_orth_fabric.solid_update(group, x, u, ur, dt, fint, mint)
+    assert len(res) == 3
+    s, ep, c = res
+    assert s.shape == (6,)
+    assert c > 0.0
+

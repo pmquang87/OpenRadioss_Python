@@ -112,7 +112,8 @@ from . import (detonation, eos, law01_elastic, law02_johnson_cook, law03_plas_bo
                law118_reserved, law122_chaboche, law125_tab_aniso_rate, law127_mohr_coulomb, law128_hill_rate_shell,
                law129_barlat_yld2000, law130_nonlocal_damage, law131_modular_elastoplas, law132_rate_modifier,
                law133_microplane_concrete, law134_fabric_wrinkle, law135_modular_user, law151_multimat_ale,
-               law158_progressive_composite, law187_samp1_polymer)
+               law158_progressive_composite, law187_samp1_polymer,
+               inimap)
 from .law120_tapo import (
     Law120Params,
     build_law120,
