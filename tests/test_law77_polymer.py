@@ -226,3 +226,160 @@ def test_law77_dispatcher():
     assert sig_out[0] < 0.0
     assert c_out > 0.0
 
+
+def test_law77_plastic_yielding_and_spherical_projection():
+    """Verify spherical yield projection bounds stress when exceeding yield."""
+    p = build_law77(e0=20.0, nu=0.2, emax=100.0, rho0=0.05, yield_init=0.5, aa=0.0, p0=0.0, pext=0.0)
+    sig0 = np.zeros(6, dtype=np.float64)
+    # Large compressive strain exceeding yield
+    deps = np.array([-0.1, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float64)
+    extra = {}
+
+    sig_out, epsp_out, c_out = solid_update(p, sig0, deps, dt=1.0e-6, extra=extra)
+
+    # In 1D uniaxial strain with zero transverse strain:
+    # With yield projection, SVM should be capped at YLD = 0.5
+    svm = np.sqrt(
+        sig_out[0] ** 2
+        + sig_out[1] ** 2
+        + sig_out[2] ** 2
+        + 2.0 * (sig_out[3] ** 2 + sig_out[4] ** 2 + sig_out[5] ** 2)
+    )
+    assert svm == pytest.approx(0.5, rel=1e-3)
+    assert epsp_out > 0.0
+
+
+def test_law77_tabulated_rate_dependent_yield():
+    """Verify tabulated yield stress interpolates between loading curves at different strain rates."""
+    # Curve 1 at rate=0.0 (quasi-static): yield stress = 1.0
+    # Curve 2 at rate=100.0 (dynamic): yield stress = 2.0
+    c1 = (np.array([0.0, 0.5, 1.0]), np.array([1.0, 1.0, 1.0]))
+    c2 = (np.array([0.0, 0.5, 1.0]), np.array([2.0, 2.0, 2.0]))
+    load_curves = [{"rate": 0.0, "curve": c1}, {"rate": 100.0, "curve": c2}]
+
+    p = build_law77(
+        e0=50.0,
+        nu=0.2,
+        emax=100.0,
+        rho0=0.05,
+        load_curves=load_curves,
+        aa=0.0,
+        p0=0.0,
+        pext=0.0,
+    )
+
+    deps = np.array([-0.1, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float64)
+
+    # Case A: quasi-static (rate ~ 0) -> yield ~ 1.0
+    sig_qs, _, _ = solid_update(p, np.zeros(6), deps, dt=1.0)
+    svm_qs = np.sqrt(np.sum(sig_qs[:3] ** 2) + 2.0 * np.sum(sig_qs[3:] ** 2))
+    assert svm_qs == pytest.approx(1.0, rel=1e-2)
+
+    # Case B: high rate (deps_norm = 0.1, dt = 0.001 -> rate = 100.0) -> yield ~ 2.0
+    sig_dyn, _, _ = solid_update(p, np.zeros(6), deps, dt=1.0e-3)
+    svm_dyn = np.sqrt(np.sum(sig_dyn[:3] ** 2) + 2.0 * np.sum(sig_dyn[3:] ** 2))
+    assert svm_dyn == pytest.approx(2.0, rel=1e-2)
+
+    # Case C: intermediate rate (deps_norm = 0.1, dt = 0.002 -> rate = 50.0) -> yield ~ 1.5
+    sig_mid, _, _ = solid_update(p, np.zeros(6), deps, dt=2.0e-3)
+    svm_mid = np.sqrt(np.sum(sig_mid[:3] ** 2) + 2.0 * np.sum(sig_mid[3:] ** 2))
+    assert svm_mid == pytest.approx(1.5, rel=1e-2)
+
+
+def test_law77_modulus_evolution():
+    """Verify modulus E evolution (sigeps77.F lines 404-420) increases E towards EMAX."""
+    p = build_law77(e0=10.0, nu=0.2, emax=50.0, rho0=0.05, yield_init=0.2, aa=5.0)
+    sig = np.zeros(6, dtype=np.float64)
+    extra = {}
+
+    # Step 1: initial compression causing plastic flow
+    deps = np.array([-0.05, -0.01, -0.01, 0.0, 0.0, 0.0], dtype=np.float64)
+    sig, epsp, _ = solid_update(p, sig, deps, dt=1.0e-5, extra=extra)
+
+    uvar = extra["uvar77"]
+    e_evolved = uvar[0, 11]
+    # Modulus must have grown above E0 = 10.0 due to plastic strain
+    assert e_evolved > 10.0
+    assert e_evolved <= 50.0
+
+
+def test_law77_unloading_damage_modes():
+    """Verify loading followed by unloading detects delta < 0 and tests damage models."""
+    for idamage in (1, 2, 3):
+        p = build_law77(
+            e0=20.0,
+            nu=0.2,
+            emax=100.0,
+            rho0=0.05,
+            yield_init=1.0,
+            iunload=idamage,
+            hys=0.5,
+            expo=1.5,
+            aa=0.0,
+        )
+        sig = np.zeros(6, dtype=np.float64)
+        extra = {}
+
+        # Loading step
+        deps_load = np.array([0.05, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float64)
+        sig, epsp, _ = solid_update(p, sig, deps_load, dt=1.0e-5, extra=extra)
+        assert extra["uvar77"][0, 13] == 1.0  # ILOAD = 1 (loading)
+
+        # Unloading step (strain reversed)
+        deps_unload = np.array([-0.02, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float64)
+        sig, epsp, _ = solid_update(p, sig, deps_unload, dt=1.0e-5, extra=extra)
+        # Under unloading, ILOAD must flip to -1
+        assert extra["uvar77"][0, 13] == -1.0
+
+
+def test_law77_pore_gas_pressure_coupling():
+    """Verify pore air compression generates positive P_AIR and adjusts stress."""
+    p = build_law77(
+        e0=20.0,
+        nu=0.2,
+        rho0=0.05,
+        p0=0.1013,
+        rhoa=1.2e-3,
+        gamma=1.4,
+        frac=0.8,
+    )
+    sig = np.zeros(6, dtype=np.float64)
+    extra = {}
+
+    # Negative volumetric strain (compression): increases air pressure
+    deps = np.array([-0.05, -0.05, -0.05, 0.0, 0.0, 0.0], dtype=np.float64)
+    sig, epsp, c_sound = solid_update(p, sig, deps, dt=1.0e-5, extra=extra)
+
+    uvar = extra["uvar77"]
+    # Net air pressure P_AIR stored in UVAR(19)
+    p_air = uvar[0, 18]
+    assert p_air > 0.0
+    # Acoustic wave speed accounts for pore air compressibility EF
+    assert c_sound > p.c_solid
+
+
+def test_law77_shell_tabulated_plasticity():
+    """Verify 2D plane-stress shell update with tabulated rate-dependent curve."""
+    c_load = (np.array([0.0, 0.5, 1.0]), np.array([2.5, 2.5, 2.5]))
+    p = build_law77(
+        e0=25.0,
+        nu=0.2,
+        load_curves=[{"rate": 0.0, "curve": c_load}],
+        aa=0.0,
+        p0=0.0,
+        pext=0.0,
+    )
+
+    sig0 = np.zeros(3, dtype=np.float64)
+    deps = np.array([0.2, 0.1, 0.0], dtype=np.float64)
+    extra = {}
+
+    sig_out, epsp_out, c_out = shell_update(p, sig0, deps, dt=1.0e-5, extra=extra)
+
+    # In plane stress: svm = sqrt(sxx^2 + syy^2 - sxx*syy + 3*sxy^2)
+    svm = np.sqrt(sig_out[0] ** 2 + sig_out[1] ** 2 - sig_out[0] * sig_out[1] + 3.0 * sig_out[2] ** 2)
+    assert svm == pytest.approx(2.5, rel=1e-2)
+    assert epsp_out > 0.0
+    assert c_out > 0.0
+
+
