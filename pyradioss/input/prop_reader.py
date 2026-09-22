@@ -45,13 +45,15 @@ from .deck_reader import Card, KeywordBlock, parse_fortran_float
 #: /PROP spelling in the cfg tree; unknown TYPE<n> spellings resolve their
 #: own number, anything else is a sentinel (-1).
 PROP_TYPE_NUMBERS: Dict[str, int] = {
-    "VOID": 0, "SHELL": 1, "TRUSS": 2, "BEAM": 3, "SPRING": 4, "RIVET": 5,
+    "VOID": 0, "SHELL": 1, "TRUSS": 2, "BEAM": 3, "SPRING": 4, "RIVET": 5, "TYPE5": 5, "PROP_TYPE5": 5,
     "SOL_ORTH": 6, "SPR_PUL": 12, "SPR_GENE": 8, "SH_ORTH": 9, "SH_COMP": 10,
     "SH_SANDW": 11, "SPR_BEAM": 13, "SOLID": 14, "POROUS": 15, "SH_FABR": 16,
-    "STACK": 17, "INT_BEAM": 18, "TSHELL": 20, "TSH_ORTH": 21, "TSH_COMP": 22,
+    "STACK": 17, "TYPE17": 17, "SH_COMP": 17, "COMP_SHELL": 17, "INT_BEAM": 18,
+    "TSHELL": 20, "TYPE20": 20, "PROP_TYPE20": 20,
+    "TSH_ORTH": 21, "TYPE21": 21, "PROP_TYPE21": 21, "TSHELL_COMP": 21, "TSH_COMP": 22,
     "SPR_MAT": 23, "HEXA20": 23, "BRIC20": 23, "TYPE23": 23, "SPR_AXI": 25, "SPR_TAB": 26, "SPR_BDAMP": 27, "NSTRAND": 28,
     "SPR_PRE": 32, "KJOINT": 33, "SPH": 34, "STITCH": 35, "PREDIT": 36,
-    "SPR_TORS": 19, "TYPE19": 19, "TORSION": 19,
+    "SPR_TORS": 19, "TYPE19": 19, "TORSION": 19, "THERM_SHELL": 19, "SH_THERM": 19, "TYPE19_THERM": 19,
     "CONNECT": 43, "SPR_CRUS": 44, "KJOINT2": 45, "SPR_MUSCLE": 46,
     "PLY_STACK": 51, "TYPE51": 51, "PCOMPP": 52, "FLUID": 6,
 }
@@ -62,7 +64,7 @@ PROP_TYPE_NUMBERS: Dict[str, int] = {
 #: (the spring families) may legally carry mat_ID = 0 (a fictitious
 #: material is assigned for the spring elements).
 MATERIAL_REQUIRED_PROP_TYPES = frozenset(
-    {0, 1, 2, 3, 6, 9, 10, 11, 14, 16, 17, 18, 20, 21, 22, 23, 34, 43, 51,
+    {0, 1, 2, 3, 6, 9, 10, 11, 14, 16, 17, 18, 19, 20, 21, 22, 23, 34, 43, 51,
      52})
 
 
@@ -91,7 +93,7 @@ def prop_type_ok(req_prop: int, prop: Property) -> bool:
     pt = prop.type
     if pt == req_prop or pt == 0:
         return True
-    if req_prop == 1 and pt in (9, 16):
+    if req_prop == 1 and pt in (9, 16, 17, 19):
         return True
     if req_prop == 3 and pt in (18,):
         return True
@@ -620,23 +622,41 @@ def parse_tshell(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     c1 = _get(cards, 0)
     c2 = _get(cards, 1)
     
-    # NBP (Inpts) is at index 4 (column 40:50) on the first card
+    isolid = 15
+    inpts_r, inpts_s, inpts_t = 0, 0, 0
     nbp = 0
     if c1:
         if fixed:
-            nbp = _iv(c1.raw[40:50]) if len(c1.raw) >= 50 else 0
+            isolid = _iv(c1.raw[0:10]) or 15
+            inpts_r = _iv(c1.raw[30:40]) if len(c1.raw) >= 40 else 0
+            inpts_s = _iv(c1.raw[40:50]) if len(c1.raw) >= 50 else 0
+            inpts_t = _iv(c1.raw[50:60]) if len(c1.raw) >= 60 else 0
+            nbp = _iv(c1.raw[60:70]) if len(c1.raw) >= 70 else 0
         else:
             ints = c1.ints()
-            nbp = ints[4] if len(ints) > 4 else 0
-            
-    inpts_r, inpts_s, inpts_t = 0, 0, 0
-    if nbp > 200:
+            isolid = ints[0] if len(ints) > 0 else 15
+            if len(ints) >= 6:
+                inpts_r = ints[3]
+                inpts_s = ints[4]
+                inpts_t = ints[5]
+                nbp = ints[6] if len(ints) > 6 else 0
+            elif len(ints) >= 4:
+                nbp = ints[3]
+
+    if nbp > 200 and (inpts_r == 0 or inpts_s == 0 or inpts_t == 0):
         inpts_r = nbp // 100
         rem = nbp % 100
         inpts_s = rem // 10
         inpts_t = rem % 10
-    else:
-        inpts_s = nbp
+    elif nbp > 0 and inpts_t == 0:
+        inpts_t = nbp
+        
+    if inpts_r <= 0:
+        inpts_r = 2
+    if inpts_s <= 0:
+        inpts_s = 2
+    if inpts_t <= 0:
+        inpts_t = 3
         
     h = 0.0
     if c2:
@@ -650,11 +670,58 @@ def parse_tshell(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
         "npts_r": inpts_r,
         "npts_s": inpts_s,
         "npts_t": inpts_t,
-        "h": h
+        "h": h,
+        "isolid": 15,
+        "shear_corr": 5.0 / 6.0,
     }
     
     # Return an active property so that the Engine can run SHEL16 tests
     return Property(id=block.user_id, type=20, title=title, params=params)
+
+
+def parse_tshell_comp(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
+    """/PROP/TYPE21 (/PROP/TSH_ORTH, /PROP/TSHELL_COMP) — composite thick shell."""
+    title, cards, fixed = _data_cards(block)
+    if not cards:
+        log.error("/PROP/TYPE21 block is empty", block.source)
+        return None
+
+    c1 = _get(cards, 0)
+    c2 = _get(cards, 1)
+
+    nbp = 0
+    isolid = 15
+    if c1:
+        if fixed:
+            isolid = _iv(c1.raw[0:10]) or 15
+            nbp = _iv(c1.raw[40:50]) if len(c1.raw) >= 50 else 0
+        else:
+            ints = c1.ints()
+            isolid = ints[0] if len(ints) > 0 else 15
+            nbp = ints[3] if len(ints) > 3 else 0
+
+    vx, vy, vz, angle = 1.0, 0.0, 0.0, 0.0
+    if c2:
+        if fixed:
+            vx = _fv(c2.raw[0:20]) if len(c2.raw) >= 20 else 1.0
+            vy = _fv(c2.raw[20:40]) if len(c2.raw) >= 40 else 0.0
+            vz = _fv(c2.raw[40:60]) if len(c2.raw) >= 60 else 0.0
+        else:
+            flts = c2.floats()
+            vx = flts[0] if len(flts) > 0 else 1.0
+            vy = flts[1] if len(flts) > 1 else 0.0
+            vz = flts[2] if len(flts) > 2 else 0.0
+
+    params = {
+        "isolid": isolid,
+        "nbp": nbp,
+        "vx": vx,
+        "vy": vy,
+        "vz": vz,
+        "angle": angle,
+        "shear_corr": 5.0 / 6.0,
+    }
+    return Property(id=block.user_id, type=21, title=title, params=params)
 
 
 
@@ -715,17 +782,33 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
         return parse_spr_tab(block, log)
     if typename in ("SPR_BDAMP", "TYPE27"):
         return parse_spr_bdamp(block, log)
-    if typename in ("TSHELL", "TYPE20"):
+    if typename in ("TSHELL", "TYPE20", "PROP_TYPE20"):
         return parse_tshell(block, log)
+    if typename in ("TSH_ORTH", "TYPE21", "PROP_TYPE21", "TSHELL_COMP", "TSH_COMP"):
+        return parse_tshell_comp(block, log)
     if typename in ("VOID", "TYPE0"):
         return parse_void(block, log)
     if typename in ("CONNECT", "TYPE43"):
         return parse_connect(block, log)
+    if typename in ("RIVET", "TYPE5", "PROP_TYPE5"):
+        from .prop_rivet import parse_prop_rivet
+        return parse_prop_rivet(block, log)
     if typename in ("STITCH", "TYPE35"):
         return parse_stitch(block, log)
-    if typename in ("PREDIT", "TYPE36"):
-        return parse_predit(block, log)
-    if typename in ("SPR_TORS", "TYPE19", "TORSION"):
+    if typename in ("STACK", "TYPE17", "SH_COMP", "PROP_TYPE17", "COMP_SHELL"):
+        from .prop_composite import parse_prop17_composite
+        return parse_prop17_composite(block, log)
+    if typename in ("THERM_SHELL", "SH_THERM", "PROP_THERM_SHELL", "TYPE19_THERM"):
+        from .prop_composite import parse_prop19_thermal
+        return parse_prop19_thermal(block, log)
+    if typename in ("SPR_TORS", "TORSION"):
+        return parse_spr_tors(block, log)
+    if typename == "TYPE19":
+        _t, _cd, _ = _data_cards(block)
+        _toks = [tk for c in _cd for tk in c.tokens()]
+        if any("THERM" in tk.upper() or "HEAT" in tk.upper() for tk in _toks):
+            from .prop_composite import parse_prop19_thermal
+            return parse_prop19_thermal(block, log)
         return parse_spr_tors(block, log)
     if typename in ("SPR_CRUS", "TYPE44", "CRUSH_SPRING", "SPRING_CRUSH"):
         return parse_spr_crus(block, log)
