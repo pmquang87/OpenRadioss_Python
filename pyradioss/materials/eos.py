@@ -438,11 +438,13 @@ def _coefficients_puff(eos, mu: np.ndarray, e: np.ndarray | float | None = None)
     c1 = p.get("c1", 0.0)
     c2 = p.get("c2", 0.0)
     c3 = p.get("c3", 0.0)
-    t1 = p.get("t1", 0.0)
-    t2 = p.get("t2", 0.0)
-    esubl = p.get("es", p.get("esubl", 0.0))
-    gamma0 = p.get("gamma0", p.get("g0", 0.0))
-    h = p.get("h", p.get("hh", 0.0))
+    t1 = p.get("t1", p.get("sigt1", 0.0))
+    if t1 == 0.0:
+        t1 = c1
+    t2 = p.get("t2", p.get("sigt2", 0.0))
+    esubl = p.get("es", p.get("esubl", p.get("es_subl", 0.0)))
+    gamma0 = p.get("gamma0", p.get("g0", p.get("gamma", 0.0)))
+    h = p.get("h", p.get("hh", p.get("eoh", 0.0)))
     psh = p.get("psh", 0.0)
 
     if e is None:
@@ -458,8 +460,10 @@ def _coefficients_puff(eos, mu: np.ndarray, e: np.ndarray | float | None = None)
 
     ee = np.sqrt(np.maximum(eta, 1e-12))
     bb_hot = (h + (gamma0 - h) * ee) * eta
-    cc = np.where(np.abs(gamma0 * esubl) > 1e-12, c1 / (gamma0 * esubl), 0.0)
-    expa = np.exp(cc * xx)
+    denom_cc = gamma0 * esubl
+    safe_denom_cc = denom_cc if abs(denom_cc) > 1e-12 else 1.0
+    cc = np.where(np.abs(denom_cc) > 1e-12, c1 / safe_denom_cc, 0.0)
+    expa = np.exp(np.clip(cc * xx, -50.0, 50.0))
     aa_hot = bb_hot * esubl * (expa - 1.0)
 
     is_comp = (mu >= 0.0)
@@ -1023,11 +1027,13 @@ def update(eos, mu: np.ndarray, dv: np.ndarray, e_old: np.ndarray,
         c1 = p.get("c1", 0.0)
         c2 = p.get("c2", 0.0)
         c3 = p.get("c3", 0.0)
-        t1 = p.get("t1", 0.0)
-        t2 = p.get("t2", 0.0)
-        esubl = p.get("es", p.get("esubl", 0.0))
-        gamma0 = p.get("gamma0", p.get("g0", 0.0))
-        h = p.get("h", p.get("hh", 0.0))
+        t1 = p.get("t1", p.get("sigt1", 0.0))
+        if t1 == 0.0:
+            t1 = c1
+        t2 = p.get("t2", p.get("sigt2", 0.0))
+        esubl = p.get("es", p.get("esubl", p.get("es_subl", 0.0)))
+        gamma0 = p.get("gamma0", p.get("g0", p.get("gamma", 0.0)))
+        h = p.get("h", p.get("hh", p.get("eoh", 0.0)))
         psh = p.get("psh", 0.0)
         pmin = p.get("pmin", -1e30)
 
@@ -1054,8 +1060,10 @@ def update(eos, mu: np.ndarray, dv: np.ndarray, e_old: np.ndarray,
 
         ee = np.sqrt(np.maximum(eta, 1e-12))
         bb_hot = (h + (gamma0 - h) * ee) * eta
-        cc = np.where(np.abs(gamma0 * esubl) > 1e-12, c1 / (gamma0 * esubl), 0.0)
-        expa = np.exp(cc * xx)
+        denom_cc = gamma0 * esubl
+        safe_denom_cc = denom_cc if abs(denom_cc) > 1e-12 else 1.0
+        cc = np.where(np.abs(denom_cc) > 1e-12, c1 / safe_denom_cc, 0.0)
+        expa = np.exp(np.clip(cc * xx, -50.0, 50.0))
 
         dpdm_comp = (c1 + 2.0 * c2 * mu + 3.0 * c3 * (mu ** 2)) * gx + gamma0 * (df ** 2) * (p_tot - 0.5 * aa_raw_comp)
         dpdm_cold = (t1 + 2.0 * t2 * mu) * gx + gamma0 * (df ** 2) * (p_tot - 0.5 * aa_raw_cold)
@@ -1299,6 +1307,101 @@ def update(eos, mu: np.ndarray, dv: np.ndarray, e_old: np.ndarray,
         c2 = dpdm / rho0
         return p_new, e_new, np.maximum(c2, 0.0)
 
+    if kind == "SESAME":
+        # Upstream Fortran reference: common_source/eos/sesame.F
+        rho_tab = p.get("rho_table", p.get("r_table"))
+        theta_tab = p.get("theta_table", p.get("t_table"))
+        p_tab = p.get("p_table")
+        e_tab = p.get("e_table")
+        filename = p.get("filename")
+        if (rho_tab is None or p_tab is None or e_tab is None) and filename:
+            try:
+                table_dict = read_sesame_file(filename)
+                p.update(table_dict)
+                rho_tab = p.get("rho_table")
+                theta_tab = p.get("theta_table")
+                p_tab = p.get("p_table")
+                e_tab = p.get("e_table")
+            except Exception:
+                pass
+
+        pmin = p.get("pmin", -1e30)
+        psh = p.get("psh", 0.0)
+
+        n = len(mu)
+        p_new = np.zeros(n, dtype=float)
+        e_new = np.zeros(n, dtype=float)
+        c2 = np.zeros(n, dtype=float)
+
+        has_table = (rho_tab is not None and theta_tab is not None
+                     and p_tab is not None and e_tab is not None)
+
+        if has_table:
+            r_arr = np.asarray(rho_tab, dtype=float)
+            t_arr = np.asarray(theta_tab, dtype=float)
+            p_mat = np.asarray(p_tab, dtype=float)
+            e_mat = np.asarray(e_tab, dtype=float)
+
+            for i in range(n):
+                mu_i = float(mu[i])
+                dv_i = float(dv[i])
+                e_old_i = float(e_old[i])
+                p_old_i = float(p_old[i])
+                de_oth_i = float(de_other[i])
+
+                rho_i = rho0 * (1.0 + mu_i)
+                espem_old = e_old_i / max(rho0, 1e-12)
+
+                # Pass 1: predictor at e_old
+                t_pred, dtde_pred = mintp_re(r_arr, t_arr, e_mat, rho_i, espem_old)
+                p_pred, dpdr_pred, dpdt_pred = mintp1_rt(r_arr, t_arr, p_mat, rho_i, t_pred)
+                dpde_pred = dpdt_pred * dtde_pred / max(rho0, 1e-12)
+                B0 = dpde_pred
+                A0 = p_pred - B0 * e_old_i
+
+                # Predictor energy
+                denom0 = 1.0 + 0.5 * B0 * dv_i
+                e_pred = (e_old_i + de_oth_i - 0.5 * dv_i * (p_old_i + A0)) / max(denom0, 1e-6)
+
+                # Pass 2: corrector at e_pred
+                espem_pred = e_pred / max(rho0, 1e-12)
+                t_corr, dtde_corr = mintp_re(r_arr, t_arr, e_mat, rho_i, espem_pred)
+                p_corr, dpdr_corr, dpdt_corr = mintp1_rt(r_arr, t_arr, p_mat, rho_i, t_corr)
+                dpde_corr = dpdt_corr * dtde_corr / max(rho0, 1e-12)
+                B1 = dpde_corr
+                A1 = p_corr - B1 * e_pred
+
+                denom1 = 1.0 + 0.5 * B1 * dv_i
+                e_res = (e_old_i + de_oth_i - 0.5 * dv_i * (p_old_i + A1)) / max(denom1, 1e-6)
+                p_raw = A1 + B1 * e_res
+                p_tot = max(p_raw, pmin)
+                p_res = p_tot - psh
+
+                dpdm_corr = rho0 * dpdr_corr
+                eta_i = max(1.0 + mu_i, 1e-12)
+                dpdm_tot = dpdm_corr + (p_tot / (eta_i ** 2)) * dpde_corr
+                c2_i = dpdm_tot / max(rho0, 1e-12)
+
+                p_new[i] = p_res
+                e_new[i] = e_res
+                c2[i] = max(c2_i, 0.0)
+                if state is not None:
+                    state[f"theta_{i}"] = t_corr
+            return p_new, e_new, c2
+        else:
+            k0 = float(p.get("k0", 2.0e9))
+            gamma0 = float(p.get("gamma0", 1.4))
+            B = (gamma0 - 1.0) * (1.0 + mu)
+            A = k0 * mu - psh
+            denom = 1.0 + 0.5 * B * dv
+            e_new = (e_old + de_other - 0.5 * dv * (p_old + A)) / np.maximum(denom, 1e-6)
+            p_raw = A + B * e_new
+            p_tot = np.maximum(p_raw, pmin)
+            p_new = p_tot - psh
+            eta = np.maximum(1.0 + mu, 1e-12)
+            c2 = (k0 + (p_tot / (eta ** 2)) * B) / max(rho0, 1e-12)
+            return p_new, e_new, np.maximum(c2, 0.0)
+
     # General default polynomial fallback
     A, B = coefficients(eos, mu)
     denom = 1.0 + 0.5 * B * dv
@@ -1450,6 +1553,60 @@ def pressure(eos, mu: np.ndarray | float, e: np.ndarray | float, time: float = 0
         pmin = eos.params.get("pmin", -psh)
         p_val = np.maximum(A + B * e_arr, pmin)
         return float(p_val) if is_scalar else p_val
+
+    if kind == "SESAME":
+        # Upstream Fortran reference: common_source/eos/sesame.F
+        rho_tab = eos.params.get("rho_table", eos.params.get("r_table"))
+        theta_tab = eos.params.get("theta_table", eos.params.get("t_table"))
+        p_tab = eos.params.get("p_table")
+        e_tab = eos.params.get("e_table")
+        filename = eos.params.get("filename")
+        if (rho_tab is None or p_tab is None or e_tab is None) and filename:
+            try:
+                table_dict = read_sesame_file(filename)
+                eos.params.update(table_dict)
+                rho_tab = eos.params.get("rho_table")
+                theta_tab = eos.params.get("theta_table")
+                p_tab = eos.params.get("p_table")
+                e_tab = eos.params.get("e_table")
+            except Exception:
+                pass
+
+        pmin = eos.params.get("pmin", -1e30)
+        psh = eos.params.get("psh", 0.0)
+        rho0 = getattr(eos, "rho0", None) or eos.params.get("rho0_card", 1.0)
+
+        has_table = (rho_tab is not None and theta_tab is not None
+                     and p_tab is not None and e_tab is not None)
+
+        if has_table:
+            r_arr = np.asarray(rho_tab, dtype=float)
+            t_arr = np.asarray(theta_tab, dtype=float)
+            p_mat = np.asarray(p_tab, dtype=float)
+            e_mat = np.asarray(e_tab, dtype=float)
+
+            if is_scalar:
+                rho_val = rho0 * (1.0 + float(mu))
+                e_spec = float(e) / max(rho0, 1e-12)
+                t_val, _ = mintp_re(r_arr, t_arr, e_mat, rho_val, e_spec)
+                p_val, _, _ = mintp1_rt(r_arr, t_arr, p_mat, rho_val, t_val)
+                p_tot = max(p_val, pmin)
+                return float(p_tot - psh)
+            else:
+                res = np.zeros_like(mu_arr)
+                for i in range(len(mu_arr)):
+                    rho_i = rho0 * (1.0 + float(mu_arr[i]))
+                    e_spec = float(e_arr[i]) / max(rho0, 1e-12)
+                    t_val, _ = mintp_re(r_arr, t_arr, e_mat, rho_i, e_spec)
+                    p_val, _, _ = mintp1_rt(r_arr, t_arr, p_mat, rho_i, t_val)
+                    res[i] = max(p_val, pmin) - psh
+                return res
+        else:
+            k0 = float(eos.params.get("k0", 2.0e9))
+            gamma0 = float(eos.params.get("gamma0", 1.4))
+            p_val = k0 * mu_arr + (gamma0 - 1.0) * (1.0 + mu_arr) * e_arr
+            p_tot = np.maximum(p_val, pmin) - psh
+            return float(p_tot) if is_scalar else p_tot
 
     A, B = coefficients(eos, mu_arr)
     p_val = A + B * e_arr
@@ -1615,8 +1772,30 @@ def initial_state(eos):
         return eg, p0
 
     if kind == "SESAME":
+        # Upstream Fortran reference: starter/source/materials/eos/hm_read_eos_sesame.F lines 160-171
         e0 = p.get("e0", 0.0)
-        p0 = p.get("p0", 0.0) - p.get("psh", 0.0)
+        psh = p.get("psh", 0.0)
+        rho_tab = p.get("rho_table", p.get("r_table"))
+        p_tab = p.get("p_table")
+        e_tab = p.get("e_table")
+        theta_tab = p.get("theta_table", p.get("t_table"))
+        filename = p.get("filename")
+        if (rho_tab is None or p_tab is None or e_tab is None) and filename:
+            try:
+                table_dict = read_sesame_file(filename)
+                p.update(table_dict)
+                rho_tab = p.get("rho_table")
+                theta_tab = p.get("theta_table")
+                p_tab = p.get("p_table")
+                e_tab = p.get("e_table")
+            except Exception:
+                pass
+        has_table = (rho_tab is not None and theta_tab is not None
+                     and p_tab is not None and e_tab is not None)
+        if has_table:
+            p0 = pressure(eos, 0.0, e0)
+        else:
+            p0 = p.get("p0", 0.0) - psh
         return e0, p0
 
     if kind in ("IDEAL-GAS", "IDEAL_GAS"):
