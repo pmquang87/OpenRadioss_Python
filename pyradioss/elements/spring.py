@@ -66,7 +66,7 @@ from . import spring_advanced, spring_general
 _MASS_REQUIRED_SPRING_TYPES = frozenset({4})
 
 #: /PROP spelling per TYPE for the mass message (the card the user wrote)
-_SPRING_PROP_SPELLING = {4: "SPRING", 19: "SPR_TORS", 32: "SPR_PRE", 44: "SPR_CRUS", 46: "SPR_MUSCLE"}
+_SPRING_PROP_SPELLING = {4: "SPRING", 19: "SPR_TORS", 25: "SPR_AXI", 32: "SPR_PRE", 44: "SPR_CRUS", 46: "SPR_MUSCLE"}
 
 
 def _safe_param(params: dict, key: str, default: float = 0.0) -> float:
@@ -128,14 +128,16 @@ def init_group(group, model, log):
     is6 = np.isin(kind, list(spring_general.SPRING_PROP_TYPES))
     is32 = (kind == 32)
     is19 = (kind == 19)
+    is25 = (kind == 25)
     is44 = (kind == 44)
     is46 = (kind == 46)
-    is_adv = is19 | is44 | is46
+    is_adv = is19 | is25 | is44 | is46
     is_kj = (kind == 33) | (kind == 45)
     idx4 = np.where(~is6 & ~is32 & ~is_adv & ~is_kj)[0]
     idx6 = np.where(is6)[0]
     idx32 = np.where(is32)[0]
     idx19 = np.where(is19)[0]
+    idx25 = np.where(is25)[0]
     idx44 = np.where(is44)[0]
     idx46 = np.where(is46)[0]
     idx_kj = np.where(is_kj)[0]
@@ -194,14 +196,14 @@ def init_group(group, model, log):
     st.update(L0=L0, mass=mass, k=k, cdamp=cdamp,
               force=np.zeros(n), eint=np.zeros(n), ehour=np.zeros(n),
               idx4=idx4, idx6=idx6, idx32=idx32,
-              idx19=idx19, idx44=idx44, idx46=idx46, idx_kj=idx_kj, model=model)
+              idx19=idx19, idx25=idx25, idx44=idx44, idx46=idx46, idx_kj=idx_kj, model=model)
 
     massn = np.repeat(mass / 2.0, 2)       # per (elem, localnode)
     inertn = np.zeros(2 * n)
     if len(idx6):
         spring_general.init6(group, model, log, idx6, massn, inertn)
-    if len(idx19) or len(idx44) or len(idx46):
-        spring_advanced.init_advanced(group, model, log, idx19, idx44, idx46, massn, inertn)
+    if len(idx19) or len(idx25) or len(idx44) or len(idx46):
+        spring_advanced.init_advanced(group, model, log, idx19=idx19, idx25=idx25, idx44=idx44, idx46=idx46, massn=massn, inertn=inertn)
     node_idx = group.conn.reshape(-1)
     return node_idx, massn, (inertn if inertn.any() else None)
 
@@ -409,12 +411,14 @@ def forces(group, x, v, vr, dt, fint, mint):
     idx4 = st.get("idx4")
     idx32 = st.get("idx32")
     idx19 = st.get("idx19")
+    idx25 = st.get("idx25")
     idx44 = st.get("idx44")
     idx46 = st.get("idx46")
     idx_kj = st.get("idx_kj")
     if ((idx6 is None or len(idx6) == 0) and
         (idx32 is None or len(idx32) == 0) and
         (idx19 is None or len(idx19) == 0) and
+        (idx25 is None or len(idx25) == 0) and
         (idx44 is None or len(idx44) == 0) and
         (idx46 is None or len(idx46) == 0) and
         (idx_kj is None or len(idx_kj) == 0)):
@@ -432,8 +436,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         dtc[idx6] = spring_general.forces6(group, x, v, vr, dt, fint, mint, idx6)
     if idx19 is not None and len(idx19):
         dtc[idx19] = spring_advanced.forces_torsion_type19(group, x, v, vr, dt, fint, mint, idx19)
+    if idx25 is not None and len(idx25):
+        dtc[idx25] = spring_advanced.forces_axi_type25(group, x, v, dt, fint, idx25)
     if idx44 is not None and len(idx44):
-        dtc[idx44] = spring_advanced.forces_crushing_type44(group, x, v, dt, fint, idx44)
+        dtc[idx44] = spring_advanced.forces_crushing_type44(group, x, v, dt, fint, idx44, vr=vr, mint=mint)
     if idx46 is not None and len(idx46):
         dtc[idx46] = spring_advanced.forces_muscle_type46(group, x, v, dt, fint, idx46)
     if "force" in st:

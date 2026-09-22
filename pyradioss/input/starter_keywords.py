@@ -7634,7 +7634,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             )
         return
 
-    if ptype in (26, 27, 51, 17, 34, 12, 15, 23, 25):
+    if ptype in (26, 27, 51, 17, 34, 12, 15, 23):
         from .prop_reader import InactiveProperty, _universal_geo_params
         full_params = _universal_geo_params()
         full_params.update(params)
@@ -7642,47 +7642,49 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             id=block.user_id, type=ptype, title=title, params=full_params,
             prop_name=f"/PROP/{block.parts[1] if len(block.parts) > 1 else 'TYPE' + str(ptype)}"
         )
-        if ptype == 25:
-            from ..model.entities import PropType25
-            tension = {
-                "stiff": float(params.get("stiff_tens", 0.0)),
-                "damp": float(params.get("damp_tens", 0.0)),
-                "a": float(params.get("a_tens", 0.0)),
-                "b": float(params.get("b_tens", 0.0)),
-                "d": float(params.get("d_tens", 0.0)),
-                "fun_a": int(params.get("fun_a_tens", 0)),
-                "hflag": int(params.get("hflag_tens", 0)),
-                "fun_b": int(params.get("fun_b_tens", 0)),
-                "fun_c": int(params.get("fun_c_tens", 0)),
-                "min_rup": float(params.get("min_rup_tens", 0.0)),
-                "max_rup": float(params.get("max_rup_tens", 0.0)),
-            }
-            shear = {
-                "stiff": float(params.get("stiff_shear", 0.0)),
-                "damp": float(params.get("damp_shear", 0.0)),
-                "a": float(params.get("a_shear", 0.0)),
-                "b": float(params.get("b_shear", 0.0)),
-                "d": float(params.get("d_shear", 0.0)),
-                "fun_a": int(params.get("fun_a_shear", 0)),
-                "hflag": int(params.get("hflag_shear", 0)),
-                "fun_b": int(params.get("fun_b_shear", 0)),
-                "fun_c": int(params.get("fun_c_shear", 0)),
-                "min_rup": float(params.get("min_rup_shear", 0.0)),
-                "max_rup": float(params.get("max_rup_shear", 0.0)),
-            }
-            model.prop_type25s[block.user_id] = PropType25(
-                id=block.user_id, mass=float(params.get("mass", 0.0)),
-                inertia=float(params.get("inertia", 0.0)),
-                skew_id=int(params.get("skew_id", 0)),
-                sensor_id=int(params.get("sensor_id", params.get("sens_id", 0))),
-                isflag=int(params.get("isflag", 0)),
-                ifail=int(params.get("ifail", 0)),
-                ileng=int(params.get("ileng", 0)),
-                ifail2=int(params.get("ifail2", 0)),
-                tension=tension,
-                shear=shear,
-                title=title,
-            )
+    elif ptype == 25:
+        from ..model.entities import PropType25
+        tension = {
+            "stiff": float(params.get("stiff_tens", 0.0)),
+            "damp": float(params.get("damp_tens", 0.0)),
+            "a": float(params.get("a_tens", 0.0)),
+            "b": float(params.get("b_tens", 0.0)),
+            "d": float(params.get("d_tens", 0.0)),
+            "fun_a": int(params.get("fun_a_tens", 0)),
+            "hflag": int(params.get("hflag_tens", 0)),
+            "fun_b": int(params.get("fun_b_tens", 0)),
+            "fun_c": int(params.get("fun_c_tens", 0)),
+            "min_rup": float(params.get("min_rup_tens", 0.0)),
+            "max_rup": float(params.get("max_rup_tens", 0.0)),
+        }
+        shear = {
+            "stiff": float(params.get("stiff_shear", 0.0)),
+            "damp": float(params.get("damp_shear", 0.0)),
+            "a": float(params.get("a_shear", 0.0)),
+            "b": float(params.get("b_shear", 0.0)),
+            "d": float(params.get("d_shear", 0.0)),
+            "fun_a": int(params.get("fun_a_shear", 0)),
+            "hflag": int(params.get("hflag_shear", 0)),
+            "fun_b": int(params.get("fun_b_shear", 0)),
+            "fun_c": int(params.get("fun_c_shear", 0)),
+            "min_rup": float(params.get("min_rup_shear", 0.0)),
+            "max_rup": float(params.get("max_rup_shear", 0.0)),
+        }
+        params["tension"] = tension
+        params["shear"] = shear
+        model.prop_type25s[block.user_id] = PropType25(
+            id=block.user_id, mass=float(params.get("mass", 0.0)),
+            inertia=float(params.get("inertia", 0.0)),
+            skew_id=int(params.get("skew_id", 0)),
+            sensor_id=int(params.get("sensor_id", params.get("sens_id", 0))),
+            isflag=int(params.get("isflag", 0)),
+            ifail=int(params.get("ifail", 0)),
+            ileng=int(params.get("ileng", 0)),
+            ifail2=int(params.get("ifail2", 0)),
+            tension=tension,
+            shear=shear,
+            title=title,
+        )
     model.properties[block.user_id] = Property(
         id=block.user_id, type=ptype, title=title, params=params)
     if ptype == 5:
@@ -37680,6 +37682,12 @@ def read_prop_type44(block: KeywordBlock, model: Model, log: MessageLog) -> None
             "fun_d2": fun_d2, "fun_d3": fun_d3, "fun_d4": fun_d4, "fun_d5": fun_d5, "fscale13": fscale13,
             "strain1": strain1, "strain2": strain2, "strain3": strain3,
             "strain4": strain4, "strain5": strain5, "strain6": strain6, "strain7": strain7,
+            "fct_d_x": fct_d_x, "dscale_x": dscale_x, "f_x": f_x,
+            "fct_d_y": fct_d_y, "dscale_y": dscale_y, "f_y": f_y,
+            "fct_d_z": fct_d_z, "dscale_z": dscale_z, "f_z": f_z,
+            "fct_d_xx": fct_d_xx, "dscale_xx": dscale_xx, "f_xx": f_xx,
+            "fct_d_yy": fct_d_yy, "dscale_yy": dscale_yy, "f_yy": f_yy,
+            "fct_d_zz": fct_d_zz, "dscale_zz": dscale_zz, "f_zz": f_zz,
         }
     )
 

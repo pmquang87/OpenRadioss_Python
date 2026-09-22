@@ -1,6 +1,7 @@
 """
 Advanced spring element formulations:
 - /PROP/TYPE19 (SPR_TORS): 2-node Torsion Spring (Fortran r1tors.F)
+- /PROP/TYPE25 (SPR_AXI): Axisymmetric Nonlinear Spring (Fortran r6def3.F, redef3.F90, rforc3.F)
 - /PROP/TYPE44 (SPR_CRUS): Crushing Spring with energy absorption (Fortran ruser44.F)
 - /PROP/TYPE46 (SPR_MUSCLE): Active Muscle Spring with Hill-type dynamics (Fortran ruser46.F)
 
@@ -9,6 +10,8 @@ Fortran origin
 * engine : ``engine/source/elements/spring/rforc3.F``
   - TYPE19: Torsion spring relative angle theta about line of nodes, rotational stiffness K_theta,
     damping C_theta, applied opposite moments M = K_theta * theta + C_theta * dtheta/dt.
+  - TYPE25: ``engine/source/elements/spring/r6def3.F``, ``redef3.F90`` (nonlinear axial and shear spring
+    with hardening, rate dependency, and displacement/force rupture).
   - TYPE44: ``engine/source/elements/spring/ruser44.F`` (crushable frame spring with non-recoverable
     plastic crushing displacement, compression plateau, and elastic unloading).
   - TYPE46: ``engine/source/elements/spring/ruser46.F`` (Hill-type muscle spring with activation level
@@ -16,6 +19,7 @@ Fortran origin
     relationship f_v(v/v_max)).
 * starter:
   - ``starter/source/properties/spring/hm_read_prop19.F``
+  - ``starter/source/properties/spring/hm_read_prop25.F``
   - ``starter/source/properties/spring/hm_read_prop44.F``
   - ``starter/source/properties/spring/hm_read_prop46.F``
 """
@@ -30,7 +34,7 @@ from ..common.constants import EM20, EP30
 from ..common.fastmath import norm3
 
 #: Advanced spring property type numbers
-ADVANCED_SPRING_PROP_TYPES = frozenset({19, 44, 46})
+ADVANCED_SPRING_PROP_TYPES = frozenset({19, 25, 44, 46})
 
 
 def _safe_param(params: dict, key: str, default: float = 0.0) -> float:
@@ -193,6 +197,379 @@ def forces_torsion_type19(group, x, v, vr, dt, fint, mint, idx19):
 
 
 # ============================================================================
+# TYPE25: Axisymmetric Nonlinear Spring (/PROP/TYPE25, /PROP/SPR_AXI)
+# ============================================================================
+
+def init_axi_type25(group, model, log, idx25, massn, inertn):
+    """Initialize state arrays for TYPE25 axisymmetric nonlinear springs.
+
+    Fortran origin:
+      - Starter: ``starter/source/properties/spring/hm_read_prop25.F``
+      - Engine:  ``engine/source/elements/spring/r6def3.F``,
+                 ``engine/source/elements/spring/redef3.F90``
+
+    TYPE25 features independent nonlinear axial and shear behavior:
+      - Axial tension/compression stiffness K_ax, damping C_ax, nonlinear curve fun_a,
+        hardening flag hflag (0=elastic, 1=isotropic hardening, 2=decoupled),
+        rate dependency A, B, D, and rupture limits min_rup (comp) / max_rup (tens).
+      - Shear stiffness K_sh, damping C_sh, nonlinear curve fun_a, and shear rupture.
+      - ileng flag: 0 for displacement Delta L, 1 for engineering strain Delta L / L0.
+      - ifail flag: 0 for uniaxial failure, 1 for multiaxial failure interaction.
+      - ifail2 flag: 0 for displacement rupture, 2 for force rupture.
+    """
+    st = group.state
+    n = group.n
+    m25 = len(idx25)
+    if m25 == 0:
+        return
+
+    if "t25_k_ax" not in st:
+        st["t25_k_ax"] = np.zeros(n)
+        st["t25_c_ax"] = np.zeros(n)
+        st["t25_fun_a_ax"] = np.zeros(n, dtype=np.int64)
+        st["t25_hflag_ax"] = np.zeros(n, dtype=np.int64)
+        st["t25_a_ax"] = np.zeros(n)
+        st["t25_b_ax"] = np.zeros(n)
+        st["t25_d_ax"] = np.zeros(n)
+        st["t25_min_rup_ax"] = np.zeros(n)
+        st["t25_max_rup_ax"] = np.zeros(n)
+
+        st["t25_k_sh"] = np.zeros(n)
+        st["t25_c_sh"] = np.zeros(n)
+        st["t25_fun_a_sh"] = np.zeros(n, dtype=np.int64)
+        st["t25_hflag_sh"] = np.zeros(n, dtype=np.int64)
+        st["t25_min_rup_sh"] = np.zeros(n)
+        st["t25_max_rup_sh"] = np.zeros(n)
+
+        st["t25_ileng"] = np.zeros(n, dtype=np.int64)
+        st["t25_ifail"] = np.zeros(n, dtype=np.int64)
+        st["t25_ifail2"] = np.zeros(n, dtype=np.int64)
+        st["t25_skew_id"] = np.zeros(n, dtype=np.int64)
+
+        st["t25_mass"] = np.zeros(n)
+        st["t25_inertia"] = np.zeros(n)
+
+        st["t25_delta_sh"] = np.zeros((n, 3))
+        st["t25_delta_p_ax"] = np.zeros(n)
+        st["t25_fxep"] = np.zeros(n)
+        st["t25_dx_old"] = np.zeros(n)
+
+    pos = {int(e): j for j, e in enumerate(idx25)}
+    for sl, mat, prop in st["slices"]:
+        if getattr(prop, "type", 0) != 25:
+            continue
+        rng = np.arange(group.n)[sl]
+        local = [e for e in rng if int(e) in pos]
+        if not len(local):
+            continue
+        p = getattr(prop, "params", {}) or {}
+        p25_obj = None
+        if hasattr(model, "prop_type25s"):
+            p25_obj = model.prop_type25s.get(getattr(prop, "id", 0))
+
+        tens = p.get("tension", {})
+        if not tens and p25_obj is not None:
+            tens = getattr(p25_obj, "tension", {})
+        shear = p.get("shear", {})
+        if not shear and p25_obj is not None:
+            shear = getattr(p25_obj, "shear", {})
+
+        # Axial parameters
+        k_ax = _safe_param(tens, "stiff", _safe_param(p, "stiff_tens", _safe_param(p, "k_ax", _safe_param(p, "k", 0.0))))
+        c_ax = _safe_param(tens, "damp", _safe_param(p, "damp_tens", _safe_param(p, "c_ax", _safe_param(p, "c", 0.0))))
+        a_ax = _safe_param(tens, "a", _safe_param(p, "a_tens", 0.0))
+        b_ax = _safe_param(tens, "b", _safe_param(p, "b_tens", 0.0))
+        d_ax = _safe_param(tens, "d", _safe_param(p, "d_tens", 0.0))
+        fun_a_ax = _safe_int_param(tens, "fun_a", _safe_int_param(p, "fun_a_tens", _safe_int_param(p, "fun_a1", 0)))
+        hflag_ax = _safe_int_param(tens, "hflag", _safe_int_param(p, "hflag_tens", _safe_int_param(p, "hflag1", 0)))
+        min_rup_ax = _safe_param(tens, "min_rup", _safe_param(p, "min_rup_tens", _safe_param(p, "min_rup1", _safe_param(p, "min_rup", 0.0))))
+        max_rup_ax = _safe_param(tens, "max_rup", _safe_param(p, "max_rup_tens", _safe_param(p, "max_rup1", _safe_param(p, "max_rup", 0.0))))
+
+        # Shear parameters
+        k_sh = _safe_param(shear, "stiff", _safe_param(p, "stiff_shear", _safe_param(p, "k_sh", 0.0)))
+        c_sh = _safe_param(shear, "damp", _safe_param(p, "damp_shear", _safe_param(p, "c_sh", 0.0)))
+        fun_a_sh = _safe_int_param(shear, "fun_a", _safe_int_param(p, "fun_a_shear", _safe_int_param(p, "fun_a2", 0)))
+        hflag_sh = _safe_int_param(shear, "hflag", _safe_int_param(p, "hflag_shear", _safe_int_param(p, "hflag2", 0)))
+        min_rup_sh = _safe_param(shear, "min_rup", _safe_param(p, "min_rup_shear", _safe_param(p, "min_rup2", 0.0)))
+        max_rup_sh = _safe_param(shear, "max_rup", _safe_param(p, "max_rup_shear", _safe_param(p, "max_rup2", 0.0)))
+
+        # Metadata
+        mass = _safe_param(p, "mass", getattr(p25_obj, "mass", 0.0) if p25_obj else 0.0)
+        inertia = _safe_param(p, "inertia", getattr(p25_obj, "inertia", 0.0) if p25_obj else 0.0)
+        ileng = _safe_int_param(p, "ileng", getattr(p25_obj, "ileng", 0) if p25_obj else 0)
+        ifail = _safe_int_param(p, "ifail", getattr(p25_obj, "ifail", 0) if p25_obj else 0)
+        ifail2 = _safe_int_param(p, "ifail2", getattr(p25_obj, "ifail2", 0) if p25_obj else 0)
+        skew_id = _safe_int_param(p, "skew_id", getattr(p25_obj, "skew_id", 0) if p25_obj else 0)
+
+        st["t25_k_ax"][local] = k_ax
+        st["t25_c_ax"][local] = c_ax
+        st["t25_fun_a_ax"][local] = fun_a_ax
+        st["t25_hflag_ax"][local] = hflag_ax
+        st["t25_a_ax"][local] = a_ax
+        st["t25_b_ax"][local] = b_ax
+        st["t25_d_ax"][local] = d_ax
+        st["t25_min_rup_ax"][local] = min_rup_ax
+        st["t25_max_rup_ax"][local] = max_rup_ax
+
+        st["t25_k_sh"][local] = k_sh
+        st["t25_c_sh"][local] = c_sh
+        st["t25_fun_a_sh"][local] = fun_a_sh
+        st["t25_hflag_sh"][local] = hflag_sh
+        st["t25_min_rup_sh"][local] = min_rup_sh
+        st["t25_max_rup_sh"][local] = max_rup_sh
+
+        st["t25_ileng"][local] = ileng
+        st["t25_ifail"][local] = ifail
+        st["t25_ifail2"][local] = ifail2
+        st["t25_skew_id"][local] = skew_id
+        st["t25_mass"][local] = mass
+        st["t25_inertia"][local] = inertia
+
+        st["k"][local] = max(k_ax, k_sh)
+        st["cdamp"][local] = max(c_ax, c_sh)
+        st["mass"][local] = mass
+
+        if massn is not None and mass > 0.0:
+            for e in local:
+                if 2 * e + 1 < len(massn):
+                    massn[2 * e] += mass / 2.0
+                    massn[2 * e + 1] += mass / 2.0
+
+        if inertn is not None and inertia > 0.0:
+            for e in local:
+                if 2 * e + 1 < len(inertn):
+                    inertn[2 * e] += inertia / 2.0
+                    inertn[2 * e + 1] += inertia / 2.0
+
+
+def forces_axi_type25(group, x, v, dt, fint, idx25):
+    """Compute forces for TYPE25 axisymmetric nonlinear springs (r6def3.F, redef3.F90)."""
+    if idx25 is None or len(idx25) == 0:
+        return np.empty(0)
+    st = group.state
+    conn = group.conn[idx25]
+    n1, n2 = conn[:, 0], conn[:, 1]
+    model = st.get("model")
+    n_elem = len(idx25)
+
+    dx = x[n2] - x[n1]
+    norm = norm3(dx)
+    degen = (norm < EM20)
+    L = np.where(degen, EM20, norm)
+    a = np.where(degen[:, None], np.array([1.0, 0.0, 0.0]), dx / L[:, None])
+
+    L0 = st["L0"][idx25]
+    delta_L = L - L0
+
+    if v is None:
+        dv = np.zeros_like(dx)
+        v_ax = np.zeros(n_elem)
+        v_sh = np.zeros_like(dx)
+    else:
+        dv = v[n2] - v[n1]
+        v_ax = np.einsum("nb,nb->n", dv, a)
+        v_sh = dv - v_ax[:, None] * a
+
+    dt_val = max(float(dt), 0.0) if dt is not None else 0.0
+
+    # Accumulated transverse shear displacement
+    if dt_val > 0.0:
+        st["t25_delta_sh"][idx25] += v_sh * dt_val
+    delta_sh_vec = st["t25_delta_sh"][idx25]
+    # Remove any axial component from numerical drift to stay exactly in transverse plane
+    axial_proj = np.einsum("nb,nb->n", delta_sh_vec, a)
+    delta_sh_vec -= axial_proj[:, None] * a
+    delta_sh = norm3(delta_sh_vec)
+    u_sh = np.where((delta_sh > EM20)[:, None], delta_sh_vec / np.maximum(delta_sh[:, None], EM20), 0.0)
+
+    # Engineering strain vs displacement
+    ileng = st["t25_ileng"][idx25]
+    use_strain = (ileng == 1) & (L0 > EM20)
+    scale_len = np.where(use_strain, L0, 1.0)
+    dx_tens = delta_L / scale_len
+    dx_sh = delta_sh / scale_len
+
+    k_ax = st["t25_k_ax"][idx25]
+    c_ax = st["t25_c_ax"][idx25]
+    fun_a_ax = st["t25_fun_a_ax"][idx25]
+    hflag_ax = st["t25_hflag_ax"][idx25]
+    a_ax = st["t25_a_ax"][idx25]
+    b_ax = st["t25_b_ax"][idx25]
+    d_ax = st["t25_d_ax"][idx25]
+    min_rup_ax = st["t25_min_rup_ax"][idx25]
+    max_rup_ax = st["t25_max_rup_ax"][idx25]
+
+    k_sh = st["t25_k_sh"][idx25]
+    c_sh = st["t25_c_sh"][idx25]
+    fun_a_sh = st["t25_fun_a_sh"][idx25]
+    hflag_sh = st["t25_hflag_sh"][idx25]
+    min_rup_sh = st["t25_min_rup_sh"][idx25]
+    max_rup_sh = st["t25_max_rup_sh"][idx25]
+
+    ifail = st["t25_ifail"][idx25]
+    ifail2 = st["t25_ifail2"][idx25]
+
+    # Active status
+    if "off" not in st:
+        st["off"] = np.ones(group.n)
+    alive = (st["off"][idx25] > 0.0)
+
+    # 1. Axial quasi-static force
+    F_quasi_ax = k_ax * dx_tens
+    has_model_funcs = (model is not None and hasattr(model, "functions"))
+
+    for i in range(n_elem):
+        fa = fun_a_ax[i]
+        if fa > 0 and has_model_funcs and fa in model.functions:
+            func = model.functions[fa]
+            f_val = func.eval(dx_tens[i])
+            hf = hflag_ax[i]
+            if hf == 0:
+                # Nonlinear elastic: pure curve evaluation
+                F_quasi_ax[i] = f_val
+            elif hf == 1:
+                # Isotropic hardening
+                f_ep = st["t25_fxep"][idx25[i]]
+                ddx = dx_tens[i] - st["t25_dx_old"][idx25[i]]
+                f_trial = f_ep + k_ax[i] * ddx
+                if abs(f_trial) > abs(f_val):
+                    f_trial = np.sign(f_trial) * abs(f_val)
+                F_quasi_ax[i] = f_trial
+                st["t25_fxep"][idx25[i]] = f_trial
+            elif hf == 2:
+                # Decoupled tension / compression
+                dp = st["t25_delta_p_ax"][idx25[i]]
+                if dx_tens[i] > dp:
+                    f_trial = k_ax[i] * (dx_tens[i] - dp)
+                    f_clamp = min(f_trial, f_val)
+                    st["t25_delta_p_ax"][idx25[i]] = dx_tens[i] - f_clamp / max(k_ax[i], EM20)
+                    F_quasi_ax[i] = f_clamp
+                else:
+                    F_quasi_ax[i] = 0.0
+            else:
+                F_quasi_ax[i] = k_ax[i] * dx_tens[i] + f_val
+
+    st["t25_dx_old"][idx25] = dx_tens.copy()
+
+    # Rate effect dfac = ak + b * log(max(1, |v_ax/d|))
+    has_rate = (d_ax > 0.0) & (b_ax > 0.0)
+    dfac = np.ones(n_elem)
+    if np.any(has_rate):
+        dvv = np.maximum(1.0, np.abs(v_ax[has_rate]) / d_ax[has_rate])
+        a_term = np.where(a_ax[has_rate] > 0.0, a_ax[has_rate], 1.0)
+        dfac[has_rate] = a_term + b_ax[has_rate] * np.log(dvv)
+    pure_a = (~has_rate) & (a_ax > 0.0)
+    if np.any(pure_a):
+        dfac[pure_a] = a_ax[pure_a]
+
+    F_quasi_ax *= dfac
+    F_damp_ax = c_ax * v_ax
+    F_ax = F_quasi_ax + F_damp_ax
+
+    # 2. Shear quasi-static force
+    F_quasi_sh = k_sh * dx_sh
+    for i in range(n_elem):
+        fa_s = fun_a_sh[i]
+        if fa_s > 0 and has_model_funcs and fa_s in model.functions:
+            func_s = model.functions[fa_s]
+            f_val_s = func_s.eval(dx_sh[i])
+            hf_s = hflag_sh[i]
+            if hf_s == 0:
+                F_quasi_sh[i] = f_val_s
+            else:
+                F_quasi_sh[i] = k_sh[i] * dx_sh[i] + f_val_s
+
+    F_sh_vec = F_quasi_sh[:, None] * u_sh + c_sh[:, None] * v_sh
+
+    # 3. Rupture checks
+    for i in range(n_elem):
+        if not alive[i]:
+            continue
+        rup = False
+        if ifail2[i] == 2:
+            # Force rupture criterion
+            f_a = F_ax[i]
+            f_s = norm3(F_sh_vec[i:i+1])[0]
+            if ifail[i] == 0:
+                if f_a > 0.0 and max_rup_ax[i] > 0.0 and f_a >= max_rup_ax[i]:
+                    rup = True
+                if f_a < 0.0 and min_rup_ax[i] != 0.0 and f_a <= min_rup_ax[i]:
+                    rup = True
+                if max_rup_sh[i] > 0.0 and f_s >= max_rup_sh[i]:
+                    rup = True
+            else:
+                # Multiaxial force interaction
+                crit = 0.0
+                if f_a > 0.0 and max_rup_ax[i] > 0.0:
+                    crit += (f_a / max_rup_ax[i]) ** 2
+                elif f_a < 0.0 and min_rup_ax[i] != 0.0:
+                    crit += (f_a / min_rup_ax[i]) ** 2
+                if max_rup_sh[i] > 0.0:
+                    crit += (f_s / max_rup_sh[i]) ** 2
+                if crit >= 1.0:
+                    rup = True
+        else:
+            # Displacement rupture criterion (ifail2 == 0)
+            u_a = dx_tens[i]
+            u_s = dx_sh[i]
+            if ifail[i] == 0:
+                # Uniaxial failure
+                if u_a > 0.0 and max_rup_ax[i] > 0.0 and u_a >= max_rup_ax[i]:
+                    rup = True
+                if u_a < 0.0 and min_rup_ax[i] != 0.0 and u_a <= min_rup_ax[i]:
+                    rup = True
+                if max_rup_sh[i] > 0.0 and u_s >= max_rup_sh[i]:
+                    rup = True
+            else:
+                # Multiaxial failure
+                crit = 0.0
+                if u_a > 0.0 and max_rup_ax[i] > 0.0:
+                    crit += (u_a / max_rup_ax[i]) ** 2
+                elif u_a < 0.0 and min_rup_ax[i] != 0.0:
+                    crit += (u_a / min_rup_ax[i]) ** 2
+                if max_rup_sh[i] > 0.0:
+                    crit += (u_s / max_rup_sh[i]) ** 2
+                if crit >= 1.0:
+                    rup = True
+
+        if rup:
+            st["off"][idx25[i]] = 0.0
+            alive[i] = False
+
+    # Zero out forces for ruptured elements
+    F_ax = np.where(alive, F_ax, 0.0)
+    F_sh_vec = np.where(alive[:, None], F_sh_vec, 0.0)
+
+    # 4. Total force and nodal application
+    F_tot = F_ax[:, None] * a + F_sh_vec
+
+    if fint is not None:
+        np.add.at(fint, n1, F_tot)
+        np.add.at(fint, n2, -F_tot)
+
+    # 5. Energy and force bookkeeping
+    F_old = st["force"][idx25].copy()
+    st["force"][idx25] = F_ax
+    if dt_val > 0.0:
+        p_ax = 0.5 * (F_old + F_ax) * v_ax
+        p_sh = np.einsum("nb,nb->n", F_sh_vec, v_sh)
+        st["eint"][idx25] += (p_ax + p_sh) * dt_val
+
+    # 6. Critical time step
+    mass = np.maximum(st["t25_mass"][idx25], EM20)
+    k_eff = np.maximum(k_ax, k_sh)
+    c_eff = np.maximum(c_ax, c_sh)
+    pos_k = (k_eff > 0.0) & (st["t25_mass"][idx25] > 0.0)
+    pure_c = (k_eff <= 0.0) & (c_eff > 0.0) & (st["t25_mass"][idx25] > 0.0)
+
+    omega = 2.0 * np.sqrt(np.where(pos_k, k_eff / mass, 1.0))
+    xi = np.where(pos_k, c_eff / np.sqrt(np.maximum(k_eff * mass, EM20)), 0.0)
+    dt_crit = (2.0 / omega) * (np.sqrt(1.0 + xi ** 2) - xi)
+    dt_c = np.where(pure_c, 0.5 * mass / np.maximum(c_eff, EM20), EP30)
+    return np.where(pos_k, dt_crit, dt_c)
+
+
+# ============================================================================
 # TYPE44: Crushing Spring with Energy Absorption
 # ============================================================================
 
@@ -223,6 +600,40 @@ def init_crushing_type44(group, model, log, idx44, massn, inertn):
         st["t44_mass"] = np.zeros(n)
         st["t44_fct_yield"] = np.zeros(n, dtype=np.int64)
 
+        # 6-DOF rotational & bending states (Fortran ruser44.F)
+        st["t44_k44"] = np.zeros(n)
+        st["t44_k55"] = np.zeros(n)
+        st["t44_k66"] = np.zeros(n)
+        st["t44_k5b"] = np.zeros(n)
+        st["t44_k6c"] = np.zeros(n)
+        st["t44_c_rot"] = np.zeros(n)
+        st["t44_c_by"] = np.zeros(n)
+        st["t44_c_bz"] = np.zeros(n)
+        st["t44_inertia"] = np.zeros(n)
+
+        st["t44_rot_x"] = np.zeros(n)
+        st["t44_rot_y1"] = np.zeros(n)
+        st["t44_rot_y2"] = np.zeros(n)
+        st["t44_rot_z1"] = np.zeros(n)
+        st["t44_rot_z2"] = np.zeros(n)
+
+        st["t44_fun_a1"] = np.zeros(n, dtype=np.int64)
+        st["t44_fun_b1"] = np.zeros(n, dtype=np.int64)
+        st["t44_fun_a2"] = np.zeros(n, dtype=np.int64)
+        st["t44_fun_b2"] = np.zeros(n, dtype=np.int64)
+        st["t44_fun_a3"] = np.zeros(n, dtype=np.int64)
+        st["t44_fun_b3"] = np.zeros(n, dtype=np.int64)
+        st["t44_fun_a4"] = np.zeros(n, dtype=np.int64)
+        st["t44_fun_b4"] = np.zeros(n, dtype=np.int64)
+        st["t44_fun_a5"] = np.zeros(n, dtype=np.int64)
+        st["t44_fun_b5"] = np.zeros(n, dtype=np.int64)
+        st["t44_fun_a6"] = np.zeros(n, dtype=np.int64)
+        st["t44_fun_b6"] = np.zeros(n, dtype=np.int64)
+
+        st["t44_fscale11"] = np.ones(n)
+        st["t44_fscale22"] = np.ones(n)
+        st["t44_fscale33"] = np.ones(n)
+
     pos = {int(e): j for j, e in enumerate(idx44)}
     for sl, mat, prop in st["slices"]:
         if getattr(prop, "type", 0) != 44:
@@ -232,16 +643,47 @@ def init_crushing_type44(group, model, log, idx44, massn, inertn):
         if not len(local):
             continue
         p = getattr(prop, "params", {}) or {}
+        p44_obj = None
+        if hasattr(model, "prop_type44s"):
+            p44_obj = model.prop_type44s.get(getattr(prop, "id", 0))
 
         # Stiffness: k_unload, k11, k, or stiff1
         k_un = _safe_param(p, "k_unload", _safe_param(p, "k11", _safe_param(p, "k", _safe_param(p, "stiff1", 0.0))))
-        # Yield force: f_yield, f_max, or from cards
         fy = _safe_param(p, "f_yield", _safe_param(p, "f_max", 0.0))
         fy_t = _safe_param(p, "f_yield_tensile", 0.0)
         d_crush = _safe_param(p, "delta_crush_max", _safe_param(p, "delta_crush", 1e20))
         c = _safe_param(p, "c", _safe_param(p, "cdamp", _safe_param(p, "dscale_x", 0.0)))
-        ms = _safe_param(p, "mass", 0.0)
+        ms = _safe_param(p, "mass", getattr(p44_obj, "mass", 0.0) if p44_obj else 0.0)
         fct_y = _safe_int_param(p, "fun_b1", _safe_int_param(p, "fct_yield", 0))
+
+        # 6-DOF bending and torsion parameters
+        k44 = _safe_param(p, "k44", _safe_param(p, "k_torsion", getattr(p44_obj, "k44", 0.0) if p44_obj else 0.0))
+        k55 = _safe_param(p, "k55", _safe_param(p, "k_bend_y", getattr(p44_obj, "k55", 0.0) if p44_obj else 0.0))
+        k66 = _safe_param(p, "k66", _safe_param(p, "k_bend_z", getattr(p44_obj, "k66", 0.0) if p44_obj else 0.0))
+        k5b = _safe_param(p, "k5b", getattr(p44_obj, "k5b", 0.0) if p44_obj else 0.0)
+        k6c = _safe_param(p, "k6c", getattr(p44_obj, "k6c", 0.0) if p44_obj else 0.0)
+
+        c_rot = _safe_param(p, "dscale_xx", _safe_param(p, "c_rot", 0.0))
+        c_by = _safe_param(p, "dscale_yy", _safe_param(p, "c_bend_y", 0.0))
+        c_bz = _safe_param(p, "dscale_zz", _safe_param(p, "c_bend_z", 0.0))
+        iner = _safe_param(p, "inertia", getattr(p44_obj, "inertia", 0.0) if p44_obj else 0.0)
+
+        fun_a1 = _safe_int_param(p, "fun_a1", getattr(p44_obj, "fun_a1", 0) if p44_obj else 0)
+        fun_b1 = _safe_int_param(p, "fun_b1", _safe_int_param(p, "fct_yield", getattr(p44_obj, "fun_b1", 0) if p44_obj else 0))
+        fun_a2 = _safe_int_param(p, "fun_a2", getattr(p44_obj, "fun_a2", 0) if p44_obj else 0)
+        fun_b2 = _safe_int_param(p, "fun_b2", getattr(p44_obj, "fun_b2", 0) if p44_obj else 0)
+        fun_a3 = _safe_int_param(p, "fun_a3", getattr(p44_obj, "fun_a3", 0) if p44_obj else 0)
+        fun_b3 = _safe_int_param(p, "fun_b3", getattr(p44_obj, "fun_b3", 0) if p44_obj else 0)
+        fun_a4 = _safe_int_param(p, "fun_a4", getattr(p44_obj, "fun_a4", 0) if p44_obj else 0)
+        fun_b4 = _safe_int_param(p, "fun_b4", getattr(p44_obj, "fun_b4", 0) if p44_obj else 0)
+        fun_a5 = _safe_int_param(p, "fun_a5", getattr(p44_obj, "fun_a5", 0) if p44_obj else 0)
+        fun_b5 = _safe_int_param(p, "fun_b5", getattr(p44_obj, "fun_b5", 0) if p44_obj else 0)
+        fun_a6 = _safe_int_param(p, "fun_a6", getattr(p44_obj, "fun_a6", 0) if p44_obj else 0)
+        fun_b6 = _safe_int_param(p, "fun_b6", getattr(p44_obj, "fun_b6", 0) if p44_obj else 0)
+
+        fscale11 = _safe_param(p, "fscale11", _safe_param(p, "fscal_x", getattr(p44_obj, "fscale11", 1.0) if p44_obj else 1.0))
+        fscale22 = _safe_param(p, "fscale22", _safe_param(p, "fscal_rx", getattr(p44_obj, "fscale22", 1.0) if p44_obj else 1.0))
+        fscale33 = _safe_param(p, "fscale33", getattr(p44_obj, "fscale33", 1.0) if p44_obj else 1.0)
 
         st["t44_k_unload"][local] = k_un
         st["t44_f_yield"][local] = fy
@@ -250,6 +692,34 @@ def init_crushing_type44(group, model, log, idx44, massn, inertn):
         st["t44_cdamp"][local] = c
         st["t44_mass"][local] = ms
         st["t44_fct_yield"][local] = fct_y
+
+        st["t44_k44"][local] = k44
+        st["t44_k55"][local] = k55
+        st["t44_k66"][local] = k66
+        st["t44_k5b"][local] = k5b
+        st["t44_k6c"][local] = k6c
+        st["t44_c_rot"][local] = c_rot
+        st["t44_c_by"][local] = c_by
+        st["t44_c_bz"][local] = c_bz
+        st["t44_inertia"][local] = iner
+
+        st["t44_fun_a1"][local] = fun_a1
+        st["t44_fun_b1"][local] = fun_b1
+        st["t44_fun_a2"][local] = fun_a2
+        st["t44_fun_b2"][local] = fun_b2
+        st["t44_fun_a3"][local] = fun_a3
+        st["t44_fun_b3"][local] = fun_b3
+        st["t44_fun_a4"][local] = fun_a4
+        st["t44_fun_b4"][local] = fun_b4
+        st["t44_fun_a5"][local] = fun_a5
+        st["t44_fun_b5"][local] = fun_b5
+        st["t44_fun_a6"][local] = fun_a6
+        st["t44_fun_b6"][local] = fun_b6
+
+        st["t44_fscale11"][local] = fscale11
+        st["t44_fscale22"][local] = fscale22
+        st["t44_fscale33"][local] = fscale33
+
         st["k"][local] = k_un
         st["cdamp"][local] = c
         st["mass"][local] = ms
@@ -260,18 +730,24 @@ def init_crushing_type44(group, model, log, idx44, massn, inertn):
                     massn[2 * e] += ms / 2.0
                     massn[2 * e + 1] += ms / 2.0
 
+        if inertn is not None and iner > 0.0:
+            for e in local:
+                if 2 * e + 1 < len(inertn):
+                    inertn[2 * e] += iner / 2.0
+                    inertn[2 * e + 1] += iner / 2.0
 
-def forces_crushing_type44(group, x, v, dt, fint, idx44):
-    """Compute forces for TYPE44 crushing springs.
 
-    Trial force: F_trial = K_unload * (delta - delta_p)
-    Compression yield: when F_trial < -F_yield (crushing plateau)
-      F_elastic = -F_yield
-      delta_p = delta + F_yield / K_unload
-    Elastic unloading:
-      when unloading, delta_p is fixed and F = K_unload * (delta - delta_p)
-    Energy accounting:
-      Incremental work = 0.5 * (F_old + F) * Ldot * dt booked into eint.
+def forces_crushing_type44(group, x, v, dt, fint, idx44, vr=None, mint=None):
+    """Compute forces and moments for TYPE44 crushing springs with 6-DOF support (Fortran ruser44.F).
+
+    Features:
+      - 1D axial plastic crushing in compression with plateau and elastic unloading.
+      - 6-DOF bending & torsion stiffnesses (K44, K55, K66, K5b, K6c).
+      - Multi-DOF yield curves (torsion, bending about Y and Z at nodes 1 and 2).
+      - Equilibrium transverse shear forces derived from bending moments:
+        F_z = (M_y1 + M_y2) / L, F_y = -(M_z1 + M_z2) / L.
+      - Exact linear and angular momentum conservation: sum(F) = 0, sum(M) + r x F = 0.
+      - Damping and energy dissipation booking into eint.
     """
     if idx44 is None or len(idx44) == 0:
         return np.empty(0)
@@ -279,6 +755,7 @@ def forces_crushing_type44(group, x, v, dt, fint, idx44):
     conn = group.conn[idx44]
     n1, n2 = conn[:, 0], conn[:, 1]
     model = st.get("model")
+    n_elem = len(idx44)
 
     dx = x[n2] - x[n1]
     norm = norm3(dx)
@@ -304,7 +781,8 @@ def forces_crushing_type44(group, x, v, dt, fint, idx44):
     fct_y = st["t44_fct_yield"][idx44]
 
     # Evaluate yield force from functions if specified
-    if model is not None and hasattr(model, "functions"):
+    has_funcs = (model is not None and hasattr(model, "functions"))
+    if has_funcs:
         for i, fid in enumerate(fct_y):
             if fid > 0 and fid in model.functions:
                 func = model.functions[fid]
@@ -348,15 +826,157 @@ def forces_crushing_type44(group, x, v, dt, fint, idx44):
     F_old = st["force"][idx44].copy()
     st["force"][idx44] = F
 
-    # Apply forces to nodes: tension pulls together, compression pushes apart
+    # Apply axial forces to nodes: tension pulls together, compression pushes apart
     fvec = F[:, None] * a
     if fint is not None:
         np.add.at(fint, n1, fvec)
         np.add.at(fint, n2, -fvec)
 
-    # Internal energy work booking
+    # Internal energy work booking for axial force
     if dt_val > 0.0:
         st["eint"][idx44] += 0.5 * (F_old + F) * Ldot * dt_val
+
+    # ========================================================================
+    # 6-DOF Rotational & Bending Moments (Fortran ruser44.F)
+    # ========================================================================
+    k44 = st.get("t44_k44", np.zeros(group.n))[idx44]
+    k55 = st.get("t44_k55", np.zeros(group.n))[idx44]
+    k66 = st.get("t44_k66", np.zeros(group.n))[idx44]
+    has_rot = np.any((k44 > 0.0) | (k55 > 0.0) | (k66 > 0.0))
+
+    if has_rot and vr is not None:
+        # Construct orthogonal local coordinate triad (e1, e2, e3)
+        e1 = a
+        ref = np.array([0.0, 1.0, 0.0])
+        dot_y = np.abs(np.einsum("nb,b->n", e1, ref))
+        par = dot_y > 0.99
+        ref_vecs = np.where(par[:, None], np.array([0.0, 0.0, 1.0]), ref)
+        e3_raw = np.cross(e1, ref_vecs)
+        norm_e3 = norm3(e3_raw)
+        e3 = np.where((norm_e3 > EM20)[:, None], e3_raw / np.maximum(norm_e3[:, None], EM20), np.array([0.0, 0.0, 1.0]))
+        e2 = np.cross(e3, e1)
+
+        omega1 = vr[n1]
+        omega2 = vr[n2]
+        d_omega = omega2 - omega1
+
+        # Relative rotational rates in local axes
+        rx_rate = np.einsum("nb,nb->n", d_omega, e1)
+        ry1_rate = np.einsum("nb,nb->n", omega1, e2)
+        ry2_rate = np.einsum("nb,nb->n", omega2, e2)
+        rz1_rate = np.einsum("nb,nb->n", omega1, e3)
+        rz2_rate = np.einsum("nb,nb->n", omega2, e3)
+
+        if dt_val > 0.0:
+            st["t44_rot_x"][idx44] += rx_rate * dt_val
+            st["t44_rot_y1"][idx44] += ry1_rate * dt_val
+            st["t44_rot_y2"][idx44] += ry2_rate * dt_val
+            st["t44_rot_z1"][idx44] += rz1_rate * dt_val
+            st["t44_rot_z2"][idx44] += rz2_rate * dt_val
+
+        rot_x = st["t44_rot_x"][idx44]
+        rot_y1 = st["t44_rot_y1"][idx44]
+        rot_y2 = st["t44_rot_y2"][idx44]
+        rot_z1 = st["t44_rot_z1"][idx44]
+        rot_z2 = st["t44_rot_z2"][idx44]
+
+        k5b = st["t44_k5b"][idx44]
+        k6c = st["t44_k6c"][idx44]
+        c_rot = st["t44_c_rot"][idx44]
+        c_by = st["t44_c_by"][idx44]
+        c_bz = st["t44_c_bz"][idx44]
+
+        # Elastic moments + damping
+        xmom = k44 * rot_x + c_rot * rx_rate
+        my1 = (k55 * rot_y1 + k5b * rot_y2) + c_by * ry1_rate
+        my2 = (k5b * rot_y1 + k55 * rot_y2) + c_by * ry2_rate
+        mz1 = (k66 * rot_z1 + k6c * rot_z2) + c_bz * rz1_rate
+        mz2 = (k6c * rot_z1 + k66 * rot_z2) + c_bz * rz2_rate
+
+        # Clamping to yield curves if specified
+        if has_funcs:
+            for i in range(n_elem):
+                sc_rx = st["t44_fscale22"][idx44[i]]
+                sc_bend = st["t44_fscale33"][idx44[i]]
+
+                # Torsion yield: fun_b2 (+), fun_a2 (-)
+                fb2 = st["t44_fun_b2"][idx44[i]]
+                fa2 = st["t44_fun_a2"][idx44[i]]
+                if fb2 > 0 and fb2 in model.functions:
+                    fxxp = sc_rx * abs(model.functions[fb2].eval(rot_x[i]))
+                    xmom[i] = min(xmom[i], fxxp)
+                if fa2 > 0 and fa2 in model.functions:
+                    fxxm = -sc_rx * abs(model.functions[fa2].eval(rot_x[i]))
+                    xmom[i] = max(xmom[i], fxxm)
+
+                # Bending Y1: fun_b3 (+), fun_a3 (-)
+                fb3 = st["t44_fun_b3"][idx44[i]]
+                fa3 = st["t44_fun_a3"][idx44[i]]
+                if fb3 > 0 and fb3 in model.functions:
+                    fyy1p = sc_bend * abs(model.functions[fb3].eval(rot_y1[i]))
+                    my1[i] = min(my1[i], fyy1p)
+                if fa3 > 0 and fa3 in model.functions:
+                    fyy1m = -sc_bend * abs(model.functions[fa3].eval(rot_y1[i]))
+                    my1[i] = max(my1[i], fyy1m)
+
+                # Bending Y2: fun_b5 (+), fun_a5 (-)
+                fb5 = st["t44_fun_b5"][idx44[i]]
+                fa5 = st["t44_fun_a5"][idx44[i]]
+                if fb5 > 0 and fb5 in model.functions:
+                    fyy2p = sc_bend * abs(model.functions[fb5].eval(rot_y2[i]))
+                    my2[i] = min(my2[i], fyy2p)
+                if fa5 > 0 and fa5 in model.functions:
+                    fyy2m = -sc_bend * abs(model.functions[fa5].eval(rot_y2[i]))
+                    my2[i] = max(my2[i], fyy2m)
+
+                # Bending Z1: fun_b4 (+), fun_a4 (-)
+                fb4 = st["t44_fun_b4"][idx44[i]]
+                fa4 = st["t44_fun_a4"][idx44[i]]
+                if fb4 > 0 and fb4 in model.functions:
+                    fzz1p = sc_bend * abs(model.functions[fb4].eval(rot_z1[i]))
+                    mz1[i] = min(mz1[i], fzz1p)
+                if fa4 > 0 and fa4 in model.functions:
+                    fzz1m = -sc_bend * abs(model.functions[fa4].eval(rot_z1[i]))
+                    mz1[i] = max(mz1[i], fzz1m)
+
+                # Bending Z2: fun_b6 (+), fun_a6 (-)
+                fb6 = st["t44_fun_b6"][idx44[i]]
+                fa6 = st["t44_fun_a6"][idx44[i]]
+                if fb6 > 0 and fb6 in model.functions:
+                    fzz2p = sc_bend * abs(model.functions[fb6].eval(rot_z2[i]))
+                    mz2[i] = min(mz2[i], fzz2p)
+                if fa6 > 0 and fa6 in model.functions:
+                    fzz2m = -sc_bend * abs(model.functions[fa6].eval(rot_z2[i]))
+                    mz2[i] = max(mz2[i], fzz2m)
+
+        # Transverse shear forces from bending moment equilibrium (ruser44.F lines 556-557)
+        inv_L = 1.0 / np.maximum(L, EM20)
+        fz_shear = (my1 + my2) * inv_L
+        fy_shear = -(mz1 + mz2) * inv_L
+
+        # Nodal moments in global coordinates
+        m1_vec = xmom[:, None] * e1 + my1[:, None] * e2 + mz1[:, None] * e3
+        m2_vec = -xmom[:, None] * e1 + my2[:, None] * e2 + mz2[:, None] * e3
+
+        if mint is not None:
+            np.add.at(mint, n1, m1_vec)
+            np.add.at(mint, n2, m2_vec)
+
+        # Transverse forces applied to nodes:
+        # Moment equilibrium about node 1: M1 + M2 + (x2 - x1) x F2 = 0
+        # (x2 - x1) x F2 = L e1 x (fy*e2 + fz*e3) = L*(fy*e3 - fz*e2)
+        # So for M1_y + M2_y - L*fz = 0, F2 must have +fz along e3.
+        # And M1_z + M2_z + L*fy = 0, F2 must have +fy along e2.
+        # Thus F2 = fy*e2 + fz*e3, and F1 = -F2 = -(fy*e2 + fz*e3)
+        f_shear_vec = fy_shear[:, None] * e2 + fz_shear[:, None] * e3
+        if fint is not None:
+            np.add.at(fint, n1, -f_shear_vec)
+            np.add.at(fint, n2, f_shear_vec)
+
+        # Rotational work booking into eint
+        if dt_val > 0.0:
+            p_rot = xmom * rx_rate + my1 * ry1_rate + my2 * ry2_rate + mz1 * rz1_rate + mz2 * rz2_rate
+            st["eint"][idx44] += p_rot * dt_val
 
     # Time step calculation
     mass = np.maximum(st["t44_mass"][idx44], EM20)
@@ -368,7 +988,22 @@ def forces_crushing_type44(group, x, v, dt, fint, idx44):
     xi = np.where(pos_k, c_damp / np.sqrt(np.maximum(k_dt * mass, EM20)), 0.0)
     dt_crit = (2.0 / omega) * (np.sqrt(1.0 + xi ** 2) - xi)
     dt_c = np.where(pure_c, 0.5 * mass / np.maximum(c_damp, EM20), EP30)
-    return np.where(pos_k, dt_crit, dt_c)
+    dt_final = np.where(pos_k, dt_crit, dt_c)
+
+    # Rotational time step check if rotational stiffness and inertia are specified
+    iner = st.get("t44_inertia", np.zeros(group.n))[idx44]
+    k_rot_max = np.maximum(k44, np.maximum(k55, k66))
+    c_rot_max = np.maximum(st.get("t44_c_rot", np.zeros(group.n))[idx44], st.get("t44_c_by", np.zeros(group.n))[idx44])
+    has_iner = (iner > 0.0) & (k_rot_max > 0.0)
+    if np.any(has_iner):
+        i_p = iner[has_iner]
+        k_p = k_rot_max[has_iner]
+        c_p = c_rot_max[has_iner]
+        denom = np.sqrt(c_p * c_p + i_p * k_p) + c_p
+        dt_rot = i_p / np.maximum(denom, EM20)
+        dt_final[has_iner] = np.minimum(dt_final[has_iner], dt_rot)
+
+    return dt_final
 
 
 # ============================================================================
@@ -584,10 +1219,17 @@ def forces_muscle_type46(group, x, v, dt, fint, idx46):
 # Combined Dispatch for spring.py and Standalone Element Kernel
 # ============================================================================
 
-def init_advanced(group, model, log, idx19, idx44, idx46, massn, inertn):
+def init_advanced(group, model, log, *pos_args, idx19=None, idx25=None, idx44=None, idx46=None, massn=None, inertn=None, **kwargs):
     """Dispatcher called by spring.py init_group for advanced spring types."""
+    if len(pos_args) == 5:
+        idx19, idx44, idx46, massn, inertn = pos_args
+    elif len(pos_args) == 6:
+        idx19, idx25, idx44, idx46, massn, inertn = pos_args
+
     if idx19 is not None and len(idx19):
         init_torsion_type19(group, model, log, idx19, massn, inertn)
+    if idx25 is not None and len(idx25):
+        init_axi_type25(group, model, log, idx25, massn, inertn)
     if idx44 is not None and len(idx44):
         init_crushing_type44(group, model, log, idx44, massn, inertn)
     if idx46 is not None and len(idx46):
