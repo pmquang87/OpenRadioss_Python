@@ -751,6 +751,24 @@ def _coefficients_idealgas(eos, mu: np.ndarray):
     return A, B
 
 
+def _coefficients_polynomial(eos, mu: np.ndarray):
+    """A(mu), B(mu) for Polynomial EOS (common_source/eos/eospolyno.F)."""
+    p = eos.params
+    mu_pos = np.maximum(mu, 0.0)
+    mu2 = mu * mu_pos
+    c0 = p.get("c0", 0.0)
+    c1 = p.get("c1", 0.0)
+    c2 = p.get("c2", 0.0)
+    c3 = p.get("c3", 0.0)
+    c4 = p.get("c4", 0.0)
+    c5 = p.get("c5", 0.0)
+    c6 = p.get("c6", 0.0)
+    psh = p.get("psh", 0.0)
+    A = (c0 - psh) + (c1 + c3 * (mu ** 2)) * mu + c2 * mu2
+    B = c4 + c5 * mu + c6 * mu2
+    return A, B
+
+
 def coefficients(eos, mu: np.ndarray, e: np.ndarray | float | None = None, time: float = 0.0):
     """A(mu), B(mu) of p = A + B E (see module docstring)."""
     kind = eos.kind.upper()
@@ -758,6 +776,8 @@ def coefficients(eos, mu: np.ndarray, e: np.ndarray | float | None = None, time:
         return _coefficients_sesame(eos, mu, e)
     if kind in ("IDEAL-GAS", "IDEAL_GAS"):
         return _coefficients_idealgas(eos, mu)
+    if kind in ("POLYNOMIAL", "POLY"):
+        return _coefficients_polynomial(eos, mu)
     if kind == "GRUNEISEN":
         return _coefficients_gruneisen(eos, mu)
     if kind == "TILLOTSON":
@@ -799,18 +819,8 @@ def coefficients(eos, mu: np.ndarray, e: np.ndarray | float | None = None, time:
     if kind == "TABULATED":
         return _coefficients_tabulated(eos, mu)
 
-    # Standard POLYNOMIAL
-    p = eos.params
-    mubar = np.maximum(mu, 0.0)
-    c0 = p.get("c0", 0.0)
-    c1 = p.get("c1", 0.0)
-    c2 = p.get("c2", 0.0)
-    c3 = p.get("c3", 0.0)
-    c4 = p.get("c4", 0.0)
-    c5 = p.get("c5", 0.0)
-    A = c0 + c1 * mu + c2 * (mubar ** 2) + c3 * (mu ** 3)
-    B = c4 + c5 * mu
-    return A, B
+    # Default fallback to polynomial
+    return _coefficients_polynomial(eos, mu)
 
 
 # ============================================================================
@@ -1402,7 +1412,31 @@ def update(eos, mu: np.ndarray, dv: np.ndarray, e_old: np.ndarray,
             c2 = (k0 + (p_tot / (eta ** 2)) * B) / max(rho0, 1e-12)
             return p_new, e_new, np.maximum(c2, 0.0)
 
-    # General default polynomial fallback
+    if kind in ("POLYNOMIAL", "POLY"):
+        c1 = p.get("c1", 0.0)
+        c2 = p.get("c2", 0.0)
+        c3 = p.get("c3", 0.0)
+        c5 = p.get("c5", 0.0)
+        c6 = p.get("c6", 0.0)
+        psh = p.get("psh", 0.0)
+        pmin = p.get("pmin", -1e30)
+
+        mu_pos = np.maximum(mu, 0.0)
+        A, B = _coefficients_polynomial(eos, mu)
+        denom = 1.0 + 0.5 * B * dv
+        e_new = (e_old + de_other - 0.5 * dv * (p_old + A + 2.0 * psh)) / np.maximum(denom, 1e-6)
+        p_raw = A + B * e_new
+        p_new = np.maximum(p_raw + psh, pmin) - psh
+
+        eta = 1.0 + mu
+        df = 1.0 / np.maximum(eta, 1e-12)
+        dpdm = (c1 + 2.0 * c2 * mu_pos + 3.0 * c3 * (mu ** 2)
+                + (c5 + c6 * mu_pos) * e_new
+                + B * (df ** 2) * (p_new + psh))
+        c2_bulk = dpdm / rho0
+        return p_new, e_new, np.maximum(c2_bulk, 0.0)
+
+    # General default fallback
     A, B = coefficients(eos, mu)
     denom = 1.0 + 0.5 * B * dv
     e_new = (e_old + de_other - 0.5 * dv * (p_old + A)) / np.maximum(denom, 1e-6)
@@ -1608,6 +1642,14 @@ def pressure(eos, mu: np.ndarray | float, e: np.ndarray | float, time: float = 0
             p_tot = np.maximum(p_val, pmin) - psh
             return float(p_tot) if is_scalar else p_tot
 
+    if kind in ("POLYNOMIAL", "POLY"):
+        A, B = _coefficients_polynomial(eos, mu_arr)
+        psh = eos.params.get("psh", 0.0)
+        pmin = eos.params.get("pmin", -1e30)
+        p_raw = A + B * e_arr
+        p_val = np.maximum(p_raw + psh, pmin) - psh
+        return float(p_val) if is_scalar else p_val
+
     A, B = coefficients(eos, mu_arr)
     p_val = A + B * e_arr
     return float(p_val) if is_scalar else p_val
@@ -1810,6 +1852,14 @@ def initial_state(eos):
         if e0 is None:
             e0 = p0_param / (gamma - 1.0) if gamma > 1.0 else 0.0
         p0 = p0_param - psh if p0_param > 0.0 else (gamma - 1.0) * e0 - psh
+        return e0, p0
+
+    if kind in ("POLYNOMIAL", "POLY"):
+        c0 = p.get("c0", 0.0)
+        c4 = p.get("c4", 0.0)
+        e0 = p.get("e0", 0.0)
+        psh = p.get("psh", 0.0)
+        p0 = (c0 - psh) + c4 * e0
         return e0, p0
 
     e0 = eos.params.get("e0", 0.0)
