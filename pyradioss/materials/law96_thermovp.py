@@ -325,7 +325,10 @@ def calc_yield(p: Law96Params, epsp: float, temp: float = 0.0) -> Tuple[float, f
     yld = max(0.0, yld)
 
     # Tangent modulus H = d(sigma_y) / d(epsp)
-    h_rubbery = (1.0 / 3.0) * p.sigr * (pp2 / pp1) + (4.0 / 3.0) * p.sigr * p.rc * pla2 / (pp1 ** 2)
+    # Upstream Fortran sigeps96.F lines 379-380:
+    #   HO = SIGA*RA(I)*EXP(-RA(I)*EPSPD(I)) - SIGB*RB*EXP(-RB*EPSPD(I))
+    #        + SIGR*(ONE + TWO_THIRD*RC*PLA2 * PP2 / PP1**2)
+    h_rubbery = p.sigr * (1.0 + (2.0 / 3.0) * p.rc * pla2 * pp2 / (pp1 ** 2))
     h = p.siga * ra * exp_a - p.sigb * p.rb * exp_b + h_rubbery
     return yld, h
 
