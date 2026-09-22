@@ -574,7 +574,15 @@ def init_group(group, model, log):
 # Engine-side Force Computation (ig3duforc3.F)
 # ----------------------------------------------------------------------------
 
-def forces(group, x: np.ndarray, v: np.ndarray, vr: np.ndarray | None, dt: float, fint: np.ndarray, mint: np.ndarray | None) -> np.ndarray:
+def forces(
+    group,
+    x: np.ndarray,
+    v: np.ndarray,
+    vr: np.ndarray | None = None,
+    dt: float = 0.0,
+    fint: np.ndarray | None = None,
+    mint: np.ndarray | None = None,
+) -> np.ndarray:
     """Compute 3D IGA NURBS internal forces, update stresses, energy, and return dt.
 
     # Ported from engine/source/elements/ige3d/ig3duforc3.F lines 434-620
@@ -679,7 +687,8 @@ def forces(group, x: np.ndarray, v: np.ndarray, vr: np.ndarray | None, dt: float
         dt_e[ie] = lc / max(c_sound[ie], EM20)
 
     # Accumulate internal forces into global fint (negated sign convention)
-    flat_idx = conn.reshape(-1)
-    scatter_add3(fint, flat_idx, elem_forces.reshape(-1, 3))
+    if fint is not None:
+        flat_idx = conn.reshape(-1)
+        scatter_add3(fint, flat_idx, elem_forces.reshape(-1, 3))
 
     return dt_e
