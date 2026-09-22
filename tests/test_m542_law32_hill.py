@@ -81,13 +81,15 @@ def test_law32_error_on_n_greater_than_one():
         )
 
 
-def test_law32_solid_update_not_implemented():
-    """solid_update raises NotImplementedError (shells only)."""
+def test_law32_solid_update():
+    """solid_update executes 3D Hill elastoplastic update following sigeps32.F."""
     mat = law32_hill.build_law32(id=1, E=210000.0, nu=0.3, A=300.0)
     sig = np.zeros((1, 6))
-    deps = np.zeros((1, 6))
-    with pytest.raises(NotImplementedError, match="shell elements only"):
-        law32_hill.solid_update(mat, sig, deps)
+    deps = np.array([[1.0e-3, 0.0, 0.0, 0.0, 0.0, 0.0]])
+    sig_out, ep_out, c = law32_hill.solid_update(mat, sig, deps)
+    assert sig_out.shape == (1, 6)
+    assert sig_out[0, 0] > 0.0
+    assert c > 0.0
 
 
 def test_law32_sound_speed():
