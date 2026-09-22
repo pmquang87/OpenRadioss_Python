@@ -34,4 +34,24 @@ from .entities import (  # noqa: F401
     MaterialLaw109, MatLaw109, MatTabPlas, MaterialTabPlas, MatElastoPlasTab, MatLaw109TabPlas,
     MaterialLaw110, MatLaw110, MatVegter, MaterialVegter, MatPlasVegter, MaterialPlasVegter,
 )
+from .drape import (  # noqa: F401
+    DrapeParams,
+    DrapeTable,
+    ElementDrape,
+    apply_draping_to_ply,
+    apply_draping_to_shell_mesh,
+    compute_drape_shear_angle,
+    compute_trellising_thickness,
+)
+try:
+    from .stack import (  # noqa: F401
+        PlyDefinition,
+        StackDefinition,
+        build_stack,
+        reduced_stiffness_matrix,
+        rotate_reduced_stiffness,
+    )
+except ImportError:
+    pass
+
 
