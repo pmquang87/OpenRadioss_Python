@@ -5548,6 +5548,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             model.properties[block.user_id] = prop
         return
     ptype = aliases[typename]
+    from ..model.entities import Property
     title, cards = _fixed_data(block) if block.fixed \
         else _title_and_data(block)
     params: Dict[str, float] = {}
@@ -7797,7 +7798,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             prop_name=f"/PROP/{block.parts[1] if len(block.parts) > 1 else 'TYPE' + str(ptype)}"
         )
     elif ptype == 27:
-        from ..model.entities import PropType27, Property
+        from ..model.entities import PropType27
         from .prop_reader import _universal_geo_params
         p27 = PropType27(
             id=block.user_id,
