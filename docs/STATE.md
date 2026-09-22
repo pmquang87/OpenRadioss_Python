@@ -52,6 +52,53 @@ Physics properties verified:
 - MONVOL/PRES: prescribed curve tracking
 - /LEAK: Saint-Venant choked orifice outflow
 
+## Material Law & Failure Model Porting Session (2026-09-22)
+
+Extensive batch porting of constitutive material laws, failure criteria, and connector elements from upstream OpenRadioss Fortran:
+
+### Material Laws Ported
+- **LAW04**: Hydrodynamic Johnson-Cook (`sigeps04.F`)
+- **LAW06**: Hydrodynamic Viscous Fluid (`sigeps06.F`)
+- **LAW10**: Drucker-Prager Soil & Concrete (`sigeps10.F`)
+- **LAW12**: 3D Composite Continuum Damage (`sigeps12.F`)
+- **LAW14**: Solid Composite Delamination (`sigeps14.F`)
+- **LAW15**: Chang-Chang Anisotropic Plasticity (`sigeps15.F`)
+- **LAW19**: Fabric Material with Fiber Orientations (`sigeps19.F`)
+- **LAW21**: Drucker-Prager Parabolic Yield (`sigeps21.F`)
+- **LAW24**: Concrete Damage Plasticity (`sigeps24.F`)
+- **LAW27**: Hyperelastic Mooney-Rivlin / Ogden (`sigeps27.F`)
+- **LAW28**: Honeycomb Orthotropic Cellular Material (`sigeps28.F`)
+- **LAW33**: Crushable Foam Plasticity (`sigeps33.F`)
+- **LAW35**: Kelvin-Maxwell Viscoelasticity (`sigeps35.F`)
+- **LAW37**: Biphasic Porous Media (`sigeps37.F`)
+- **LAW38**: Viscoelastic Tabulated (`sigeps38.F`)
+- **LAW40**: Maxwell-Kelvin Linear Viscoelastic (`sigeps40.F`)
+- **LAW45**: Orthotropic Fabric Membrane (`sigeps45.F`)
+- **LAW46**: Kinematic Hardening Plasticity (`sigeps46.F`)
+- **LAW49**: Steinberg-Guinan High-Pressure Plasticity (`sigeps49.F`)
+- **LAW50**: Viscoelastic Honeycomb (`sigeps50.F`)
+- **LAW57**: Barlat 3-Component Anisotropic Shell (`sigeps57.F`)
+- **LAW58**: Fabric Wrinkling Membrane (`sigeps58.F`)
+- **LAW62**: Hyper-Viscoelastic Foam (`sigeps62.F`)
+- **LAW70**: Tabulated Foam Plasticity (`sigeps70.F`)
+- **LAW73**: Hill Orthotropic Thermal Plasticity (`sigeps73.F`)
+- **LAW74**: Hill 3D Orthotropic Thermo-Elastoplastic (`sigeps74.F`)
+- **LAW79**: Johnson-Holmquist Ceramic & Glass (`sigeps79.F`)
+- **LAW80**: Ramberg-Osgood Nonlinear Plasticity (`sigeps80.F`)
+- **LAW81**: Drucker-Prager Cap Elastoplastic Soil/Concrete (`sigeps81.F`)
+- **LAW83**: Spotweld Discrete Connection / TYPE43 (`sigeps83.F`)
+- **LAW87**: Barlat Yld2000 2D Anisotropic Plasticity (`sigeps87.F`)
+- **LAW90**: Hysteretic Tabulated Foam (`sigeps90.F`)
+- **LAW96**: Thermo-Viscoplastic Strain-Rate Hardening (`sigeps96.F`)
+- **LAW102**: Drucker-Prager Cap 2 (`sigeps102.F`)
+- **LAW122**: Chaboche Combined Kinematic/Isotropic Hardening (`sigeps122.F`)
+- **LAW190**: Du Bois Crushable Foam Material (`sigeps190.F`)
+
+### Failure Models & Element Fixes Ported
+- **Brokmann Failure**: (/FAIL/BROKMANN) non-local plastic strain / stress triaxiality failure (`fail_brokmann.F`).
+- **Rivet Element**: (`rivet.py`) discrete structural fastener with shear/tension coupling.
+- **Implicit Constraint Fix**: `_apply_autos` implicit constraint resolution (9 test failures resolved).
+
 ## What is implemented (M1 → M614+multiphysics)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
