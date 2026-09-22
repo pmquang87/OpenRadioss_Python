@@ -47,7 +47,8 @@ from .deck_reader import Card, KeywordBlock, parse_fortran_float
 PROP_TYPE_NUMBERS: Dict[str, int] = {
     "VOID": 0, "SHELL": 1, "TRUSS": 2, "BEAM": 3, "SPRING": 4, "RIVET": 5, "TYPE5": 5, "PROP_TYPE5": 5,
     "SOL_ORTH": 6, "SPR_PUL": 12, "SPR_GENE": 8, "SH_ORTH": 9, "SH_COMP": 10,
-    "SH_SANDW": 11, "SPR_BEAM": 13, "SOLID": 14, "POROUS": 15, "SH_FABR": 16,
+    "SH_SANDW": 11, "TYPE11": 11, "PROP_TYPE11": 11, "SANDWICH": 11, "PROP_SANDWICH": 11, "PROP_SH_SANDW": 11,
+    "SPR_BEAM": 13, "SOLID": 14, "POROUS": 15, "SH_FABR": 16, "TYPE16": 16, "PROP_TYPE16": 16, "PROP_SH_FABR": 16, "FABRIC_SHELL": 16,
     "STACK": 17, "TYPE17": 17, "SH_COMP": 17, "COMP_SHELL": 17, "INT_BEAM": 18,
     "TSHELL": 20, "TYPE20": 20, "PROP_TYPE20": 20,
     "TSH_ORTH": 21, "TYPE21": 21, "PROP_TYPE21": 21, "TSHELL_COMP": 21, "TSH_COMP": 22,
@@ -93,7 +94,7 @@ def prop_type_ok(req_prop: int, prop: Property) -> bool:
     pt = prop.type
     if pt == req_prop or pt == 0:
         return True
-    if req_prop == 1 and pt in (9, 16, 17, 19):
+    if req_prop == 1 and pt in (9, 11, 16, 17, 19):
         return True
     if req_prop == 3 and pt in (18,):
         return True
@@ -768,10 +769,9 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     ptype = _type_number(typename)
     if typename in ("SH_ORTH", "TYPE9"):
         return parse_sh_orth(block, 9, log)
-    if typename in ("SH_FABR", "TYPE16"):
-        # TYPE16 orientation frame is ported; per-ply composite layup is
-        # not — parse the orientation, run as a single orthotropic layer
-        return parse_sh_orth(block, 16, log)
+    if typename in ("SH_FABR", "TYPE16", "PROP_TYPE16", "PROP_SH_FABR", "FABRIC_SHELL"):
+        from .prop_shell_type16 import parse_prop16
+        return parse_prop16(block, log=log)
     if typename in ("SPR_GENE", "TYPE8"):
         return parse_spr_gene(block, log)
     if typename in ("SPR_BEAM", "TYPE13"):
@@ -793,6 +793,9 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     if typename in ("RIVET", "TYPE5", "PROP_TYPE5"):
         from .prop_rivet import parse_prop_rivet
         return parse_prop_rivet(block, log)
+    if typename in ("SH_SANDW", "TYPE11", "PROP_TYPE11", "SANDWICH", "PROP_SANDWICH", "PROP_SH_SANDW"):
+        from .prop_sandwich import parse_sandwich_card
+        return parse_sandwich_card(block, log)
     if typename in ("STITCH", "TYPE35"):
         return parse_stitch(block, log)
     if typename in ("STACK", "TYPE17", "SH_COMP", "PROP_TYPE17", "COMP_SHELL"):
@@ -1153,3 +1156,13 @@ def _type_number(typename: str) -> int:
         except ValueError:
             return -1
     return -1
+
+
+def parse_sandwich(block: KeywordBlock, log: MessageLog) -> Property:
+    """Parse /PROP/TYPE11 (SH_SANDW, SANDWICH) sandwich shell property."""
+    from .prop_sandwich import parse_sandwich_card
+    return parse_sandwich_card(block, log)
+
+
+parse_prop11_sandwich = parse_sandwich
+
