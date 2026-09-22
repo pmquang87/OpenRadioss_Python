@@ -34,7 +34,7 @@ from ..common.constants import EM20, EP30
 from ..common.fastmath import norm3
 
 #: Advanced spring property type numbers
-ADVANCED_SPRING_PROP_TYPES = frozenset({19, 25, 44, 46})
+ADVANCED_SPRING_PROP_TYPES = frozenset({19, 25, 26, 44, 46})
 
 
 def _safe_param(params: dict, key: str, default: float = 0.0) -> float:
@@ -567,6 +567,306 @@ def forces_axi_type25(group, x, v, dt, fint, idx25):
     dt_crit = (2.0 / omega) * (np.sqrt(1.0 + xi ** 2) - xi)
     dt_c = np.where(pure_c, 0.5 * mass / np.maximum(c_eff, EM20), EP30)
     return np.where(pos_k, dt_crit, dt_c)
+
+
+# ============================================================================
+# TYPE26: Tabulated Nonlinear Spring (/PROP/SPR_TAB)
+# ============================================================================
+# Fortran origin:
+#   engine/source/elements/spring/r26def3.F
+#   engine/source/elements/spring/r26sig.F
+#   engine/source/elements/spring/rforc3.F
+#   starter/source/properties/spring/hm_read_prop26.F
+
+def init_tab_type26(group, model, log, idx26, massn, inertn):
+    """Initialize state arrays for TYPE26 (/PROP/SPR_TAB) tabulated nonlinear springs.
+
+    Fortran origin: starter/source/properties/spring/hm_read_prop26.F,
+    engine/source/elements/spring/r26def3.F.
+    """
+    st = group.state
+    n = group.n
+    if len(idx26) == 0:
+        return
+
+    if "t26_kmax" not in st:
+        st["t26_kmax"] = np.zeros(n)
+        st["t26_mass"] = np.zeros(n)
+        st["t26_alpha"] = np.ones(n)
+        st["t26_scale"] = np.ones(n)
+        st["t26_dmin"] = np.full(n, -1e30)
+        st["t26_dmax"] = np.full(n, 1e30)
+        st["t26_ileng"] = np.zeros(n, dtype=np.int64)
+        st["t26_dx_old"] = np.zeros(n)
+        st["t26_dv0"] = np.zeros(n)
+        st["t26_load_curves"] = [[] for _ in range(n)]
+        st["t26_unload_curves"] = [[] for _ in range(n)]
+
+    pos = {int(e): j for j, e in enumerate(idx26)}
+    for sl, mat, prop in st["slices"]:
+        if getattr(prop, "type", 0) != 26:
+            continue
+        rng = np.arange(group.n)[sl]
+        local = [e for e in rng if int(e) in pos]
+        if not len(local):
+            continue
+
+        p = getattr(prop, "params", {}) or {}
+        ms = float(getattr(prop, "mass", _safe_param(p, "mass", 0.0)))
+        km = float(getattr(prop, "kmax", _safe_param(p, "stiff0", _safe_param(p, "kmax", _safe_param(p, "k", 0.0)))))
+        al = float(getattr(prop, "alpha", _safe_param(p, "alpha", _safe_param(p, "alpha1", 1.0))))
+        if al == 0.0:
+            al = 1.0
+        sc = float(getattr(prop, "lscale", _safe_param(p, "scale", _safe_param(p, "lscale", 1.0))))
+        if sc == 0.0:
+            sc = 1.0
+        d_min = float(getattr(prop, "dmin", _safe_param(p, "dmin", 0.0)))
+        if d_min == 0.0:
+            d_min = -1e30
+        else:
+            d_min = -abs(d_min)
+        d_max = float(getattr(prop, "dmax", _safe_param(p, "dmax", 0.0)))
+        if d_max == 0.0:
+            d_max = 1e30
+        else:
+            d_max = abs(d_max)
+        il = int(getattr(prop, "ileng", _safe_int_param(p, "ileng", 0)))
+        if il == 1:
+            sc = 1.0
+
+        # Load curves
+        ld_curves = []
+        if hasattr(prop, "loading_curves") and prop.loading_curves:
+            for c in prop.loading_curves:
+                fid = getattr(c, "fct_id", 0)
+                fsc = getattr(c, "fscale", 1.0)
+                sr = getattr(c, "strain_rate", 0.0)
+                ld_curves.append((fid, fsc, sr))
+        elif "load_curves" in p and p["load_curves"]:
+            for c in p["load_curves"]:
+                fid = int(c.get("fun_load", 0))
+                fsc = float(c.get("scale_load", 1.0))
+                sr = float(c.get("strainrate_load", 0.0))
+                ld_curves.append((fid, fsc, sr))
+        ld_curves.sort(key=lambda x: x[2])
+
+        # Unload curves
+        uld_curves = []
+        if hasattr(prop, "unloading_curves") and prop.unloading_curves:
+            for c in prop.unloading_curves:
+                fid = getattr(c, "fct_id", 0)
+                fsc = getattr(c, "fscale", 1.0)
+                sr = getattr(c, "strain_rate", 0.0)
+                uld_curves.append((fid, fsc, sr))
+        elif "unload_curves" in p and p["unload_curves"]:
+            for c in p["unload_curves"]:
+                fid = int(c.get("fun_unload", 0))
+                fsc = float(c.get("scale_unload", 1.0))
+                sr = float(c.get("strainrate_unload", 0.0))
+                uld_curves.append((fid, fsc, sr))
+        if not uld_curves:
+            uld_curves = list(ld_curves)
+        else:
+            uld_curves.sort(key=lambda x: x[2])
+
+        st["t26_kmax"][local] = km
+        st["t26_mass"][local] = ms
+        st["t26_alpha"][local] = al
+        st["t26_scale"][local] = sc
+        st["t26_dmin"][local] = d_min
+        st["t26_dmax"][local] = d_max
+        st["t26_ileng"][local] = il
+        st["k"][local] = km
+        st["mass"][local] = ms
+
+        for e in local:
+            st["t26_load_curves"][e] = list(ld_curves)
+            st["t26_unload_curves"][e] = list(uld_curves)
+
+        if massn is not None and ms > 0.0:
+            for e in local:
+                if 2 * e + 1 < len(massn):
+                    massn[2 * e] += ms / 2.0
+                    massn[2 * e + 1] += ms / 2.0
+
+
+def forces_tab_type26(group, x, v, dt, fint, idx26):
+    """Compute forces for TYPE26 (/PROP/SPR_TAB) tabulated nonlinear springs.
+
+    Fortran origin: engine/source/elements/spring/r26def3.F, r26sig.F, rforc3.F.
+    """
+    if idx26 is None or len(idx26) == 0:
+        return np.empty(0)
+
+    st = group.state
+    conn = group.conn[idx26]
+    n1, n2 = conn[:, 0], conn[:, 1]
+    n_elem = len(idx26)
+
+    dx = x[n2] - x[n1]
+    norm = norm3(dx)
+    degen = (norm < EM20)
+    L = np.where(degen, EM20, norm)
+    e1 = np.where(degen[:, None], np.array([1.0, 0.0, 0.0]), dx / L[:, None])
+
+    L0 = st["L0"][idx26]
+    alive = st.get("off", np.ones(group.n))[idx26] > 0.0
+
+    ileng = st["t26_ileng"][idx26]
+    xl0 = np.where(ileng != 0, np.maximum(L0, EM20), 1.0)
+    dl_total = L - L0
+    dx_val = dl_total / xl0
+    dx_old = st["t26_dx_old"][idx26]
+    ddx = dx_val - dx_old
+
+    dt_val = dt if (dt is not None and dt > 0.0) else EP30
+    dvx = ddx / dt_val
+    dv_raw = np.abs(dvx)
+
+    alpha = st["t26_alpha"][idx26]
+    dv0 = st["t26_dv0"][idx26]
+    dv = (1.0 - alpha) * dv0 + alpha * dv_raw
+    st["t26_dv0"][idx26] = dv
+    st["t26_dx_old"][idx26] = dx_val.copy()
+
+    kmax = st["t26_kmax"][idx26]
+    scale_x = st["t26_scale"][idx26]
+    f_old = st["force"][idx26].copy()
+    FX = np.zeros(n_elem)
+
+    model = st.get("model")
+    has_model_funcs = model is not None and hasattr(model, "functions")
+
+    for i in range(n_elem):
+        if not alive[i]:
+            continue
+
+        elem_idx = idx26[i]
+        d_x = dx_val[i]
+        k_val = kmax[i]
+        sc_x = scale_x[i]
+        v_rel = dv[i]
+
+        if d_x >= 0.0:
+            # Linear elastic tension (r26sig.F lines 125-126)
+            FX[i] = k_val * d_x
+        else:
+            # Trial compression force (r26sig.F line 128)
+            f_trial = f_old[i] + k_val * ddx[i]
+            x_eval = abs(d_x) / max(sc_x, EM20)
+
+            # 1. Calculation of upper bound FMAX (loading curves, r26sig.F lines 131-175)
+            load_c = st["t26_load_curves"][elem_idx]
+            n_ld = len(load_c)
+            if n_ld == 0:
+                f_max_bound = -EM20
+            elif n_ld == 1:
+                fid1, yfac1, rate1 = load_c[0]
+                y1 = 0.0
+                if has_model_funcs and fid1 in model.functions:
+                    y1 = yfac1 * model.functions[fid1].eval(x_eval)
+                f_max_bound = -max(y1, EM20)
+            else:
+                j1 = 0
+                for j in range(1, n_ld):
+                    if v_rel >= load_c[j][2]:
+                        j1 = j
+                if j1 >= n_ld - 1:
+                    j1 = n_ld - 2
+                j2 = j1 + 1
+
+                fid1, yfac1, rate1 = load_c[j1]
+                fid2, yfac2, rate2 = load_c[j2]
+
+                y1 = 0.0
+                if has_model_funcs and fid1 in model.functions:
+                    y1 = yfac1 * model.functions[fid1].eval(x_eval)
+                y2 = 0.0
+                if has_model_funcs and fid2 in model.functions:
+                    y2 = yfac2 * model.functions[fid2].eval(x_eval)
+
+                fac = (v_rel - rate1) / max(rate2 - rate1, EM20)
+                fac = min(max(fac, 0.0), 1.0)
+                y_interp = y1 + fac * (y2 - y1)
+                f_max_bound = -max(y_interp, EM20)
+
+            # 2. Calculation of lower bound FMIN (unloading curves, r26sig.F lines 176-220)
+            unload_c = st["t26_unload_curves"][elem_idx]
+            n_uld = len(unload_c)
+            if n_uld == 0:
+                f_min_bound = f_max_bound
+            elif n_uld == 1:
+                fid1, yfac1, rate1 = unload_c[0]
+                y1 = 0.0
+                if has_model_funcs and fid1 in model.functions:
+                    y1 = yfac1 * model.functions[fid1].eval(x_eval)
+                f_min_bound = -max(y1, EM20)
+            else:
+                j1 = 0
+                for j in range(1, n_uld):
+                    if v_rel >= unload_c[j][2]:
+                        j1 = j
+                if j1 >= n_uld - 1:
+                    j1 = n_uld - 2
+                j2 = j1 + 1
+
+                fid1, yfac1, rate1 = unload_c[j1]
+                fid2, yfac2, rate2 = unload_c[j2]
+
+                y1 = 0.0
+                if has_model_funcs and fid1 in model.functions:
+                    y1 = yfac1 * model.functions[fid1].eval(x_eval)
+                y2 = 0.0
+                if has_model_funcs and fid2 in model.functions:
+                    y2 = yfac2 * model.functions[fid2].eval(x_eval)
+
+                fac = (v_rel - rate1) / max(rate2 - rate1, EM20)
+                fac = min(max(fac, 0.0), 1.0)
+                y_interp = y1 + fac * (y2 - y1)
+                f_min_bound = -max(y_interp, EM20)
+
+            # Clamping: FMAX <= F <= FMIN <= 0 (r26sig.F lines 222-228)
+            if f_min_bound < f_max_bound:
+                f_min_bound, f_max_bound = f_max_bound, f_min_bound
+
+            if f_trial > f_min_bound:
+                FX[i] = f_min_bound
+            elif f_trial < f_max_bound:
+                FX[i] = f_max_bound
+            else:
+                FX[i] = f_trial
+
+    # Rupture checks (r26def3.F lines 156-170)
+    dmin = st["t26_dmin"][idx26]
+    dmax = st["t26_dmax"][idx26]
+    for i in range(n_elem):
+        if not alive[i]:
+            continue
+        if dl_total[i] > dmax[i] * xl0[i] or dl_total[i] < dmin[i] * xl0[i]:
+            st["off"][idx26[i]] = 0.0
+            alive[i] = False
+            FX[i] = 0.0
+
+    FX = np.where(alive, FX, 0.0)
+    st["force"][idx26] = FX
+
+    # Internal energy update (r26sig.F lines 236-237)
+    if dt is not None and dt > 0.0:
+        dE = 0.5 * ddx * (FX + f_old) * xl0
+        st["eint"][idx26] += np.where(alive, dE, 0.0)
+
+    # Nodal force scatter
+    fvec = FX[:, None] * e1
+    if fint is not None:
+        np.add.at(fint, n1, fvec)
+        np.add.at(fint, n2, -fvec)
+
+    # Critical time step (r26def3.F lines 178-181)
+    mass = np.maximum(st["t26_mass"][idx26], EM20) * xl0
+    k_dt = np.maximum(kmax, EM20) / xl0
+    omega = 2.0 * np.sqrt(k_dt / mass)
+    dt_crit = 2.0 / omega
+    return np.where(alive, dt_crit, EP30)
 
 
 # ============================================================================
@@ -1219,17 +1519,21 @@ def forces_muscle_type46(group, x, v, dt, fint, idx46):
 # Combined Dispatch for spring.py and Standalone Element Kernel
 # ============================================================================
 
-def init_advanced(group, model, log, *pos_args, idx19=None, idx25=None, idx44=None, idx46=None, massn=None, inertn=None, **kwargs):
+def init_advanced(group, model, log, *pos_args, idx19=None, idx25=None, idx26=None, idx44=None, idx46=None, massn=None, inertn=None, **kwargs):
     """Dispatcher called by spring.py init_group for advanced spring types."""
     if len(pos_args) == 5:
         idx19, idx44, idx46, massn, inertn = pos_args
     elif len(pos_args) == 6:
         idx19, idx25, idx44, idx46, massn, inertn = pos_args
+    elif len(pos_args) == 7:
+        idx19, idx25, idx26, idx44, idx46, massn, inertn = pos_args
 
     if idx19 is not None and len(idx19):
         init_torsion_type19(group, model, log, idx19, massn, inertn)
     if idx25 is not None and len(idx25):
         init_axi_type25(group, model, log, idx25, massn, inertn)
+    if idx26 is not None and len(idx26):
+        init_tab_type26(group, model, log, idx26, massn, inertn)
     if idx44 is not None and len(idx44):
         init_crushing_type44(group, model, log, idx44, massn, inertn)
     if idx46 is not None and len(idx46):

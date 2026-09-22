@@ -7634,7 +7634,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             )
         return
 
-    if ptype in (26, 27, 51, 17, 34, 12, 15, 23):
+    if ptype in (27, 51, 17, 34, 12, 15, 23):
         from .prop_reader import InactiveProperty, _universal_geo_params
         full_params = _universal_geo_params()
         full_params.update(params)
@@ -7642,6 +7642,9 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             id=block.user_id, type=ptype, title=title, params=full_params,
             prop_name=f"/PROP/{block.parts[1] if len(block.parts) > 1 else 'TYPE' + str(ptype)}"
         )
+    elif ptype == 26:
+        read_prop_spr_tab(block, model, log)
+        return
     elif ptype == 25:
         from ..model.entities import PropType25
         tension = {
@@ -34987,8 +34990,7 @@ def read_mat_law121(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 def read_prop_spr_tab(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/PROP/TYPE26/id`` or ``/PROP/SPR_TAB/id`` (M182): Tabulated nonlinear spring property."""
-    from ..model.entities import PropType26, PropType26Curve
-    from .prop_reader import InactiveProperty
+    from ..model.entities import PropType26, PropType26Curve, Property
     prop_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank]
@@ -35120,8 +35122,8 @@ def read_prop_spr_tab(block: KeywordBlock, model: Model, log: MessageLog) -> Non
         "load_curves": [{"fun_load": c.fct_id, "scale_load": c.fscale, "strainrate_load": c.strain_rate} for c in loading_curves],
         "unload_curves": [{"fun_unload": c.fct_id, "scale_unload": c.fscale, "strainrate_unload": c.strain_rate} for c in unloading_curves],
     })
-    model.properties[prop_id] = InactiveProperty(
-        id=prop_id, type=26, title=title, prop_name="TYPE26",
+    model.properties[prop_id] = Property(
+        id=prop_id, type=26, title=title,
         params=p26_params,
     )
 
