@@ -1,10 +1,14 @@
 r"""LAW10 — Soil and crushable material with Drucker-Prager yield and compaction EOS (/MAT/LAW10, /MAT/SOIL, /MAT/DPRAG).
 
 Fortran origins:
-- ``engine/source/materials/mat/mat010/m10law.F`` (solid constitutive update)
-- ``common_source/eos/compaction.F90`` (compaction equation of state)
-- ``starter/source/materials/mat/mat010/hm_read_mat10.F`` (starter card reader, defaults & parameter estimation)
-- ``C:\OpenRadioss\hm_cfg_files\config\CFG\radioss2020\MAT\matl10_law10.cfg`` (CFG attributes & card format)
+- ``C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat010\m10law.F``
+  (Subroutine M10LAW, lines 28-220; historically cited as sigeps10.F)
+- ``C:\OpenRadioss\source\OpenRadioss-latest-20260520\common_source\eos\compaction.F90``
+  (Compaction equation of state, lines 103-180)
+- ``C:\OpenRadioss\source\OpenRadioss-latest-20260520\starter\source\materials\mat\mat010\hm_read_mat10.F``
+  (Starter card reader, defaults & parameter estimation, lines 97-290)
+- ``C:\OpenRadioss\hm_cfg_files\config\CFG\radioss2020\MAT\matl10_law10.cfg``
+  (CFG attributes & card format)
 
 Theory
 ------
@@ -17,10 +21,12 @@ LAW10 models geological materials (soils, rocks, sand) and crushable concrete us
    \(P(\mu) = c_0 + c_1 \mu + (c_2 + c_3 \mu) \mu |\mu|\)
    with maximum historic compaction memory \(\mu_{bak}\) and constant or continuous
    unloading bulk modulus \(B_{unl}\).
-3. Radial return projection of the deviatoric trial stress onto the yield envelope:
+3. Shock bulk viscosity for shock smoothing (mqviscb / mmain.F90 lines 1329-1342):
+   \(P_{tot} = P_{new} + P_{sh} + q_{vis}\)
+4. Radial return projection of the deviatoric trial stress onto the yield envelope:
    \(r = \sqrt{G_0 / (J_2 + 10^{-14})}\)
-   with Cauchy stress \(\sigma = s_{new} - P_{new} I\).
-4. Acoustic wave speed:
+   with Cauchy stress \(\sigma = s_{new} - (P_{new} + q_{vis}) I\).
+5. Acoustic wave speed:
    \(c = \sqrt{(K_{eff} + \frac{4}{3} G) / \rho_0}\) where \(K_{eff} = \max(c_1, B_{unl})\).
 
 Solids only (SOLID_ISOTROPIC + SPH).
@@ -90,8 +96,10 @@ def _ensure_params(mat: Material | dict) -> dict[str, Any]:
         raise ValueError(f"LAW10: Poisson's ratio nu must be in [0, 0.5) (got {nu})")
 
     # Elastic shear and bulk moduli
-    g = e / (2.0 * (1.0 + nu))
-    k = e / (3.0 * (1.0 - 2.0 * nu))
+    g_val = p.get("G") if p.get("G") is not None else p.get("MAT_G")
+    g = float(g_val) if g_val is not None and float(g_val) > 0.0 else e / (2.0 * (1.0 + nu))
+    k_val = p.get("K") if p.get("K") is not None else p.get("MAT_K")
+    k = float(k_val) if k_val is not None and float(k_val) > 0.0 else e / (3.0 * (1.0 - 2.0 * nu))
 
     # Drucker-Prager coefficients A0, A1, A2
     a0 = float(p.get("A0") if p.get("A0") is not None else (p.get("MAT_A0") or 0.0))
@@ -110,20 +118,36 @@ def _ensure_params(mat: Material | dict) -> dict[str, Any]:
     )
     amax = float(amax_val) if amax_val is not None and float(amax_val) != 0.0 else _EP20
 
-    # Tension fracture pressure pmin (defaults to -1e30 if 0 or None, hm_read_mat10.F line 223)
+    # Tension fracture pressure pmin (defaults to -1e30 if 0 or None, hm_read_mat10.F line 223, m10law.F line 98)
     pmin_val = (
         p.get("pmin")
         if p.get("pmin") is not None
         else (
             p.get("MAT_PC")
             if p.get("MAT_PC") is not None
-            else (p.get("PMIN") if p.get("PMIN") is not None else p.get("p_min"))
+            else (
+                p.get("PMIN")
+                if p.get("PMIN") is not None
+                else (
+                    p.get("p_min")
+                    if p.get("p_min") is not None
+                    else (
+                        p.get("MAT_PMIN")
+                        if p.get("MAT_PMIN") is not None
+                        else (p.get("pfrac") if p.get("pfrac") is not None else p.get("PFRAC"))
+                    )
+                )
+            )
         )
     )
     pmin = float(pmin_val) if pmin_val is not None and float(pmin_val) != 0.0 else -_INF
 
     # External pressure / shift
-    pext = float(p.get("pext") if p.get("pext") is not None else (p.get("PEXT") or 0.0))
+    pext = float(
+        p.get("pext")
+        if p.get("pext") is not None
+        else (p.get("PEXT") if p.get("PEXT") is not None else (p.get("MAT_PEXT") or 0.0))
+    )
     psh = float(
         p.get("psh")
         if p.get("psh") is not None
@@ -162,7 +186,11 @@ def _ensure_params(mat: Material | dict) -> dict[str, Any]:
         else (
             p.get("EOS_COM_B")
             if p.get("EOS_COM_B") is not None
-            else (p.get("BUNL") if p.get("BUNL") is not None else p.get("MAT_BULK"))
+            else (
+                p.get("BUNL")
+                if p.get("BUNL") is not None
+                else (p.get("MAT_BULK") if p.get("MAT_BULK") is not None else p.get("MAT_BUNL"))
+            )
         )
     )
     bunl = float(bunl_val) if bunl_val is not None else 0.0
@@ -176,7 +204,19 @@ def _ensure_params(mat: Material | dict) -> dict[str, Any]:
             else (
                 p.get("XMUMX")
                 if p.get("XMUMX") is not None
-                else (p.get("mue_mx") if p.get("mue_mx") is not None else p.get("MAT_SIG"))
+                else (
+                    p.get("mue_mx")
+                    if p.get("mue_mx") is not None
+                    else (
+                        p.get("MAT_SIG")
+                        if p.get("MAT_SIG") is not None
+                        else (
+                            p.get("MAT_XMUMX")
+                            if p.get("MAT_XMUMX") is not None
+                            else (p.get("mu_max") if p.get("mu_max") is not None else p.get("MU_MAX"))
+                        )
+                    )
+                )
             )
         )
     )
@@ -265,7 +305,13 @@ def _ensure_params(mat: Material | dict) -> dict[str, Any]:
     p["EOS_COM_B"] = bunl
     p["EOS_COM_Mue_max"] = mue_max
     p["MAT_BULK"] = bunl
+    p["MAT_BUNL"] = bunl
     p["MAT_SIG"] = mue_max
+    p["MAT_XMUMX"] = mue_max
+    p["MAT_PMIN"] = pmin
+    p["PFRAC"] = pmin
+    p["MAT_G"] = g
+    p["MAT_K"] = k
 
     return p
 
@@ -439,6 +485,10 @@ def solid_update(
     if extra is None:
         extra = {}
 
+    single = (sig.ndim == 1)
+    if single:
+        sig = sig[None, :]
+
     n = sig.shape[0]
     if n == 0:
         sig_ret = sig.copy()
@@ -448,6 +498,8 @@ def solid_update(
 
     if dt <= 0.0:
         sig_ret = sig.copy()
+        if single:
+            sig_ret = sig_ret[0]
         if return_tuple:
             c_val = sound_speed(mat, extra=extra)
             return sig_ret, epsp, c_val
@@ -462,6 +514,9 @@ def solid_update(
         d_e = np.asarray(eps_dot, dtype=float) * dt
     else:
         d_e = np.zeros_like(sig, dtype=float)
+
+    if single and d_e.ndim == 1:
+        d_e = d_e[None, :]
 
     # Material parameters
     p = _ensure_params(mat)
@@ -542,7 +597,16 @@ def solid_update(
     p_eos = np.where(mu_bak > 0.0, np.minimum(p_loading, p_unl), p_loading)
     p_eos = np.maximum(p_eos, pmin) * off
     p_new = p_eos - psh
-    p_tot = p_new + psh
+
+    # Shock / bulk viscosity pressure (mqviscb / mmain.F90 lines 1329-1342)
+    q_vis = np.asarray(
+        extra.get("qvis", extra.get("q_bulk", extra.get("q", 0.0))),
+        dtype=float,
+    )
+    if q_vis.shape != (n,):
+        q_vis = np.full(n, float(q_vis.flat[0]) if q_vis.size > 0 else 0.0, dtype=float)
+
+    p_tot = p_new + psh + q_vis
 
     # Historic compaction update (compaction.F90 line 177)
     mu_bak = np.minimum(mue_max, np.maximum(mu_bak, mu))
@@ -566,11 +630,12 @@ def solid_update(
     # 5. Deviatoric stress update (m10law.F lines 199-204)
     s_new = ratio[:, None] * s_tr * off[:, None]
 
-    # 6. Total Cauchy stress recombination (sigma = s - p_new * I)
+    # 6. Total Cauchy stress recombination (sigma = s - (p_new + q_vis) * I)
+    p_eff = p_new + q_vis
     sig_new = np.empty_like(sig, dtype=float)
-    sig_new[:, 0] = s_new[:, 0] - p_new
-    sig_new[:, 1] = s_new[:, 1] - p_new
-    sig_new[:, 2] = s_new[:, 2] - p_new
+    sig_new[:, 0] = s_new[:, 0] - p_eff
+    sig_new[:, 1] = s_new[:, 1] - p_eff
+    sig_new[:, 2] = s_new[:, 2] - p_eff
     sig_new[:, 3] = s_new[:, 3]
     sig_new[:, 4] = s_new[:, 4]
     sig_new[:, 5] = s_new[:, 5]
@@ -594,9 +659,16 @@ def solid_update(
     extra["j2"] = j2
     extra["p_new"] = p_new
     extra["ptot"] = p_tot
+    extra["q_vis"] = q_vis
 
     if epsp is not None:
         epsp[:] = extra["epxe"]
+
+    if single:
+        if return_tuple:
+            c_speed = sound_speed(mat, extra=extra)
+            return sig_new[0], extra["epxe"], c_speed
+        return sig_new[0]
 
     if return_tuple:
         c_speed = sound_speed(mat, extra=extra)
@@ -655,6 +727,10 @@ def consistent_solid_tangent(
             if isinstance(a, dict):
                 extra = a
                 break
+
+    single = (sig.ndim == 1)
+    if single:
+        sig = sig[None, :]
 
     n = sig.shape[0]
     if n == 0:
@@ -790,10 +866,27 @@ def consistent_solid_tangent(
         if kwargs.get("symmetric", False):
             d_tangent[i] = 0.5 * (d_tangent[i] + d_tangent[i].T)
 
+    if single:
+        return d_tangent[0]
     return d_tangent
 
 
 solid_tangent = consistent_solid_tangent
+tangent = consistent_solid_tangent
+
+
+def needs_defgrad(mat: Any = None) -> bool:
+    """Return False: LAW10 uses an incremental hypoelastic rate formulation."""
+    return False
+
+
+def extra_shapes(mat: Any = None, nip: int | None = None) -> dict[str, tuple[int, ...]]:
+    """Persistent history variables for LAW10 (m10law.F lines 76-77; compaction.F90 line 176)."""
+    return {
+        "mu_bak": () if nip is None else (nip,),
+        "epxe": () if nip is None else (nip,),
+        "mu": () if nip is None else (nip,),
+    }
 
 
 # -----------------------------------------------------------------------------

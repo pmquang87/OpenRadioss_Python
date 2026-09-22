@@ -26,6 +26,10 @@ from pyradioss.materials.law10_soil import (
     shell_update,
     sound_speed,
     consistent_solid_tangent,
+    solid_tangent,
+    tangent,
+    needs_defgrad,
+    extra_shapes,
 )
 from pyradioss.input.mat_reader import MAT_PHYSICS_REGISTRY
 
@@ -508,3 +512,109 @@ def test_law10_consistent_tangent_finite_difference():
 
     # Verify finite-difference consistency
     np.testing.assert_allclose(d_sig_tangent, d_sig_fd, rtol=1e-3, atol=1e-2)
+
+
+# =============================================================================
+# 6. Additional Parity & API Verification (M10LAW / sigeps10.F)
+# =============================================================================
+
+def test_law10_public_api_and_metadata():
+    """Verify standard pyradioss material API exports."""
+    assert callable(law10_soil.solid_update)
+    assert callable(law10_soil.shell_update)
+    assert callable(law10_soil.sound_speed)
+    assert callable(law10_soil.consistent_solid_tangent)
+    assert callable(law10_soil.solid_tangent)
+    assert callable(law10_soil.tangent)
+    assert callable(law10_soil.needs_defgrad)
+    assert callable(law10_soil.extra_shapes)
+    assert law10_soil.tangent is law10_soil.consistent_solid_tangent
+    assert law10_soil.solid_tangent is law10_soil.consistent_solid_tangent
+
+    # Hypoelastic law does not need deformation gradient F
+    assert not law10_soil.needs_defgrad()
+
+    # Extra shapes for history variables
+    shapes_none = law10_soil.extra_shapes()
+    assert shapes_none["mu_bak"] == ()
+    assert shapes_none["epxe"] == ()
+    assert shapes_none["mu"] == ()
+
+    shapes_nip = law10_soil.extra_shapes(nip=8)
+    assert shapes_nip["mu_bak"] == (8,)
+    assert shapes_nip["epxe"] == (8,)
+    assert shapes_nip["mu"] == (8,)
+
+
+def test_law10_1d_array_support():
+    """Verify solid_update and consistent_solid_tangent accept 1D (6,) arrays."""
+    mat = build_law10({"MAT_RHO": 2000.0, "MAT_E": 1.0e7, "MAT_NU": 0.25, "A0": 1.0e6})
+    sig_1d = np.zeros(6, dtype=float)
+    deps_1d = np.array([0.0, 0.0, 0.0, 1.0e-3, 0.0, 0.0])
+
+    extra = {}
+    sig_out = solid_update(mat, sig_1d, d_eps=deps_1d, dt=1e-4, extra=extra)
+    assert sig_out.shape == (6,)
+    np.testing.assert_allclose(sig_out[3], 1000.0, rtol=1e-5)
+
+    # Tangent with 1D stress
+    d_tang = consistent_solid_tangent(mat, sig_out, extra=extra)
+    assert d_tang.shape == (6, 6)
+
+
+def test_law10_shock_bulk_viscosity():
+    """Verify shock bulk viscosity (q / qvis) increases hydrostatic pressure and modifies yield surface."""
+    mat = build_law10({
+        "MAT_RHO": 2000.0,
+        "MAT_E": 1.0e7,
+        "MAT_NU": 0.25,
+        "A0": 1.0e6,
+        "A1": 2.0,
+        "c0": 0.0,
+        "c1": 1.0e7,
+    })
+    sig = np.zeros((1, 6), dtype=float)
+    # Hydrostatic compression mu = 0.02 -> P_eos = 2e5
+    deps = np.array([[-0.02 / 3.0, -0.02 / 3.0, -0.02 / 3.0, 1.0e-3, 0.0, 0.0]])
+
+    # Without bulk viscosity
+    extra_no_q = {}
+    sig_no_q = solid_update(mat, sig, d_eps=deps, dt=1e-4, extra=extra_no_q)
+    # P_tot = 2e5, G0 = 1e6 + 2.0 * 2e5 = 1.4e6
+    assert math.isclose(extra_no_q["ptot"][0], 2.0e5)
+    assert math.isclose(extra_no_q["g0"][0], 1.4e6)
+    np.testing.assert_allclose(sig_no_q[0, 0], -2.0e5, rtol=1e-5)
+
+    # With bulk viscosity q = 5.0e4
+    extra_q = {"q": np.array([5.0e4])}
+    sig_q = solid_update(mat, sig, d_eps=deps, dt=1e-4, extra=extra_q)
+    # P_tot = 2e5 + 5e4 = 2.5e5, G0 = 1e6 + 2.0 * 2.5e5 = 1.5e6
+    assert math.isclose(extra_q["ptot"][0], 2.5e5)
+    assert math.isclose(extra_q["g0"][0], 1.5e6)
+    # Total stress includes q: -(P_new + q) = -2.5e5
+    np.testing.assert_allclose(sig_q[0, 0], -2.5e5, rtol=1e-5)
+
+
+def test_law10_extended_aliases():
+    """Verify MAT_G, MAT_K, MAT_PMIN, PFRAC, MAT_BUNL, MAT_XMUMX aliases in _ensure_params."""
+    p = _ensure_params({
+        "MAT_RHO": 2500.0,
+        "MAT_E": 2.0e7,
+        "MAT_NU": 0.2,
+        "MAT_G": 8.5e6,     # overrides default E/(2(1+nu))
+        "MAT_K": 1.2e7,     # overrides default E/(3(1-2nu))
+        "MAT_PMIN": -5.0e4, # overrides pmin
+        "MAT_BUNL": 3.0e7,
+        "MAT_XMUMX": 0.4,
+    })
+    assert p["G"] == 8.5e6
+    assert p["K"] == 1.2e7
+    assert p["pmin"] == -5.0e4
+    assert p["bunl"] == 3.0e7
+    assert p["mue_max"] == 0.4
+    assert p["MAT_G"] == 8.5e6
+    assert p["MAT_K"] == 1.2e7
+    assert p["MAT_PMIN"] == -5.0e4
+    assert p["PFRAC"] == -5.0e4
+    assert p["MAT_BUNL"] == 3.0e7
+    assert p["MAT_XMUMX"] == 0.4
