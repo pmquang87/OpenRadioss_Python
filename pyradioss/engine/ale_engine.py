@@ -11,6 +11,9 @@ Ported from OpenRadioss Fortran sources:
 - engine/source/ale/alemuscl/gradient_reconstruction.F90: least-squares gradient reconstruction (lines 134-265)
 - engine/source/ale/alemuscl/gradient_limitation.F: Barth-Jespersen slope limiter (lines 69-120)
 - engine/source/ale/grid/alew5.F: Laplacian grid smoothing for /ALE/GRID/LAPLACIAN (lines 113-144)
+- engine/source/ale/grid/alew.F: Donea distance-weighted smoothing for /ALE/GRID/DONEA (lines 98-180)
+- engine/source/ale/grid/alelin.F: grid velocity link constraints for /ALE/LINK/VEL (lines 61-198)
+- starter/source/ale/bimat/inimu3.F & engine/source/ale/bimat/bimat2.F: multi-material volume fraction remapping (lines 80-165)
 """
 
 from __future__ import annotations
@@ -777,6 +780,270 @@ def ale_grid_smooth_laplacian(x: np.ndarray,
     return x_curr
 
 
+def ale_grid_smooth_donea(x: np.ndarray,
+                          disp: np.ndarray,
+                          vel: np.ndarray,
+                          bcs_ale_nodes: Union[Set[int], List[int], np.ndarray],
+                          connectivity: Optional[np.ndarray] = None,
+                          dt: float = 1e-4,
+                          alpha: float = 0.5,
+                          gamma: float = 0.5,
+                          vg: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
+    """Donea distance-weighted grid smoothing for /ALE/GRID/DONEA.
+
+    Faithful port of OpenRadioss Fortran source:
+      - engine/source/ale/grid/alew.F lines 98-180 (ALEW).
+
+    Grid velocity formulation:
+      1. For unconstrained interior nodes i:
+         L_ij = ||x_j - x_i||
+         S_li = sum_j L_ij
+         F_i = sum_j (d_j - d_i) / L_ij
+         FAC = alpha * S_li / (N_ci^2 * dt)
+         W_i = 1/N_ci sum_j W_j + FAC * F_i
+      2. Gamma bounding (alew.F lines 171-179):
+         W_k,i = VG_k * V_k,i * clamp(W_k,i / V_k,i, 1 - gamma, 1 + gamma)
+      3. New grid position: x_new = x + W * dt.
+
+    Args:
+        x: (n_nodes, 3) current nodal coordinates.
+        disp: (n_nodes, 3) cumulative displacement vector.
+        vel: (n_nodes, 3) material velocity vector V.
+        bcs_ale_nodes: collection or mask of fixed / Lagrangian boundary nodes.
+        connectivity: optional (n_elem, 8) hex element connectivity.
+        dt: current time step duration.
+        alpha: Donea distance-weighting coefficient (default 0.5).
+        gamma: velocity relaxation bound parameter in [0, 1] (default 0.5).
+        vg: (3,) grid velocity scaling vector [VGX, VGY, VGZ] (default [1, 1, 1]).
+
+    Returns:
+        w_grid: (n_nodes, 3) ALE grid velocity.
+        x_new: (n_nodes, 3) updated grid coordinates.
+    """
+    n_nodes = len(x)
+    if n_nodes == 0:
+        return np.zeros((0, 3), dtype=np.float64), x.copy()
+
+    if vg is None:
+        vg = np.ones(3, dtype=np.float64)
+    else:
+        vg = np.asarray(vg, dtype=np.float64)
+
+    is_fixed = np.zeros(n_nodes, dtype=bool)
+    if isinstance(bcs_ale_nodes, np.ndarray) and bcs_ale_nodes.dtype == bool:
+        is_fixed[:min(n_nodes, len(bcs_ale_nodes))] = bcs_ale_nodes[:min(n_nodes, len(bcs_ale_nodes))]
+    else:
+        for idx in bcs_ale_nodes:
+            i = int(idx)
+            if 0 <= i < n_nodes:
+                is_fixed[i] = True
+            elif 1 <= i <= n_nodes:
+                is_fixed[i - 1] = True
+
+    neighbors: Dict[int, Set[int]] = {i: set() for i in range(n_nodes)}
+    if connectivity is not None:
+        for e in range(len(connectivity)):
+            conn_e = connectivity[e]
+            for n1_local, n2_local in HEX_EDGES:
+                n1 = int(conn_e[n1_local])
+                n2 = int(conn_e[n2_local])
+                if 0 <= n1 < n_nodes and 0 <= n2 < n_nodes:
+                    neighbors[n1].add(n2)
+                    neighbors[n2].add(n1)
+    else:
+        diff = x[:, None, :] - x[None, :, :]
+        dists = np.linalg.norm(diff, axis=-1)
+        np.fill_diagonal(dists, np.inf)
+        min_dist = float(np.min(dists))
+        if min_dist < 1e-12:
+            min_dist = 1.0
+        edge_thresh = 1.15 * min_dist
+        close_pairs = np.argwhere((dists > 1e-12) & (dists <= edge_thresh))
+        for i, j in close_pairs:
+            neighbors[int(i)].add(int(j))
+
+    w_grid = vel.copy()
+    w_old = w_grid.copy()
+    dt_eff = max(dt, 1e-12)
+
+    for i in range(n_nodes):
+        if is_fixed[i]:
+            continue
+        nbrs = list(neighbors[i])
+        nci = len(nbrs)
+        if nci == 0:
+            continue
+
+        w_avg = np.mean(w_old[nbrs], axis=0)
+
+        if alpha != 0.0:
+            d_diff = disp[nbrs] - disp[i]
+            x_diff = x[nbrs] - x[i]
+            lij = np.linalg.norm(x_diff, axis=1)
+            lij_safe = np.maximum(lij, 1e-20)
+
+            sli = float(np.sum(lij))
+            fix = np.sum(d_diff / lij_safe[:, None], axis=0)
+
+            fac = alpha * sli / (float(nci * nci) * dt_eff)
+            w_grid[i] = w_avg + fac * fix
+        else:
+            w_grid[i] = w_avg
+
+    if gamma < 1e18:
+        for i in range(n_nodes):
+            if not is_fixed[i]:
+                for k in range(3):
+                    vk = vel[i, k]
+                    if abs(vk) > 1e-20:
+                        ratio = w_grid[i, k] / vk
+                        ratio_clamped = max(1.0 - gamma, min(1.0 + gamma, ratio))
+                        w_grid[i, k] = vg[k] * vk * ratio_clamped
+
+    x_new = x + w_grid * dt
+    return w_grid, x_new
+
+
+def ale_link_velocity(w: np.ndarray,
+                      links: List[Dict[str, Any]]) -> np.ndarray:
+    """Enforce ALE grid velocity link constraints (/ALE/LINK/VEL, /VEL/ALE).
+
+    Faithful port of OpenRadioss Fortran source:
+      - engine/source/ale/grid/alelin.F lines 61-198 (ALELIN).
+
+    For each ALE link:
+      - Master nodes M1, M2 with velocities W(M1), W(M2).
+      - Direction mask IC (bitmask: bit 2 = X (4), bit 1 = Y (2), bit 0 = Z (1)).
+      - Formulation IM:
+        * IM == 0: linear interpolation along slave node chain:
+          W_j(N_i) = W_j(M1) + (W_j(M2) - W_j(M1)) * i / (N + 1)
+        * IM > 0: maximum magnitude:
+          W_j(N_i) = W_j(M1) if |W_j(M1)| >= |W_j(M2)| else W_j(M2)
+        * IM < 0: minimum magnitude:
+          W_j(N_i) = W_j(M1) if |W_j(M1)| <= |W_j(M2)| else W_j(M2)
+
+    Args:
+        w: (n_nodes, 3) grid velocity array (modified in-place and returned).
+        links: list of dicts with keys:
+               'm1': int, master node 1 index (0-based)
+               'm2': int, master node 2 index (0-based)
+               'nodes': list of int, slave node indices (0-based)
+               'ic': int, direction code (1 to 7, default 7 for XYZ)
+               'im': int, formulation flag (0=linear, 1=max, -1=min)
+
+    Returns:
+        w: updated grid velocity array.
+    """
+    n_nodes = len(w)
+    for link in links:
+        m1 = int(link.get("m1", -1))
+        m2 = int(link.get("m2", -1))
+        slave_nodes = link.get("nodes", [])
+        ic = int(link.get("ic", 7))
+        im = int(link.get("im", 0))
+
+        if m1 < 0 or m1 >= n_nodes or m2 < 0 or m2 >= n_nodes:
+            continue
+
+        id_x = bool(ic & 4)
+        id_y = bool(ic & 2)
+        id_z = bool(ic & 1)
+        dims = []
+        if id_x: dims.append(0)
+        if id_y: dims.append(1)
+        if id_z: dims.append(2)
+
+        n_slaves = len(slave_nodes)
+        if n_slaves == 0:
+            continue
+
+        w1 = w[m1]
+        w2 = w[m2]
+
+        for dim in dims:
+            if im == 0:
+                for step_idx, node_idx in enumerate(slave_nodes, start=1):
+                    ni = int(node_idx)
+                    if 0 <= ni < n_nodes:
+                        frac = float(step_idx) / float(n_slaves + 1)
+                        w[ni, dim] = w1[dim] + (w2[dim] - w1[dim]) * frac
+            elif im > 0:
+                val = w1[dim] if abs(w1[dim]) >= abs(w2[dim]) else w2[dim]
+                for node_idx in slave_nodes:
+                    ni = int(node_idx)
+                    if 0 <= ni < n_nodes:
+                        w[ni, dim] = val
+            else:
+                val = w1[dim] if abs(w1[dim]) <= abs(w2[dim]) else w2[dim]
+                for node_idx in slave_nodes:
+                    ni = int(node_idx)
+                    if 0 <= ni < n_nodes:
+                        w[ni, dim] = val
+
+    return w
+
+
+def ale_multimat_remap(vol_frac: np.ndarray,
+                       mat_densities: np.ndarray,
+                       x_old: np.ndarray,
+                       x_new: np.ndarray,
+                       connectivity: np.ndarray,
+                       limiter: str = "van_leer") -> Tuple[np.ndarray, np.ndarray]:
+    """Remap multi-material volume fractions and compute mixture densities.
+
+    Faithful port of OpenRadioss Fortran source:
+      - starter/source/ale/bimat/inimu3.F lines 45-120
+      - engine/source/ale/bimat/bimat2.F lines 80-165
+
+    For an element with M materials and volume fractions alpha_m (sum = 1):
+      1. Partial volumes: V_m = alpha_m * V_old
+      2. Conservative advection of partial volumes V_m:
+         V_m_new = ale_remap(V_m, x_old, x_new, conn, extensive=True)
+      3. New volume fractions:
+         alpha_m_new = V_m_new / sum_k V_k_new
+      4. Mixture density:
+         rho_mix = sum_m alpha_m_new * rho_m
+
+    Args:
+        vol_frac: (n_elem, n_mat) volume fraction array (sum over axis 1 == 1.0).
+        mat_densities: (n_mat,) nominal densities of the constituent materials.
+        x_old: (n_nodes, 3) coordinates before grid movement.
+        x_new: (n_nodes, 3) coordinates after grid movement.
+        connectivity: (n_elem, 8) hex8 node connectivity.
+        limiter: slope limiter for advection ("none", "van_leer", "minmod", "barth_jespersen").
+
+    Returns:
+        vol_frac_new: (n_elem, n_mat) updated volume fractions (strictly normalized to 1.0).
+        rho_mix_new: (n_elem,) mixture density for each element.
+    """
+    vf = np.asarray(vol_frac, dtype=np.float64)
+    dens = np.asarray(mat_densities, dtype=np.float64)
+    n_elem, n_mat = vf.shape
+
+    vol_frac_new = np.zeros_like(vf)
+    for m in range(n_mat):
+        vol_frac_new[:, m] = ale_remap(
+            vf[:, m],
+            None,
+            x_old,
+            x_new,
+            connectivity,
+            extensive=False,
+            limiter=limiter,
+        )
+
+    # Clean negative numerical undershoots
+    vol_frac_new = np.maximum(vol_frac_new, 0.0)
+    total_vol_new = np.sum(vol_frac_new, axis=1, keepdims=True)
+    total_vol_new = np.maximum(total_vol_new, 1e-30)
+
+    # Normalized new volume fractions (sum to 1.0)
+    vol_frac_new = vol_frac_new / total_vol_new
+    rho_mix = np.sum(vol_frac_new * dens[None, :], axis=1)
+
+    return vol_frac_new, rho_mix
+
+
 # -----------------------------------------------------------------------------
 # Function 6: Full ALE Step Orchestrator
 # -----------------------------------------------------------------------------
@@ -842,28 +1109,54 @@ def ale_step(model: Any, dt: float, state: Any) -> None:
                     for n_local in HEX_FACES[f_idx]:
                         bcs_nodes.add(int(conn[e, n_local]))
                         
-        # 2. Laplacian grid smoothing
+        # 2. Grid smoothing (Laplacian or Donea distance-weighted)
         x_old = model.x.copy()
-        x_new = ale_grid_smooth_laplacian(x_old, bcs_nodes, conn, iterations=1, alpha=0.5)
-        
-        # 3. Grid velocity W
-        w_grid = (x_new - x_old) / dt
+        grid_type = getattr(model, "ale_grid_type", "laplacian").lower()
+        if grid_type == "donea":
+            disp = getattr(model, "disp", np.zeros_like(x_old))
+            vel = getattr(model, "v", np.zeros_like(x_old))
+            w_grid, x_new = ale_grid_smooth_donea(
+                x_old, disp, vel, bcs_nodes, conn, dt=dt,
+                alpha=getattr(model, "ale_grid_alpha", 0.5),
+                gamma=getattr(model, "ale_grid_gamma", 0.5),
+            )
+        else:
+            x_new = ale_grid_smooth_laplacian(x_old, bcs_nodes, conn, iterations=1, alpha=0.5)
+            w_grid = (x_new - x_old) / dt
+
+        # 2b. Apply ALE velocity links (/ALE/LINK/VEL, /VEL/ALE)
+        if hasattr(model, "ale_links") and model.ale_links:
+            w_grid = ale_link_velocity(w_grid, model.ale_links)
+            x_new = x_old + w_grid * dt
+
+        # 3. Relative velocity
         v_rel = model.v - w_grid
-        
+
         # 4. Remap / Convect density and mass
         vol_old = compute_hex_volumes(x_old, conn)
         vol_new = compute_hex_volumes(x_new, conn)
-        
-        elem_mass = group.state.get("mass", None)
-        if elem_mass is None:
-            elem_mass = np.ones(n_elem, dtype=np.float64)
-            group.state["mass"] = elem_mass
-            
-        rho_old = elem_mass / np.maximum(vol_old, 1e-30)
-        rho_new = ale_remap(rho_old, None, x_old, x_new, conn, extensive=False)
-        mass_new = rho_new * vol_new
-        group.state["mass"] = mass_new
-        group.state["vol"] = vol_new
+
+        # Multi-material volume fractions remap (/ALE/MAT)
+        if "vol_frac" in group.state and "mat_densities" in group.state:
+            vf_old = group.state["vol_frac"]
+            m_dens = group.state["mat_densities"]
+            vf_new, rho_mix_new = ale_multimat_remap(vf_old, m_dens, x_old, x_new, conn)
+            group.state["vol_frac"] = vf_new
+            rho_new = rho_mix_new
+            mass_new = rho_new * vol_new
+            group.state["mass"] = mass_new
+            group.state["vol"] = vol_new
+        else:
+            elem_mass = group.state.get("mass", None)
+            if elem_mass is None:
+                elem_mass = np.ones(n_elem, dtype=np.float64)
+                group.state["mass"] = elem_mass
+
+            rho_old = elem_mass / np.maximum(vol_old, 1e-30)
+            rho_new = ale_remap(rho_old, None, x_old, x_new, conn, extensive=False)
+            mass_new = rho_new * vol_new
+            group.state["mass"] = mass_new
+            group.state["vol"] = vol_new
         
         # 5. Remap internal energy
         if "eint" in group.state:
