@@ -22,6 +22,34 @@ from __future__ import annotations
 
 import numpy as np
 
+__all__ = [
+    "HAS_CUPY",
+    "to_gpu",
+    "to_cpu",
+    "hexa_pre",
+    "hexa_post",
+    "hexa_hgphys",
+    "shell_pre",
+    "shell_post",
+    "_tri_closest",
+    "t7_narrow",
+    "t24_narrow",
+    "scatter3",
+    "scatter3_colored",
+    "law70_tab2d",
+    "law70_enorm",
+    "law70_snorm",
+    "law70_elastic_stress",
+    "tetra10_pre",
+    "tetra10_post",
+    "qbat_pre_flat",
+    "qbat_post_flat",
+    "qbat_pre",
+    "qbat_post",
+    "qeph_pre",
+    "qeph_post",
+]
+
 try:
     import cupy as cp
     try:
