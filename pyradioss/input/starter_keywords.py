@@ -39434,30 +39434,72 @@ def read_prop_type35(block: KeywordBlock, model: Model, log: MessageLog) -> None
         log.error(f"/PROP/TYPE35/{prop_id}: missing data card", block.source)
         return
 
-    amas, elastif, xlim1, xk = 0.0, 0.0, 0.0, 0.0
+    amas, elastif, xlim1, xlim2, xk = 0.0, 0.0, 0.0, 0.0, 0.0
     fun_a1, fun_b1, fun_c1, fun_d1 = 0, 0, 0, 0
-    damg, fdelay = 0.0, 0.0
+    damg, fdelay, rload, fscal = 0.0, 0.0, 0.0, 1.0
     # M149 format compatibility fields
     k_tens, k_comp, k_shear, f_tens, f_shear = 0.0, 0.0, 0.0, 0.0, 0.0
     skew_id, iflag, ipen, ifail, dist_max, area = 0, 0, 0, 0, 0.0, 0.0
 
     if block.fixed:
-        if len(valid_cards) > 0:
-            c0 = valid_cards[0].cut("PROP_STITCH_1")
+        if len(valid_cards) >= 3:
+            # 3-card /PROP/TYPE35 layout (hm_read_prop35.F)
+            c0 = valid_cards[0].cut("PROP_TYPE35_1")
             amas = _safe_float(c0[0]) if len(c0) > 0 else 0.0
             elastif = _safe_float(c0[1]) if len(c0) > 1 else 0.0
             xlim1 = _safe_float(c0[2]) if len(c0) > 2 else 0.0
-            xk = _safe_float(c0[3]) if len(c0) > 3 else 0.0
-        if len(valid_cards) > 1:
-            c1 = valid_cards[1].cut("PROP_STITCH_2")
-            fun_a1 = _safe_int(c1[0]) if len(c1) > 0 else 0
-            fun_b1 = _safe_int(c1[1]) if len(c1) > 1 else 0
-            fun_c1 = _safe_int(c1[2]) if len(c1) > 2 else 0
-            fun_d1 = _safe_int(c1[3]) if len(c1) > 3 else 0
-            damg = _safe_float(c1[4]) if len(c1) > 4 else 0.0
-            fdelay = _safe_float(c1[5]) if len(c1) > 5 else 0.0
+            xlim2 = _safe_float(c0[3]) if len(c0) > 3 else 0.0
+            xk = _safe_float(c0[4]) if len(c0) > 4 else 0.0
+
+            c1 = valid_cards[1].cut("PROP_TYPE35_2")
+            damg = _safe_float(c1[0]) if len(c1) > 0 else 0.0
+            fdelay = _safe_float(c1[1]) if len(c1) > 1 else 0.0
+            rload = _safe_float(c1[2]) if len(c1) > 2 else 0.0
+            fscal = _safe_float(c1[3], 1.0) if len(c1) > 3 and c1[3].strip() else 1.0
+
+            c2 = valid_cards[2].cut("PROP_TYPE35_3")
+            fun_a1 = _safe_int(c2[0]) if len(c2) > 0 else 0
+            fun_b1 = _safe_int(c2[1]) if len(c2) > 1 else 0
+            fun_c1 = _safe_int(c2[2]) if len(c2) > 2 else 0
+            fun_d1 = _safe_int(c2[3]) if len(c2) > 3 else 0
+        else:
+            # 2-card /PROP/STITCH layout (prop_p35_stitch.cfg)
+            if len(valid_cards) > 0:
+                c0 = valid_cards[0].cut("PROP_STITCH_1")
+                amas = _safe_float(c0[0]) if len(c0) > 0 else 0.0
+                elastif = _safe_float(c0[1]) if len(c0) > 1 else 0.0
+                xlim1 = _safe_float(c0[2]) if len(c0) > 2 else 0.0
+                xk = _safe_float(c0[3]) if len(c0) > 3 else 0.0
+            if len(valid_cards) > 1:
+                c1 = valid_cards[1].cut("PROP_STITCH_2")
+                fun_a1 = _safe_int(c1[0]) if len(c1) > 0 else 0
+                fun_b1 = _safe_int(c1[1]) if len(c1) > 1 else 0
+                fun_c1 = _safe_int(c1[2]) if len(c1) > 2 else 0
+                fun_d1 = _safe_int(c1[3]) if len(c1) > 3 else 0
+                damg = _safe_float(c1[4]) if len(c1) > 4 else 0.0
+                fdelay = _safe_float(c1[5]) if len(c1) > 5 else 0.0
     else:
-        if len(valid_cards) > 0:
+        if len(valid_cards) >= 3 and len(valid_cards[2].tokens()) == 4:
+            # 3-card free format
+            t0 = valid_cards[0].tokens()
+            amas = _safe_float(t0[0]) if len(t0) > 0 else 0.0
+            elastif = _safe_float(t0[1]) if len(t0) > 1 else 0.0
+            xlim1 = _safe_float(t0[2]) if len(t0) > 2 else 0.0
+            xlim2 = _safe_float(t0[3]) if len(t0) > 3 else 0.0
+            xk = _safe_float(t0[4]) if len(t0) > 4 else 0.0
+
+            t1 = valid_cards[1].tokens()
+            damg = _safe_float(t1[0]) if len(t1) > 0 else 0.0
+            fdelay = _safe_float(t1[1]) if len(t1) > 1 else 0.0
+            rload = _safe_float(t1[2]) if len(t1) > 2 else 0.0
+            fscal = _safe_float(t1[3], 1.0) if len(t1) > 3 else 1.0
+
+            t2 = valid_cards[2].tokens()
+            fun_a1 = _safe_int(t2[0]) if len(t2) > 0 else 0
+            fun_b1 = _safe_int(t2[1]) if len(t2) > 1 else 0
+            fun_c1 = _safe_int(t2[2]) if len(t2) > 2 else 0
+            fun_d1 = _safe_int(t2[3]) if len(t2) > 3 else 0
+        elif len(valid_cards) > 0:
             t0 = valid_cards[0].tokens()
             if len(t0) >= 5:
                 # M149 format
@@ -39479,27 +39521,34 @@ def read_prop_type35(block: KeywordBlock, model: Model, log: MessageLog) -> None
                 elastif = _safe_float(t0[1]) if len(t0) > 1 else 0.0
                 xlim1 = _safe_float(t0[2]) if len(t0) > 2 else 0.0
                 xk = _safe_float(t0[3]) if len(t0) > 3 else 0.0
-        if len(valid_cards) > 1 and len(valid_cards[0].tokens()) < 5:
-            t1 = valid_cards[1].tokens()
-            fun_a1 = _safe_int(t1[0]) if len(t1) > 0 else 0
-            fun_b1 = _safe_int(t1[1]) if len(t1) > 1 else 0
-            fun_c1 = _safe_int(t1[2]) if len(t1) > 2 else 0
-            fun_d1 = _safe_int(t1[3]) if len(t1) > 3 else 0
-            damg = _safe_float(t1[4]) if len(t1) > 4 else 0.0
-            fdelay = _safe_float(t1[5]) if len(t1) > 5 else 0.0
+            if len(valid_cards) > 1 and len(valid_cards[0].tokens()) < 5:
+                t1 = valid_cards[1].tokens()
+                fun_a1 = _safe_int(t1[0]) if len(t1) > 0 else 0
+                fun_b1 = _safe_int(t1[1]) if len(t1) > 1 else 0
+                fun_c1 = _safe_int(t1[2]) if len(t1) > 2 else 0
+                fun_d1 = _safe_int(t1[3]) if len(t1) > 3 else 0
+                damg = _safe_float(t1[4]) if len(t1) > 4 else 0.0
+                fdelay = _safe_float(t1[5]) if len(t1) > 5 else 0.0
+
+    if fscal == 0.0:
+        fscal = 1.0
 
     p35 = PropType35(
         id=prop_id, amas=amas, elastif=elastif, xlim1=xlim1, xk=xk,
         fun_a1=fun_a1, fun_b1=fun_b1, fun_c1=fun_c1, fun_d1=fun_d1,
-        damg=damg, fdelay=fdelay, title=title,
+        damg=damg, fdelay=fdelay, xlim2=xlim2, rload=rload, iload=int(rload),
+        fscal=fscal, title=title,
     )
     model.prop_type35s[prop_id] = p35
     model.properties[prop_id] = Property(
         id=prop_id, type=35, title=title,
         params={
-            "mass": amas, "amas": amas, "elastif": elastif, "xlim1": xlim1, "xk": xk,
+            "mass": amas, "amas": amas, "elastif": elastif, "stiff": elastif, "k": elastif,
+            "xlim1": xlim1, "x_lim1": xlim1, "xlim2": xlim2, "x_lim2": xlim2,
+            "xk": xk, "k_post": xk,
             "fun_a1": fun_a1, "fun_b1": fun_b1, "fun_c1": fun_c1, "fun_d1": fun_d1,
-            "damg": damg, "fdelay": fdelay,
+            "damg": damg, "d1": damg, "fdelay": fdelay, "d2": fdelay,
+            "rload": rload, "iload": int(rload), "fscal": fscal,
             # M149 compatibility aliases
             "k_tens": k_tens, "k_comp": k_comp, "k_shear": k_shear,
             "f_tens": f_tens, "f_shear": f_shear,

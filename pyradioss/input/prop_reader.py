@@ -828,65 +828,118 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
 
 
 def parse_stitch(block: KeywordBlock, log: MessageLog) -> Property:
-    """/PROP/STITCH (TYPE35) — Stitch connection property (M149).
+    """/PROP/STITCH or /PROP/TYPE35 — Progressive damage stitch spring property.
 
-    Fortran origin: starter/source/properties/p35_stitch/hm_read_prop35.F
-    CFG: prop_stitch.cfg
+    Fortran origin: starter/source/properties/spring/hm_read_prop35.F
+    CFG: prop_p35_stitch.cfg
     """
     title, cards, fixed = _data_cards(block)
     params = _universal_geo_params()
 
-    k_tens = 0.0
-    k_comp = 0.0
-    k_shear = 0.0
-    f_tens = 0.0
-    f_shear = 0.0
-    skew_id = 0
-    iflag = 0
-    ipen = 0
-    ifail = 0
-    dist_max = 0.0
-    area = 1.0
+    amas, elastif, xlim1, xlim2, xk = 0.0, 0.0, 0.0, 0.0, 0.0
+    fun_a1, fun_b1, fun_c1, fun_d1 = 0, 0, 0, 0
+    damg, fdelay, rload, fscal = 0.0, 0.0, 0.0, 1.0
+    k_tens, k_comp, k_shear, f_tens, f_shear = 0.0, 0.0, 0.0, 0.0, 0.0
+    skew_id, iflag, ipen, ifail, dist_max, area = 0, 0, 0, 0, 0.0, 1.0
 
-    if len(cards) > 0 and not cards[0].is_blank:
+    valid_cards = [c for c in cards if not c.is_blank]
+    if valid_cards:
         if fixed:
-            f0 = cards[0].cut("PROP_STITCH_1")
-            k_tens = _fv(f0[0]) if len(f0) > 0 else 0.0
-            k_comp = _fv(f0[1]) if len(f0) > 1 else 0.0
-            k_shear = _fv(f0[2]) if len(f0) > 2 else 0.0
-            f_tens = _fv(f0[3]) if len(f0) > 3 else 0.0
-            f_shear = _fv(f0[4]) if len(f0) > 4 else 0.0
-        else:
-            t0 = cards[0].tokens()
-            k_tens = _fv(t0[0]) if len(t0) > 0 else 0.0
-            k_comp = _fv(t0[1]) if len(t0) > 1 else 0.0
-            k_shear = _fv(t0[2]) if len(t0) > 2 else 0.0
-            f_tens = _fv(t0[3]) if len(t0) > 3 else 0.0
-            f_shear = _fv(t0[4]) if len(t0) > 4 else 0.0
+            if len(valid_cards) >= 3:
+                f0 = cards[0].cut("PROP_TYPE35_1")
+                amas = _fv(f0[0]) if len(f0) > 0 else 0.0
+                elastif = _fv(f0[1]) if len(f0) > 1 else 0.0
+                xlim1 = _fv(f0[2]) if len(f0) > 2 else 0.0
+                xlim2 = _fv(f0[3]) if len(f0) > 3 else 0.0
+                xk = _fv(f0[4]) if len(f0) > 4 else 0.0
 
-    if len(cards) > 1 and not cards[1].is_blank:
-        if fixed:
-            f1 = cards[1].cut("PROP_STITCH_2")
-            skew_id = _iv(f1[0]) if len(f1) > 0 else 0
-            iflag = _iv(f1[1]) if len(f1) > 1 else 0
-            ipen = _iv(f1[2]) if len(f1) > 2 else 0
-            ifail = _iv(f1[3]) if len(f1) > 3 else 0
-            dist_max = _fv(f1[4]) if len(f1) > 4 else 0.0
-            area = _fv(f1[5], 1.0) if len(f1) > 5 else 1.0
+                f1 = cards[1].cut("PROP_TYPE35_2")
+                damg = _fv(f1[0]) if len(f1) > 0 else 0.0
+                fdelay = _fv(f1[1]) if len(f1) > 1 else 0.0
+                rload = _fv(f1[2]) if len(f1) > 2 else 0.0
+                fscal = _fv(f1[3], 1.0) if len(f1) > 3 and f1[3].strip() else 1.0
+
+                f2 = cards[2].cut("PROP_TYPE35_3")
+                fun_a1 = _iv(f2[0]) if len(f2) > 0 else 0
+                fun_b1 = _iv(f2[1]) if len(f2) > 1 else 0
+                fun_c1 = _iv(f2[2]) if len(f2) > 2 else 0
+                fun_d1 = _iv(f2[3]) if len(f2) > 3 else 0
+            else:
+                f0 = cards[0].cut("PROP_STITCH_1")
+                amas = _fv(f0[0]) if len(f0) > 0 else 0.0
+                elastif = _fv(f0[1]) if len(f0) > 1 else 0.0
+                xlim1 = _fv(f0[2]) if len(f0) > 2 else 0.0
+                xk = _fv(f0[3]) if len(f0) > 3 else 0.0
+                if len(valid_cards) > 1:
+                    f1 = cards[1].cut("PROP_STITCH_2")
+                    fun_a1 = _iv(f1[0]) if len(f1) > 0 else 0
+                    fun_b1 = _iv(f1[1]) if len(f1) > 1 else 0
+                    fun_c1 = _iv(f1[2]) if len(f1) > 2 else 0
+                    fun_d1 = _iv(f1[3]) if len(f1) > 3 else 0
+                    damg = _fv(f1[4]) if len(f1) > 4 else 0.0
+                    fdelay = _fv(f1[5]) if len(f1) > 5 else 0.0
         else:
-            t1 = cards[1].tokens()
-            skew_id = _iv(t1[0]) if len(t1) > 0 else 0
-            iflag = _iv(t1[1]) if len(t1) > 1 else 0
-            ipen = _iv(t1[2]) if len(t1) > 2 else 0
-            ifail = _iv(t1[3]) if len(t1) > 3 else 0
-            dist_max = _fv(t1[4]) if len(t1) > 4 else 0.0
-            area = _fv(t1[5], 1.0) if len(t1) > 5 else 1.0
+            t0 = valid_cards[0].tokens()
+            if len(valid_cards) >= 3 and len(valid_cards[2].tokens()) == 4:
+                amas = _fv(t0[0]) if len(t0) > 0 else 0.0
+                elastif = _fv(t0[1]) if len(t0) > 1 else 0.0
+                xlim1 = _fv(t0[2]) if len(t0) > 2 else 0.0
+                xlim2 = _fv(t0[3]) if len(t0) > 3 else 0.0
+                xk = _fv(t0[4]) if len(t0) > 4 else 0.0
+
+                t1 = valid_cards[1].tokens()
+                damg = _fv(t1[0]) if len(t1) > 0 else 0.0
+                fdelay = _fv(t1[1]) if len(t1) > 1 else 0.0
+                rload = _fv(t1[2]) if len(t1) > 2 else 0.0
+                fscal = _fv(t1[3], 1.0) if len(t1) > 3 else 1.0
+
+                t2 = valid_cards[2].tokens()
+                fun_a1 = _iv(t2[0]) if len(t2) > 0 else 0
+                fun_b1 = _iv(t2[1]) if len(t2) > 1 else 0
+                fun_c1 = _iv(t2[2]) if len(t2) > 2 else 0
+                fun_d1 = _iv(t2[3]) if len(t2) > 3 else 0
+            elif len(t0) >= 5:
+                k_tens = _fv(t0[0])
+                k_comp = _fv(t0[1])
+                k_shear = _fv(t0[2])
+                f_tens = _fv(t0[3])
+                f_shear = _fv(t0[4])
+                if len(valid_cards) > 1:
+                    t1 = valid_cards[1].tokens()
+                    skew_id = _iv(t1[0]) if len(t1) > 0 else 0
+                    iflag = _iv(t1[1]) if len(t1) > 1 else 0
+                    ipen = _iv(t1[2]) if len(t1) > 2 else 0
+                    ifail = _iv(t1[3]) if len(t1) > 3 else 0
+                    dist_max = _fv(t1[4]) if len(t1) > 4 else 0.0
+                    area = _fv(t1[5], 1.0) if len(t1) > 5 else 1.0
+            else:
+                amas = _fv(t0[0]) if len(t0) > 0 else 0.0
+                elastif = _fv(t0[1]) if len(t0) > 1 else 0.0
+                xlim1 = _fv(t0[2]) if len(t0) > 2 else 0.0
+                xk = _fv(t0[3]) if len(t0) > 3 else 0.0
+                if len(valid_cards) > 1:
+                    t1 = valid_cards[1].tokens()
+                    fun_a1 = _iv(t1[0]) if len(t1) > 0 else 0
+                    fun_b1 = _iv(t1[1]) if len(t1) > 1 else 0
+                    fun_c1 = _iv(t1[2]) if len(t1) > 2 else 0
+                    fun_d1 = _iv(t1[3]) if len(t1) > 3 else 0
+                    damg = _fv(t1[4]) if len(t1) > 4 else 0.0
+                    fdelay = _fv(t1[5]) if len(t1) > 5 else 0.0
+
+    if fscal == 0.0:
+        fscal = 1.0
 
     params.update({
+        "mass": amas, "amas": amas, "elastif": elastif, "stiff": elastif, "k": elastif,
+        "xlim1": xlim1, "x_lim1": xlim1, "xlim2": xlim2, "x_lim2": xlim2,
+        "xk": xk, "k_post": xk,
+        "fun_a1": fun_a1, "fun_b1": fun_b1, "fun_c1": fun_c1, "fun_d1": fun_d1,
+        "damg": damg, "d1": damg, "fdelay": fdelay, "d2": fdelay,
+        "rload": rload, "iload": int(rload), "fscal": fscal,
         "k_tens": k_tens, "k_comp": k_comp, "k_shear": k_shear,
         "f_tens": f_tens, "f_shear": f_shear,
         "skew_id": skew_id, "iflag": iflag, "ipen": ipen,
-        "ifail": ifail, "dist_max": dist_max, "area": area
+        "ifail": ifail, "dist_max": dist_max, "area": area,
     })
     return Property(id=block.user_id, type=35, title=title, params=params)
 

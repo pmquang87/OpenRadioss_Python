@@ -12263,6 +12263,10 @@ class PropType35:
     fun_d1: int = 0
     damg: float = 0.0
     fdelay: float = 0.0
+    xlim2: float = 0.0
+    rload: float = 0.0
+    iload: int = 0
+    fscal: float = 1.0
     title: str = ""
 
 

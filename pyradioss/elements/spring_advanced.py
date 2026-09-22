@@ -34,7 +34,7 @@ from ..common.constants import EM20, EP30
 from ..common.fastmath import norm3
 
 #: Advanced spring property type numbers
-ADVANCED_SPRING_PROP_TYPES = frozenset({19, 25, 26, 27, 44, 46})
+ADVANCED_SPRING_PROP_TYPES = frozenset({19, 25, 26, 27, 35, 44, 46})
 
 
 def _safe_param(params: dict, key: str, default: float = 0.0) -> float:
@@ -1160,6 +1160,256 @@ def forces_bdamp_type27(group, x, v, dt, fint, idx27):
 
 
 # ============================================================================
+# TYPE35: Progressive Damage Stitch Spring (/PROP/TYPE35, /PROP/STITCH, /PROP/SEW)
+# ============================================================================
+
+def _eval_stitch_func(model, fn_id: int, x_val: float, default_val: float = 0.0) -> float:
+    """Safely evaluate user function by id for TYPE35 springs."""
+    if fn_id <= 0 or model is None or not hasattr(model, "functions"):
+        return default_val
+    func = model.functions.get(fn_id)
+    if func is None:
+        return default_val
+    if hasattr(func, "eval"):
+        return float(func.eval(x_val))
+    if hasattr(func, "evaluate"):
+        return float(func.evaluate(x_val))
+    if callable(func):
+        return float(func(x_val))
+    return default_val
+
+
+def init_stitch_type35(group, model, log, idx35, massn, inertn):
+    """Initialize state arrays for TYPE35 (/PROP/TYPE35, /PROP/STITCH) progressive damage springs.
+
+    Fortran origin:
+      starter/source/properties/spring/hm_read_prop35.F
+      starter/source/elements/spring/rini35.F
+      engine/source/elements/spring/ruser35.F
+    """
+    st = group.state
+    n = group.n
+    if len(idx35) == 0:
+        return
+
+    if "t35_elastif" not in st:
+        st["t35_mass"] = np.zeros(n)
+        st["t35_elastif"] = np.zeros(n)
+        st["t35_xlim1"] = np.full(n, 1e30)
+        st["t35_xlim2"] = np.zeros(n)
+        st["t35_xk"] = np.zeros(n)
+        st["t35_d1"] = np.zeros(n)
+        st["t35_d2"] = np.zeros(n)
+        st["t35_iload"] = np.zeros(n, dtype=np.int64)
+        st["t35_fscal"] = np.ones(n)
+        st["t35_fun_a1"] = np.zeros(n, dtype=np.int64)
+        st["t35_fun_b1"] = np.zeros(n, dtype=np.int64)
+        st["t35_fun_c1"] = np.zeros(n, dtype=np.int64)
+        st["t35_fun_d1"] = np.zeros(n, dtype=np.int64)
+        st["t35_uvar1"] = np.zeros(n)   # accumulated engineering strain X
+        st["t35_uvar2"] = np.ones(n)    # damage on yield & stiffness (init 1.0)
+        st["t35_uvar3"] = np.zeros(n)   # damage delay progress (init 0.0)
+        st["t35_fr_wave"] = np.zeros(n) # wave / damage initiation flag (init 0.0)
+        st["t35_force"] = np.zeros(n)
+
+    pos = {int(e): j for j, e in enumerate(idx35)}
+    for sl, mat, prop in st["slices"]:
+        if getattr(prop, "type", 0) != 35:
+            continue
+        rng = np.arange(group.n)[sl]
+        local = [e for e in rng if int(e) in pos]
+        if not len(local):
+            continue
+
+        p = getattr(prop, "params", {}) or {}
+        ms = float(getattr(prop, "amas", getattr(prop, "mass", _safe_param(p, "mass", _safe_param(p, "amas", 0.0)))))
+        elast = float(getattr(prop, "elastif", _safe_param(p, "elastif", _safe_param(p, "stiff", _safe_param(p, "k", 0.0)))))
+        xlim1 = float(getattr(prop, "xlim1", _safe_param(p, "xlim1", _safe_param(p, "x_lim1", 0.0))))
+        if xlim1 == 0.0 and "xlim1" not in p and not hasattr(prop, "xlim1"):
+            xlim1 = 1e30
+        xlim2 = float(getattr(prop, "xlim2", _safe_param(p, "xlim2", _safe_param(p, "x_lim2", 0.0))))
+        xk = float(getattr(prop, "xk", _safe_param(p, "xk", _safe_param(p, "k_post", 0.0))))
+        d1 = float(getattr(prop, "damg", _safe_param(p, "damg", _safe_param(p, "d1", 0.0))))
+        d2 = float(getattr(prop, "fdelay", _safe_param(p, "fdelay", _safe_param(p, "d2", 0.0))))
+        iload = int(getattr(prop, "iload", _safe_int_param(p, "iload", _safe_int_param(p, "rload", 0))))
+        fscal = float(getattr(prop, "fscal", _safe_param(p, "fscal", 1.0)))
+        if fscal == 0.0:
+            fscal = 1.0
+
+        fa1 = int(getattr(prop, "fun_a1", _safe_int_param(p, "fun_a1", 0)))
+        fb1 = int(getattr(prop, "fun_b1", _safe_int_param(p, "fun_b1", 0)))
+        fc1 = int(getattr(prop, "fun_c1", _safe_int_param(p, "fun_c1", 0)))
+        fd1 = int(getattr(prop, "fun_d1", _safe_int_param(p, "fun_d1", 0)))
+
+        st["t35_mass"][local] = ms
+        st["t35_elastif"][local] = elast
+        st["t35_xlim1"][local] = xlim1
+        st["t35_xlim2"][local] = xlim2
+        st["t35_xk"][local] = xk
+        st["t35_d1"][local] = d1
+        st["t35_d2"][local] = d2
+        st["t35_iload"][local] = iload
+        st["t35_fscal"][local] = fscal
+        st["t35_fun_a1"][local] = fa1
+        st["t35_fun_b1"][local] = fb1
+        st["t35_fun_c1"][local] = fc1
+        st["t35_fun_d1"][local] = fd1
+        st["t35_uvar1"][local] = 0.0
+        st["t35_uvar2"][local] = 1.0
+        st["t35_uvar3"][local] = 0.0
+        st["t35_fr_wave"][local] = 0.0
+        st["t35_force"][local] = 0.0
+
+        L0_local = np.maximum(st.get("L0", np.ones(n))[local], EM20)
+        st["k"][local] = elast / L0_local
+        st["mass"][local] = ms
+
+        if massn is not None and ms > 0.0:
+            for e in local:
+                if 2 * e + 1 < len(massn):
+                    massn[2 * e] += ms / 2.0
+                    massn[2 * e + 1] += ms / 2.0
+
+
+def forces_stitch_type35(group, x, v, dt, fint, idx35):
+    """Compute forces for TYPE35 (/PROP/TYPE35, /PROP/STITCH) progressive damage springs.
+
+    Fortran origin:
+      engine/source/elements/spring/ruser35.F
+      engine/source/elements/spring/rforc3.F
+    """
+    if idx35 is None or len(idx35) == 0:
+        return np.empty(0)
+
+    st = group.state
+    conn = group.conn[idx35]
+    n1, n2 = conn[:, 0], conn[:, 1]
+    n_elem = len(idx35)
+
+    dx = x[n2] - x[n1]
+    L = np.sqrt(np.sum(dx * dx, axis=-1))
+    L_safe = np.maximum(L, EM20)
+    a = dx / L_safe[:, None]
+
+    v_rel = v[n2] - v[n1]
+    vx = np.sum(v_rel * a, axis=-1)
+
+    L0 = st.get("L0", L_safe)[idx35]
+    L0_safe = np.maximum(L0, EM20)
+    XL = np.where(L_safe > EM20, L_safe, L0_safe)
+
+    elastif = st["t35_elastif"][idx35]
+    xlim1 = st["t35_xlim1"][idx35]
+    d1 = st["t35_d1"][idx35]
+    d2 = st["t35_d2"][idx35]
+    iload = st["t35_iload"][idx35]
+    fscal = st["t35_fscal"][idx35]
+    fa1 = st["t35_fun_a1"][idx35]
+    fb1 = st["t35_fun_b1"][idx35]
+    fc1 = st["t35_fun_c1"][idx35]
+    fd1 = st["t35_fun_d1"][idx35]
+
+    uvar1 = st["t35_uvar1"][idx35]
+    uvar2 = st["t35_uvar2"][idx35]
+    uvar3 = st["t35_uvar3"][idx35]
+    fr_wave = st["t35_fr_wave"][idx35]
+    fx = st["t35_force"][idx35]
+    fx_old = fx.copy()
+
+    off = st.get("off", np.ones(group.n))[idx35].copy()
+    model = st.get("model")
+
+    dt_val = dt if (dt is not None and dt > 0.0) else 0.0
+    DX = dt_val * vx / XL
+    X = uvar1 + DX
+
+    for i in range(n_elem):
+        if off[i] <= 0.0:
+            fx[i] = 0.0
+            continue
+
+        xi = X[i]
+        dxi = DX[i]
+        sc = fscal[i]
+        uv2 = uvar2[i]
+        uv3 = uvar3[i]
+        frw = fr_wave[i]
+        il = iload[i]
+        d1_val = d1[i]
+        d2_val = d2[i]
+        xlim1_val = xlim1[i]
+
+        # 1. Yield bounds (ruser35.F lines 161-167)
+        if uv3 == 0.0:
+            fn_t = fa1[i]
+            fn_c = fb1[i]
+            fmx = sc * _eval_stitch_func(model, fn_t, xi, default_val=1e30)
+            fmn = sc * _eval_stitch_func(model, fn_c, xi, default_val=-1e30)
+        else:
+            fn_t = fc1[i] if fc1[i] > 0 else fa1[i]
+            fn_c = fd1[i] if fd1[i] > 0 else fb1[i]
+            fmx = uv2 * sc * _eval_stitch_func(model, fn_t, xi, default_val=1e30)
+            fmn = uv2 * sc * _eval_stitch_func(model, fn_c, xi, default_val=-1e30)
+
+        # 2. Damage accumulation (ruser35.F lines 169-177)
+        if uv3 >= 1.0:
+            frw = 1.0
+            if il == 0 or dxi > 0.0:
+                uv2 = uv2 * (1.0 - d1_val)
+        elif frw == 1.0:
+            if il == 0 or dxi > 0.0:
+                uv3 = uv3 + d2_val
+
+        # 3. Rupture check and wave flag update (ruser35.F lines 179-188)
+        if xi >= xlim1_val:
+            frw = 1.0
+            if uv3 >= 1.0 and off[i] >= 1.0:
+                off[i] = 0.0
+        else:
+            frw = 0.0
+
+        # 4. Force computation (ruser35.F lines 190-194)
+        uvar1[i] = xi
+        uvar2[i] = uv2
+        uvar3[i] = uv3
+        fr_wave[i] = frw
+
+        fxi = fx[i] + elastif[i] * dxi * uv2
+        fxi = min(fxi, fmx)
+        fxi = max(fxi, fmn)
+        fxi = fxi * off[i]
+        fx[i] = fxi
+
+    st["t35_uvar1"][idx35] = uvar1
+    st["t35_uvar2"][idx35] = uvar2
+    st["t35_uvar3"][idx35] = uvar3
+    st["t35_fr_wave"][idx35] = fr_wave
+    st["t35_force"][idx35] = fx
+    if "off" in st:
+        st["off"][idx35] = off
+    if "force" in st:
+        st["force"][idx35] = fx
+
+    fvec = fx[:, None] * a
+    if fint is not None:
+        np.add.at(fint, n1, fvec)
+        np.add.at(fint, n2, -fvec)
+
+    if dt_val > 0.0 and "eint" in st:
+        alive = (off > 0.0)
+        st["eint"][idx35] += np.where(alive, 0.5 * (fx_old + fx) * vx * dt_val, 0.0)
+
+    # Time step computation (ruser35.F lines 198-202)
+    mass = np.maximum(st["t35_mass"][idx35], EM20)
+    k_eff = np.maximum(elastif / XL, 0.0)
+    pos_k = (k_eff > 0.0) & (st["t35_mass"][idx35] > 0.0)
+
+    omega = 2.0 * np.sqrt(np.where(pos_k, k_eff / mass, 1.0))
+    dt_crit = np.where(pos_k, 2.0 / omega, EP30)
+    return np.where(off > 0.0, dt_crit, EP30)
+
+
+# ============================================================================
 # TYPE44: Crushing Spring with Energy Absorption
 # ============================================================================
 
@@ -1809,7 +2059,7 @@ def forces_muscle_type46(group, x, v, dt, fint, idx46):
 # Combined Dispatch for spring.py and Standalone Element Kernel
 # ============================================================================
 
-def init_advanced(group, model, log, *pos_args, idx19=None, idx25=None, idx26=None, idx27=None, idx44=None, idx46=None, massn=None, inertn=None, **kwargs):
+def init_advanced(group, model, log, *pos_args, idx19=None, idx25=None, idx26=None, idx27=None, idx35=None, idx44=None, idx46=None, massn=None, inertn=None, **kwargs):
     """Dispatcher called by spring.py init_group for advanced spring types."""
     if len(pos_args) == 5:
         idx19, idx44, idx46, massn, inertn = pos_args
@@ -1819,6 +2069,8 @@ def init_advanced(group, model, log, *pos_args, idx19=None, idx25=None, idx26=No
         idx19, idx25, idx26, idx44, idx46, massn, inertn = pos_args
     elif len(pos_args) == 8:
         idx19, idx25, idx26, idx27, idx44, idx46, massn, inertn = pos_args
+    elif len(pos_args) == 9:
+        idx19, idx25, idx26, idx27, idx35, idx44, idx46, massn, inertn = pos_args
 
     if idx19 is not None and len(idx19):
         init_torsion_type19(group, model, log, idx19, massn, inertn)
@@ -1828,6 +2080,8 @@ def init_advanced(group, model, log, *pos_args, idx19=None, idx25=None, idx26=No
         init_tab_type26(group, model, log, idx26, massn, inertn)
     if idx27 is not None and len(idx27):
         init_bdamp_type27(group, model, log, idx27, massn, inertn)
+    if idx35 is not None and len(idx35):
+        init_stitch_type35(group, model, log, idx35, massn, inertn)
     if idx44 is not None and len(idx44):
         init_crushing_type44(group, model, log, idx44, massn, inertn)
     if idx46 is not None and len(idx46):
@@ -1922,6 +2176,8 @@ def local_stiffness(group, x=None):
                 ptype = 26
             elif "27" in pname or "BDAMP" in pname:
                 ptype = 27
+            elif "35" in pname or "STITCH" in pname or "SEW" in pname:
+                ptype = 35
             elif "19" in pname or "TORS" in pname:
                 ptype = 19
             elif "44" in pname or "CRUS" in pname:
@@ -1955,6 +2211,11 @@ def local_stiffness(group, x=None):
             if stiff == 0.0:
                 stiff = float(p.get("k", 1.0))
             k_ax[sl] = stiff
+
+        elif ptype == 35:  # /PROP/TYPE35, /PROP/STITCH
+            elastif = float(getattr(prop, "elastif", 0.0) or p.get("elastif", 0.0) or p.get("stiff", 0.0) or p.get("k", 0.0))
+            L_sl = np.maximum(L0[sl], EM20)
+            k_ax[sl] = elastif / L_sl if elastif > 0.0 else float(p.get("k", 1.0))
 
         elif ptype == 23 or getattr(prop, "prop_name", "") == "SPR_MAT":  # /PROP/SPR_MAT
             E = float(getattr(mat, "E", 0.0) or 0.0)
