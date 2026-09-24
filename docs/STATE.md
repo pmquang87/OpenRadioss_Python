@@ -748,8 +748,10 @@ random-response → spectral-fatigue tower up to non-Gaussian evolutionary
 joint-tensor NORTA). NumPy reference backend + numba JIT (`auto` ≥32
 elements); SuperLU/CHOLMOD/MUMPS direct solvers. `pyradioss-gui` run-monitor
 with post-processing (anim→VTK, TH→CSV, anim→d3plot via Vortex-Radioss
-v1.021). NOT ported at all: MPI/SMP parallelism, ALE/Euler, airbags/monvol,
-DKT18 shell.
+v1.021). SPMD domain decomposition (`-np N`: Starter split into per-domain
+restarts, Engine frontier exchanges over threads or mpi4py/MPI —
+`pyradioss/spmd/`). ALE/Euler, airbags/monvol and DKT18 are covered by the
+later milestones (M_ALE, M_MONVOL, M47) despite this paragraph's M41 date.
 
 ### Validation state (M41, authoritative editions in VALIDATION.md)
 

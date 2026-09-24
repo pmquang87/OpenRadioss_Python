@@ -78,6 +78,39 @@ pyradioss-engine  -i TENSILE_0001.rad
 (You can also run them without installing: `python -m pyradioss.starter -i …`
 and `python -m pyradioss.engine -i …`.)
 
+### Domain decomposition (`-np N`, the SPMD port)
+
+The original solver's SPMD mode — `starter -np N` cuts the model into N
+domains, `mpirun -np N engine` runs one MPI process per domain — is ported
+in `pyradioss/spmd/` (Fortran origin: `starter/source/spmd/` and
+`engine/source/mpi/`):
+
+```bash
+# 1. Starter -np N: weighted recursive-bisection decomposition (initwg.F /
+#    domdec1.F / domdec2.F), frontier nodes shared between domains, and ONE
+#    restart per domain, TENSILE_0000_0001.rst ... TENSILE_0000_000N.rst
+#    (ddsplit.F naming), plus the usual global TENSILE_0000.rst
+pyradioss-starter -i TENSILE_0000.rad -np 4
+
+# 2a. Engine -np N without MPI: the N domains run as N threads of one
+#     process (pyradioss.spmd.ThreadComm) — functional, not a speed-up
+pyradioss-engine -i TENSILE_0001.rad -np 4
+
+# 2b. Engine under MPI (needs mpi4py + an MPI library): one process per
+#     domain (pyradioss.spmd.Mpi4pyComm); N must equal the Starter's -np,
+#     else the inipar.F "REQUIRED (number of .rst files) NSPMD" error
+mpirun -np 4 python -m pyradioss.engine -i TENSILE_0001.rad -np 4
+```
+
+Each cycle the domains exchange and sum the frontier-node forces and
+stiffnesses (`spmd_exch_a.F`), agree on the global time step
+(`spmd_glob_min5.F`), and reduce the energy/momentum ledgers with the
+`WEIGHT` convention so shared nodes are booked once (`ecrit.F`). Domain 0
+gathers the global view and writes the ONLY listing, T01 and ANIM files
+(`spmd_chkw.F`: only P0 prints; set `PYRADIOSS_SPMD_LOG_ALL=1` for
+per-domain `<Run>_0001_000p.out` listings). The results are the serial
+results up to floating-point summation order.
+
 Outputs:
 
 | File | Content |
