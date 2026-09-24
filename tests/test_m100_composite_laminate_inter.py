@@ -295,6 +295,49 @@ Solid_Orthotropic_Prop
         assert p.params["skew_id"] == 1
         assert abs(p.params["phi"] - 30.0) < 1e-12
 
+    def test_pcompp_shell_prop_type_ok(self, tmp_path):
+        """Assert /PROP/PCOMPP (TYPE51) on /SHELL element parts passes prop_type_ok and build_element_groups."""
+        from pyradioss.input.prop_reader import prop_type_ok
+        from pyradioss.model.entities import Property
+
+        # Direct prop_type_ok unit check
+        prop = Property(id=51, type=51, title="Composite_PCOMPP", params={"laminate_id": 1})
+        assert prop_type_ok(1, prop)
+
+        # Starter run with /PART, /SHELL, /PROP/PCOMPP (calling build_element_groups internally)
+        deck = f"""\
+#---1---+----2---+----3---+----4---+----5---+----6---+----7---+----8---+----9---+---10---+
+/BEGIN
+TEST_PCOMPP_SHELL
+      2021         0
+/MAT/LAW1/1
+Elastic_Matrix
+              7.8e-9
+            210000.0                 0.3
+/PROP/PCOMPP/51
+PCOMPP_Shell_Prop
+                   1
+/PART/1
+Part_Shell
+        51         1
+/NODE
+         1                 0.0                 0.0                 0.0
+         2                 2.0                 0.0                 0.0
+         3                 2.0                 2.0                 0.0
+         4                 0.0                 2.0                 0.0
+/SHELL/1
+         1         1         2         3         4
+/END
+"""
+        model, log = _run(tmp_path, deck)
+        assert len(log.errors) == 0
+        assert 51 in model.properties
+        p = model.properties[51]
+        assert p.type == 51
+        assert prop_type_ok(1, p)
+        assert model.shells is not None
+        assert len(model.shells.state["slices"]) == 1
+
 
 # ══════════════════════════════════════════════════════════════════════
 #  /INTER/TYPE25 & /INTER/SUB tests
