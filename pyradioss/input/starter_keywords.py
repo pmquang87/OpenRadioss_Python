@@ -41883,7 +41883,10 @@ def read_mat_law25(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     from .mat_reader import InactiveMaterial
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    if block.fixed:
+        valid_cards = [c for c in cards if not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
+    else:
+        valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
     if not valid_cards:
         log.error(f"/MAT/LAW25/{mat_id}: missing data card", block.source)
         return
@@ -43150,7 +43153,10 @@ def read_prop_type18(block: KeywordBlock, model: Model, log: MessageLog) -> None
 
     prop_id = block.user_id or 1
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    if block.fixed:
+        cards = [c for c in cards if not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
+    else:
+        cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
 
     params = {
         "isflag": 0, "ismstr": 0, "dm": 0.0, "df": 0.0,
