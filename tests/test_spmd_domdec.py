@@ -17,8 +17,8 @@ import numpy as np
 import pytest
 
 from pyradioss.common.messages import MessageLog, StarterError
-from pyradioss.model.entities import (MonitoredVolume, PressureLoad,
-                                      RigidWall, Sensor)
+from pyradioss.model.entities import (GJoint, MonitoredVolume,
+                                      PressureLoad, RigidWall, Sensor)
 from pyradioss.model.model import ElementGroup, Model
 from pyradioss.spmd.domdec import (DomainInfo, check_spmd_support, decompose,
                                    element_weights, slice_model)
@@ -454,3 +454,13 @@ def test_run_starter_np_refuses_before_restart(tmp_path, monkeypatch):
     base = deck[: -len("_0000.rad")]
     assert not os.path.isfile(base + "_0000.rst")
     assert not glob.glob(base + "_0000_*.rst")
+
+
+def test_gjoint_refused_under_spmd():
+    model = Model()
+    model.gjoints = [GJoint(id=1, subtype="GEAR", node_id0=1, node_id1=2, node_id2=3)]
+    with pytest.raises(StarterError) as exc:
+        check_spmd_support(model, np=2)
+    assert "/GJOINT" in str(exc.value)
+    # Serial (np=1) is supported
+    check_spmd_support(model, np=1)

@@ -465,13 +465,16 @@ def _nonempty(obj) -> bool:
         return bool(obj)
 
 
-def check_spmd_support(model: Model) -> None:
+def check_spmd_support(model: Model, np: Optional[int] = None,
+                       nspmd: Optional[int] = None) -> None:
     """Raise StarterError listing every model feature the SPMD port does
-    not decompose (Lagrange-multiplier constraints, SPH, ALE/FSI, FVMBAG,
-    XFEM, centrifugal loads, non-reflecting / cyclic / wall BCs, sensors
-    other than TIME/NOT/AND/OR/DISP/VEL/DIST, moving walls on all nodes,
-    plus the few kernels whose element buffers hold cross-element or
+    not decompose (Lagrange-multiplier constraints, /GJOINT (lag_mult.F LAG_MULTP),
+    SPH, ALE/FSI, FVMBAG, XFEM, centrifugal loads, non-reflecting / cyclic /
+    wall BCs, sensors other than TIME/NOT/AND/OR/DISP/VEL/DIST, moving walls on all
+    nodes, plus the few kernels whose element buffers hold cross-element or
     nodal data)."""
+    if (np is not None and np <= 1) or (nspmd is not None and nspmd <= 1):
+        return
     bad: List[str] = []
     for itf in getattr(model, "interfaces", []):
         if getattr(itf, "lagmul", False):
@@ -513,7 +516,9 @@ def check_spmd_support(model: Model) -> None:
                        ("bcs_cyclics", "/BCS/CYCLIC"),
                        ("cyclic_bcs", "/BCS/CYCLIC"),
                        ("bcs_walls", "/BCS/WALL"),
-                       ("nbcs_blocks", "/NBCS")):
+                       ("nbcs_blocks", "/NBCS"),
+                       # lag_mult.F LAG_MULTP L683: IF(ISPMD==0 .AND. NGJOINT>0) CALL ARRET(2)
+                       ("gjoints", "/GJOINT")):
         if _nonempty(getattr(model, attr, None)):
             bad.append(what)
     if getattr(model, "has_ale", False):
