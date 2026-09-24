@@ -51,7 +51,7 @@ exceed the ground-state one (LAW42 at large stretch!) MUST return the
 true current sound speed or the Courant time step is not a bound.
 """
 
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 
