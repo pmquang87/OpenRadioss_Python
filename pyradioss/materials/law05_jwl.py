@@ -1,9 +1,10 @@
 """LAW5 / JWL — Jones-Wilkins-Lee High Pressure Gas Expansion Equation of State (/MAT/LAW5, /MAT/JWL).
 
-Fortran origins:
-- ``engine/source/materials/mat/mat005/m5law.F`` (solid constitutive update & sound speed)
-- ``engine/source/materials/mat/mat005/mjwl.F`` (energy, afterburning & stress state)
-- ``starter/source/materials/mat/mat005/hm_read_mat05.F`` (starter card reader & defaults)
+Function: SIGEPS_05 / M5LAW (lines 1-186) & MJWL (lines 1-189)
+Upstream Fortran origins:
+- ``C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\mat\\mat005\\m5law.F`` (solid constitutive update & sound speed, subroutine M5LAW / SIGEPS05)
+- ``C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\mat\\mat005\\mjwl.F`` (energy, afterburning & stress state, subroutine MJWL)
+- ``C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\starter\\source\\materials\\mat\\mat005\\hm_read_mat05.F`` (starter card reader & defaults, subroutine HM_READ_MAT05)
 - ``C:\\OpenRadioss\\hm_cfg_files\\config\\CFG\\radioss110\\MAT\\matl5_jwl.cfg`` (CFG attributes & format)
 
 Theory & Formulation

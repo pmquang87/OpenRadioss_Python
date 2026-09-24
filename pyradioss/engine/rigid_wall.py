@@ -98,20 +98,29 @@ types then close the balance by construction:
 
 from __future__ import annotations
 
-from typing import Any, Tuple
+from typing import Any, Dict, Optional, Tuple
 import numpy as np
 
 from ..common.constants import EM20
 from ..model.model import Model
+from .rwall_thermal import RwallThermal, RwallThermalParams
 
 
 class RigidWalls:
     def __init__(self, model: Model, log):
         self.model = model
         self.walls = []
+        self.thermal_walls: Dict[int, RwallThermal] = {}
         for rw in model.rwalls:
             if getattr(rw, "lagmul", False):
                 continue
+            thermal = getattr(rw, "thermal", None)
+            if thermal is None and (getattr(rw, "is_therm", False) or hasattr(rw, "thermal_params")):
+                p = getattr(rw, "thermal_params", rw)
+                thermal = RwallThermal(p)
+                rw.thermal = thermal
+            if thermal is not None:
+                self.thermal_walls[rw.id] = thermal
             if rw.grnod_id in (None, 0):
                 idx = np.arange(model.numnod)
             else:
@@ -315,7 +324,7 @@ class RigidWalls:
                 - np.einsum("nb,nb->n", v_trial, v_old[i]))).sum())
 
             if wnode < 0:
-                wext += U                            # fixed wall (does negative work, goes to EW)
+                removed += -U                        # fixed wall (impact work absorbed into contact energy)
             elif driven:
                 wext += U                            # imposed-motion wall
             else:

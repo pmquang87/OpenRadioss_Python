@@ -35,6 +35,20 @@ from .initialization import (build_element_groups,
 from .restart import write_restart
 
 
+def build_model(blocks_or_path, log: Optional[MessageLog] = None) -> Model:
+    """Convenience helper to read/parse deck blocks and resolve materials into a Model."""
+    if isinstance(blocks_or_path, (str, list, tuple)) or hasattr(blocks_or_path, "__fspath__"):
+        blocks = read_deck(blocks_or_path)
+    else:
+        blocks = blocks_or_path
+    model = Model()
+    if log is None:
+        log = MessageLog()
+    parse_starter_deck(blocks, model, log)
+    resolve_materials(model, log)
+    return model
+
+
 def run_name_from_input(path: str) -> str:
     """'MYRUN_0000.rad' -> 'MYRUN' (the Radioss run-name convention)."""
     base = os.path.basename(path)
@@ -51,11 +65,12 @@ def _listing_summary(model: Model, log: MessageLog) -> None:
     log.info(f"     TITLE . . . . . . . . . . . . . . : {model.title}")
     log.info(f"     NUMBER OF NODES . . . . . . . . . : {model.numnod}")
     counts = {
-        "bricks": "BRICK", "bricks_heph": "BRICK", "bric20s": "BRIC20",
+        "bricks": "BRICK", "bricks_heph": "BRICK", "tshells": "TSHELL", "bric20s": "BRIC20",
+        "penta6s": "PENTA6",
         "tetras": "TETRA4", "tetra10s": "TETRA10",
         "shells": "SHELL", "shells_qbat": "SHELL", "shells_qeph": "SHELL", "shel16s": "SHEL16",
         "quads": "QUAD", "sh3n": "SH3N", "sh3n_dkt18": "SH3N",
-        "trusses": "TRUSS", "springs": "SPRING", "beams": "BEAM",
+        "trusses": "TRUSS", "springs": "SPRING", "beams": "BEAM", "beams_fiber": "BEAM",
     }
     for attr, kw in counts.items():
         g = getattr(model, attr)
@@ -136,9 +151,9 @@ def apply_transforms(model: Model, log: MessageLog) -> None:
                     idx1 = model.node_index(n1)
                     idx2 = model.node_index(n2)
                     v = model.x0[idx2] - model.x0[idx1]
-                    tx += v[0]
-                    ty += v[1]
-                    tz += v[2]
+                    tx = float(v[0])
+                    ty = float(v[1])
+                    tz = float(v[2])
                 except KeyError as exc:
                     log.warning(f"/TRANSFORM/TRA/{tr_id}: node {exc} for "
                                 f"node-pair vector not found")
@@ -154,12 +169,10 @@ def apply_transforms(model: Model, log: MessageLog) -> None:
                 continue
             p1 = np.array(p1, dtype=float)
             p2 = np.array(p2, dtype=float)
-            if n1 > 0 or n2 > 0:
+            if n1 > 0 and n2 > 0:
                 try:
-                    if n1 > 0:
-                        p1 = model.x0[model.node_index(n1)].copy()
-                    if n2 > 0:
-                        p2 = model.x0[model.node_index(n2)].copy()
+                    p1 = model.x0[model.node_index(n1)].copy()
+                    p2 = model.x0[model.node_index(n2)].copy()
                 except KeyError as exc:
                     log.warning(f"/TRANSFORM/ROT/{tr_id}: node {exc} not found")
                     continue
@@ -183,12 +196,10 @@ def apply_transforms(model: Model, log: MessageLog) -> None:
                 continue
             p1 = np.array(p1, dtype=float)
             p2 = np.array(p2, dtype=float)
-            if n1 > 0 or n2 > 0:
+            if n1 > 0 and n2 > 0:
                 try:
-                    if n1 > 0:
-                        p1 = model.x0[model.node_index(n1)].copy()
-                    if n2 > 0:
-                        p2 = model.x0[model.node_index(n2)].copy()
+                    p1 = model.x0[model.node_index(n1)].copy()
+                    p2 = model.x0[model.node_index(n2)].copy()
                 except KeyError as exc:
                     log.warning(f"/TRANSFORM/SYM/{tr_id}: node {exc} not found")
                     continue
@@ -276,6 +287,15 @@ def apply_transforms(model: Model, log: MessageLog) -> None:
             O1 = p[0]
             O2 = p[3]
             model.x0[idx] = O2 + (model.x0[idx] - O1) @ R.T
+
+        elif tr_type == "MATRIX":
+            grnod, mat_3x3, trans_vec, sub_id = args
+            idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
+            if idx is None or len(idx) == 0:
+                continue
+            mat = np.asarray(mat_3x3, dtype=float)
+            vec = np.asarray(trans_vec, dtype=float)
+            model.x0[idx] = model.x0[idx] @ mat.T + vec
 
 
 def run_starter(input_file: str, log: MessageLog | None = None) -> Model:

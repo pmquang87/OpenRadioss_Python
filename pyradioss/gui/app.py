@@ -37,7 +37,45 @@ from .runner import (GuiConfig, JobRunner, build_deck_summary,
                      derive_engine_deck, load_t01)
 
 _POLL_MS = 100          # queue-drain cadence
-_BACKENDS = ("auto", "numpy", "numba")
+_BACKENDS = ("auto", "numpy", "numba", "cupy")
+
+
+def probe_cupy(cupy_module: Optional[object] = None) -> tuple[bool, str]:
+    """Probe whether CuPy/CUDA is available and return (is_available, device_name_or_status).
+
+    Args:
+        cupy_module: Optional injected cupy module (used for testing).
+
+    Returns:
+        (available, device_name_or_status):
+            available: True if CuPy and CUDA device are ready, False otherwise.
+            device_name_or_status: GPU device name (e.g. 'NVIDIA GeForce RTX 4090')
+                                   or '(not available)'.
+    """
+    try:
+        if cupy_module is not None:
+            cupy = cupy_module
+        else:
+            import cupy  # type: ignore[import-untyped]
+
+        if hasattr(cupy, "cuda") and hasattr(cupy.cuda, "is_available"):
+            if not cupy.cuda.is_available():
+                return False, "(not available)"
+        if hasattr(cupy, "cuda") and hasattr(cupy.cuda, "runtime"):
+            count = cupy.cuda.runtime.getDeviceCount()
+            if count <= 0:
+                return False, "(not available)"
+            props = cupy.cuda.runtime.getDeviceProperties(0)
+            name = props.get("name", "CUDA GPU")
+            if isinstance(name, bytes):
+                name = name.decode("utf-8", errors="replace")
+            return True, str(name)
+        return True, "CUDA GPU"
+    except Exception:
+        return False, "(not available)"
+
+
+probe_gpu = probe_cupy
 
 
 class PyradiossGUI:
@@ -59,6 +97,11 @@ class PyradiossGUI:
         self.status_var = tk.StringVar(value="Ready.")
         self.term_var = tk.StringVar(value="")
         self.channel_vars: dict = {}
+
+        # -- GPU / CuPy status -----------------------------------------
+        self.gpu_available, self.gpu_name = probe_cupy()
+        gpu_display = self.gpu_name if self.gpu_available else "(not available)"
+        self.gpu_info_var = tk.StringVar(value=f"GPU: {gpu_display}")
 
         # -- post-processing state --------------------------------------
         self.post_runner = None
@@ -102,9 +145,16 @@ class PyradiossGUI:
 
         ttk.Label(job, text="Backend:").grid(
             row=2, column=0, sticky="w", padx=4, pady=4)
-        ttk.Combobox(job, textvariable=self.backend_var, values=_BACKENDS,
-                     state="readonly", width=10).grid(
-            row=2, column=1, sticky="w", padx=4, pady=4)
+        backend_frame = ttk.Frame(job)
+        backend_frame.grid(row=2, column=1, sticky="w", padx=4, pady=4)
+        ttk.Combobox(backend_frame, textvariable=self.backend_var, values=_BACKENDS,
+                     state="readonly", width=10).pack(side=tk.LEFT)
+        self.gpu_label = ttk.Label(
+            backend_frame, textvariable=self.gpu_info_var,
+            text=self.gpu_info_var.get(),
+            foreground="#2a7b2e" if self.gpu_available else "#777")
+        self.gpu_label.pack(side=tk.LEFT, padx=(8, 0))
+
         ttk.Label(job, text="Threads (0=auto):").grid(
             row=2, column=2, sticky="e", padx=4, pady=4)
         ttk.Spinbox(job, from_=0, to=64, textvariable=self.nthread_var,
@@ -614,6 +664,7 @@ class PyradiossGUI:
             self.runner.stop()
             self.runner.join(timeout=5)
         if self.post_runner is not None and self.post_runner.is_running():
+            self.post_runner.stop()
             self.post_runner.join(timeout=5)
         self.root.destroy()
 

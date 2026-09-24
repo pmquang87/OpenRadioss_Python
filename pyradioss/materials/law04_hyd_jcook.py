@@ -1,15 +1,17 @@
 """LAW4 — Hydrodynamic Johnson-Cook (/MAT/LAW4, /MAT/HYD_JCOOK).
 
-Fortran origins:
-- ``engine/source/materials/mat/mat004/m4law.F`` (solid constitutive update)
-- ``starter/source/materials/mat/mat004/hm_read_mat04.F`` (starter card reader & defaults)
+Function: SIGEPS_04 / M4LAW (lines 1-244)
+Upstream Fortran origins:
+- ``C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\mat\\mat004\\m4law.F`` (solid constitutive update, subroutine M4LAW / SIGEPS04)
+- ``C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\starter\\source\\materials\\mat\\mat004\\hm_read_mat04.F`` (starter card reader & defaults, subroutine HM_READ_MAT04)
+- ``C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\common_source\\eos\\gruneisen.F`` (Mie-Grüneisen equation of state, subroutine GRUNEISEN)
 - ``C:\\OpenRadioss\\hm_cfg_files\\config\\CFG\\radioss110\\MAT\\matl4_hyd_jcook.cfg`` (CFG attributes & format)
 
 Theory
 ------
 LAW4 models elastic-plastic hydrodynamic behavior using a Johnson-Cook yield surface
 with isotropic power-law hardening, strain rate sensitivity, and thermal softening,
-coupled with a hydrodynamic equation of state (linear bulk modulus or embedded polynomial EOS).
+coupled with a hydrodynamic equation of state (linear bulk modulus, embedded polynomial EOS, or Grüneisen EOS).
 
 1. Deviatoric elastic trial (m4law.F lines 90-95, 106-113):
    P_old = -tr(sigma_old) / 3
@@ -70,6 +72,8 @@ coupled with a hydrodynamic equation of state (linear bulk modulus or embedded p
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 import numpy as np
 
@@ -331,12 +335,46 @@ def build_law04(rec) -> Material:
     e0 = float(p.get("e0") if p.get("e0") is not None else (p.get("MAT_EA") or p.get("MAT_E0") or 0.0))
     psh = float(p.get("psh") if p.get("psh") is not None else (p.get("MAT_PSH") or 0.0))
 
+    if isinstance(eos, dict):
+        eos = EquationOfState(
+            kind=eos.get("kind", "POLYNOMIAL"),
+            params=eos.get("params", eos),
+            rho0=density,
+        )
+
+    # Detect Grüneisen EOS parameters (/EOS/GRUNEISEN, gruneisen.F)
+    has_gruneisen = (
+        str(p.get("eos_kind", p.get("eos_type", ""))).upper() in ("GRUNEISEN", "GRUN", "2")
+        or (isinstance(rec, dict) and str(rec.get("eos_kind", rec.get("kind", ""))).upper() in ("GRUNEISEN", "GRUN"))
+        or any(k in p for k in ("gamma0", "s1", "eos_gamma0", "eos_s1", "EOS_GRUN_1", "GAMMA0"))
+    )
+
     has_embedded_eos = any(
         k in p for k in ("c0", "c1", "c2", "c3", "c4", "c5", "e0", "psh",
                          "MAT_C0", "MAT_C1", "MAT_C2", "MAT_C3", "MAT_C4", "MAT_C5",
                          "MAT_EA", "MAT_E0", "MAT_PSH")
     )
-    if eos is None and has_embedded_eos:
+    if eos is None and has_gruneisen:
+        # Grüneisen parameters: c (bulk sound speed), s1, s2, s3 (Hugoniot slopes), gamma0, a
+        c_sound = p.get("c_sound") or p.get("eos_c") or p.get("C_GRUN")
+        if c_sound is None:
+            c_val = p.get("c")
+            if c_val is not None and float(c_val) != c_rate:
+                c_sound = float(c_val)
+            else:
+                c_sound = np.sqrt(k / density) if density > 0.0 else 0.0
+        grun_params = {
+            "c": float(c_sound),
+            "s1": float(p.get("s1") if p.get("s1") is not None else (p.get("eos_s1") or p.get("S1") or 0.0)),
+            "s2": float(p.get("s2") if p.get("s2") is not None else (p.get("eos_s2") or p.get("S2") or 0.0)),
+            "s3": float(p.get("s3") if p.get("s3") is not None else (p.get("eos_s3") or p.get("S3") or 0.0)),
+            "gamma0": float(p.get("gamma0") if p.get("gamma0") is not None else (p.get("eos_gamma0") or p.get("GAMMA0") or 0.0)),
+            "a": float(p.get("a_grun") if p.get("a_grun") is not None else (p.get("eos_a") or p.get("A_GRUN") or 0.0)),
+            "e0": float(p.get("e0") if p.get("e0") is not None else (p.get("eos_e0") or 0.0)),
+            "rho0_card": float(p.get("rho0_card") or density),
+        }
+        eos = EquationOfState(kind="GRUNEISEN", params=grun_params, rho0=density)
+    elif eos is None and has_embedded_eos:
         eos_params = {
             "c0": c0,
             "c1": c1,
@@ -607,13 +645,82 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
             else:
                 extra["temp"] = T.copy()
 
-    # 12. Hydrodynamic pressure update & cutoff (m4law.F / eosmain.F)
+    # 12. Hydrodynamic pressure update & cutoff (m4law.F line 91, eosmain.F line 229, gruneisen.F)
     # Pressure P is positive in compression, negative in tension.
-    if extra is not None and "rho" in extra and extra["rho"] is not None:
-        P_new = K * (extra["rho"] / rho0 - 1.0)
+    if getattr(mat, "eos", None) is not None:
+        from pyradioss.materials import eos as eos_mod
+
+        if extra is not None and "rho" in extra and extra["rho"] is not None:
+            rho_curr = np.asarray(extra["rho"], dtype=float)
+            mu = rho_curr / rho0 - 1.0
+            dv = 1.0 / (1.0 + np.maximum(mu, -0.999999)) - 1.0
+        elif extra is not None and "mu" in extra and extra["mu"] is not None:
+            mu = np.asarray(extra["mu"], dtype=float)
+            dv = 1.0 / (1.0 + np.maximum(mu, -0.999999)) - 1.0
+        else:
+            # Volumetric strain increment: tr(deps) = -3 * dav
+            mu = 3.0 * dav
+            dv = -mu
+
+        e_int = None
+        p_eos_old = None
+        if extra is not None:
+            if "e_eos" in extra and extra["e_eos"] is not None:
+                e_int = np.atleast_1d(np.asarray(extra["e_eos"], dtype=float))
+            elif "eint" in extra and extra["eint"] is not None:
+                e_int = np.atleast_1d(np.asarray(extra["eint"], dtype=float))
+            if "p_eos" in extra and extra["p_eos"] is not None:
+                p_eos_old = np.atleast_1d(np.asarray(extra["p_eos"], dtype=float))
+
+        if e_int is None:
+            e0 = float(getattr(mat.eos, "params", {}).get("e0", 0.0))
+            e_int = np.full(nel, e0, dtype=float)
+        if p_eos_old is None:
+            p_eos_old = P_old
+
+        # Deviatoric work rate de_dev = s_mid : deps
+        s_mid = 0.5 * (s + (sig + P_old[:, None]))
+        de_dev = np.einsum("nk,nk->n", s_mid, deps)
+
+        mu_arr = np.atleast_1d(np.asarray(mu, dtype=float))
+        dv_arr = np.atleast_1d(np.asarray(dv, dtype=float))
+        if mu_arr.shape != (nel,):
+            mu_arr = np.full(nel, float(mu_arr.flat[0]), dtype=float)
+        if dv_arr.shape != (nel,):
+            dv_arr = np.full(nel, float(dv_arr.flat[0]), dtype=float)
+
+        P_eos, e_eos, c2 = eos_mod.update(
+            mat.eos, mu_arr, dv_arr, e_int, p_eos_old, de_dev
+        )
+
+        if extra is not None:
+            if "e_eos" in extra and isinstance(extra["e_eos"], np.ndarray):
+                extra["e_eos"][:] = e_eos
+            elif "e_eos" in extra:
+                extra["e_eos"] = e_eos
+            if "p_eos" in extra and isinstance(extra["p_eos"], np.ndarray):
+                extra["p_eos"][:] = P_eos
+            elif "p_eos" in extra:
+                extra["p_eos"] = P_eos
+
+        P_new = np.asarray(P_eos, dtype=float)
+        if P_new.ndim == 0:
+            P_new = np.full(nel, float(P_new), dtype=float)
+
+        # Sound speed combining EOS bulk stiffness c2 and shear G:
+        # Fortran m4law.F line 100: DPDM = DPDM + 4/3*G; SSP = sqrt(abs(DPDM)/RHO0)
+        c_val = np.sqrt(np.maximum(c2 + (4.0 / 3.0) * G / rho0, 0.0))
+        c = np.asarray(c_val, dtype=float)
+        if c.ndim == 0 or c.shape != (nel,):
+            c = np.full(nel, float(c), dtype=float)
     else:
-        # Incremental hypoelastic bulk update: dP = -K * tr(deps) = 3 * K * dav
-        P_new = P_old + 3.0 * K * dav
+        if extra is not None and "rho" in extra and extra["rho"] is not None:
+            P_new = K * (extra["rho"] / rho0 - 1.0)
+        else:
+            # Incremental hypoelastic bulk update: dP = -K * tr(deps) = 3 * K * dav
+            P_new = P_old + 3.0 * K * dav
+        c_val = np.sqrt(max((K + (4.0 / 3.0) * G) / rho0, 0.0))
+        c = np.full(nel, c_val, dtype=float)
 
     # Pressure cutoff: P >= Pmin (Pmin is negative tension cutoff, e.g. -1e30)
     P_new = np.maximum(P_new, pmin)
@@ -625,10 +732,6 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
     sig[:, 3] = s[:, 3]
     sig[:, 4] = s[:, 4]
     sig[:, 5] = s[:, 5]
-
-    # 13. Sound speed
-    c_val = np.sqrt(max((K + (4.0 / 3.0) * G) / rho0, 0.0))
-    c = np.full(nel, c_val, dtype=float)
 
     return sig, epsp, c
 
@@ -654,6 +757,24 @@ def consistent_solid_tangent(mat: Material, sig: np.ndarray, epsp: np.ndarray,
     p = _ensure_params(mat)
     G = float(p["G"])
     Kb = float(p["K"])
+    rho0 = float(getattr(mat, "rho0", 1.0) or 1.0)
+    if getattr(mat, "eos", None) is not None:
+        from pyradioss.materials import eos as eos_mod
+        mu_tan = 0.0
+        e_tan = float(getattr(mat.eos, "params", {}).get("e0", 0.0))
+        if extra is not None:
+            if "mu" in extra and extra["mu"] is not None:
+                mu_tan = float(np.mean(extra["mu"]))
+            elif "rho" in extra and extra["rho"] is not None:
+                mu_tan = float(np.mean(extra["rho"])) / rho0 - 1.0
+            if "e_eos" in extra and extra["e_eos"] is not None:
+                e_tan = float(np.mean(extra["e_eos"]))
+        try:
+            c_eos = float(eos_mod.sound_speed(mat.eos, mu_tan, e_tan))
+            if c_eos > 0.0:
+                Kb = rho0 * (c_eos ** 2)
+        except Exception:
+            pass
     B = float(p["B"])
     N = float(p["N"])
     sig_max = float(p["sig_max"])
@@ -786,7 +907,63 @@ def consistent_solid_tangent(mat: Material, sig: np.ndarray, epsp: np.ndarray,
     return D
 
 
+def sound_speed(
+    mat: Material | dict,
+    rho: float | np.ndarray | None = None,
+    extra: dict | None = None,
+) -> float | np.ndarray:
+    """Acoustic longitudinal wave speed for LAW4 (hydrodynamic Johnson-Cook).
+
+    Cites m4law.F line 100:
+    c = sqrt((K_eff + 4/3 * G) / rho0)
+    """
+    p = _ensure_params(mat)
+    g = float(p["G"])
+    k = float(p["K"])
+    rho0 = float(getattr(mat, "rho0", 1.0) or (p.get("rho0", 1.0) if isinstance(p, dict) else 1.0) or 1.0)
+    current_rho = rho0 if rho is None else rho
+
+    if getattr(mat, "eos", None) is not None:
+        from pyradioss.materials import eos as eos_mod
+        mu_val = 0.0
+        e_val = float(getattr(mat.eos, "params", {}).get("e0", 0.0))
+        if extra is not None:
+            if "mu" in extra and extra["mu"] is not None:
+                mu_val = float(np.mean(extra["mu"]))
+            elif "rho" in extra and extra["rho"] is not None:
+                mu_val = float(np.mean(extra["rho"])) / rho0 - 1.0
+            if "e_eos" in extra and extra["e_eos"] is not None:
+                e_val = float(np.mean(extra["e_eos"]))
+        try:
+            c_eos = float(eos_mod.sound_speed(mat.eos, mu_val, e_val))
+            if c_eos > 0.0:
+                k = rho0 * (c_eos ** 2)
+        except Exception:
+            pass
+
+    c_sq = (k + (4.0 / 3.0) * g) / current_rho
+    c = np.sqrt(np.maximum(0.0, c_sq))
+    if isinstance(c, np.ndarray) and c.ndim == 0:
+        return float(c)
+    return c
+
+
 solid_tangent = consistent_solid_tangent
+tangent = consistent_solid_tangent
+
+
+def needs_defgrad(mat: Any = None) -> bool:
+    """Return False: LAW4 uses an incremental hypoelastic rate formulation."""
+    return False
+
+
+def extra_shapes(mat: Any = None, nip: int | None = None) -> dict[str, tuple[int, ...]]:
+    """Persistent history variables for LAW4."""
+    return {
+        "temp": () if nip is None else (nip,),
+        "e_eos": () if nip is None else (nip,),
+        "p_eos": () if nip is None else (nip,),
+    }
 
 
 def _register():

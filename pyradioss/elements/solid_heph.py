@@ -247,7 +247,7 @@ def _exact_dt_factor(dndx: np.ndarray, vol: np.ndarray, lc: np.ndarray,
         eig = np.linalg.eigvals(C[None, :, :] @ BBt[sl])
         w2max = (8.0 / mat.rho0) * eig.real.max(axis=1)
         dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
-        fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
+        fac[sl] = np.minimum(dt_exact / np.maximum(lc[sl] / c, EM20), 1.0)
     return fac
 
 
@@ -284,7 +284,7 @@ def init_group(group, model, log):
 
     xe = model.x0[group.conn]                      # (n, 8, 3)
     dndx0, vol = _geometry(xe)
-    bad = vol <= 0.0
+    bad = vol <= EM20
     if np.any(bad):
         for eid in group.ids[bad]:
             log.error(f"/BRICK {eid}: zero or negative volume "
@@ -522,7 +522,8 @@ def _post(xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
     # ---- critical time step (sdlen3 + material) ----------------------------
     Q = np.where(compressing, qb * c + qa * lc * np.abs(trD), 0.0)
     denom = Q + np.sqrt(Q * Q + c * c)
-    dt_crit = np.where(denom > 0.0, dtfac * lc / denom, EP30)
+    safe_denom = np.where(denom > 0.0, denom, 1.0)
+    dt_crit = np.where(denom > 0.0, dtfac * lc / safe_denom, EP30)
     
     # dt cap for physical hourglass
     gnorm = np.einsum("nai,nai->n", gamma, gamma)
@@ -683,7 +684,9 @@ def forces(group, x, v, vr, dt, fint, mint):
         if getattr(mat, "law", 1) == 0:
             continue
         if sl.stop > sl.start and not c_from_law[sl.start]:
-            c[sl] = np.sqrt((getattr(mat, "K", 0.0) + 4.0 * getattr(mat, "G", 0.0) / 3.0) / rho[sl])
+            K_sl = getattr(mat, "K", 0.0)
+            G_sl = getattr(mat, "G", 0.0)
+            c[sl] = np.sqrt(np.maximum(K_sl + 4.0 * G_sl / 3.0, 0.0) / np.maximum(rho[sl], EM20))
         qa[sl] = getattr(prop, "params", {}).get("qa", 1.1)
         qb[sl] = getattr(prop, "params", {}).get("qb", 0.05)
         hcoef[sl] = getattr(prop, "params", {}).get("h", HG_PHYS)

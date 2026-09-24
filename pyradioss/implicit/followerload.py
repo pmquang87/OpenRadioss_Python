@@ -119,7 +119,7 @@ def pload_tangent(loads, model, t, x, dof):
         if p == 0.0:
             continue
         xs = x[segs].copy()                              # (nseg, 4, 3)
-        degen = (segs[:, 3] == segs[:, 2]) | (segs[:, 3] <= 0)
+        degen = (segs[:, 3] == segs[:, 2]) | (segs[:, 3] < 0)
         if np.any(degen):
             xs[degen, 3] = xs[degen, 2]
         C13 = _skew(xs[:, 2] - xs[:, 0])                 # [d13]x
@@ -131,6 +131,9 @@ def pload_tangent(loads, model, t, x, dof):
         # d f_a/d x_b = p w_a 1/2 [ e13_b (-[d24]x) + e24_b [d13]x ]
         dAdx = 0.5 * (e24[None, :, None, None] * C13[:, None, :, :]
                       - e13[None, :, None, None] * C24[:, None, :, :])
+        if np.any(degen):
+            dAdx[degen, 2] += dAdx[degen, 3]
+            dAdx[degen, 3] = 0.0
         # (nseg, 4(b), 3, 3) -> the full (nseg, 4(a), 3, 4(b), 3) block,
         # NEGATED: the load stiffness is K += -d f_ext/d x
         ke = -p * np.einsum("na,nbij->naibj", w, dAdx).reshape(
@@ -139,8 +142,8 @@ def pload_tangent(loads, model, t, x, dof):
         for k in range(4):
             for c in range(3):
                 edofs[:, 3 * k + c] = segs[:, k] * DOFS_PER_NODE + c
-        if np.any(degen & (segs[:, 3] <= 0)):
-            edofs[degen & (segs[:, 3] <= 0), 9:] = -1
+        if np.any(degen & (segs[:, 3] < 0)):
+            edofs[degen & (segs[:, 3] < 0), 9:] = -1
         eq = np.full(edofs.shape, -1, dtype=np.int64)
         valid = (edofs >= 0) & (edofs < len(dof.eq))
         eq[valid] = dof.eq[edofs[valid]]

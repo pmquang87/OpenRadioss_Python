@@ -339,7 +339,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     n = group.n
     if n == 0 or len(conn) == 0:
         return np.empty(0, dtype=float)
-    if dt < 0.0:
+    if dt is None or dt < 0.0:
         return np.full(n, EP30)
 
     # Reconstruct positions and velocities for virtual midside nodes (-1)
@@ -399,11 +399,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         if c_new is not None:
             c_new = c_new.reshape(-1, 4).max(axis=1)
             c[sl] = c_new
-            c_from_law[sl] = True
         else:
             K_sl = getattr(mat, "K", 0.0)
             G_sl = getattr(mat, "G", 0.0)
-            c[sl] = np.sqrt((K_sl + 4.0 * G_sl / 3.0) / np.maximum(rho[sl], EM20))
+            c[sl] = np.sqrt(np.maximum(K_sl + 4.0 * G_sl / 3.0, 0.0) / np.maximum(rho[sl], EM20))
             c_from_law[sl] = True
 
     # ---- failure evaluation -------------------------------------------
@@ -435,15 +434,18 @@ def forces(group, x, v, vr, dt, fint, mint):
         qb[sl] = getattr(prop, "params", {}).get("qb", 0.05) if hasattr(prop, "params") else getattr(prop, "qb", 0.05)
 
     # ---- post block: viscosity, forces, energies, dt -------------------
+    dtfac = st.get("dtfac", 0.25)
+    if np.ndim(dtfac) == 0:
+        dtfac = np.full(n, float(dtfac))
     jit = accel_get("tetra10_post")
     if jit is not None:
         fe, dt_crit, w_visc, qvw_new, deint0 = jit(
             xe, dndx, vol, vol_tot, lc, rho, trD, deps, sig, sig_old,
-            qa, qb, c, alive, st["qvw_pend"], dt, st["dtfac"])
+            qa, qb, c, alive, st["qvw_pend"], dt, dtfac)
     else:
         fe, dt_crit, w_visc, qvw_new, deint0 = _post(
             xe, dndx, vol, vol_tot, lc, rho, trD, deps, sig, sig_old,
-            qa, qb, c, alive, st["qvw_pend"], dt, st["dtfac"])
+            qa, qb, c, alive, st["qvw_pend"], dt, dtfac)
 
     alive = st["off"] > 0.0
     fe[~alive] = 0.0

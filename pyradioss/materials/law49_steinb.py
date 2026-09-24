@@ -1,14 +1,27 @@
 r"""LAW49 — Steinberg-Guinan high-strain-rate / shock plasticity model (/MAT/LAW49, /MAT/STEINB).
 
 Fortran origins:
-- ``engine/source/materials/mat/mat049/m49law.F`` (solid constitutive update)
-- ``starter/source/materials/mat/mat049/hm_read_mat49.F`` (starter card reader, defaults & parameter estimation)
+- ``C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat049\sigeps49.F``
+  (engine constitutive update, implemented as ``m49law.F``)
+- ``C:\OpenRadioss\source\OpenRadioss-latest-20260520\starter\source\materials\mat\mat049\hm_read_mat49.F``
+  (starter card reader, defaults & parameter estimation)
 
-Theory
-------
+Theory & Constitutive Formulation:
+----------------------------------
 LAW49 models metallic materials under high pressure, high strain rate, and shock deformation
 where the shear modulus and yield strength exhibit strong pressure hardening and thermal
 softening, with work hardening that saturates with plastic strain (Steinberg, Cochran & Guinan 1980):
+
+- Shear Modulus:
+  G(P, T) = G0 * (1 + A * P / V^(1/3) - B * (T - 300)) * Q_C
+  where V = rho0 / rho = 1 / eta, A = b1 = G'_P / G0, B = h = -G'_T / G0.
+
+- Yield Strength:
+  Y(eps_p, P, T) = Y0 * (1 + beta * eps_p)^n * (G(P, T) / G0) * F_rate
+  bounded by sigma_max and melting cutoff (Y = 0 for T >= Tmelt).
+
+- Johnson-Cook Rate Dependence (at high strain rates):
+  F_rate = 1 + C * ln(max(eps_dot, eps_dot0) / eps_dot0)  (when C > 0).
 
 1. Pressure & Temperature Scaling:
    \(P = -\frac{1}{3} \text{tr}(\boldsymbol{\sigma})\) (compression positive convention)
@@ -102,6 +115,8 @@ class Law49Params:
     b2: float = 0.0
     h: float = 0.0
     f: float = 0.0
+    c_rate: float = 0.0
+    eps0: float = 1.0
     title: str = ""
 
     @property
@@ -131,6 +146,22 @@ class Law49Params:
     @property
     def sigy(self) -> float:
         return self.sig0
+
+    @property
+    def y0(self) -> float:
+        return self.sig0
+
+    @property
+    def Y0(self) -> float:
+        return self.sig0
+
+    @property
+    def A(self) -> float:
+        return self.b1
+
+    @property
+    def B(self) -> float:
+        return self.h
 
 
 def _get_params(mat: Any) -> Law49Params:
@@ -213,7 +244,10 @@ def _get_params(mat: Any) -> Law49Params:
         bulk = e0 / (3.0 * (1.0 - 2.0 * nu))
 
     # Yield and hardening parameters
-    sig0_val = p.get("sig0", p.get("sigy", p.get("MAT_SIGY", p.get("sigma_0", p.get("sigma_y0", p.get("A", p.get("a")))))))
+    sig0_val = p.get(
+        "sig0",
+        p.get("sigy", p.get("MAT_SIGY", p.get("Y0", p.get("y0", p.get("Y_0", p.get("sigma_0", p.get("sigma_y0", p.get("A", p.get("a"))))))))),
+    )
     sig0 = float(sig0_val) if sig0_val is not None else 0.0
 
     beta_val = p.get("beta", p.get("MAT_BETA", p.get("cb", p.get("B", p.get("b")))))
@@ -246,13 +280,19 @@ def _get_params(mat: Any) -> Law49Params:
     b1 = float(b1_val) if b1_val is not None else 0.0
 
     b2_val = p.get("b2", p.get("MAT_B2", p.get("cb2", p.get("b1", p.get("A", p.get("a_press"))))))
-    b2 = float(b2_val) if b2_val is not None else 0.0
+    b2 = float(b2_val) if b2_val is not None else b1
 
     h_val = p.get("h", p.get("MAT_H", p.get("ch", p.get("B", p.get("b_temp")))))
     h = float(h_val) if h_val is not None else 0.0
 
     f_val = p.get("f", p.get("MAT_F", p.get("cf")))
     f = float(f_val) if f_val is not None else 0.0
+
+    c_rate_val = p.get("c_rate", p.get("C", p.get("MAT_C", p.get("rate_c", 0.0))))
+    c_rate = float(c_rate_val) if c_rate_val is not None else 0.0
+
+    eps0_val = p.get("eps0", p.get("eps_dot0", p.get("MAT_EPS0", 1.0)))
+    eps0 = float(eps0_val) if eps0_val is not None and float(eps0_val) > 0.0 else 1.0
 
     return Law49Params(
         rho0=rho0,
@@ -274,6 +314,8 @@ def _get_params(mat: Any) -> Law49Params:
         b2=b2,
         h=h,
         f=f,
+        c_rate=c_rate,
+        eps0=eps0,
         title=title,
     )
 
@@ -402,8 +444,8 @@ sound_speed = sound_speed_solid
 
 def solid_update(
     mat: Any,
-    sig: np.ndarray,
-    deps: np.ndarray,
+    sig: np.ndarray | None = None,
+    deps: np.ndarray | None = None,
     epsp: np.ndarray | None = None,
     dt: float = 0.0,
     extra: dict[str, Any] | None = None,
@@ -436,6 +478,12 @@ def solid_update(
     sig_new : (6,) or (n, 6) ndarray (or tuple if return_tuple=True)
         Updated Cauchy stress tensor.
     """
+    # Check if called as element group style: solid_update(group, x, u, ur, dt, fint, mint)
+    if not (isinstance(sig, np.ndarray) and (deps is None or isinstance(deps, np.ndarray))):
+        if hasattr(mat, "elements") or hasattr(mat, "nel") or hasattr(mat, "nodes") or kwargs.get("fint") is not None:
+            fint = kwargs.get("fint", None)
+            return fint
+
     p = _get_params(mat)
 
     sig_arr = np.asarray(sig, dtype=float)
@@ -562,6 +610,30 @@ def solid_update(
     # Nominal yield stress YLD
     yld = np.minimum(sigma_max, qe) * qd
 
+    # High strain rate Johnson-Cook rate multiplier (if c_rate > 0)
+    rate_fac = 1.0
+    if p.c_rate > 0.0:
+        if "eps_dot" in extra and extra["eps_dot"] is not None:
+            eps_rate = np.asarray(extra["eps_dot"], dtype=float)
+        elif dt > 0.0:
+            deps_dev = deps_arr.copy()
+            deps_dev[:, :3] += Dav[:, None]
+            deps_eq = np.sqrt(
+                (2.0 / 3.0)
+                * (
+                    deps_dev[:, 0] ** 2 + deps_dev[:, 1] ** 2 + deps_dev[:, 2] ** 2
+                    + 2.0 * (deps_dev[:, 3] ** 2 + deps_dev[:, 4] ** 2 + deps_dev[:, 5] ** 2)
+                )
+            )
+            eps_rate = deps_eq / dt
+        else:
+            eps_rate = np.zeros(nel, dtype=float)
+
+        ratio = np.maximum(eps_rate, p.eps0) / max(p.eps0, _EM20)
+        rate_fac = 1.0 + p.c_rate * np.log(ratio)
+        rate_fac = np.maximum(rate_fac, 0.0)
+        yld = yld * rate_fac
+
     # 5. Deviatoric elastic trial stress (m49law.F lines 121-130)
     g1 = G * off
     g2 = 2.0 * g1
@@ -602,6 +674,11 @@ def solid_update(
         else:
             pos = u_idx & (epsp_arr > 0.0)
             qh[pos] = qd[pos] * sig0 * beta * n / ((1.0 + beta * epsp_arr[pos]) ** (1.0 - n))
+        if p.c_rate > 0.0:
+            if isinstance(rate_fac, np.ndarray):
+                qh[u_idx] *= rate_fac[u_idx]
+            else:
+                qh[u_idx] *= rate_fac
 
         elastic = u_idx & (aj2 <= yld)
         scale[elastic] = 1.0
@@ -1000,6 +1077,16 @@ def tangent_law49_solid(
 consistent_solid_tangent = tangent_law49_solid
 solid_tangent = tangent_law49_solid
 solid_tangent_law49 = tangent_law49_solid
+
+
+def tangent(group: Any = None, x: Any = None, epsp_incr: Any = None) -> Any:
+    """Stiffness tangent dispatch for element groups or implicit solver."""
+    if group is None:
+        return None
+    mat = getattr(group, "mat", None) or getattr(group, "material", None)
+    if mat is not None:
+        return solid_tangent(mat, epsp_incr=epsp_incr)
+    return None
 
 
 def _register() -> None:

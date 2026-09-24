@@ -343,7 +343,7 @@ def test_extended_interfaces(tmp_path):
         if itype in (5, 14):
             assert inter.grnod_id == 10
             assert inter.surf_id == 20
-        elif itype == 23:
+        elif itype in (21, 23):
             assert inter.surf_id == 20
             assert inter.surf_id1 == 10
         else:

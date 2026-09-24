@@ -29,9 +29,9 @@ Contents per state:
     (the ported solids are the Isolid=1 Jaumann formulation: sig lives in
     the fixed global basis — a corotational solid kernel, if ever added,
     must rotate before emitting here).  The Voigt 6 [xx,yy,zz,xy,yz,zx]
-    fills the 3x3 as ``[s0 s3 s4 / s3 s1 s5 / s4 s5 s2]``: yz at (0,2)
-    and zx at (1,2), the official anim_to_vtk placement (not the
-    textbook one) that the VTK->d3plot converter reads back by position
+    fills the 3x3 as ``[s0 s3 s5 / s3 s1 s4 / s5 s4 s2]``,
+    the official anim_to_vtk placement that the VTK->d3plot converter
+    reads back by position
   - ``TENSORS 2DELEM_Stress_(lower)/(upper)`` — shell outer-fiber
     in-plane stress as ELEMENT-LOCAL plane-stress 3x3 (like the official
     tool; the corotational storage frame — rotated fiber->element for
@@ -52,28 +52,49 @@ from ..model.model import Model
 # their two end nodes (the 3rd is the orientation node, not geometry).
 _VTK_CELL = {
     "bricks": (12, 8),
+    "bricks_full": (12, 8),
+    "bricks_eas": (12, 8),
     "bricks_heph": (12, 8),
+    "solid_shells_ha8": (12, 8),
+    "cohesives": (12, 8),
     "bric20s": (25, 20),
+    "penta6s": (13, 6),
+    "penta6s_heph": (13, 6),
+    "pyra5s": (14, 5),
     "shel16s": (12, 8),
+    "thickshell_wedges": (13, 6),
+    "thickshell_composites": (12, 8),
+    "tshells": (12, 8),
     "tetras": (10, 4),
+    "tetras_sfem": (10, 4),
     "tetra10s": (24, 10),
     "shells": (9, 4),
     "shells_qbat": (9, 4),
     "shells_qeph": (9, 4),
     "sh3n": (5, 3),
     "sh3n_dkt18": (5, 3),
+    "shells_dkt6": (5, 3),
     "quads": (9, 4),
+    "quads_full": (9, 4),
+    "trias": (5, 3),
     "trusses": (3, 2),
     "springs": (3, 2),
     "beams": (3, 2),
+    "beams_fiber": (3, 2),
 }
 
-_SOLID_FAMILIES = ("bricks", "bricks_heph", "tetras", "tetra10s", "bric20s", "shel16s", "quads")
-_SHELL_FAMILIES = ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18")
+# VTK node permutation for 20-node quadratic hexahedrons (VTK_QUADRATIC_HEXAHEDRON).
+_BRIC20_TO_VTK = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 12, 13, 14, 15]
+
+_SOLID_FAMILIES = (
+    "bricks", "bricks_full", "bricks_eas", "bricks_heph", "solid_shells_ha8", "cohesives",
+    "tshells", "tetras", "tetras_sfem", "tetra10s", "bric20s", "shel16s", "thickshell_wedges",
+    "thickshell_composites", "quads", "quads_full", "trias", "penta6s", "penta6s_heph", "pyra5s"
+)
+_SHELL_FAMILIES = ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18", "shells_dkt6")
 
 # anim_to_vtk's symmetric-3x3 fill of the solid Voigt 6 [xx,yy,zz,xy,yz,
-# zx], row-major: [s0 s3 s4 / s3 s1 s5 / s4 s5 s2].  yz lands at (0,2)
-# and zx at (1,2) — NOT the textbook placement, but the official tool's,
+# zx], row-major: [s0 s3 s5 / s3 s1 s4 / s5 s4 s2] — the official tool's,
 # and the VTK->d3plot converter maps the slots back purely by position.
 _VOIGT9 = [0, 3, 5, 3, 1, 4, 5, 4, 2]
 
@@ -166,7 +187,7 @@ def _write_block(fh, arr, fmt: str) -> None:
 
 def _von_mises(group_name: str, group) -> np.ndarray:
     st = group.state
-    if group_name in ("bricks", "bricks_heph", "tetras", "tetra10s", "bric20s", "shel16s", "quads"):
+    if group_name in _SOLID_FAMILIES:
         s = st["sig"]
         if s.ndim == 3:
             s = s.mean(axis=1)
@@ -201,6 +222,63 @@ def _epsp(group_name: str, group) -> np.ndarray:
     return e.max(axis=1) if e.ndim >= 2 else e
 
 
+def _group_cell_data(name: str, g):
+    """Return (block, ctypes, size) for element group g."""
+    ctype, nn = _VTK_CELL[name]
+    if g.n == 0:
+        return np.empty((0, 1 + nn), dtype=np.int64), np.empty(0, dtype=np.int64), 0
+
+    if name == "tetra10s" and (g.conn[:, :nn] < 0).any():
+        slaved = (g.conn[:, :nn] < 0).any(axis=1)
+        if slaved.all():
+            ctypes = np.full(g.n, 10, dtype=np.int64)
+            block = np.hstack([np.full((g.n, 1), 4, dtype=np.int64), g.conn[:, :4]])
+            return block, ctypes, 5 * g.n
+        elif not slaved.any():
+            ctypes = np.full(g.n, 24, dtype=np.int64)
+            block = np.hstack([np.full((g.n, 1), 10, dtype=np.int64), g.conn[:, :10]])
+            return block, ctypes, 11 * g.n
+        else:
+            ctypes = np.where(slaved, 10, 24).astype(np.int64)
+            lines = []
+            for i in range(g.n):
+                if slaved[i]:
+                    c = g.conn[i, :4]
+                    lines.append(f"4 {c[0]} {c[1]} {c[2]} {c[3]}")
+                else:
+                    c = g.conn[i, :10]
+                    lines.append(f"10 {' '.join(str(x) for x in c)}")
+            size = int(5 * slaved.sum() + 11 * (~slaved).sum())
+            return lines, ctypes, size
+
+    if name == "bric20s":
+        slaved = (g.conn[:, :nn] < 0).any(axis=1)
+        if slaved.all():
+            ctypes = np.full(g.n, 12, dtype=np.int64)
+            block = np.hstack([np.full((g.n, 1), 8, dtype=np.int64), g.conn[:, :8]])
+            return block, ctypes, 9 * g.n
+        elif not slaved.any():
+            ctypes = np.full(g.n, 25, dtype=np.int64)
+            block = np.hstack([np.full((g.n, 1), 20, dtype=np.int64), g.conn[:, _BRIC20_TO_VTK]])
+            return block, ctypes, 21 * g.n
+        else:
+            ctypes = np.where(slaved, 12, 25).astype(np.int64)
+            lines = []
+            for i in range(g.n):
+                if slaved[i]:
+                    c = g.conn[i, :8]
+                    lines.append(f"8 {' '.join(str(x) for x in c)}")
+                else:
+                    c = g.conn[i, _BRIC20_TO_VTK]
+                    lines.append(f"20 {' '.join(str(x) for x in c)}")
+            size = int(9 * slaved.sum() + 21 * (~slaved).sum())
+            return lines, ctypes, size
+
+    ctypes = np.full(g.n, ctype, dtype=np.int64)
+    block = np.hstack([np.full((g.n, 1), nn, dtype=np.int64), g.conn[:, :nn]])
+    return block, ctypes, (1 + nn) * g.n
+
+
 def _get_cell_info(name: str, g):
     ctype, nn = _VTK_CELL[name]
     if name == "tetra10s" and (g.conn[:, :nn] < 0).any():
@@ -216,7 +294,8 @@ def write_anim_state(path: str, model: Model, t: float,
     n = model.numnod
     groups = list(model.element_groups())
     ncell = sum(g.n for _, g in groups)
-    size = sum((1 + _get_cell_info(name, g)[1]) * g.n for name, g in groups)
+    cell_data = [_group_cell_data(name, g) for name, g in groups]
+    size = sum(cd[2] for cd in cell_data)
 
     with open(path, "w", encoding="utf-8", errors="replace") as fh:
         fh.write("# vtk DataFile Version 3.0\n")
@@ -230,16 +309,15 @@ def write_anim_state(path: str, model: Model, t: float,
         fh.write(f"POINTS {n} double\n")
         _write_block(fh, model.x, "%.9E")
         fh.write(f"CELLS {ncell} {size}\n")
-        for name, g in groups:
-            _, nn = _get_cell_info(name, g)
-            block = np.hstack([np.full((g.n, 1), nn, dtype=np.int64),
-                               g.conn[:, :nn]])
-            _write_block(fh, block, "%d")
+        for block, _, _ in cell_data:
+            if isinstance(block, list):
+                if block:
+                    fh.write("\n".join(block) + "\n")
+            else:
+                _write_block(fh, block, "%d")
         fh.write(f"CELL_TYPES {ncell}\n")
-        for name, g in groups:
-            ctype, _ = _get_cell_info(name, g)
-            _write_block(fh, np.full(g.n, ctype, dtype=np.int64),
-                         "%d")
+        for _, ctypes, _ in cell_data:
+            _write_block(fh, ctypes, "%d")
 
         fh.write(f"POINT_DATA {n}\n")
         if "DIS" in vect:
@@ -282,7 +360,7 @@ def write_anim_state(path: str, model: Model, t: float,
                 _write_block(fh, g.ids, "%d")
             fh.write("SCALARS PART_ID int 1\nLOOKUP_TABLE default\n")
             for name, g in groups:
-                _write_block(fh, g.state["part_ids"], "%d")
+                _write_block(fh, g.state.get("part_ids", np.zeros(g.n, dtype=np.int64)), "%d")
             # ---- official anim_to_vtk result arrays (M42), appended
             # behind the historical prefix.  Each array spans ALL cells:
             # rows of foreign families are zeros (downstream converters
@@ -308,7 +386,7 @@ def write_anim_state(path: str, model: Model, t: float,
                 fh.write("TENSORS 3DELEM_Stress double\n")
                 for name, g in groups:
                     if name in _SOLID_FAMILIES:
-                        s = g.state["sig"]
+                        s = g.state.get("sig", np.zeros((g.n, 6)))
                         if s.ndim == 3:
                             s = s.mean(axis=1)
                         if s.shape[1] < 6:

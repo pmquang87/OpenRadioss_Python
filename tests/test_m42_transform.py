@@ -77,8 +77,8 @@ dummy prop
     
     model = run_starter(str(f))
     
+    # Per OpenRadioss Fortran lectrans.F:224-226: node pair replaces card TX, TY, TZ.
     # node pair is 1 -> 4, delta is (5, 5, 5).
-    # TX, TY, TZ = (1, 2, 3) + (5, 5, 5) = (6, 7, 8)
-    # Applied to nodes 2 and 3.
-    assert np.allclose(model.x0[model.node_index(2)], [7.0, 7.0, 8.0])
-    assert np.allclose(model.x0[model.node_index(3)], [6.0, 7.0, 8.0])
+    # Applied to node 2 (1, 0, 0) -> (6, 5, 5) and node 3 (0, 0, 0) -> (5, 5, 5).
+    assert np.allclose(model.x0[model.node_index(2)], [6.0, 5.0, 5.0])
+    assert np.allclose(model.x0[model.node_index(3)], [5.0, 5.0, 5.0])

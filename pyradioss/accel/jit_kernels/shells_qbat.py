@@ -38,15 +38,15 @@ _VETA = np.array([
 @njit(cache=True)
 def qbat_pre_flat(xe, ve, vre, off, dt):
     n = xe.shape[0]
-    E = np.empty((n, 3, 3))
-    area = np.empty(n)
-    lc = np.empty(n)
-    vdef3 = np.empty(n)
-    cdet = np.empty((n, 4))
+    E = np.zeros((n, 3, 3))
+    area = np.zeros(n)
+    lc = np.zeros(n)
+    vdef3 = np.zeros(n)
+    cdet = np.zeros((n, 4))
     vdef = np.zeros((n, 4, 8))
     bm = np.zeros((n, 4, 8))
     bc = np.zeros((n, 4, 24))
-    x13n = np.empty(n); x24n = np.empty(n); y13n = np.empty(n); y24n = np.empty(n)
+    x13n = np.zeros(n); x24n = np.zeros(n); y13n = np.zeros(n); y24n = np.zeros(n)
     
     for e in range(n):
         if off[e] <= 0.0:

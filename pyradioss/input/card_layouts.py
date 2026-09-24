@@ -60,13 +60,15 @@ def fmt_float(v, width: int = 20) -> str:
             s = f"{v:.{prec}G}"
             if len(s) <= width:
                 break
-        if len(s) > width:
-            for exp_prec in range(max(0, width - 6), -1, -1):
-                s = f"{v:.{exp_prec}E}"
-                if len(s) <= width:
-                    break
-        if len(s) > width:
-            s = s[:width]
+    if len(s) > width:
+        for exp_prec in range(max(0, width - 4), -1, -1):
+            s = f"{v:.{exp_prec}E}"
+            if len(s) <= width:
+                break
+            s_cond = re.sub(r'E([+-])', r'\1', s)
+            if len(s_cond) <= width:
+                s = s_cond
+                break
     return f"{s:>{width}}"
 
 
@@ -144,6 +146,37 @@ MAT_THERM_HILL_5 = MAT_LAW73_5
 MAT_THERM_HILL_6 = MAT_LAW73_6
 MAT_THERM_HILL_7 = MAT_LAW73_7
 
+# M582: /MAT/LAW71 (/MAT/SUPER_ELAS, /MAT/NITINOL) card layout constants citing radioss140/MAT/matl71_71.cfg
+MAT_LAW71_1 = (20, 20)
+MAT_LAW71_2 = (20, 20, 20)
+MAT_LAW71_3 = (20, 20, 20, 20, 20)
+MAT_LAW71_4 = (20, 20, 20, 20, 20)
+MAT_LAW71_5 = (20, 20, 20, 20)
+
+MAT_LAW71_CFG_1 = MAT_LAW71_1
+MAT_LAW71_CFG_2 = MAT_LAW71_2
+MAT_LAW71_CFG_3 = MAT_LAW71_3
+MAT_LAW71_CFG_4 = MAT_LAW71_4
+MAT_LAW71_CFG_5 = MAT_LAW71_5
+
+MAT_SUPER_ELAS_1 = MAT_LAW71_1
+MAT_SUPER_ELAS_2 = MAT_LAW71_2
+MAT_SUPER_ELAS_3 = MAT_LAW71_3
+MAT_SUPER_ELAS_4 = MAT_LAW71_4
+MAT_SUPER_ELAS_5 = MAT_LAW71_5
+
+MAT_SUPER_ELAS_CFG_1 = MAT_LAW71_1
+MAT_SUPER_ELAS_CFG_2 = MAT_LAW71_2
+MAT_SUPER_ELAS_CFG_3 = MAT_LAW71_3
+MAT_SUPER_ELAS_CFG_4 = MAT_LAW71_4
+MAT_SUPER_ELAS_CFG_5 = MAT_LAW71_5
+
+MAT_NITINOL_1 = MAT_LAW71_1
+MAT_NITINOL_2 = MAT_LAW71_2
+MAT_NITINOL_3 = MAT_LAW71_3
+MAT_NITINOL_4 = MAT_LAW71_4
+MAT_NITINOL_5 = MAT_LAW71_5
+
 # M564: /MAT/LAW87 (/MAT/BARLAT2000, /MAT/BARLAT_2000, /MAT/BARLAT2000_2D) card layout constants citing radioss140/MAT/matl87_barlat.cfg & radioss2025/MAT/matl87_barlat.cfg
 MAT_LAW87_1 = (20, 20)
 MAT_LAW87_2 = (20, 20, 10, 10, 20, 20)
@@ -167,6 +200,23 @@ MAT_BARLAT2000_6 = MAT_LAW87_6
 MAT_BARLAT2000_7 = MAT_LAW87_7
 MAT_BARLAT2000_8 = MAT_LAW87_8
 MAT_BARLAT2000_CURVE = MAT_LAW87_CURVE
+
+# M593: /PROP/TYPE18 (/PROP/INT_BEAM) card layout constants citing radioss2024/PROP/prop_p18_int_beam.cfg
+PROP_TYPE18_1 = (10, 10)
+PROP_TYPE18_2 = (20, 20)
+PROP_TYPE18_3 = (10, 10, 20, 20)
+PROP_TYPE18_IP = (20, 20, 20)
+PROP_TYPE18_SEC1 = (10, 10, 20, 20, 20, 20)
+PROP_TYPE18_SEC2 = (20, 20)
+PROP_TYPE18_ROTW = (3, 1, 1, 1, 1, 1, 1)
+
+PROP_INT_BEAM_FLAGS = PROP_TYPE18_1
+PROP_INT_BEAM_DAMP = PROP_TYPE18_2
+PROP_INT_BEAM_NIP = PROP_TYPE18_3
+PROP_INT_BEAM_FIBER = PROP_TYPE18_IP
+PROP_INT_BEAM_SEC1 = PROP_TYPE18_SEC1
+PROP_INT_BEAM_SEC2 = PROP_TYPE18_SEC2
+PROP_INT_BEAM_ROTW = PROP_TYPE18_ROTW
 
 MAT_BARLAT_2000_1 = MAT_LAW87_1
 MAT_BARLAT_2000_2 = MAT_LAW87_2
@@ -334,6 +384,49 @@ MAT_LAW28_CFG_4 = MAT_LAW28_4
 MAT_LAW28_CFG_5 = MAT_LAW28_5
 MAT_LAW28_CFG_6 = MAT_LAW28_6
 MAT_LAW28_CFG_7 = MAT_LAW28_7
+
+# M588: /MAT/LAW76 (/MAT/SAMP, /MAT/SAMP-1) card layout constants citing radioss100/radioss2018/MAT/matl76_76.cfg
+MAT_LAW76_1 = (20, 20)
+MAT_LAW76_2 = (20, 20)
+MAT_LAW76_3 = (10, 10, 10, 10, 20, 20, 20)
+MAT_LAW76_4 = (20, 20, 20, 10, 20, 10, 20)
+MAT_LAW76_5 = (20, 20, 20, 10, 10, 10, 20)
+MAT_LAW76_6 = (10, 10, 10)
+
+MAT_LAW76_CFG_1 = MAT_LAW76_1
+MAT_LAW76_CFG_2 = MAT_LAW76_2
+MAT_LAW76_CFG_3 = MAT_LAW76_3
+MAT_LAW76_CFG_4 = MAT_LAW76_4
+MAT_LAW76_CFG_5 = MAT_LAW76_5
+MAT_LAW76_CFG_6 = MAT_LAW76_6
+
+MAT_SAMP_1 = MAT_LAW76_1
+MAT_SAMP_2 = MAT_LAW76_2
+MAT_SAMP_3 = MAT_LAW76_3
+MAT_SAMP_4 = MAT_LAW76_4
+MAT_SAMP_5 = MAT_LAW76_5
+MAT_SAMP_6 = MAT_LAW76_6
+
+MAT_SAMP_CFG_1 = MAT_LAW76_1
+MAT_SAMP_CFG_2 = MAT_LAW76_2
+MAT_SAMP_CFG_3 = MAT_LAW76_3
+MAT_SAMP_CFG_4 = MAT_LAW76_4
+MAT_SAMP_CFG_5 = MAT_LAW76_5
+MAT_SAMP_CFG_6 = MAT_LAW76_6
+
+MAT_SAMP1_1 = MAT_LAW76_1
+MAT_SAMP1_2 = MAT_LAW76_2
+MAT_SAMP1_3 = MAT_LAW76_3
+MAT_SAMP1_4 = MAT_LAW76_4
+MAT_SAMP1_5 = MAT_LAW76_5
+MAT_SAMP1_6 = MAT_LAW76_6
+
+MAT_SAMP_1_1 = MAT_LAW76_1
+MAT_SAMP_1_2 = MAT_LAW76_2
+MAT_SAMP_1_3 = MAT_LAW76_3
+MAT_SAMP_1_4 = MAT_LAW76_4
+MAT_SAMP_1_5 = MAT_LAW76_5
+MAT_SAMP_1_6 = MAT_LAW76_6
 
 MAT_HONEYCOMB_1 = MAT_LAW28_1
 MAT_HONEYCOMB_2 = MAT_LAW28_2
@@ -1638,6 +1731,13 @@ LAYOUTS: Dict[str, List[int]] = {
     # CARD("%20lg%20lg%10d%10d%10d%10d%10d%10d",
     #      Mass, Inertia, skew_ID, sens_ID, Isflag, Ifail, Ileng/Ifail2, ...)
     "PROP_SPR_HEAD": [20, 20, 10, 10, 10, 10, 10, 10],
+    # prop_p13_spr_beam.cfg per-DOF function card:
+    # CARD("%10d%10d%10d%10d%10d          %20lg%20lg",
+    #      FUN_A, HFLAG, FUN_B, FUN_C, FUN_D, (gap 10), MIN_RUP, MAX_RUP)
+    "PROP_SPR_DOF_FCT": [10, 10, 10, 10, 10, 10, 20, 20],
+    # prop_p13_spr_beam.cfg velocity / rate parameters card:
+    # CARD("%20lg%20lg%20lg%10d", TRANS_VEL0, ROT_VEL0, Asrate, ISRATE)
+    "PROP_SPR_VEL": [20, 20, 20, 10],
     # PROP/prop_p32_spr_pre.cfg (radioss100/radioss51) header card:
     # CARD("%20lg                              %10d%10d", MASS, ISENSOR, ILock)
     # — the 30 blank columns between the mass and sens_ID are a real gap in
@@ -1736,6 +1836,23 @@ LAYOUTS: Dict[str, List[int]] = {
     "EOS_POLY_2": [20] * 5,
     # mat_EOS.cfg LINEAR: CARD("%20lg"*4, LAW5_P0, MAT_BULK, LAW5_PSH, Refer_Rho)
     "EOS_LINEAR": [20] * 4,
+    "EOS_GRUN_1": [20] * 4,
+    "EOS_GRUN_2": [20] * 4,
+    "EOS_PUFF_1": [20] * 4,
+    "EOS_PUFF_2": [20] * 3,
+    "EOS_PUFF_3": [20] * 3,
+    "EOS_TILL_1": [20] * 4,
+    "EOS_TILL_2": [20] * 5,
+    "EOS_TILL_3": [20] * 2,
+    "EOS_MURN_1": [20] * 5,
+    "EOS_OSBO_1": [20] * 5,
+    "EOS_OSBO_2": [20] * 4,
+    "EOS_LSZK_1": [20] * 5,
+    "EOS_NOBLE_1": [20] * 5,
+    "EOS_JWL_1": [20] * 5,
+    "EOS_JWL_2": [20] * 3,
+    "EOS_NASG_1": [20] * 4,
+    "EOS_NASG_2": [20] * 4,
 
     # ---- skews / frames (M39) -------------------------------------------------
     # SYSTEM/skew_fix.cfg (radioss120) + SYSTEM/frame_fix.cfg (radioss51):
@@ -2386,8 +2503,20 @@ LAYOUTS: Dict[str, List[int]] = {
     "INTER_TYPE15_2": [20, 20],
     "INTER_TYPE20_1": [10, 10, 10, 10, 10, 10, 10, 10, 20],
     "INTER_TYPE22_1": [10, 10],
+    "INTER_TYPE21_1": [10, 10, 10, 10, 10, 20, 10, 10, 10],
+    "INTER_TYPE21_2": [20, 20, 20, 20, 10],
+    "INTER_TYPE21_3": [20, 20, 20, 20],
+    "INTER_TYPE21_4": [20, 20, 20, 20, 20],
+    "INTER_TYPE21_5": [7, 1, 1, 1, 20, 10, 20, 20, 20],
+    "INTER_TYPE21_6": [10, 10, 20, 10, 10, 10, 20],
     "INTER_TYPE23_1": [10, 10, 10, 10, 10, 10, 10, 10],
-    "INTER_TYPE23_2": [20, 20],
+    "INTER_TYPE23_2": [20, 20, 20],
+    "INTER_TYPE23_3": [20, 20],
+    "INTER_TYPE23_4": [20, 20, 20, 20, 20],
+    "INTER_TYPE23_5": [7, 1, 1, 1, 10, 10, 10, 20, 20, 20],
+    "INTER_TYPE23_6": [10, 10, 20],
+    "INTER_TYPE23_7": [20, 20, 20, 20, 20],
+    "INTER_TYPE23_8": [20],
 
     # MONVOL/FVMBAG2 (M111)
     "MONVOL_FVMBAG2_1": [10, 10, 20, 10],
@@ -2450,6 +2579,8 @@ LAYOUTS: Dict[str, List[int]] = {
     # SPH/INOUT (M112)
     "SPH_INOUT_1": [10, 10, 10],
     "SPH_INOUT_2": [20, 20, 20],
+    "SPHIO_1": [10, 10, 10],
+    "SPHIO_2": [20, 20, 20],
 
     # SPHBCS (M113)
     "SPHBCS_1": [10, 10, 10, 10, 10],
@@ -2551,8 +2682,9 @@ LAYOUTS: Dict[str, List[int]] = {
     "GAUGE_POINT_1": [20, 20, 20, 20, 20],
 
     # BRIC20 / HEXA20, PROP/TYPE23, ALECFDSPH (M122)
-    "ELEM_BRIC20_1": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
-    "ELEM_BRIC20_2": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+    "ELEM_BRIC20_1": [10, 10, 10, 10, 10, 10, 10, 10, 10],
+    "ELEM_BRIC20_2": [10, 10, 10, 10, 10, 10, 10, 10],
+    "ELEM_BRIC20_3": [10, 10, 10, 10],
     "PROP_HEXA20_1": [10, 10, 20, 20, 20],
     "ALECFDSPH_1": [10, 10, 20, 20, 20, 20],
 
@@ -2655,11 +2787,14 @@ LAYOUTS: Dict[str, List[int]] = {
 
     # EXTENDED GROUPS, RIGID WALLS, CROSS SECTIONS & SENSORS (M136)
     "RWALL_BOX_1": [10, 10, 10, 10],
-    "RWALL_BOX_2": [20, 20, 20, 20, 20, 20],
+    "RWALL_BOX_2": [20, 20, 20],
+    "RWALL_BOX_3": [20, 20, 20],
     "RWALL_CONE_1": [10, 10, 10, 10],
-    "RWALL_CONE_2": [20, 20, 20, 20, 20, 20, 20],
+    "RWALL_CONE_2": [20, 20, 20],
+    "RWALL_CONE_3": [20, 20, 20, 20],
     "SECT_BOX_1": [10, 10, 10],
-    "SECT_CUT_1": [20, 20, 20, 20, 20, 20],
+    "SECT_CUT_1": [20, 20, 20],
+    "SECT_CUT_2": [20, 20, 20],
 
     # EXTENDED INIVEL, DETONATION FRONTS, STATE MAPPING & SETS (M137)
     "INIVEL_PART_1": [10, 20, 20, 20, 20, 10],
@@ -2743,6 +2878,11 @@ LAYOUTS: Dict[str, List[int]] = {
     "PROP_PREDIT_3A": [20],
     "PROP_PREDIT_2B": [10],
     "PROP_PREDIT_3B": [20, 20, 20, 20, 20],
+    "PROP_TYPE36_1": [10],
+    "PROP_TYPE36_2A": [10, 10, 10],
+    "PROP_TYPE36_3A": [20],
+    "PROP_TYPE36_2B": [10],
+    "PROP_TYPE36_3B": [20, 20, 20, 20, 20],
     "PROP_SPR_MUSCLE_1": [20, 20, 20, 20, 20],
     "PROP_SPR_MUSCLE_2": [10, 10, 10, 10, 10, 10],
     "PROP_SPR_MUSCLE_3": [20, 10, 20, 20, 20, 20],
@@ -2885,11 +3025,17 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_LAW121_4": [10, 10, 20, 20],
     "MAT_LAW121_5": [10, 10, 20, 20],
     "MAT_LAW121_6": [10, 10, 20, 20],
-    "MAT_LAW124_2": [20, 20, 30, 10, 20],
+    "MAT_LAW124_2": [20, 20, 10, 10, 10, 10, 20],
     "MAT_LAW124_3": [20, 20, 20, 20, 20],
     "MAT_LAW124_4": [20, 20, 20, 20],
     "MAT_LAW124_5": [20, 20, 20, 10, 10, 10, 10],
     "MAT_LAW124_6": [20, 20, 20, 20],
+    "MAT_CDPM2_1": [20],
+    "MAT_CDPM2_2": [20, 20, 10, 10, 10, 10, 20],
+    "MAT_CDPM2_3": [20, 20, 20, 20, 20],
+    "MAT_CDPM2_4": [20, 20, 20, 20],
+    "MAT_CDPM2_5": [20, 20, 20, 10, 10, 10, 10],
+    "MAT_CDPM2_6": [20, 20, 20, 20],
     # M162: FAIL/HC_DSSE, FAIL/MULLINS, FAIL/SNCONNECT, FAIL/SPALLING
     "FAIL_HC_DSSE_1": [10, 20, 10],
     "FAIL_HC_DSSE_2": [20, 20, 20, 20, 20],
@@ -2977,9 +3123,13 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_LAW80_8": [20, 20],
     # M171: MAT LAW117 (COH_MC), LAW90 (PLAS_TAB), LAW33 (FOAM_PLAS), HEAT, NONLOCAL
     "MAT_LAW117_4": [20, 20, 20, 20, 20],
-    "MAT_LAW90_2": [20, 20],
-    "MAT_LAW90_3": [10, 10, 20, 20, 20],
+    "MAT_LAW90_2": [20, 20, 10, 10, 20, 20],
+    "MAT_LAW90_3": [10, 10, 20, 20, 20, 20],
     "MAT_LAW90_FUNC": [10, 20, 20],
+    "MAT_HYST_FOAM_1": [20, 20],
+    "MAT_HYST_FOAM_2": [20, 20, 10, 10, 20, 20],
+    "MAT_HYST_FOAM_3": [10, 10, 20, 20, 20, 20],
+    "MAT_HYST_FOAM_FUNC": [10, 20, 20],
     "MAT_LAW33_1": [20, 20],
     "MAT_LAW33_2": [20, 10, 10, 20],
     "MAT_LAW33_3": [20, 20, 20],
@@ -3160,6 +3310,14 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_LAW123_6": [20, 20, 20, 20, 20],
     "MAT_LAW123_7": [20, 20, 10, 10, 20],
     "MAT_LAW123_8": [20, 20, 20],
+    "MAT_DAIMLER_PINHO_1": [20],
+    "MAT_DAIMLER_PINHO_2": [20, 20, 20],
+    "MAT_DAIMLER_PINHO_3": [20, 20, 20],
+    "MAT_DAIMLER_PINHO_4": [20, 20, 20],
+    "MAT_DAIMLER_PINHO_5": [20, 20, 20, 20, 20],
+    "MAT_DAIMLER_PINHO_6": [20, 20, 20, 20, 20],
+    "MAT_DAIMLER_PINHO_7": [20, 20, 10, 10, 20],
+    "MAT_DAIMLER_PINHO_8": [20, 20, 20],
     "MAT_LAW132_1": [20],
     "MAT_LAW132_2": [20, 20, 20],
     "MAT_LAW132_3": [20, 20, 20],
@@ -3173,6 +3331,19 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_LAW132_11": [20, 20, 20, 20, 20],
     "MAT_LAW132_12": [20, 20, 20, 20, 20],
     "MAT_LAW132_13": [20, 20],
+    "MAT_DAIMLER_CAMANHO_1": [20],
+    "MAT_DAIMLER_CAMANHO_2": [20, 20, 20],
+    "MAT_DAIMLER_CAMANHO_3": [20, 20, 20],
+    "MAT_DAIMLER_CAMANHO_4": [20, 20, 20],
+    "MAT_DAIMLER_CAMANHO_5": [20, 20, 20, 20, 20],
+    "MAT_DAIMLER_CAMANHO_6": [20, 20, 20, 20, 20],
+    "MAT_DAIMLER_CAMANHO_7": [20, 20, 20, 20],
+    "MAT_DAIMLER_CAMANHO_8": [20, 20, 20, 20, 10],
+    "MAT_DAIMLER_CAMANHO_9": [20, 20, 20],
+    "MAT_DAIMLER_CAMANHO_10": [20, 20, 20],
+    "MAT_DAIMLER_CAMANHO_11": [20, 20, 20, 20, 20],
+    "MAT_DAIMLER_CAMANHO_12": [20, 20, 20, 20, 20],
+    "MAT_DAIMLER_CAMANHO_13": [20, 20],
     "MAT_LAW134_1": [20],
     "MAT_LAW134_2": [20, 20, 20],
     "MAT_LAW134_3": [20, 20, 20],
@@ -3353,6 +3524,7 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_LAW190_2": [20, 20],
     "MAT_LAW190_3": [20, 20],
     "MAT_LAW190_4": [10, 20, 20],
+    "MAT_LAW190_5": [20, 10],
     "MAT_LAW41_1": [20, 20],
     "MAT_LAW41_2": [10, 20, 20, 20, 20, 20],
     "MAT_LAW41_3": [10, 20, 20, 20, 20, 20],
@@ -3636,6 +3808,18 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_SAMP_4": [20, 20, 20, 10, 20, 10, 20],
     "MAT_SAMP_5": [20, 20, 20, 10, 10, 10, 20],
     "MAT_SAMP_6": [10, 10, 10],
+    "MAT_SAMP-1_1": [20, 20],
+    "MAT_SAMP-1_2": [20, 20],
+    "MAT_SAMP-1_3": [10, 10, 10, 10, 20, 20, 20],
+    "MAT_SAMP-1_4": [20, 20, 20, 10, 20, 10, 20],
+    "MAT_SAMP-1_5": [20, 20, 20, 10, 10, 10, 20],
+    "MAT_SAMP-1_6": [10, 10, 10],
+    "MAT_SAMP_1_1": [20, 20],
+    "MAT_SAMP_1_2": [20, 20],
+    "MAT_SAMP_1_3": [10, 10, 10, 10, 20, 20, 20],
+    "MAT_SAMP_1_4": [20, 20, 20, 10, 20, 10, 20],
+    "MAT_SAMP_1_5": [20, 20, 20, 10, 10, 10, 20],
+    "MAT_SAMP_1_6": [10, 10, 10],
     "PROP_TYPE11_1": [10, 10, 10, 10, 20, 20],
     "PROP_TYPE11_2": [20, 20, 20, 20, 20],
     "PROP_TYPE11_3": [10, 10, 20, 20, 10, 10, 10],
@@ -3763,9 +3947,12 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_SESAM_6": [20, 20, 20, 20, 20],
     "PROP_TYPE12_1": [20, 30, 10, 10, 10, 20],
     "PROP_TYPE12_2": [20, 20, 20, 20, 20],
-    "PROP_TYPE12_3": [10, 10, 10, 30, 20, 20],
-    "PROP_TYPE12_4": [20, 20, 20],
-    "PROP_SPR_PUL_4": [20, 20, 20],
+    "PROP_TYPE12_3": [10, 10, 10, 10, 10, 10, 20, 20],
+    "PROP_TYPE12_3_OLD": [10, 10, 10, 30, 20, 20],
+    "PROP_TYPE12_4": [20, 20, 20, 20],
+    "PROP_TYPE12_5": [10, 10, 20, 20, 20, 20],
+    "PROP_SPR_PUL_4": [20, 20, 20, 20],
+    "PROP_SPR_PUL_5": [10, 10, 20, 20, 20, 20],
     "PROP_TYPE15_1": [20, 20, 20],
     "PROP_TYPE15_2": [20],
     "PROP_TYPE15_3": [20, 20, 20],
@@ -4877,6 +5064,10 @@ LAYOUTS: Dict[str, List[int]] = {
     "PROP_TYPE18_IP": [20, 20, 20],
     "PROP_TYPE18_SEC1": [10, 10, 20, 20, 20, 20],
     "PROP_TYPE18_SEC2": [20, 20],
+    "PROP_TYPE18_ROTW": [3, 1, 1, 1, 1, 1, 1],
+    "PROP_INT_BEAM_SEC1": [10, 10, 20, 20, 20, 20],
+    "PROP_INT_BEAM_SEC2": [20, 20],
+    "PROP_INT_BEAM_ROTW": [3, 1, 1, 1, 1, 1, 1],
     # M193: Default Interfaces (TYPE11, TYPE19, TYPE25)
     "DEF_INTER_TYPE11_1": [20, 10, 10, 10, 10, 10],
     "DEF_INTER_TYPE11_2": [80, 10],
@@ -4945,6 +5136,11 @@ LAYOUTS: Dict[str, List[int]] = {
     "SPH_INOUT_INLET_2": [10],
     "SPH_INOUT_OUTLET_1": [30, 10, 20],
     "SPH_INOUT_NRF_1": [30, 10, 20, 20],
+    "SPHIO_EXT_1": [10, 10, 10, 20, 10, 10, 10, 20],
+    "SPHIO_INLET_1": [10, 20, 30, 10, 20],
+    "SPHIO_INLET_2": [10],
+    "SPHIO_OUTLET_1": [30, 10, 20],
+    "SPHIO_NRF_1": [30, 10, 20, 20],
     # M203: LAGMUL GEAR/RACK/DIFF, INTER TYPE26, SENSOR PYTHON, CHECKSUM, POS
     "LAGMUL_GEAR_1": [10, 10, 20, 10, 10, 10, 10],
     "LAGMUL_RACK_1": [10, 10, 20, 10, 10, 10, 10],
@@ -8461,6 +8657,37 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_THERM_HILL_6": [10, 10, 20, 20],
     "MAT_THERM_HILL_7": [20, 20],
 
+    # M582: /MAT/LAW71 (/MAT/SUPER_ELAS, /MAT/NITINOL)
+    "MAT_LAW71_1": [20, 20],
+    "MAT_LAW71_2": [20, 20, 20],
+    "MAT_LAW71_3": [20, 20, 20, 20, 20],
+    "MAT_LAW71_4": [20, 20, 20, 20, 20],
+    "MAT_LAW71_5": [20, 20, 20, 20],
+
+    "MAT_LAW71_CFG_1": [20, 20],
+    "MAT_LAW71_CFG_2": [20, 20, 20],
+    "MAT_LAW71_CFG_3": [20, 20, 20, 20, 20],
+    "MAT_LAW71_CFG_4": [20, 20, 20, 20, 20],
+    "MAT_LAW71_CFG_5": [20, 20, 20, 20],
+
+    "MAT_SUPER_ELAS_1": [20, 20],
+    "MAT_SUPER_ELAS_2": [20, 20, 20],
+    "MAT_SUPER_ELAS_3": [20, 20, 20, 20, 20],
+    "MAT_SUPER_ELAS_4": [20, 20, 20, 20, 20],
+    "MAT_SUPER_ELAS_5": [20, 20, 20, 20],
+
+    "MAT_SUPER_ELAS_CFG_1": [20, 20],
+    "MAT_SUPER_ELAS_CFG_2": [20, 20, 20],
+    "MAT_SUPER_ELAS_CFG_3": [20, 20, 20, 20, 20],
+    "MAT_SUPER_ELAS_CFG_4": [20, 20, 20, 20, 20],
+    "MAT_SUPER_ELAS_CFG_5": [20, 20, 20, 20],
+
+    "MAT_NITINOL_1": [20, 20],
+    "MAT_NITINOL_2": [20, 20, 20],
+    "MAT_NITINOL_3": [20, 20, 20, 20, 20],
+    "MAT_NITINOL_4": [20, 20, 20, 20, 20],
+    "MAT_NITINOL_5": [20, 20, 20, 20],
+
     # M564: /MAT/LAW87 (/MAT/BARLAT2000, /MAT/BARLAT_2000, /MAT/BARLAT2000_2D)
     "MAT_LAW87_1": [20, 20],
     "MAT_LAW87_2": [20, 20, 10, 10, 20, 20],
@@ -8662,6 +8889,38 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_TAB_HYP_4_ROW": [10, 10, 20, 20, 20],
     "MAT_TAB_HYP_5": [20, 20, 20, 20, 20],
     "MAT_TAB_HYP_6": [20, 20, 20, 20, 10, 10],
+
+    # M591: /MAT/LAW126 (/MAT/JOHNSON_HOLMQUIST_CONCRETE) aliases
+    "MAT_JOHNSON_HOLMQUIST_CONCRETE_1": [20],
+    "MAT_JOHNSON_HOLMQUIST_CONCRETE_2": [20],
+    "MAT_JOHNSON_HOLMQUIST_CONCRETE_3": [20, 20, 20, 20, 20],
+    "MAT_JOHNSON_HOLMQUIST_CONCRETE_4": [20, 20, 20, 20, 20],
+    "MAT_JOHNSON_HOLMQUIST_CONCRETE_5": [20, 20, 20, 20],
+    "MAT_JOHNSON_HOLMQUIST_CONCRETE_6": [20, 20, 20],
+    "MAT_JOHNSON_HOLMQUIST_CONCRETE_7": [20, 20, 10, 10, 20, 10, 10],
+    "MAT_JOHNSON_HOLMQUIST_CONCRETE_8": [20, 20, 20, 20],
+
+    # M591: /MAT/LAW169 (/MAT/ARUP_ADHESIVE) card layouts
+    # Fortran origin: hm_read_mat169.F90; CFG: radioss2025/MAT/LAW169.cfg
+    "MAT_LAW169_1": [20],
+    "MAT_LAW169_2": [20, 20, 20, 20, 20],
+    "MAT_LAW169_3": [20, 20, 10, 10, 20],
+
+    "MAT_ARUP_ADHESIVE_1": [20],
+    "MAT_ARUP_ADHESIVE_2": [20, 20, 20, 20, 20],
+    "MAT_ARUP_ADHESIVE_3": [20, 20, 10, 10, 20],
+
+    # /PROP/TYPE28 (/PROP/NSTRAND) card layouts
+    # Fortran origin: hm_read_prop28.F; CFG: radioss130/PROP/prop_p28_nstrand.cfg
+    "PROP_TYPE28_1": [20, 20, 20],
+    "PROP_TYPE28_2": [10, 10, 20, 20, 20, 20],
+    "PROP_TYPE28_3": [20, 20],
+    "PROP_TYPE28_4": [10, 10, 20],
+
+    "PROP_NSTRAND_1": [20, 20, 20],
+    "PROP_NSTRAND_2": [10, 10, 20, 20, 20, 20],
+    "PROP_NSTRAND_3": [20, 20],
+    "PROP_NSTRAND_4": [10, 10, 20],
 }
 
 

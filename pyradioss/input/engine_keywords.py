@@ -196,9 +196,9 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 sub2 = block.parts[2].upper() if len(block.parts) > 2 else ""
                 sub3 = block.parts[3].upper() if len(block.parts) > 3 else ""
                 if sub == "NODA":
-                    ec.dt_noda = ("CST" if len(block.parts) > 2 and
-                                  block.parts[2].upper() == "CST"
-                                  else "NODA")
+                    ec.dt_noda = sub2 if sub2 else "NODA"
+                    if len(block.parts) > 3 and block.parts[3].isdigit():
+                        ec.dt_noda_grnod = int(block.parts[3])
                 elif sub == "AMS":
                     ec.dt_ams = True
                     if len(block.parts) > 2:
@@ -206,7 +206,7 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             ec.dt_ams_igrp = int(block.parts[2])
                         except ValueError:
                             pass
-                elif sub in ("BRICK", "BRI", "SHELL", "SH3N", "SHE", "QUAD", "QUA", "TETRA10", "TETRA4", "INTER", "SPRING", "BEAM", "TRUSS", "SPH"):
+                elif sub in ("BRICK", "BRI", "SOLID", "SOLI", "HEXA", "PENTA", "PENTA6", "WEDGE", "TSHELL", "BRIC20", "HEXA20", "SHELL", "SHEL", "SHE", "COQUE", "SH3N", "SH_3N", "SHEL16", "QUAD", "QUA", "TETRA", "TETRA10", "TETRA4", "INTER", "SPRING", "BEAM", "TRUSS", "SPH", "ELEM", "ALL"):
                     action = sub2 if sub2 else "STOP"
                     scale_elem, dt_min_elem = 0.9, 0.0
                     if block.cards:
@@ -215,12 +215,22 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             scale_elem = vals_el[0] if vals_el[0] > 0.0 else 0.9
                         if len(vals_el) > 1:
                             dt_min_elem = vals_el[1]
-                    ec.dt_controls[sub] = {
+                    ctrl = {
                         "action": action,
                         "flag": sub3,
                         "scale": scale_elem,
                         "dt_min": dt_min_elem,
                     }
+                    if len(block.cards) > 1 and (
+                        sub in ("BRICK", "BRI", "SOLID", "SOLI", "HEXA", "PENTA", "PENTA6", "WEDGE",
+                                "TSHELL", "BRIC20", "HEXA20", "TETRA", "TETRA10", "TETRA4", "ELEM", "ALL")
+                    ):
+                        c2 = block.cards[1].floats()
+                        ctrl["col_min"] = c2[0] if len(c2) > 0 else 0.0
+                        ctrl["defv_min"] = c2[1] if len(c2) > 1 else 0.0
+                        ctrl["asp_max"] = c2[2] if len(c2) > 2 else 0.0
+                        ctrl["defv_max"] = c2[3] if len(c2) > 3 else 0.0
+                    ec.dt_controls[sub] = ctrl
                 if sub in ("NODA", "", "CST"):
                     if block.cards:
                         vals = block.cards[0].floats()
@@ -233,6 +243,13 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             ec.dt_scale = vals[0] if vals[0] > 0.0 else 0.9
                         if len(vals) > 1:
                             ec.dt_min = vals[1]
+                        if sub == "NODA":
+                            if len(vals) > 2:
+                                ec.dt_noda_percent_addmass = vals[2]
+                            if len(block.cards) > 1:
+                                c1 = block.cards[1].ints()
+                                if c1:
+                                    ec.dt_noda_grnod = c1[0]
                 elif sub == "AMS":
                     if block.cards:
                         vals = block.cards[0].floats()
@@ -377,16 +394,78 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         vals = block.cards[0].floats()
                         if vals:
                             ec.impl_dt = vals[0]
-                elif sub in ("NONLIN", "NLGEOM", "NL"):
+                elif sub in ("NONLIN", "NLGEOM", "NL", "NONL"):
+                    ec.impl_nonl = True
                     sub2 = (block.parts[2].upper()
                             if len(block.parts) > 2 else "")
+                    sub3 = (block.parts[3].upper()
+                            if len(block.parts) > 3 else "")
                     # /IMPL/NONLIN/SMDISP = the original's explicit small-
                     # displacement restriction: exactly the M8 linear path
-                    ec.impl_nlgeom = sub2 != "SMDISP"
-                    if block.cards:  # may carry dt_incr like the bare card
-                        vals = block.cards[0].floats()
-                        if vals:
-                            ec.impl_dt = vals[0]
+                    ec.impl_nlgeom = sub2 not in ("SMDIS", "SMDISP")
+                    if sub2 == "KTANG":
+                        ec.impl_ikt = 1
+                        ec.impl_nonl_ikt = 1
+                    elif sub2 == "KTFUL":
+                        ec.impl_ikt = 2
+                        ec.impl_nonl_ikt = 2
+                    elif sub2 == "KTFU8":
+                        ec.impl_ikt = 3
+                        ec.impl_nonl_ikt = 3
+                    elif sub2 == "KTCON":
+                        ec.impl_ikt = 4
+                        ec.impl_nonl_ikt = 4
+                    elif sub2 in ("SMDIS", "SMDISP"):
+                        ec.impl_nonl_smdisp = 1
+                    elif sub2 == "SOLVI":
+                        ec.impl_nonl_solvnfo = 1
+                    elif sub2 == "PITER":
+                        if sub3.isdigit():
+                            ec.impl_nonl_ipupd = int(sub3)
+                        elif block.cards:
+                            vals = block.cards[0].floats()
+                            if vals:
+                                ec.impl_nonl_ipupd = int(vals[0])
+                    else:
+                        if sub2.isdigit():
+                            ec.impl_nonl_insolv = int(sub2)
+                        if block.cards:
+                            vals = block.cards[0].floats()
+                            if len(vals) >= 3 and int(vals[1]) in (1, 2, 3, 12, 13, 23, 123):
+                                ec.impl_nonl_n_lim = int(vals[0])
+                                ec.impl_max_iter = int(vals[0])
+                                ec.impl_nonl_nitol = int(vals[1])
+                                ec.impl_nitol = int(vals[1])
+                                nitol = ec.impl_nonl_nitol
+                                if nitol == 12 and len(vals) >= 4:
+                                    ec.impl_nonl_n_tole = vals[2]
+                                    ec.impl_nonl_n_tolf = vals[3]
+                                    ec.impl_tole = vals[2]
+                                    ec.impl_tolf = vals[3]
+                                elif nitol == 13 and len(vals) >= 4:
+                                    ec.impl_nonl_n_tole = vals[2]
+                                    ec.impl_nonl_n_tolu = vals[3]
+                                    ec.impl_tole = vals[2]
+                                    ec.impl_tolu = vals[3]
+                                elif nitol == 23 and len(vals) >= 4:
+                                    ec.impl_nonl_n_tolf = vals[2]
+                                    ec.impl_nonl_n_tolu = vals[3]
+                                    ec.impl_tolf = vals[2]
+                                    ec.impl_tolu = vals[3]
+                                elif nitol == 123 and len(vals) >= 5:
+                                    ec.impl_nonl_n_tole = vals[2]
+                                    ec.impl_nonl_n_tolf = vals[3]
+                                    ec.impl_nonl_n_tolu = vals[4]
+                                    ec.impl_tole = vals[2]
+                                    ec.impl_tolf = vals[3]
+                                    ec.impl_tolu = vals[4]
+                                else:
+                                    ec.impl_nonl_n_tol = vals[2]
+                                    ec.impl_tol = vals[2]
+                                if nitol == 1 and ec.impl_rref == 1:
+                                    ec.impl_rref = 0
+                            elif vals:
+                                ec.impl_dt = vals[0]
                 elif sub in ("ARCL", "ARC", "RIKS"):
                     ec.impl_arc = True
                     ec.impl_nlgeom = True
@@ -848,6 +927,12 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     # M36: NON-GAUSSIAN COPULA / NON-TRANSLATION JOINT DISTRIBUTION
                     # Replaces the Gaussian copula with a t-copula.
                     is_copula = bool(subs & {"COPULA", "TCOPULA"})
+                    # M614: Extended Fatigue models
+                    is_steinberg = bool(subs & {"STEINBERG", "STEIN"})
+                    is_zhaobaker = bool(subs & {"ZHAO_BAKER", "ZHAO", "BAKER"})
+                    is_mean = bool(subs & {"MEAN", "MEAN_STRESS", "MEANSTRESS"})
+                    is_en = bool(subs & {"EN", "EPSILON_N", "STRAIN_LIFE", "COFFIN_MANSON"})
+                    is_notch = bool(subs & {"NOTCH", "NEUBER", "GLINKA"})
                     if is_wville:
                         is_evol = True                # continuous spectrum needs the
                         #                               drifting-shape / evol schedule
@@ -900,6 +985,62 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_wville = True
                     if is_exact:
                         ec.impl_fatig_exact = True
+                    if is_steinberg:
+                        ec.impl_fatig_steinberg = True
+                    if is_zhaobaker:
+                        ec.impl_fatig_zhao_baker = True
+                    if is_mean:
+                        method_name = "GOODMAN"
+                        for p in block.parts:
+                            pu = p.upper()
+                            if pu in ("GOODMAN", "GERBER", "SODERBERG", "MORROW", "SWT", "WALKER"):
+                                method_name = pu
+                                break
+                        ec.impl_fatig_mean_method = method_name
+                        if block.cards:
+                            toks = block.cards[0].tokens()
+                            vals = block.cards[0].floats()
+                            if toks:
+                                try:
+                                    float(toks[0])
+                                except ValueError:
+                                    ec.impl_fatig_mean_method = toks[0].upper()
+                            if len(vals) > 0: ec.impl_fatig_mean_ult = vals[0]
+                            if len(vals) > 1: ec.impl_fatig_mean_yield = vals[1]
+                            if len(vals) > 2: ec.impl_fatig_mean_sigf = vals[2]
+                            if len(vals) > 3: ec.impl_fatig_mean_gamma = vals[3]
+                    if is_en:
+                        ec.impl_fatig_en = True
+                        if block.cards:
+                            vals = block.cards[0].floats()
+                            if len(vals) > 0: ec.impl_fatig_en_e = vals[0]
+                            if len(vals) > 1: ec.impl_fatig_en_sigf = vals[1]
+                            if len(vals) > 2: ec.impl_fatig_en_b = vals[2]
+                            if len(vals) > 3: ec.impl_fatig_en_epsf = vals[3]
+                            if len(vals) > 4: ec.impl_fatig_en_c = vals[4]
+                            if len(vals) > 5: ec.impl_fatig_en_kp = vals[5]
+                            if len(vals) > 6: ec.impl_fatig_en_np = vals[6]
+                    if is_notch:
+                        ec.impl_fatig_notch = True
+                        notch_name = "NEUBER"
+                        for p in block.parts:
+                            pu = p.upper()
+                            if pu in ("NEUBER", "GLINKA"):
+                                notch_name = pu
+                                break
+                        ec.impl_fatig_notch_method = notch_name
+                        if block.cards:
+                            toks = block.cards[0].tokens()
+                            vals = block.cards[0].floats()
+                            if toks:
+                                try:
+                                    float(toks[0])
+                                except ValueError:
+                                    ec.impl_fatig_notch_method = toks[0].upper()
+                            if len(vals) > 0: ec.impl_fatig_notch_kt = vals[0]
+                            if len(vals) > 1: ec.impl_fatig_notch_e = vals[1]
+                            if len(vals) > 2: ec.impl_fatig_notch_kp = vals[2]
+                            if len(vals) > 3: ec.impl_fatig_notch_np = vals[3]
                     if is_base:
                         ec.impl_fatig_base = True
                         if len(v0) > 4 and v0[4] >= 0:
@@ -1067,26 +1208,290 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             "seed) — the path count runs on the synthesised "
                             "history; without it there is no time domain to "
                             "count", block.source)
-                    if ec.impl_fatig_funct <= 0:
-                        log.warning(
-                            "/IMPL/FATIG: no input-PSD /FUNCT id on line 1 "
-                            "(fmin fmax nf funct) — the run will error at the "
-                            "analysis", block.source)
-                    if ec.impl_fatig_snm <= 0.0 or ec.impl_fatig_snc <= 0.0:
-                        log.warning(
-                            "/IMPL/FATIG: no valid S-N curve on line 2 (m C) — "
-                            "a positive slope m and coefficient C are required "
-                            "(N = C*S^-m)", block.source)
-                elif sub in ("NEWTON", "SOLVINFO"):
+                    if not (is_mean or is_en or is_notch):
+                        if ec.impl_fatig_funct <= 0:
+                            log.warning(
+                                "/IMPL/FATIG: no input-PSD /FUNCT id on line 1 "
+                                "(fmin fmax nf funct) — the run will error at the "
+                                "analysis", block.source)
+                        if ec.impl_fatig_snm <= 0.0 or ec.impl_fatig_snc <= 0.0:
+                            log.warning(
+                                "/IMPL/FATIG: no valid S-N curve on line 2 (m C) — "
+                                "a positive slope m and coefficient C are required "
+                                "(N = C*S^-m)", block.source)
+                elif sub in ("NEWTON", "SOLVINFO", "CONV", "TOL"):
+                    if block.cards:
+                        vals = block.cards[0].floats()
+                        if len(vals) >= 3 and int(vals[1]) in (1, 2, 3, 12, 13, 23, 123):
+                            # OpenRadioss Fortran layout (freimpl.F:326): N_LIM, NITOL, N_TOL...
+                            ec.impl_max_iter = int(vals[0])
+                            ec.impl_nitol = int(vals[1])
+                            if ec.impl_nitol == 12 and len(vals) >= 4:
+                                ec.impl_tole = vals[2]
+                                ec.impl_tolf = vals[3]
+                            elif ec.impl_nitol == 13 and len(vals) >= 4:
+                                ec.impl_tole = vals[2]
+                                ec.impl_tolu = vals[3]
+                            elif ec.impl_nitol == 23 and len(vals) >= 4:
+                                ec.impl_tolf = vals[2]
+                                ec.impl_tolu = vals[3]
+                            elif ec.impl_nitol == 123 and len(vals) >= 5:
+                                ec.impl_tole = vals[2]
+                                ec.impl_tolf = vals[3]
+                                ec.impl_tolu = vals[4]
+                            else:
+                                ec.impl_tol = vals[2]
+                        else:
+                            if vals:
+                                ec.impl_tol = vals[0]
+                            if len(vals) > 1:
+                                ec.impl_max_iter = int(vals[1])
+                            if len(vals) > 2:
+                                ec.impl_nitol = int(vals[2])
+                elif sub in ("LSOLVER", "SOLVER", "SOLV"):
+                    ec.impl_solv = True
+                    sub2 = (block.parts[2].lower()
+                            if len(block.parts) > 2 else "")
+                    if sub2.isdigit():
+                        ec.impl_solv_isolv = int(sub2)
+                    if sub2 in ("5", "bfgs"):
+                        ec.impl_bfgs = True
+                        ec.impl_insolv = 5
+                    elif sub2 in ("2", "3"):
+                        ec.impl_bfgs = True
+                        ec.impl_insolv = int(sub2)
+                    else:
+                        ec.impl_linsolve = sub2
+                    if block.cards:
+                        vals = block.cards[0].floats()
+                        if len(vals) >= 4:
+                            ec.impl_solv_iprec = int(vals[0])
+                            ec.impl_solv_l_lim = int(vals[1])
+                            ec.impl_solv_itol = int(vals[2])
+                            ec.impl_solv_l_tol = float(vals[3])
+                            if ec.impl_solv_isolv == 3:
+                                ec.impl_solv_mumpsd = ec.impl_solv_l_lim
+                elif sub == "SBCS":
+                    ec.impl_sbcs = True
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    sub3 = (block.parts[3].upper()
+                            if len(block.parts) > 3 else "")
+                    if sub2 == "MSGLV":
+                        ec.impl_sbcs_msg_lvl = int(sub3) if sub3.isdigit() else 0
+                    elif sub2 == "ORDER":
+                        ec.impl_sbcs_b_order = int(sub3) if sub3.isdigit() else 0
+                    elif sub2 == "OUTCO":
+                        ec.impl_sbcs_b_mcore = 1
+                elif sub == "MUMPS":
+                    ec.impl_mumps = True
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    sub3 = (block.parts[3].upper()
+                            if len(block.parts) > 3 else "")
+                    if sub2 == "MSGLV":
+                        ec.impl_mumps_m_msg = int(sub3) if sub3.isdigit() else 0
+                    elif sub2 == "ORDER":
+                        if sub3 in ("METIS", "5"):
+                            ec.impl_mumps_m_order = 5
+                        elif sub3 in ("PORD", "4"):
+                            ec.impl_mumps_m_order = 4
+                        elif sub3.isdigit():
+                            ec.impl_mumps_m_order = int(sub3)
+                    elif sub2 == "OUTCO":
+                        ec.impl_mumps_m_ocore = 1
+                    elif sub2 == "AUTOC":
+                        ec.impl_mumps_m_ocore = -1
+                elif sub == "NCYCL":
+                    vals = block.cards[0].floats() if block.cards else []
+                    if vals:
+                        ec.impl_ncycl_stop = int(vals[0])
+                elif sub in ("LINE", "LINEAR"):
+                    ec.impl_line = True
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    sub3 = (block.parts[3].upper()
+                            if len(block.parts) > 3 else "")
+                    if sub2 == "INTER":
+                        ilintf = int(sub3) if sub3.isdigit() else 2
+                        ec.impl_line_ilintf = max(2, ilintf)
+                    elif sub2 == "SCAUC":
+                        ec.impl_line_iscau = 1
                     if block.cards:
                         vals = block.cards[0].floats()
                         if vals:
-                            ec.impl_tol = vals[0]
+                            ec.impl_dt = vals[0]
+                elif sub in ("BFGS", "LBFGS"):
+                    ec.impl_bfgs = True
+                    sub2 = block.parts[2] if len(block.parts) > 2 else ""
+                    if sub2.isdigit():
+                        ec.impl_lbfgs = int(sub2)
+                    if block.cards:
+                        vals = block.cards[0].floats()
+                        if vals and vals[0] > 0:
+                            ec.impl_lbfgs = int(vals[0])
+                elif sub in ("LSEAR", "LINESEARCH"):
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    if sub2 == "OFF":
+                        ec.impl_line_search = False
+                        ec.impl_iline_s = 100
+                    else:
+                        ec.impl_line_search = True
+                        if sub2.isdigit():
+                            ec.impl_iline_s = int(sub2)
+                        if block.cards:
+                            vals = block.cards[0].floats()
+                            if vals and vals[0] > 0:
+                                ec.impl_nls_lim = int(vals[0])
+                            if len(vals) > 1 and vals[1] > 0:
+                                ec.impl_ls_tol = float(vals[1])
+                elif sub == "RREF":
+                    ec.impl_rref = 2
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    sub3 = (block.parts[3].upper()
+                            if len(block.parts) > 3 else "")
+                    vals = block.cards[0].floats() if block.cards else []
+                    if sub2 == "OFF":
+                        ec.impl_rref = 0
+                    elif sub2 == "INTER":
+                        ec.impl_rref_irefi = int(sub3) if sub3.isdigit() else (int(vals[0]) if vals else 0)
+                    elif sub2 == "LIMIT":
+                        if vals:
+                            ec.impl_rref_rf_min = vals[0]
                         if len(vals) > 1:
-                            ec.impl_max_iter = int(vals[1])
-                elif sub in ("LSOLVER", "SOLVER"):
-                    ec.impl_linsolve = (block.parts[2].lower()
-                                        if len(block.parts) > 2 else "")
+                            ec.impl_rref_rf_max = vals[1]
+                    elif vals:
+                        ec.impl_rref = int(vals[0])
+                elif sub == "DIVER":
+                    ec.impl_diver = True
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    if sub2 == "TOL":
+                        if block.cards:
+                            vals = block.cards[0].floats()
+                            if vals:
+                                ec.impl_tol_div = float(vals[0])
+                    elif sub2.isdigit():
+                        ec.impl_ndiver = int(sub2)
+                        if ec.impl_ndiver == 0:
+                            ec.impl_ndiver = -1
+                    elif block.cards:
+                        vals = block.cards[0].floats()
+                        if vals:
+                            ec.impl_ndiver = int(vals[0])
+                            if ec.impl_ndiver == 0:
+                                ec.impl_ndiver = -1
+                elif sub == "GSTIF":
+                    ec.impl_gstif = True
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    if sub2 == "OFF":
+                        ec.impl_gstif_ikg = 0
+                    else:
+                        ec.impl_gstif_ikg = 1
+                elif sub == "PSTIF":
+                    ec.impl_pstif = True
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    if sub2 == "OFF":
+                        ec.impl_pstif_ikpres = 0
+                    else:
+                        ec.impl_pstif_ikpres = 1
+                elif sub in ("SHPOF", "SHPOFF"):
+                    ec.impl_shpproj_ikproj = -1
+                elif sub in ("SHPON",):
+                    ec.impl_shpproj_ikproj = 1
+                elif sub == "SPRIN":
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    if sub2 == "NONL":
+                        ec.impl_sprin_isprn = 1
+                    elif sub2 in ("LINE", "LINEAR"):
+                        ec.impl_sprin_isprn = 0
+                elif sub == "MONVO":
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    if sub2 == "OFF":
+                        ec.impl_monvo_impmv = 0
+                    else:
+                        ec.impl_monvo_impmv = 1
+                elif sub == "CONTR":
+                    ec.impl_contr = True
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    sub3 = (block.parts[3].upper()
+                            if len(block.parts) > 3 else "")
+                    vals = block.cards[0].floats() if block.cards else []
+                    if sub2 == "DT":
+                        if sub3 == "STOP":
+                            if vals:
+                                dt_min = vals[0]
+                                dt_max = vals[1] if len(vals) > 1 else vals[0]
+                                ec.impl_contr_dt_stop = (dt_min, dt_max)
+                                ec.impl_dt_min = dt_min
+                                ec.impl_dt_max = dt_max
+                        else:
+                            ec.impl_contr_dt_params["idtc"] = int(sub3) if sub3.isdigit() else 1
+                            ec.impl_contr_dt_params["vals"] = vals
+                    elif sub2 == "SHEL":
+                        if vals:
+                            ec.impl_contr_kz_tol = vals[0]
+                    elif sub2 == "INTER":
+                        if vals:
+                            ec.impl_contr_sk_int = vals[0]
+                elif sub == "PRINT":
+                    ec.impl_print = True
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    sub3 = (block.parts[3].upper()
+                            if len(block.parts) > 3 else "")
+                    vals = block.cards[0].floats() if block.cards else []
+                    if sub2 == "LINE":
+                        ec.impl_print_line = int(sub3) if sub3.isdigit() else (int(vals[0]) if vals else 1)
+                    elif sub2 == "NONL":
+                        ec.impl_print_nonl = int(sub3) if sub3.isdigit() else (int(vals[0]) if vals else 1)
+                    elif sub2 == "STIF":
+                        if vals:
+                            ec.impl_print_stif_tol = vals[0]
+                        if len(vals) > 1:
+                            ec.impl_print_stif_nc = int(vals[1])
+                        if len(vals) > 2:
+                            ec.impl_print_stif_it = int(vals[2])
+                elif sub == "CHECK":
+                    ec.impl_check = 1
+                elif sub == "QSTAT":
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    if sub2 == "DTSCA":
+                        ec.impl_qstat = 1
+                        if block.cards:
+                            vals = block.cards[0].floats()
+                            if vals:
+                                ec.impl_qstat_scal_dtq = vals[0]
+                    elif sub2 == "MRIGM":
+                        ec.impl_qstat = 1
+                        ec.impl_qstat_irig_m = 1
+                        if block.cards:
+                            vals = block.cards[0].floats()
+                            if len(vals) >= 3:
+                                ec.impl_qstat_e_ref = (vals[0], vals[1], vals[2])
+                                if vals[0] > 0 and vals[1] > 0 and vals[2] > 0:
+                                    ec.impl_qstat_irig_m = 2
+                    else:
+                        ec.impl_qstat = int(sub2) if sub2.isdigit() else 1
+                elif sub in ("AUTOS", "AUTSPC"):
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    if sub2 == "OFF":
+                        ec.impl_autos = 0
+                    elif sub2 == "ALL":
+                        ec.impl_autos = 2
+                    else:
+                        ec.impl_autos = 1
+                elif sub in ("SPRB", "SPRINGBACK"):
+                    ec.impl_sprb = True
                 elif sub in ("DYNA", "DYNAMIC", "DYN"):
                     # /IMPL/DYNA (M10): implicit DYNAMICS — Newmark / HHT.
                     # Sub-sub-keyword mirrors the original's IDYNA read
@@ -1114,8 +1519,11 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                                 "/IMPL/DYNA/DAMP: negative Rayleigh "
                                 "coefficient — this INJECTS energy",
                                 block.source)
-                    elif sub2 in ("", "1", "2"):
-                        ec.impl_dyna = int(sub2) if sub2 else 2
+                    elif sub2 in ("", "1", "2", "3", "GEN", "GENALPHA", "WOODBOSSAK"):
+                        if sub2 in ("3", "GEN", "GENALPHA", "WOODBOSSAK"):
+                            ec.impl_dyna = 3
+                        else:
+                            ec.impl_dyna = int(sub2) if sub2 else 2
                         vals = block.cards[0].floats() if block.cards else []
                         if ec.impl_dyna == 1:
                             # HHT: the card value IS alpha (freimpl.F reads
@@ -1129,6 +1537,19 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                                     f"HHT range [-1/3, 0] — second-order "
                                     f"accuracy / unconditional stability "
                                     f"not guaranteed", block.source)
+                            ec.impl_dyna_alpha_m = 0.0
+                            ec.impl_dyna_alpha_f = -ec.impl_dyna_alpha if ec.impl_dyna_alpha <= 0.0 else ec.impl_dyna_alpha
+                            ec.impl_dyna_gamma = 0.5 - ec.impl_dyna_alpha_m + ec.impl_dyna_alpha_f
+                            ec.impl_dyna_beta = 0.25 * (1.0 - ec.impl_dyna_alpha_m + ec.impl_dyna_alpha_f) ** 2
+                        elif ec.impl_dyna == 3:
+                            # Generalized-alpha: alpha_m, alpha_f
+                            if vals:
+                                ec.impl_dyna_alpha_m = vals[0]
+                            if len(vals) > 1:
+                                ec.impl_dyna_alpha_f = vals[1]
+                            ec.impl_dyna_gamma = 0.5 - ec.impl_dyna_alpha_m + ec.impl_dyna_alpha_f
+                            ec.impl_dyna_beta = 0.25 * (1.0 - ec.impl_dyna_alpha_m + ec.impl_dyna_alpha_f) ** 2
+                            ec.impl_dyna_alpha = -ec.impl_dyna_alpha_f
                         else:
                             # Newmark: gamma then beta (DY_G = NM_A,
                             # DY_B = NM_B in imp_dyna.F)
@@ -1147,7 +1568,7 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                                     block.source)
                     else:
                         log.warning(f"/IMPL/DYNA/{sub2} not ported — "
-                                    f"ignored (supports 1, 2)", block.source)
+                                    f"ignored (supports 1, 2, 3)", block.source)
                 else:
                     log.warning(f"/IMPL/{sub} not ported — ignored (supports "
                                 f"DTINI, NEWTON, LSOLVER, NONLIN, ARCL, "
@@ -1192,8 +1613,10 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             emax = vals[0]
                             if emax > 0.0:
                                 ec.energy_error_stop = emax
-                        if len(vals) > 2 and vals[2] > 0.0:
-                            ec.stop_nstep = int(vals[2])
+                        if len(vals) > 1:
+                            ec.mass_error_stop = vals[1]
+                        if len(vals) > 2:
+                            ec.nodal_mass_error_stop = vals[2]
             elif key == "DEBUG":
                 # /DEBUG or /DEBUG/<suboption> (M120): fredebug.F
                 sub = block.parts[1].upper() if len(block.parts) > 1 else ""
@@ -1388,6 +1811,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
             elif key == "KEREL":
                 # /KEREL (M146): freform.F
                 ec.kerel_active = True
+                if len(block.parts) > 1 and block.parts[1].isdigit():
+                    ec.kerel_istatg = int(block.parts[1])
                 for c in block.cards:
                     if c.is_blank:
                         continue
@@ -1403,6 +1828,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
             elif key == "DYREL":
                 # /DYREL (M146): freform.F
                 ec.dyrel_active = True
+                if len(block.parts) > 1 and block.parts[1].isdigit():
+                    ec.dyrel_istatg = int(block.parts[1])
                 for c in block.cards:
                     if c.is_blank:
                         continue
@@ -1415,6 +1842,57 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             ec.dyrel_istatg = int(v[0])
                         else:
                             ec.dyrel_beta = v[0]
+            elif key == "ADYREL":
+                # /ADYREL, /ADYREL/FREQ_ (M604): freform.F
+                ec.adyrel_active = True
+                has_freq = any(p.upper().startswith("FREQ") for p in block.parts[1:])
+                for p in block.parts[1:]:
+                    if p.isdigit():
+                        ec.adyrel_istatg = int(p)
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    v = c.floats()
+                    if has_freq and ec.adyrel_freq_c == 0.0 and len(v) >= 1:
+                        ec.adyrel_freq_c = v[0]
+                        has_freq = False
+                    elif len(v) >= 2:
+                        ec.adyrel_tstart = v[0]
+                        ec.adyrel_tstop = v[1]
+                    elif len(v) == 1:
+                        if v[0].is_integer() and ec.adyrel_istatg == 0:
+                            ec.adyrel_istatg = int(v[0])
+                        else:
+                            ec.adyrel_tstart = v[0]
+            elif key == "RELAX":
+                # /RELAX, /RELAX/SYSTEM, /RELAX/DYNA (M604): standard Radioss relaxation alias
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                istatg = int(block.parts[1]) if (len(block.parts) > 1 and block.parts[1].isdigit()) else 0
+                if sub == "DYNA":
+                    ec.dyrel_active = True
+                    ec.dyrel_istatg = istatg
+                    for c in block.cards:
+                        if c.is_blank:
+                            continue
+                        v = c.floats()
+                        if len(v) >= 2:
+                            ec.dyrel_beta = v[0]
+                            ec.dyrel_period = v[1]
+                        elif len(v) == 1:
+                            if v[0].is_integer() and ec.dyrel_istatg == 0:
+                                ec.dyrel_istatg = int(v[0])
+                            else:
+                                ec.dyrel_beta = v[0]
+                else:
+                    parsed_cards = [c.floats() for c in block.cards if not c.is_blank]
+                    ec.kerel_active = True
+                    ec.kerel_istatg = istatg
+                    for v in parsed_cards:
+                        if len(v) >= 2:
+                            ec.kerel_tstart = v[0]
+                            ec.kerel_tstop = v[1]
+                        elif len(v) == 1 and v[0].is_integer() and ec.kerel_istatg == 0:
+                            ec.kerel_istatg = int(v[0])
             elif key in ("THERMAL", "HEAT"):
                 # /THERMAL, /HEAT, /THERMAL/DT, /HEAT/DT (M146/M202): frethermal.F
                 ec.heat_active = True
@@ -1609,6 +2087,10 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 # /PARITH/ON, /PARITH/OFF (M200)
                 sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
                 ec.parith = sub
+            elif key == "ALE":
+                # /ALE/ON, /ALE/OFF (M_ALE)
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
+                ec.ale_on = (sub == "ON")
             elif key == "TH":
                 # /TH/TITLE (M200)
                 sub = block.parts[1].upper() if len(block.parts) > 1 else ""

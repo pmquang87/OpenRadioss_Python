@@ -82,6 +82,10 @@ def _per_element(group, getter) -> np.ndarray:
 def _segment_areas(x0: np.ndarray, segments: np.ndarray) -> np.ndarray:
     """Area of 3/4-node segments (triangles have n4 = n3: the cross
     product formula handles both, the degenerate diagonal halves it)."""
+    if len(segments) == 0:
+        return np.zeros(0, dtype=float)
+    if len(x0) == 0 or np.max(segments) >= len(x0):
+        return np.zeros(len(segments), dtype=float)
     xs = x0[segments]
     d1 = xs[:, 2] - xs[:, 0]
     d2 = xs[:, 3] - xs[:, 1]
@@ -89,7 +93,7 @@ def _segment_areas(x0: np.ndarray, segments: np.ndarray) -> np.ndarray:
 
 
 _SHELL_GROUPS = ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18")
-_SOLID_GROUPS = ("bricks", "bricks_heph", "tetras", "tetra10s", "bric20s", "shel16s", "quads")
+_SOLID_GROUPS = ("bricks", "bricks_heph", "tshells", "tetras", "tetra10s", "bric20s", "shel16s", "quads", "penta6s")
 
 
 # ----------------------------------------------------------------------------
@@ -108,18 +112,26 @@ def segment_stiffness_gap(model: Model, segments: np.ndarray,
     n = len(segments)
     K = np.zeros(n)
     gap = np.zeros(n)
-    area = _segment_areas(model.x0, segments)
+    x0 = model.x0 if getattr(model, "x0", None) is not None and len(model.x0) > 0 else getattr(model, "x", np.zeros((0, 3)))
+    area = _segment_areas(x0, segments)
+
+    if seg_gtype is None:
+        seg_gtype = np.full(n, "", dtype="<U8")
+    if seg_elem is None:
+        seg_elem = np.full(n, -1, dtype=np.int64)
 
     for gname in np.unique(seg_gtype):
         sel = seg_gtype == gname
         if gname == "":
             K[sel] = stfac * _fallback_modulus(model) * np.sqrt(area[sel])
             continue
-        group = getattr(model, gname)
+        group = getattr(model, gname, None)
+        if group is None:
+            continue
         erow = seg_elem[sel]
         if gname in _SHELL_GROUPS:
             # K = 0.5 * Stfac * E * t ;  gap contribution = t / 2
-            E = _per_element(group, lambda m, p: m.E)[erow]
+            E = _per_element(group, lambda m, p: getattr(m, 'E', 0.0))[erow]
             t = group.state["thick"][erow]
             K[sel] = 0.5 * stfac * E * t
             gap[sel] = 0.5 * t * fscale_gap
@@ -148,12 +160,13 @@ def node_stiffness_gap(model: Model, stfac: float, fscale_gap: float = 1.0):
     gap = np.zeros(model.numnod)
     for gname, group in model.element_groups():
         if gname in _SHELL_GROUPS:
-            E = _per_element(group, lambda m, p: m.E)
+            E = _per_element(group, lambda m, p: getattr(m, 'E', 0.0))
             k_e = 0.5 * stfac * E * group.state["thick"]
             g_e = 0.5 * group.state["thick"] * fscale_gap
         elif gname in _SOLID_GROUPS:
             B = _per_element(group, _bulk_modulus)
-            k_e = stfac * B * np.maximum(group.state["vol0"], 0.0) ** (1.0 / 3.0)
+            vol0_clean = np.nan_to_num(group.state.get("vol0", 0.0), nan=0.0)
+            k_e = stfac * B * np.maximum(vol0_clean, 0.0) ** (1.0 / 3.0)
             g_e = np.zeros(group.n)
         else:
             # trusses/springs/beams: no face to contact through — their
@@ -176,12 +189,20 @@ def node_stiffness_gap(model: Model, stfac: float, fscale_gap: float = 1.0):
 # ----------------------------------------------------------------------------
 
 def segment_mesh_gap(model: Model, segments: np.ndarray, percent_mesh_size: float = 0.4):
-    xs = model.x0[segments]
+    if len(segments) == 0:
+        return np.zeros(0, dtype=float)
+    tri_mask = (segments[:, 2] == segments[:, 3]) | (segments[:, 3] < 0)
+    valid_segs = segments.copy()
+    if np.any(tri_mask):
+        valid_segs[tri_mask, 3] = valid_segs[tri_mask, 2]
+    xs = model.x0[valid_segs]
     d1 = np.linalg.norm(xs[:, 1] - xs[:, 0], axis=1)
     d2 = np.linalg.norm(xs[:, 2] - xs[:, 1], axis=1)
     d3 = np.linalg.norm(xs[:, 3] - xs[:, 2], axis=1)
     d4 = np.linalg.norm(xs[:, 0] - xs[:, 3], axis=1)
-    d3[segments[:, 2] == segments[:, 3]] = np.inf
+    d3[tri_mask] = np.inf
+    if np.any(tri_mask):
+        d4[tri_mask] = np.linalg.norm(xs[tri_mask, 0] - xs[tri_mask, 2], axis=1)
     Lmin = np.min(np.column_stack((d1, d2, d3, d4)), axis=1)
     return percent_mesh_size * Lmin
 
@@ -189,9 +210,52 @@ def segment_mesh_gap(model: Model, segments: np.ndarray, percent_mesh_size: floa
 def node_mesh_gap(model: Model, segments: np.ndarray, nodes: np.ndarray, percent_mesh_size: float = 0.4):
     g_m_l = segment_mesh_gap(model, segments, percent_mesh_size)
     node_gap = np.full(model.numnod, np.inf)
-    for k in range(4):
-        np.minimum.at(node_gap, segments[:, k], g_m_l)
-    return node_gap[nodes]
+    if len(segments) > 0 and len(g_m_l) == len(segments):
+        for k in range(4):
+            valid_k = (segments[:, k] >= 0) & (segments[:, k] < model.numnod)
+            if np.any(valid_k):
+                np.minimum.at(node_gap, segments[valid_k, k], g_m_l[valid_k])
+
+    inf_mask = np.isinf(node_gap[nodes])
+    if np.any(inf_mask):
+        for gname, group in model.element_groups():
+            if not hasattr(group, "conn") or group.conn is None or len(group.conn) == 0:
+                continue
+            conn = group.conn
+            if gname in _SHELL_GROUPS:
+                valid_conn = conn.copy()
+                if valid_conn.shape[1] >= 4:
+                    tri = (valid_conn[:, 2] == valid_conn[:, 3]) | (valid_conn[:, 3] < 0)
+                    valid_conn[tri, 3] = valid_conn[tri, 2]
+                xs = model.x0[valid_conn]
+                d1 = np.linalg.norm(xs[:, 1] - xs[:, 0], axis=1)
+                d2 = np.linalg.norm(xs[:, 2] - xs[:, 1], axis=1)
+                if valid_conn.shape[1] >= 4:
+                    tri = (valid_conn[:, 2] == valid_conn[:, 3]) | (valid_conn[:, 3] < 0)
+                    d3 = np.where(tri, np.inf, np.linalg.norm(xs[:, 3] - xs[:, 2], axis=1))
+                    d4 = np.where(tri, np.linalg.norm(xs[:, 0] - xs[:, 2], axis=1), np.linalg.norm(xs[:, 0] - xs[:, 3], axis=1))
+                    lmin = percent_mesh_size * np.min(np.column_stack((d1, d2, d3, d4)), axis=1)
+                else:
+                    d3 = np.linalg.norm(xs[:, 0] - xs[:, 2], axis=1)
+                    lmin = percent_mesh_size * np.min(np.column_stack((d1, d2, d3)), axis=1)
+            elif gname in _SOLID_GROUPS:
+                vol0 = np.maximum(np.nan_to_num(group.state.get("vol0", 0.0), nan=0.0), 0.0)
+                lmin = percent_mesh_size * (vol0 ** (1.0 / 3.0))
+            else:
+                continue
+            for k in range(conn.shape[1]):
+                col = conn[:, k]
+                valid = (col >= 0) & (col < model.numnod) & (lmin > 0.0)
+                if np.any(valid):
+                    np.minimum.at(node_gap, col[valid], lmin[valid])
+
+    res = node_gap[nodes].copy()
+    still_inf = np.isinf(res)
+    if np.any(still_inf):
+        valid_g = g_m_l[np.isfinite(g_m_l) & (g_m_l > 0.0)]
+        m_fallback = float(valid_g.mean()) if len(valid_g) > 0 else 0.0
+        res[still_inf] = m_fallback
+    return res
 
 
 # ----------------------------------------------------------------------------
@@ -215,14 +279,20 @@ def edge_stiffness_gap(model: Model, edges: np.ndarray,
     for gname in np.unique(seg_gtype):
         sel = seg_gtype == gname
         if gname == "":
-            L = np.linalg.norm(model.x0[edges[sel, 1]]
-                               - model.x0[edges[sel, 0]], axis=1)
+            x0 = model.x0 if getattr(model, "x0", None) is not None and len(model.x0) > 0 else getattr(model, "x", np.zeros((0, 3)))
+            if len(x0) > 0 and np.max(edges[sel]) < len(x0):
+                L = np.linalg.norm(x0[edges[sel, 1]]
+                                   - x0[edges[sel, 0]], axis=1)
+            else:
+                L = np.ones(np.sum(sel))
             K[sel] = stfac * _fallback_modulus(model) * L
             continue
-        group = getattr(model, gname)
+        group = getattr(model, gname, None)
+        if group is None:
+            continue
         erow = seg_elem[sel]
         if gname in _SHELL_GROUPS:
-            E = _per_element(group, lambda m, p: m.E)[erow]
+            E = _per_element(group, lambda m, p: getattr(m, 'E', 0.0))[erow]
             t = group.state["thick"][erow]
             K[sel] = 0.5 * stfac * E * t
             gap[sel] = 0.5 * t

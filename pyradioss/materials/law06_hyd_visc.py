@@ -1,10 +1,46 @@
-"""LAW6: Hydrodynamic viscous fluid.
+"""
+LAW06 — Hydrodynamic Viscous Fluid (/MAT/LAW6, /MAT/HYD_VISC, /MAT/HYDRO).
 
-Fortran origin: ``engine/source/materials/mat/mat006/m6law.F``,
-``starter/source/materials/mat/mat006/hm_read_mat06.F``.
+OpenRadioss /MAT/HYD_VISC (LAW06) Python implementation.
+
+Upstream Fortran Reference:
+  - Engine physics: engine/source/materials/mat/mat006/m6law.F (SUBROUTINE M6LAW, lines 30–146;
+    also designated as sigeps06.F in standard law conventions)
+  - Starter reader: starter/source/materials/mat/mat006/hm_read_mat06.F (SUBROUTINE HM_READ_MAT06, lines 38–264)
+  - Parameter mapping: hm_cfg_files/config/CFG/Keyword971/MAT/mat_006.cfg
+
+Theory & Formulation
+--------------------
+Hydrodynamic Newtonian fluid model with uncoupled volumetric and deviatoric responses:
+1. Deviatoric Viscous Stress (Navier-Stokes Newtonian fluid):
+       s_ij = 2 * eta * e_ij_dot
+   where e_ij_dot = eps_ij_dot - (1/3) * tr(eps_dot) * delta_ij is the deviatoric strain rate,
+   and dynamic viscosity eta = DAMP1 * rho (PM(24, MX) * RHO in m6law.F).
+   In engineering Voigt notation [xx, yy, zz, xy, yz, zx]:
+       s_xx = 2 * eta * (eps_xx_dot - (1/3) * tr(eps_dot))
+       s_yy = 2 * eta * (eps_yy_dot - (1/3) * tr(eps_dot))
+       s_zz = 2 * eta * (eps_zz_dot - (1/3) * tr(eps_dot))
+       s_xy = eta * gamma_xy_dot
+       s_yz = eta * gamma_yz_dot
+       s_zx = eta * gamma_zx_dot
+
+2. Volumetric Response (Equation of State):
+   Hydrostatic pressure P is determined by an Equation of State (linear, polynomial,
+   Mie-Gruneisen, Tait, etc.):
+       sigma_ij = s_ij - P * delta_ij
+   Embedded polynomial EOS computes:
+       P = C0 + C1*mu + C2*mu^2 + C3*mu^3 + (C4 + C5*mu)*E   (compression mu >= 0)
+       P = C0 + C1*mu + C3*mu^2 + C4*E                       (expansion mu < 0)
+   with tensile pressure cutoff PMIN (preventing fluid cavitation/tensile instability).
+
+3. Sound Speed:
+       c = sqrt(K / rho0) = sqrt(bulk / rho0)
 """
 
 from __future__ import annotations
+
+import math
+from typing import Any, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -12,6 +48,170 @@ from pyradioss.model.entities import EquationOfState, Material
 
 _EM20 = 1e-20
 
+
+# ============================================================================
+# 1D & Analytical Helper Functions
+# ============================================================================
+
+def newtonian_shear_stress(
+    rate: float | np.ndarray,
+    visc: float,
+    rho: Optional[float | np.ndarray] = None,
+    kinematic: bool = False,
+) -> float | np.ndarray:
+    r"""Evaluate 1D Newtonian viscous shear stress:
+        \tau = \eta \dot{\gamma} = 2 \eta \dot{\varepsilon}_{xy}
+    where \eta is dynamic viscosity (or \eta = \nu \rho if kinematic=True).
+
+    Cited from:
+      - engine/source/materials/mat/mat006/m6law.F (lines 98, 132)
+      - starter/source/materials/mat/mat006/hm_read_mat06.F (lines 110-111)
+
+    Parameters:
+        rate: Engineering shear strain rate \dot{\gamma} = d(gamma)/dt
+        visc: Viscosity parameter DAMP1
+        rho: Current density (optional, used if kinematic=True or in OpenRadioss scaling)
+        kinematic: If True, visc is treated as kinematic viscosity \nu and scaled by rho
+    """
+    is_scalar = np.isscalar(rate)
+    r_arr = np.asarray(rate, dtype=float)
+    eta = float(visc)
+    if kinematic and rho is not None:
+        eta = eta * np.asarray(rho, dtype=float)
+    tau = eta * r_arr
+    return float(np.squeeze(tau)) if is_scalar else tau
+
+
+def newtonian_deviatoric_stress(
+    edot: Sequence[float] | np.ndarray,
+    visc: float,
+    rho: Optional[float | np.ndarray] = None,
+    kinematic: bool = False,
+) -> np.ndarray:
+    r"""Evaluate 3D Newtonian viscous deviatoric stress tensor:
+        s_{ij} = 2 \eta \dot{e}_{ij} = 2 \eta (\dot{\varepsilon}_{ij} - \frac{1}{3} \text{tr}(\dot{\varepsilon}) \delta_{ij})
+
+    For Voigt vector [xx, yy, zz, xy, yz, zx] with engineering shear rates:
+        s_xx = 2 \eta (\dot{\varepsilon}_{xx} - \frac{1}{3}\text{tr}(\dot{\varepsilon}))
+        s_yy = 2 \eta (\dot{\varepsilon}_{yy} - \frac{1}{3}\text{tr}(\dot{\varepsilon}))
+        s_zz = 2 \eta (\dot{\varepsilon}_{zz} - \frac{1}{3}\text{tr}(\dot{\varepsilon}))
+        s_xy = \eta \dot{\gamma}_{xy}
+        s_yz = \eta \dot{\gamma}_{yz}
+        s_zx = \eta \dot{\gamma}_{zx}
+
+    Cited from:
+      - engine/source/materials/mat/mat006/m6law.F (lines 123-134)
+    """
+    edot_arr = np.asarray(edot, dtype=float)
+    is_1d = (edot_arr.ndim == 1 and edot_arr.size == 6)
+    if is_1d:
+        edot_arr = edot_arr[None, :]
+
+    eta = float(visc)
+    if kinematic and rho is not None:
+        rho_arr = np.atleast_1d(np.asarray(rho, dtype=float))
+        eta = eta * rho_arr[:, None]
+
+    tr3 = (edot_arr[:, 0] + edot_arr[:, 1] + edot_arr[:, 2]) / 3.0
+    s = np.zeros_like(edot_arr)
+    s[:, 0] = 2.0 * eta * (edot_arr[:, 0] - tr3)
+    s[:, 1] = 2.0 * eta * (edot_arr[:, 1] - tr3)
+    s[:, 2] = 2.0 * eta * (edot_arr[:, 2] - tr3)
+    s[:, 3] = eta * edot_arr[:, 3]
+    s[:, 4] = eta * edot_arr[:, 4]
+    s[:, 5] = eta * edot_arr[:, 5]
+
+    return s[0] if is_1d else s
+
+
+def linear_eos_pressure(
+    rho: float | np.ndarray,
+    rho0: float,
+    bulk: float,
+    pmin: Optional[float] = None,
+) -> float | np.ndarray:
+    r"""Evaluate linear hydrodynamic equation of state pressure:
+        P = K \mu = K (\rho / \rho_0 - 1)
+    clamped at tensile cutoff P >= P_min.
+
+    Cited from:
+      - engine/source/materials/mat/mat006/m6law.F
+      - starter/source/materials/mat/mat006/hm_read_mat06.F (line 99)
+    """
+    is_scalar = np.isscalar(rho)
+    rho_arr = np.asarray(rho, dtype=float)
+    mu = rho_arr / max(float(rho0), 1e-20) - 1.0
+    p = float(bulk) * mu
+    if pmin is not None:
+        p = np.maximum(p, float(pmin))
+    return float(np.squeeze(p)) if is_scalar else p
+
+
+def polynomial_eos_pressure(
+    mu: float | np.ndarray,
+    c0: float = 0.0,
+    c1: float = 0.0,
+    c2: float = 0.0,
+    c3: float = 0.0,
+    c4: float = 0.0,
+    c5: float = 0.0,
+    e0: float = 0.0,
+    pmin: Optional[float] = None,
+) -> float | np.ndarray:
+    r"""Evaluate polynomial hydrodynamic equation of state pressure:
+        Compression (\mu >= 0): P = C_0 + C_1 \mu + C_2 \mu^2 + C_3 \mu^3 + (C_4 + C_5 \mu) E_0
+        Expansion   (\mu < 0):  P = C_0 + C_1 \mu + C_3 \mu^2 + C_4 E_0
+    clamped at tensile cutoff P >= P_min.
+
+    Cited from:
+      - engine/source/materials/mat/mat006/m6law.F
+      - starter/source/materials/mat/mat006/hm_read_mat06.F (lines 116-141)
+    """
+    is_scalar = np.isscalar(mu)
+    mu_arr = np.asarray(mu, dtype=float)
+    c0_f, c1_f, c2_f = float(c0), float(c1), float(c2)
+    c3_f, c4_f, c5_f = float(c3), float(c4), float(c5)
+    e0_f = float(e0)
+
+    p_comp = c0_f + c1_f * mu_arr + c2_f * (mu_arr ** 2) + c3_f * (mu_arr ** 3) + (c4_f + c5_f * mu_arr) * e0_f
+    p_exp = c0_f + c1_f * mu_arr + c3_f * (mu_arr ** 2) + c4_f * e0_f
+    p = np.where(mu_arr >= 0.0, p_comp, p_exp)
+    if pmin is not None:
+        p = np.maximum(p, float(pmin))
+    return float(np.squeeze(p)) if is_scalar else p
+
+
+def hydrodynamic_fluid_stress(
+    deps: Sequence[float] | np.ndarray,
+    dt: float,
+    visc: float,
+    rho: float,
+    p_eos: float = 0.0,
+) -> np.ndarray:
+    r"""Evaluate total Cauchy stress tensor for hydrodynamic fluid:
+        \sigma_{ij} = s_{ij} - P \delta_{ij}
+    where s_{ij} is Newtonian deviatoric viscous stress and P is hydrostatic pressure.
+
+    Cited from:
+      - engine/source/materials/mat/mat006/m6law.F (lines 123-134)
+    """
+    deps_arr = np.asarray(deps, dtype=float)
+    is_1d = (deps_arr.ndim == 1 and deps_arr.size == 6)
+    if is_1d:
+        deps_arr = deps_arr[None, :]
+
+    rate = deps_arr / max(float(dt), 1e-20) if dt > 1e-20 else np.zeros_like(deps_arr)
+    s = newtonian_deviatoric_stress(rate, visc=visc, rho=rho, kinematic=True)
+    sig = s.copy()
+    sig[:, 0] -= float(p_eos)
+    sig[:, 1] -= float(p_eos)
+    sig[:, 2] -= float(p_eos)
+    return sig[0] if is_1d else sig
+
+
+# ============================================================================
+# Material Parameter Normalization & Construction
+# ============================================================================
 
 def _ensure_params(mat: Material) -> dict:
     """Ensure material params contain both CFG and direct keys with robust defaults."""
@@ -159,10 +359,14 @@ def build_law6(rec) -> Material:
     return mat
 
 
+# ============================================================================
+# Constitutive Stress Updates
+# ============================================================================
+
 def solid_update(mat, sig: np.ndarray, deps: np.ndarray, epsp=None, dt: float = 0.0, extra: dict = None):
     """Update solid deviatoric stress for LAW6 (Newtonian fluid).
 
-    Fortran origin: ``engine/source/materials/mat/mat006/m6law.F``.
+    Fortran origin: ``engine/source/materials/mat/mat006/m6law.F`` (lines 30-146).
 
     Args:
         mat: Material object containing visc parameter.
@@ -313,5 +517,6 @@ def _register():
     MAT_PHYSICS_REGISTRY["LAW6"] = build_law6
     MAT_PHYSICS_REGISTRY["HYD_VISC"] = build_law6
     MAT_PHYSICS_REGISTRY["HYDRO"] = build_law6
+
 
 _register()

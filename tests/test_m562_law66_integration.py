@@ -749,9 +749,9 @@ def test_shell_bt4_thickness_thinning():
         shell_bt4.forces(grp, curr_x, vel, np.zeros_like(coords), dt, fint, mint)
 
     # Thickness must thin under tensile flow
-    thk_final = grp.state["thick"][0]
-    assert thk_final < thick0, f"Expected thickness thinning < {thick0}, got {thk_final}"
-    assert thk_final > 0.0, f"Thickness must remain strictly positive, got {thk_final}"
+    thk_final = grp.state["mat_extra"]["thk66"][0]
+    assert np.all(thk_final < thick0), f"Expected thickness thinning < {thick0}, got {thk_final}"
+    assert np.all(thk_final > 0.0), f"Thickness must remain strictly positive, got {thk_final}"
 
 
 def test_shell_qeph_single_element_and_bending():

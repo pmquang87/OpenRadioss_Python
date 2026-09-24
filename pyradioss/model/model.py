@@ -42,7 +42,7 @@ from .entities import (
     InitialTrussState, InitialBeamState, InitialSpringState,
     CyclicBoundaryCondition, SolidPartPerturbation, PBlastLoad,
     SubInterface, GuidedCable, ShellPartPerturbation, FailurePerturbation, SphGlobal, SmsGlobal,
-    BcsNrf, BcsWall, RigidLink, CylJoint, GeneralJoint,
+    BcsNrf, BcsWall, RigidLink, CylJoint, GJoint, GeneralJoint, KJoint,
     MergeNode, MergeRbody, IniCrack, IniCrackSegment, LaserLoad,
     PcylLoad, PfluidLoad, Preload, PreloadAxial, DampInter, DampRange,
     AnalyGlobal, UpwindGlobal, CaaControl,
@@ -82,7 +82,7 @@ from .entities import (
     MaterialLaw117, MaterialLaw90, MaterialLaw33, MatHeatModifier, MatNonlocalModifier,
     MaterialLaw66, MatLaw66, MatPlasTabCosser, MatPlasCosser, MaterialLaw35, MaterialLaw62, MaterialLaw28, MaterialLaw44,
     MaterialLaw88, MaterialLaw92, MaterialLaw94, MaterialLaw95, MatBergstromBoyce, MaterialLaw46, MaterialLaw69,
-    MaterialLaw124, MaterialLaw126, MaterialLaw125, MaterialLaw127, MaterialLaw130,
+    MaterialLaw124, MaterialLaw126, MaterialLaw169, MaterialLaw125, MaterialLaw127, MaterialLaw130,
     MaterialLaw128, MaterialLaw129, MaterialLaw123, MaterialLaw132, MaterialLaw134,
     MaterialLaw104, MaterialLaw105, MatLaw105, MatPowderBurn, MaterialPowderBurn, MaterialLaw106,
     MaterialLaw107, MatLaw107, MatPaperLight, MatPlasPaperLight, MatPfeiffer,
@@ -101,7 +101,7 @@ from .entities import (
     FailFabric, FailHoffman, FailMaxStrain, FailTsaiHill, FailTsaiWu, PropType6, LoadCload, LoadPload,
     MatLaw114, MatLaw117, MatLaw119, MatLaw120, MatLaw121, PropType26, PropType27,
     MatLaw50, MatLaw57, MatLaw87, MatLaw95, MatLaw163, MatLaw169,
-    MatLaw49, MatLaw76, PropType11, PropSandwLayer, PropType16, PropFabricLayer, PropType17, PropType44,
+    MatLaw49, MatLaw76, PropType11, PropSandwLayer, PropType16, PropFabricLayer, PropType17, PropType19, PropType44,
     MatLaw60, MatLaw63, MatLaw48, MatLaw26, PropType12, PropType15, PropStrandLayer, PropType28,
     MatLaw6, MatLaw11, MatLaw77, MatLaw77Curve, MatLaw151, MatMultiFluidFraction, MatLaw187, MatLaw187Rate, PropType33, PropType46, PropType35,
     MatLaw3, MatLaw4, MatLaw5, MatLaw10, MatLaw14, MatLaw21, MatLaw32, MatLaw37, PropType45, PropType36,
@@ -160,6 +160,8 @@ class EngineControls:
     dt_scale: float = 0.9         # /DT  scale factor  (dt = k * dt_critical)
     dt_min: float = 0.0           # /DT  minimum dt: below this -> stop
     dt_noda: str = ""             # '' | 'NODA' | 'CST' (/DT/NODA[/CST], M6)
+    dt_noda_percent_addmass: float = 0.0  # /DT/NODA target % added mass (M613)
+    dt_noda_grnod: int = 0        # /DT/NODA node group (M613)
     dt_ams: bool = False          # /DT/AMS present (M61)
     dt_ams_igrp: int = 0          # AMS target part group (0 = all)
     dt_ams_tol: float = 1e-4      # AMS PCG tolerance
@@ -171,6 +173,8 @@ class EngineControls:
     state_tstart: float = 0.0     # /STATE/DT first snapshot time
     print_cycles: int = 100       # /PRINT listing frequency (cycles)
     energy_error_stop: float = 15.0  # %, /STOP-like divergence guard
+    mass_error_stop: float = 0.0  # %, /STOP total mass error criteria (M613)
+    nodal_mass_error_stop: float = 0.0  # %, /STOP nodal mass error criteria (M613)
     anim_vect: List[str] = field(default_factory=lambda: ["VEL", "DIS"])
     anim_elem: List[str] = field(default_factory=lambda: ["VONM", "EPSP"])
     anim_tens: List[str] = field(default_factory=list) # /ANIM/ELEM/TENS, /ANIM/BRICK/TENS, /ANIM/SHELL/TENS (M122)
@@ -210,6 +214,11 @@ class EngineControls:
     dyrel_beta: float = 1.0
     dyrel_period: float = 0.0
     dyrel_istatg: int = 0
+    adyrel_active: bool = False                                                      # /ADYREL (M604)
+    adyrel_freq_c: float = 0.0
+    adyrel_tstart: float = 0.0
+    adyrel_tstop: float = 0.0
+    adyrel_istatg: int = 0
     thermal_acc_fact: float = 1.0                                                    # /THERMAL (M146)
     thermal_dt: float = 0.0                                                          # /THERMAL/DT, /HEAT/DT (M146)
     thermal_tstart: float = 0.0
@@ -247,6 +256,7 @@ class EngineControls:
     parith: str = "ON"                                                               # /PARITH/ON, /PARITH/OFF (M200)
     heat_active: bool = False                                                        # /HEAT (M202)
     heat_flag: bool = False
+    ale_on: bool = False                                                             # /ALE/ON, /ALE/OFF (M_ALE)
 
     @property
     def tfile_dt(self) -> float:
@@ -279,6 +289,103 @@ class EngineControls:
     impl_tol: float = 1.0e-6      # Newton residual tolerance (relative)
     impl_max_iter: int = 25       # Newton iteration cap per increment
     impl_linsolve: str = ""       # '', 'superlu', 'cholmod', 'mumps'
+    # -- Component 2 (M614): BFGS, Line Search, Multi-Criterion & Controls --
+    impl_line: bool = False       # /IMPL/LINE linear static direct solve
+    impl_bfgs: bool = False       # /IMPL/BFGS or /IMPL/LBFGS quasi-Newton
+    impl_lbfgs: int = 10          # L_BFGS max stored updates
+    impl_insolv: int = 0          # solver strategy (5 = BFGS, 2/3 = BFGS variants)
+    impl_line_search: bool = False# /IMPL/LSEAR line search active
+    impl_iline_s: int = 3         # ILINE_S (1: energy, 2: force, 3: auto)
+    impl_ls_tol: float = 0.5      # LS_TOL line search tolerance
+    impl_nls_lim: int = 4         # NLS_LIM max line search iterations
+    impl_nitol: int = 2           # NITOL convergence check (1, 2, 3, 12, 13, 23, 123)
+    impl_tole: float = 1e-4       # N_TOLE energy convergence tolerance
+    impl_tolf: float = 1e-3       # N_TOLF force convergence tolerance
+    impl_tolu: float = 1e-3       # N_TOLU displacement convergence tolerance
+    impl_tol_div: float = 1e4     # TOL_DIV divergence ratio threshold
+    impl_ndiver: int = 3          # NDIVER max consecutive divergence iterations
+    impl_qstat: int = 0           # /IMPL/QSTAT quasi-static regularization (0: off, 1+: on)
+    impl_autos: int = 1           # /IMPL/AUTOS automatic single point constraint (0: off, 1: on, 2: all)
+    impl_sprb: bool = False       # /IMPL/SPRB spring-back analysis
+    # -- Component 5 & 6 (M614): freimpl.F Full Port & Extended Fatigue --
+    impl_qstat_scal_dtq: float = 1.0
+    impl_qstat_irig_m: int = 0
+    impl_qstat_e_ref: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+    impl_line_ilintf: int = 0
+    impl_line_iscau: int = 0
+    impl_solv: bool = False
+    impl_solv_isolv: int = 0
+    impl_solv_iprec: int = 0
+    impl_solv_l_lim: int = 0
+    impl_solv_itol: int = 0
+    impl_solv_l_tol: float = 0.0
+    impl_solv_mumpsd: int = 0
+    impl_sbcs: bool = False
+    impl_sbcs_msg_lvl: int = 0
+    impl_sbcs_b_order: int = 0
+    impl_sbcs_b_mcore: int = 0
+    impl_mumps: bool = False
+    impl_mumps_m_msg: int = 0
+    impl_mumps_m_order: int = 0
+    impl_mumps_m_ocore: int = 0
+    impl_nonl: bool = False
+    impl_nonl_ikt: int = 0
+    impl_nonl_ipupd: int = 0
+    impl_nonl_smdisp: int = 0
+    impl_nonl_solvnfo: int = 0
+    impl_nonl_insolv: int = 0
+    impl_nonl_n_lim: int = 0
+    impl_nonl_nitol: int = 0
+    impl_nonl_n_tol: float = 0.0
+    impl_nonl_n_tole: float = 0.0
+    impl_nonl_n_tolf: float = 0.0
+    impl_nonl_n_tolu: float = 0.0
+    impl_ncycl_stop: int = 0
+    impl_rref: int = 1
+    impl_rref_irefi: int = 0
+    impl_rref_rf_min: float = 0.0
+    impl_rref_rf_max: float = 0.0
+    impl_diver: bool = False
+    impl_gstif: bool = False
+    impl_gstif_ikg: int = 1
+    impl_pstif: bool = False
+    impl_pstif_ikpres: int = 1
+    impl_shpproj_ikproj: int = 0
+    impl_sprin_isprn: int = 1
+    impl_monvo_impmv: int = 1
+    impl_contr: bool = False
+    impl_contr_dt_stop: Tuple[float, float] = (0.0, 0.0)
+    impl_contr_dt_params: Dict[str, Any] = field(default_factory=dict)
+    impl_contr_kz_tol: float = 0.0
+    impl_contr_sk_int: float = 0.0
+    impl_print: bool = False
+    impl_print_line: int = 0
+    impl_print_nonl: int = 0
+    impl_print_stif_tol: float = 0.0
+    impl_print_stif_nc: int = 0
+    impl_print_stif_it: int = 0
+    impl_check: int = 0
+    impl_fatig_steinberg: bool = False
+    impl_fatig_zhao_baker: bool = False
+    impl_fatig_mean_method: str = ""
+    impl_fatig_mean_ult: float = 0.0
+    impl_fatig_mean_yield: float = 0.0
+    impl_fatig_mean_sigf: float = 0.0
+    impl_fatig_mean_gamma: float = 0.5
+    impl_fatig_en: bool = False
+    impl_fatig_en_e: float = 0.0
+    impl_fatig_en_sigf: float = 0.0
+    impl_fatig_en_b: float = 0.0
+    impl_fatig_en_epsf: float = 0.0
+    impl_fatig_en_c: float = 0.0
+    impl_fatig_en_kp: float = 0.0
+    impl_fatig_en_np: float = 0.0
+    impl_fatig_notch: bool = False
+    impl_fatig_notch_method: str = ""
+    impl_fatig_notch_kt: float = 1.0
+    impl_fatig_notch_e: float = 0.0
+    impl_fatig_notch_kp: float = 0.0
+    impl_fatig_notch_np: float = 0.0
     # -- M9 nonlinear geometry (/IMPL/NONLIN) and arc-length (/IMPL/ARCL) --
     impl_nlgeom: bool = False     # updated-Lagrangian frame + K_geo tangent
     impl_arc: bool = False        # Crisfield arc-length continuation
@@ -293,10 +400,13 @@ class EngineControls:
     # gamma and beta read directly, in that order: DY_G = NM_A,
     # DY_B = NM_B). With /IMPL/DYNA the /RUN "time" is PHYSICAL time again
     # and /IMPL/DTINI the physical time step.
-    impl_dyna: int = 0            # 0 = static, 1 = HHT-alpha, 2 = Newmark
+    impl_dyna: int = 0            # 0 = static, 1 = HHT-alpha, 2 = Newmark, 3 = Generalized-alpha
     impl_dyna_alpha: float = 0.0  # HHT alpha (0 = trapezoidal; -1/3 <= a <= 0)
+    impl_dyna_alpha_m: float = 0.0 # Generalized-alpha alpha_m in [0, 1)
+    impl_dyna_alpha_f: float = 0.0 # Generalized-alpha alpha_f in [0, 1)
     impl_dyna_gamma: float = 0.5  # Newmark gamma (/IMPL/DYNA/2 field 1)
     impl_dyna_beta: float = 0.25  # Newmark beta  (/IMPL/DYNA/2 field 2)
+    impl_ikt: int = 1             # Tangent policy: 1=KTANG, 2=KTFUL, 4=KTCON
     # -- M11 Rayleigh damping in the implicit system (/IMPL/DYNA/DAMP,
     # freimpl.F IDY_DAMP: card reads DAMPA_IMP then DAMPB_IMP). The damping
     # matrix is C = a*M + b*K with M the lumped mass and K the tangent at
@@ -706,10 +816,18 @@ class Model:
         # Elements by type
         # ------------------------------------------------------------------
         self.bricks: Optional[ElementGroup] = None    # /BRICK  (IXS)
+        self.bricks_full: Optional[ElementGroup] = None  # /BRICK (FULL ISOLID=2)
+        self.bricks_eas: Optional[ElementGroup] = None   # /BRICK (EAS ISOLID=17/18)
         self.bricks_heph: Optional[ElementGroup] = None  # /BRICK (HEPH ISOLID=24)
+        self.solid_shells_ha8: Optional[ElementGroup] = None  # /BRICK / HA8 (ISOLID=16)
+        self.cohesives: Optional[ElementGroup] = None    # /BRICK / COHESIVE (ISOLID=21)
         self.quads: Optional[ElementGroup] = None     # /QUAD   (IXQ)
+        self.quads_full: Optional[ElementGroup] = None  # /QUAD (FULL IQUAD=2)
+        self.trias: Optional[ElementGroup] = None     # /TRIA3  (2D CST)
         self.tetras: Optional[ElementGroup] = None    # /TETRA4 (IXS10 kin)
+        self.tetras_sfem: Optional[ElementGroup] = None  # /TETRA4 (SFEM ITETRA4=3)
         self.tetra10s: Optional[ElementGroup] = None  # /TETRA10
+        self.pyra5s: Optional[ElementGroup] = None    # /PYRA5 / degenerate solid
         self.shells: Optional[ElementGroup] = None    # /SHELL  (IXC)
         self.shells_qbat: Optional[ElementGroup] = None  # /SHELL Ishell=12
         #                                       (QBAT split, M41 dispatch)
@@ -717,16 +835,25 @@ class Model:
         #                                       (QEPH split, M41 dispatch)
         self.sh3n: Optional[ElementGroup] = None      # /SH3N   (IXTG)
         self.sh3n_dkt18: Optional[ElementGroup] = None  # /SH3N Ish3n=2
+        self.shells_dkt6: Optional[ElementGroup] = None  # /SH3N Ish3n=3 (DKT6)
         self.trusses: Optional[ElementGroup] = None   # /TRUSS  (IXT)
         self.springs: Optional[ElementGroup] = None   # /SPRING (IXR)
         self.beams: Optional[ElementGroup] = None     # /BEAM   (IXP)
+        self.beams_fiber: Optional[ElementGroup] = None  # /BEAM /PROP/TYPE18 (M593)
         self.shel16s: Optional[ElementGroup] = None   # /SHEL16 (IXS16)
+        self.thickshell_wedges: Optional[ElementGroup] = None  # /THICK_SHELL wedge
+        self.thickshell_composites: Optional[ElementGroup] = None  # /THICK_SHELL composite
         self.bric20s: Optional[ElementGroup] = None   # /BRIC20 / /HEXA20 (M122)
+        self.penta6s: Optional[ElementGroup] = None   # /PENTA6 6-node wedge (M590)
+        self.penta6s_heph: Optional[ElementGroup] = None  # /PENTA6 (HEPH ISOLID=24)
+        self.tshells: Optional[ElementGroup] = None   # /TSHELL / /PROP/TYPE20 (solid shell)
         # raw (id, part_id, node ids...) tuples collected during parsing,
         # converted to ElementGroups in Starter finalization:
         self.raw_elems: Dict[str, list] = {
-            "BRICK": [], "QUAD": [], "TETRA4": [], "TETRA10": [], "SHELL": [], "SH3N": [],
+            "BRICK": [], "PENTA6": [], "TSHELL": [], "QUAD": [], "QUAD4": [], "TETRA4": [], "TETRA10": [],
+            "PYRA": [], "PYRA5": [], "TRIA": [], "TRIA3": [], "SHELL": [], "SH3N": [],
             "TRUSS": [], "SPRING": [], "BEAM": [], "SHEL16": [], "BRIC20": [], "HEXA20": [], "SPH": []}
+
 
         # ------------------------------------------------------------------
         # Definitions keyed by user id
@@ -832,6 +959,9 @@ class Model:
         self.impflux_loads: List[ImposedFlux] = []      # /IMPFLUX (M95)
         self.impfluxes: Dict[int, ImposedFlux] = {}     # /IMPFLUX (M95/M152)
         self.initemp: List[InitialTemperature] = []    # /INITEMP (M95)
+        self.initemp_records: List[Any] = []          # /INITEMP records list
+        self.temperature: Optional[np.ndarray] = None # nodal temperatures (numnod,)
+        self.temperatures: Optional[np.ndarray] = None # alias to temperature
         self.inivol: List[InitialVolume] = []          # /INIVOL  (M94)
         self.ploads: List[PressureLoad] = []           # /PLOAD   (M5)
         self.def_inter: Dict[str, Any] = {}            # /DEF_INTER (M99/M101)
@@ -855,7 +985,7 @@ class Model:
         self.laminates: Dict[int, Laminate] = {}       # /LAMINATE (M100)
         self.bcs_nrf: Dict[int, BcsNrf] = {}           # /BCS/NRF (M102)
         self.rlinks: Dict[int, RigidLink] = {}         # /RLINK (M102)
-        self.gjoints: Dict[int, GeneralJoint] = {}     # /GJOINT (M102)
+        self.gjoints: Dict[int, GJoint] = {}           # /GJOINT (M102, M594)
         self.node_merges: Dict[int, MergeNode] = {}    # /MERGE/NODE (M102)
         self.rbody_merges: Dict[int, MergeRbody] = {}  # /MERGE/RBODY (M102)
         self.inicracks: Dict[int, IniCrack] = {}       # /INICRACK (M102)
@@ -896,6 +1026,7 @@ class Model:
         self.drapes: Dict[int, Drape] = {}             # /DRAPE (M107)
         self.inibri_erefs: List[IniBriEref] = []       # /INIBRI/EREF (M107)
         self.dyna_includes: List[IncludeDyna] = []     # /INCLUDE_DYNA (M107)
+        self.preproc_metadata: Dict[str, List[Any]] = {} # /ASSEMBLY, /HPOINT, /MECHANISM_*, etc.
         self.monvol_fvmbags: Dict[int, MonvolFvmBag1] = {} # /MONVOL/FVMBAG1 (M108)
         self.detonations: List[DetonationWave] = []    # /INIT/DET_* (M110)
         self.activations: List[ElementActivation] = [] # /ACTIV (M110)
@@ -1020,6 +1151,7 @@ class Model:
         self.inivols: Dict[int, Inivol] = {}               # /INIVOL (M151)
         self.inigrav_loads: Dict[int, InigravLoad] = {}    # /INIGRAV (M151)
         self.inistas: Dict[int, Inista] = {}               # /INISTA, /INISTATE (M151)
+        self.inista_records: List[Any] = []                # /INISTA records (M619)
         self.bem_controls: Dict[int, BemControl] = {}      # /BEM/FLOW, /BEM/DAA (M151)
         self.perturb_controls: Dict[int, PerturbControl] = {} # /PERTURB (M151)
         self.ebcs_inips: Dict[int, EbcsInip] = {}          # /EBCS/INIP (M152)
@@ -1077,6 +1209,8 @@ class Model:
         self.mat_law129s: Dict[int, MaterialLaw129] = {}           # /MAT/LAW129, /MAT/THERM_CREEP (M175)
         self.mat_law123s: Dict[int, MaterialLaw123] = {}           # /MAT/LAW123, /MAT/DAIMLER_PINHO (M175)
         self.mat_law132s: Dict[int, MaterialLaw132] = {}           # /MAT/LAW132, /MAT/DAIMLER_CAMANHO (M175)
+        self.mat_law134s: Dict[int, MaterialLaw134] = {}           # /MAT/LAW134, /MAT/VISCOUS_FOAM (M175)
+        self.mat_viscous_foams = self.mat_law134s
         self.mat_law104s: Dict[int, MaterialLaw104] = {}           # /MAT/LAW104, /MAT/JOHNS_VOCE_DRUCKER (M176/M574)
         self.mat_druckers = self.mat_law104s
         self.mat_johns_voce_druckers = self.mat_law104s
@@ -1097,6 +1231,8 @@ class Model:
         self.mat_law116s: Dict[int, MaterialLaw116] = {}           # /MAT/LAW116, /MAT/COH_HYST (M177)
         self.mat_law122s: Dict[int, MaterialLaw122] = {}           # /MAT/LAW122, /MAT/MODIFIED_LADEVEZE (M177)
         self.mat_law158s: Dict[int, MaterialLaw158] = {}           # /MAT/LAW158, /MAT/FABR_NL (M177)
+        self.mat_law169s: Dict[int, MaterialLaw169] = {}           # /MAT/LAW169, /MAT/ARUP_ADHESIVE (M591)
+        self.mat_arup_adhesives = self.mat_law169s
         self.bcs_cyclics: Dict[int, BcsCyclic] = {}                 # /BCS/CYCLIC (M178)
         self.pcyl_loads: Dict[int, PcylLoad] = {}                   # /LOAD/PCYL (M178)
         self.damp_vrels: Dict[int, DampVrel] = {}                   # /DAMP/VREL (M179)
@@ -1145,6 +1281,7 @@ class Model:
         self.prop_type11s: Dict[int, PropType11] = {}               # /PROP/TYPE11, /PROP/SH_SANDW (M184)
         self.prop_type16s: Dict[int, PropType16] = {}               # /PROP/TYPE16, /PROP/SH_FABR (M184)
         self.prop_type17s: Dict[int, PropType17] = {}               # /PROP/TYPE17, /PROP/STACK (M184)
+        self.prop_type19s: Dict[int, PropType19] = {}               # /PROP/TYPE19, /PROP/SPR_TORS
         self.prop_type44s: Dict[int, PropType44] = {}               # /PROP/TYPE44, /PROP/SPR_CRUS (M184)
         self.mat_law60s: Dict[int, MatLaw60] = {}                   # /MAT/LAW60, /MAT/PLAS_T3 (M185)
         self.mat_law26s: Dict[int, MatLaw26] = {}                   # /MAT/LAW26, /MAT/SESAM (M185)
@@ -1220,6 +1357,8 @@ class Model:
         self.fail_wierzbickis: Dict[int, FailWierzbicki] = {}       # /FAIL/WIERZBICKI, /FAIL/MMC (M189)
         self.fail_mmcs = self.fail_wierzbickis
         self.fail_wilkinss: Dict[int, FailWilkins] = {}             # /FAIL/WILKINS (M189)
+        self.fail_tbutchers: Dict[int, FailTbutcher] = {}           # /FAIL/TBUTCHER (M581)
+        self.fail_tuler_butchers = self.fail_tbutchers
         self.fail_spallings: Dict[int, FailSpalling] = {}           # /FAIL/SPALLING, /FAIL/SPALL (M189)
         self.fail_spalls = self.fail_spallings
         self.prop_type14s: Dict[int, PropType14] = {}               # /PROP/TYPE14, /PROP/SOLID (M189)
@@ -1319,6 +1458,7 @@ class Model:
         self.mat_law74s: Dict[int, MatLaw74] = {}                   # /MAT/LAW74, /MAT/HILL_3D, /MAT/ORTH_PLAS, /MAT/THERM_HILL (M193, M563)
         self.mat_hill_3ds = self.mat_law74s
         self.mat_orth_plass = self.mat_law74s
+        self.mat_hill_therms = self.mat_law74s
         self.mat_law82s: Dict[int, MatLaw82] = {}                   # /MAT/LAW82, /MAT/OGDEN (M193)
         self.mat_ogdens = self.mat_law82s
         self.prop_int_beams: Dict[int, PropType18] = {}             # /PROP/TYPE18, /PROP/INT_BEAM (M193)
@@ -1387,6 +1527,7 @@ class Model:
         self.prop_spr_tabs = self.prop_type26s
         self.damp_inters: Dict[int, Any] = {}                       # /DAMP/INTER (M196)
         self.inter_type18s: Dict[int, Any] = {}                     # /INTER/TYPE18 (M196)
+        self.inter_fsi: List[Any] = []                              # FSI interfaces (M_FSI)
         self.frame_nods: Dict[int, Any] = {}                        # /FRAME/NOD, /FRAME/NODE (M196)
         self.ini_spr_tables: Dict[int, Any] = {}                    # /INISPR, /INISPRI (M196)
         self.table_blocks: Dict[int, Any] = {}                      # /TABLE, /TABLE/0, /TABLE/1 (M196)
@@ -1503,6 +1644,7 @@ class Model:
         self.heat_rad_cavs: Dict[int, Any] = {}                      # /HEAT/RAD_CAV (M205)
         self.props_type19: Dict[int, Any] = {}                       # /PROP/TYPE19, /PROP/SPR_TORS (M205)
         self.props_spr_tors = self.props_type19
+        self.prop_type19s = self.props_type19
         self.props_type20: Dict[int, Any] = {}                       # /PROP/TYPE20, /PROP/SPR_BEND (M205)
         self.props_spr_bend = self.props_type20
         self.pblasts = self.pblast_loads
@@ -1549,6 +1691,7 @@ class Model:
         # M209 Entities
         self.slider_joints: Dict[int, Any] = {}                      # /LAGMUL/SLIDER, /SLIDER (M209)
         self.cyl_joints: Dict[int, Any] = {}                         # /LAGMUL/CYL_JOINT, /CYL_JOINT (M209)
+        self.kjoints: Dict[int, Any] = {}                            # /PROP/TYPE33, /PROP/TYPE45 (M602)
         self.damp_parts: Dict[int, Any] = {}                         # /DAMP/PART (M209)
         self.sub_cycle_enabled: bool = False                         # /ENG/SUB_CYCLE, /SUB_CYCLE (M209)
         self.sub_cycle_ratio: int = 1
@@ -3781,14 +3924,29 @@ class Model:
     def numnod(self) -> int:
         return len(self.node_ids)
 
+    @numnod.setter
+    def numnod(self, val: int) -> None:
+        if len(self.node_ids) != val:
+            self.node_ids = np.arange(1, val + 1, dtype=np.int64)
+            self._id2idx = {int(nid): i for i, nid in enumerate(self.node_ids)}
+
     # ----------------------------------------------------------------------
     def element_groups(self):
         """Iterate (name, group) over the non-empty element groups."""
-        for name in ("bricks", "bricks_heph", "bric20s", "quads", "tetras", "tetra10s", "shel16s", "shells", "shells_qbat",
-                     "shells_qeph", "sh3n", "sh3n_dkt18", "trusses", "springs", "beams"):
-            g = getattr(self, name)
+        for name in (
+            "bricks", "bricks_full", "bricks_eas", "bricks_heph", "solid_shells_ha8", "cohesives",
+            "tshells", "bric20s", "penta6s", "penta6s_heph", "pyra5s",
+            "quads", "quads_full", "trias",
+            "tetras", "tetras_sfem", "tetra10s",
+            "shel16s", "thickshell_wedges", "thickshell_composites",
+            "shells", "shells_qbat", "shells_qeph",
+            "sh3n", "sh3n_dkt18", "shells_dkt6",
+            "trusses", "springs", "beams", "beams_fiber",
+        ):
+            g = getattr(self, name, None)
             if g is not None and g.n:
                 yield name, g
+
 
     @property
     def frames(self) -> dict:

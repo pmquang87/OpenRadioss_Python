@@ -173,11 +173,17 @@ def _narrow(x, ni, seg):
     best_w = np.zeros((len(ni), 4))
     p = x[ni]
     for cols in ((0, 1, 2), (0, 2, 3)):
+        if cols == (0, 2, 3):
+            non_degen = seg[:, 2] != seg[:, 3]
+            if not np.any(non_degen):
+                continue
         a, b, c = (x[seg[:, cols[0]]], x[seg[:, cols[1]]],
                    x[seg[:, cols[2]]])
         pt, u, vv, w = _closest_point_on_triangle(p, a, b, c)
         d = norm3(p - pt)
         better = d < best_d
+        if cols == (0, 2, 3):
+            better = better & non_degen
         best_d = np.where(better, d, best_d)
         best_pt[better] = pt[better]
         wq = np.zeros((len(ni), 4))
@@ -420,8 +426,9 @@ class ContactType7:
         Km_max = np.full(len(valid_nodes), Km_val)
         Ks_subset = self.Ks[valid_nodes_mask] if len(self.Ks) == len(self.nodes) else np.zeros(len(valid_nodes))
         K_sec = combine_stiffness(itf.istf, itf.stfac, Km_max, Ks_subset)
-        dt_sec = np.sqrt(2.0 * mass[valid_nodes]
-                         / np.maximum(K_sec, EM20)).min()
+        m_sec = mass[valid_nodes]
+        m_sec_pos = m_sec > 0.0
+        dt_sec = np.sqrt(2.0 * m_sec[m_sec_pos] / np.maximum(K_sec[m_sec_pos], EM20)).min() if np.any(m_sec_pos) else np.inf
 
         valid_segs_mask = np.all((self.segs >= 0) & (self.segs < len(mass)), axis=1)
         if not np.any(valid_segs_mask):
@@ -432,7 +439,8 @@ class ContactType7:
                          self.Ks.max() if len(self.Ks) else 0.0)
         K_main = combine_stiffness(itf.istf, itf.stfac, Km_subset, Ks_max)
         m_corner = mass[valid_segs].min(axis=1)
-        dt_main = np.sqrt(2.0 * m_corner / np.maximum(K_main, EM20)).min()
+        mc_pos = m_corner > 0.0
+        dt_main = np.sqrt(2.0 * m_corner[mc_pos] / np.maximum(K_main[mc_pos], EM20)).min() if np.any(mc_pos) else np.inf
         return float(min(dt_sec, dt_main))
 
     # ------------------------------------------------------------------
@@ -610,9 +618,12 @@ class ContactType7:
         Knode += np.bincount(seg_flat[valid_sf], weights=K_rep[valid_sf],
                              minlength=n_nod)
         loaded = Knode > 0.0
-        m_loaded = np.maximum(mass[loaded], EM20)
-        dt_int = min(self.dt_bound, float(
-            np.sqrt(2.0 * m_loaded / Knode[loaded]).min()))
+        if np.any(loaded):
+            m_loaded = np.maximum(mass[loaded], EM20)
+            dt_int = min(self.dt_bound, float(
+                np.sqrt(2.0 * m_loaded / Knode[loaded]).min()))
+        else:
+            dt_int = self.dt_bound
         if stifn is not None:                    # /DT/NODA accumulation
             stifn[loaded] += Knode[loaded]
 
@@ -673,7 +684,7 @@ class ContactType7:
                 d13 = x[seg[:, 2]] - x[seg[:, 0]]
                 d24 = x[seg[:, 3]] - x[seg[:, 1]]
                 area = 0.5 * norm3(cross3(d13, d24))
-                pres = Fn_pos / np.maximum(area, EM20)
+                pres = np.where(area > EM20, Fn_pos / np.maximum(area, EM20), 0.0)
                 mu = friction.mu_kinetic(self.mfrot, self.fric,
                                          self.fric_c, pres, vt_mag)
             else:
@@ -716,6 +727,103 @@ class ContactType7:
         wrk = float(np.einsum("nb,nb->", Fvec, vrel)) * dt
         return -wrk, dt_int
 
+    def compute_thermal_conduction(
+        self,
+        temp: np.ndarray,
+        dt: float,
+        theaccfact: float = 1.0,
+        kthe: Optional[float] = None,
+        frad: Optional[float] = None,
+        drad: Optional[float] = None,
+        iform: Optional[int] = None,
+        tint: Optional[float] = None,
+        fheats: Optional[float] = None,
+        fheatm: Optional[float] = None,
+        efrict: Optional[np.ndarray] = None,
+    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, float]]:
+        """Compute thermal conduction, radiation, and friction heating for /INTER/TYPE7.
+
+        Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\interfaces\\int07\\i7therm.F
+
+        Parameters
+        ----------
+        temp : np.ndarray
+            Nodal temperatures.
+        dt : float
+            Time step dt.
+        theaccfact : float
+            Thermal acceleration factor.
+        kthe : Optional[float]
+            Thermal interface conductance KTHE.
+        frad : Optional[float]
+            Radiation coefficient.
+        drad : Optional[float]
+            Radiation cutoff distance.
+        iform : Optional[int]
+            0 = ambient exchange, 1 = slave-master exchange.
+        tint : Optional[float]
+            Ambient temperature.
+        fheats : Optional[float]
+            Friction heating fraction to slave.
+        fheatm : Optional[float]
+            Friction heating fraction to master.
+        efrict : Optional[np.ndarray]
+            Frictional dissipation per pair over dt.
+
+        Returns
+        -------
+        fthe : np.ndarray
+            Nodal thermal energy increments [J].
+        condint : np.ndarray
+            Thermal conductance per pair [W/K].
+        ledger : Dict[str, float]
+            Conduction, radiation, and friction energy breakdown.
+        """
+        from .thermal_contact import thermal_contact_type7
+
+        itf = self.itf
+        if kthe is None:
+            kthe = getattr(itf, "kthe", 0.0) or getattr(itf, "rstif", 0.0)
+        if frad is None:
+            frad = getattr(itf, "frad", 0.0)
+        if drad is None:
+            drad = getattr(itf, "drad", 0.0)
+        if iform is None:
+            iform = getattr(itf, "iform_th", getattr(itf, "iform", 1))
+        if tint is None:
+            tint = getattr(itf, "tint", 293.15)
+        if fheats is None:
+            fheats = getattr(itf, "fheats", 0.0)
+        if fheatm is None:
+            fheatm = getattr(itf, "fheatm", 0.0)
+
+        # If pairs are active from broad/narrow phase
+        if len(self.pairs_node) == 0:
+            return np.zeros(len(temp), dtype=float), np.zeros(0, dtype=float), {"conduction": 0.0, "radiation": 0.0, "friction": 0.0}
+
+        x = getattr(self.model, "x", getattr(self.model, "x0", np.zeros((len(temp), 3))))
+        slave_nodes = self.pairs_node
+        master_segs = self.segs[self.pairs_seg]
+        weights = np.full((len(slave_nodes), 4), 0.25, dtype=float)
+
+        return thermal_contact_type7(
+            x=x,
+            temp=temp,
+            slave_nodes=slave_nodes,
+            master_segs=master_segs,
+            weights=weights,
+            kthe=kthe,
+            dt=dt,
+            theaccfact=theaccfact,
+            iform=iform,
+            tint=tint,
+            frad=frad,
+            drad=drad,
+            fheats=fheats,
+            fheatm=fheatm,
+            efrict=efrict,
+        )
+
 
 class LagmulType7:
     """One /INTER/LAGMUL/TYPE7 constraint, engine-side."""
@@ -749,7 +857,7 @@ class LagmulType7:
         if cycle - handler._last_refresh >= handler.refresh:
             if handler.deletable:
                 mask = tracking.tracked_node_mask(handler.model, handler.ref_total)
-                valid_m = handler.nodes < len(mask)
+                valid_m = (handler.nodes >= 0) & (handler.nodes < len(mask))
                 tracked = np.zeros(len(handler.nodes), dtype=bool)
                 tracked[valid_m] = mask[handler.nodes[valid_m]]
                 handler.nodes_tracked = handler.nodes[tracked]
@@ -790,8 +898,18 @@ class LagmulType7:
         ni = ni[active]
         seg = seg[active]
         pen = pen[active]
-        d = np.maximum(best_d[active], EM20)
+        dist_act = best_d[active]
+        d = np.maximum(dist_act, EM20)
         nvec = (x[ni] - best_pt[active]) / d[:, None]
+        fallback = dist_act <= EM20
+        if np.any(fallback):
+            d13 = x[seg[:, 2]] - x[seg[:, 0]]
+            d24 = x[seg[:, 3]] - x[seg[:, 1]]
+            n_seg = cross3(d13, d24)
+            n_seg_norm = norm3(n_seg)
+            n_seg_safe = np.where(n_seg_norm > EM20, n_seg_norm, 1.0)
+            n_seg = np.where((n_seg_norm > EM20)[:, None], n_seg / n_seg_safe[:, None], np.array([0.0, 0.0, 1.0]))
+            nvec = np.where(fallback[:, None], n_seg, nvec)
         wseg = best_w[active]
         
         # relative velocity node vs interpolated segment point

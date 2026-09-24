@@ -363,8 +363,8 @@ def test_translational_impvel_and_work_booking():
                        model.v, model.vr, model.x, dt=dt, t_next=dt)
 
     assert np.isclose(rbe.v_ref[1], 25.0, atol=1e-14)
-    # External work = M * (v_imp - v_free) * v_imp = M * 25.0 * 25.0
-    expected_work = rbe.M * 25.0 * 25.0
+    # External work = 0.5 * M * (v_imp - v_free) * (v_old + v_new) = 0.5 * M * 25.0 * 25.0
+    expected_work = 0.5 * rbe.M * 25.0 * 25.0
     assert np.isclose(wext, expected_work, atol=1e-10)
 
 

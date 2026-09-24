@@ -1,6 +1,8 @@
 """
 LAW73 — Thermal Hill Orthotropic Plasticity for Shell Elements (/MAT/LAW73, /MAT/BARLAT2000, /MAT/HILL_THERM).
 
+OpenRadioss /MAT/HILL_THERM (LAW73) Python implementation.
+
 Upstream Fortran reference:
   - Starter reader: starter/source/materials/mat/mat073/hm_read_mat73.F
   - Engine physics: engine/source/materials/mat/mat073/sigeps73c.F
@@ -62,6 +64,220 @@ from ..model.entities import Material
 
 _EM20 = 1.0e-20
 _INF = 1.0e30
+
+
+# ============================================================================
+# 1D & 3D Analytical Hill 1948 Relations & Flow Stress
+# ============================================================================
+
+def hill48_yield_criterion_3d(
+    sig: Union[Sequence[float], np.ndarray],
+    F: float,
+    G: float,
+    H: float,
+    L: float,
+    M: float,
+    N: float,
+) -> float | np.ndarray:
+    r"""Evaluate Hill 1948 3D quadratic orthotropic equivalent yield stress:
+        \sigma_y = \sqrt{ F(\sigma_{22} - \sigma_{33})^2 + G(\sigma_{33} - \sigma_{11})^2
+                        + H(\sigma_{11} - \sigma_{22})^2 + 2 L \sigma_{23}^2
+                        + 2 M \sigma_{31}^2 + 2 N \sigma_{12}^2 }
+
+    Cited from:
+      - engine/source/materials/mat/mat073/sigeps73c.F (Hill 1948 yield formulation)
+      - starter/source/materials/mat/mat073/hm_read_mat73.F (lines 179-191)
+
+    Parameters:
+        sig: Stress tensor: (6,) Voigt [xx, yy, zz, xy, yz, zx], (3, 3) matrix,
+             or (N, 6) array.
+        F, G, H, L, M, N: Hill anisotropy constants
+    """
+    sig_arr = np.asarray(sig, dtype=float)
+    is_1d = (sig_arr.ndim == 1 and sig_arr.size == 6)
+    is_tensor = (sig_arr.ndim == 2 and sig_arr.shape == (3, 3))
+
+    if is_tensor:
+        s11, s22, s33 = sig_arr[0, 0], sig_arr[1, 1], sig_arr[2, 2]
+        s12, s23, s31 = sig_arr[0, 1], sig_arr[1, 2], sig_arr[2, 0]
+    elif is_1d:
+        s11, s22, s33 = sig_arr[0], sig_arr[1], sig_arr[2]
+        s12, s23, s31 = sig_arr[3], sig_arr[4], sig_arr[5]
+    elif sig_arr.ndim == 2 and sig_arr.shape[1] == 6:
+        s11, s22, s33 = sig_arr[:, 0], sig_arr[:, 1], sig_arr[:, 2]
+        s12, s23, s31 = sig_arr[:, 3], sig_arr[:, 4], sig_arr[:, 5]
+    else:
+        raise ValueError(f"Expected stress with 6 components or (3, 3) matrix, got shape {sig_arr.shape}")
+
+    val = (
+        float(F) * (s22 - s33) ** 2
+        + float(G) * (s33 - s11) ** 2
+        + float(H) * (s11 - s22) ** 2
+        + 2.0 * float(L) * s23 ** 2
+        + 2.0 * float(M) * s31 ** 2
+        + 2.0 * float(N) * s12 ** 2
+    )
+    res = np.sqrt(np.maximum(val, 0.0))
+    return float(res) if (is_1d or is_tensor) else res
+
+
+def hill48_yield_criterion_plane_stress(
+    sig: Union[Sequence[float], np.ndarray],
+    A01: float,
+    A02: float,
+    A03: float,
+    A12: float,
+) -> float | np.ndarray:
+    r"""Evaluate Hill 1948 plane-stress orthotropic equivalent yield stress:
+        \sigma_{eq} = \sqrt{ A_{01} \sigma_{xx}^2 + A_{02} \sigma_{yy}^2
+                           - A_{03} \sigma_{xx} \sigma_{yy} + A_{12} \sigma_{xy}^2 }
+
+    Cited from:
+      - engine/source/materials/mat/mat073/sigeps73c.F (lines 298-302, SVM calculation)
+      - starter/source/materials/mat/mat073/hm_read_mat73.F (lines 179-191)
+
+    Parameters:
+        sig: Plane stress [xx, yy, xy] (or (N, 3) array)
+        A01, A02, A03, A12: Plane-stress Hill sheet anisotropy coefficients
+    """
+    sig_arr = np.asarray(sig, dtype=float)
+    is_1d = (sig_arr.ndim == 1 and sig_arr.size >= 3)
+    if is_1d:
+        sxx, syy, sxy = sig_arr[0], sig_arr[1], sig_arr[2]
+    elif sig_arr.ndim == 2 and sig_arr.shape[1] >= 3:
+        sxx, syy, sxy = sig_arr[:, 0], sig_arr[:, 1], sig_arr[:, 2]
+    else:
+        raise ValueError(f"Expected at least 3 stress components, got shape {sig_arr.shape}")
+
+    val = (
+        float(A01) * sxx ** 2
+        + float(A02) * syy ** 2
+        - float(A03) * sxx * syy
+        + float(A12) * sxy ** 2
+    )
+    res = np.sqrt(np.maximum(val, 0.0))
+    return float(res) if is_1d else res
+
+
+def hill48_lankford_to_anisotropy(
+    r00: float,
+    r45: float,
+    r90: float,
+    iyield: int = 0,
+) -> Tuple[float, float, float, float, float, float]:
+    r"""Compute plane-stress Hill 1948 coefficients from Lankford parameters R00, R45, R90:
+        R = 0.25 * (R00 + 2 * R45 + R90)
+        H = R / (1 + R)
+        A01 = H * (1 + 1 / R00)
+        A02 = H * (1 + 1 / R90)
+        A03 = 2 * H
+        A12 = (2 * R45 + 1) * (A01 + A02 - A03)
+        if iyield > 0: normalize so A01 = 1.0
+
+    Cited from:
+      - starter/source/materials/mat/mat073/hm_read_mat73.F (lines 179-191)
+
+    Returns:
+        (A01, A02, A03, A12, R, H)
+    """
+    r0 = max(float(r00), 1e-6)
+    r4 = max(float(r45), 1e-6)
+    r9 = max(float(r90), 1e-6)
+
+    r = 0.25 * (r0 + 2.0 * r4 + r9)
+    h = r / (1.0 + r)
+    a01 = h * (1.0 + 1.0 / r0)
+    a02 = h * (1.0 + 1.0 / r9)
+    a03 = 2.0 * h
+    a12 = (2.0 * r4 + 1.0) * (a01 + a02 - a03)
+
+    if int(iyield) > 0 and a01 > 0.0:
+        a02 /= a01
+        a03 /= a01
+        a12 /= a01
+        a01 = 1.0
+
+    return a01, a02, a03, a12, r, h
+
+
+def hill48_lankford_to_3d_coefficients(
+    r00: float,
+    r45: float,
+    r90: float,
+) -> Tuple[float, float, float, float, float, float]:
+    r"""Convert Lankford parameters to 3D Hill 1948 constants (F, G, H, L, M, N):
+        H = R00 / (1 + R00)
+        F = R00 / (R90 * (1 + R00))
+        G = 1 / (1 + R00)
+        N = (R00 + R90) * (2 * R45 + 1) / (2 * R90 * (1 + R00))
+        L = M = 1.5  (standard isotropic transverse shear)
+
+    Cited from:
+      - engine/source/materials/mat/mat073/sigeps73c.F
+      - starter/source/materials/mat/mat073/hm_read_mat73.F
+    """
+    r0 = max(float(r00), 1e-6)
+    r4 = max(float(r45), 1e-6)
+    r9 = max(float(r90), 1e-6)
+
+    denom = 1.0 + r0
+    h = r0 / denom
+    f = r0 / (r9 * denom)
+    g = 1.0 / denom
+    n = (r0 + r9) * (2.0 * r4 + 1.0) / (2.0 * r9 * denom)
+    l = 1.5
+    m = 1.5
+    return f, g, h, l, m, n
+
+
+def hill48_thermal_yield_stress(
+    pla: float | np.ndarray,
+    rate: float | np.ndarray = 0.0,
+    temp: float | np.ndarray = 293.0,
+    yield_table: Any = None,
+    fscale: float = 1.0,
+    pscale: float = 1.0,
+    chard: float = 0.0,
+) -> Tuple[float | np.ndarray, float | np.ndarray]:
+    r"""Evaluate temperature- and strain-rate-dependent flow stress and hardening slope.
+
+    Supports callable table(pla, rate, temp), numeric constant, or piecewise table.
+
+    Cited from:
+      - engine/source/materials/mat/mat073/sigeps73c.F (lines 252-291)
+      - engine/source/tools/curve/table_tools.F (TABLE_VINTERP)
+    """
+    is_scalar = np.isscalar(pla) and np.isscalar(rate) and np.isscalar(temp)
+    pla_arr = np.atleast_1d(np.asarray(pla, dtype=float))
+    rate_arr = np.atleast_1d(np.asarray(rate, dtype=float))
+    temp_arr = np.atleast_1d(np.asarray(temp, dtype=float))
+
+    if yield_table is None:
+        yld = np.full_like(pla_arr, 1.0 * float(fscale))
+        slope = np.zeros_like(pla_arr)
+    elif isinstance(yield_table, (int, float, np.floating, np.integer)):
+        yld = np.full_like(pla_arr, float(yield_table) * float(fscale))
+        slope = np.zeros_like(pla_arr)
+    elif callable(yield_table):
+        vals = []
+        slopes = []
+        for p_i, r_i, t_i in zip(pla_arr, rate_arr, temp_arr):
+            res = yield_table(p_i, r_i * (1.0 / max(float(pscale), 1e-20)), t_i)
+            if isinstance(res, (tuple, list)) and len(res) >= 2:
+                vals.append(float(res[0]))
+                slopes.append(float(res[1]))
+            else:
+                vals.append(float(res))
+                slopes.append(0.0)
+        yld = np.array(vals, dtype=float) * float(fscale)
+        slope = np.array(slopes, dtype=float) * float(fscale)
+    else:
+        mock_p = Law73Params(fscale=fscale, pscale=pscale, yield_table=yield_table, chard=chard)
+        yld, slope, _ = _eval_yield_table(mock_p, pla_arr, rate_arr, temp_arr)
+
+    if is_scalar:
+        return float(yld[0]), float(slope[0])
+    return yld, slope
 
 
 # ============================================================================

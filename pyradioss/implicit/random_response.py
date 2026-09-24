@@ -272,7 +272,7 @@ def crossing_rates(moments):
         if m.shape[0] > 4:
             nup = np.where(m[2] > 0.0,
                            np.sqrt(np.clip(m[4] / m[2], 0.0, None))
-                           / (2.0 * np.pi), np.nan)
+                           / (2.0 * np.pi), 0.0)
             alpha = np.where(nup > 0.0, nu0 / nup, np.nan)
         else:
             nup = np.full(m.shape[1], np.nan)

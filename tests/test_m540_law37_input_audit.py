@@ -90,6 +90,10 @@ def data_cards(lines: list[str]) -> list[str]:
 # 1. CFG Catalogue & Card Layout Audit
 # =============================================================================
 
+@pytest.mark.skipif(
+    not os.path.isdir(r"C:\OpenRadioss\hm_cfg_files"),
+    reason="C:\\OpenRadioss not available (CI / non-Windows)",
+)
 class TestLaw37CfgCatalogueAudit:
     """Audit reference CFG catalogue files and pyradioss/input/card_layouts.py."""
 

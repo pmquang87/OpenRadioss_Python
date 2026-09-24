@@ -245,6 +245,8 @@ def build_law106(mat: Any = None, **kwargs: Any) -> JCookAlmParams:
     fcut_val = float(p_dict.get("fcut", p_dict.get("MAT_FCUT", p_dict.get("MLAW106_FCUT", _DEFAULT_FCUT))))
     vp_val = int(p_dict.get("vp", p_dict.get("MLAW106_VP", 2)))
     nmax_val = int(p_dict.get("nmax", p_dict.get("MLAW106_NMAX", 0)))
+    if nmax_val == 0:
+        nmax_val = 6 if vp_val == 1 else 3
     tol_val = float(p_dict.get("tol", p_dict.get("MLAW106_TOL", _DEFAULT_TOL)))
     cjc_val = float(p_dict.get("cjc", p_dict.get("MLAW106_CJC", 0.0)))
     deps0_val = float(p_dict.get("deps0", p_dict.get("MLAW106_DEPS0", 1.0)))

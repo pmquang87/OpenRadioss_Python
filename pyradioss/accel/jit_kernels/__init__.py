@@ -82,7 +82,7 @@ _FACES6 = np.array([
 # solid_hexa8 mirrors
 # ============================================================================
 
-@njit(cache=True, parallel=True)
+@njit(cache=True)
 def hexa_pre(xe, ve, sig, dt, off, lc_scale):
     """Mirror of solid_hexa8._pre — geometry, velocity gradient, Jaumann
     rotation (in place on sig). Returns (dndx, vol, lc, deps, trD)."""
@@ -207,7 +207,7 @@ def hexa_pre(xe, ve, sig, dt, off, lc_scale):
     return dndx, vol, lc, deps, trD
 
 
-@njit(cache=True, parallel=True)
+@njit(cache=True)
 def hexa_post(xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
               qa, qb, c, hcoef, alive, qvw_pend, dt, dtfac):
     """Mirror of solid_hexa8._post — bulk viscosity, internal + hourglass
@@ -309,7 +309,7 @@ def hexa_post(xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
 # shell_bt4 mirrors
 # ============================================================================
 
-@njit(cache=True, parallel=True)
+@njit(cache=True)
 def shell_pre(xe, ve, vre, off):
     """Mirror of shell_bt4._pre — corotational frame, local geometry and
     rate kinematics. Returns (E, area, lc, B1, B2, bb, gam, V, dm, kap,
@@ -457,7 +457,7 @@ def shell_pre(xe, ve, vre, off):
     return E, area, lc, B1, B2, bb, gam, V, dm, kap, gs
 
 
-@njit(cache=True, parallel=True)
+@njit(cache=True)
 def shell_post(E, area, B1, B2, gam, V, Nres, Mres, qres, Q,
                k_m, k_w, hqm, hqb, hqr, dt):
     """Mirror of shell_bt4._post — resultant nodal forces, chvis3.F
@@ -947,7 +947,7 @@ _FACES_T10 = np.array([
 ], dtype=np.int64)
 
 
-@njit(cache=True, parallel=True)
+@njit(cache=True)
 def tetra10_pre(xe, ve, sig, dt, off):
     """Mirror of solid_tetra10._pre — geometry at 4 Gauss points, velocity
     gradient, Jaumann rotation (in place on sig).  Returns
@@ -1093,7 +1093,7 @@ def tetra10_pre(xe, ve, sig, dt, off):
     return dndx, vol, vol_tot, lc, deps, trD
 
 
-@njit(cache=True, parallel=True)
+@njit(cache=True)
 def tetra10_post(xe, dndx, vol, vol_tot, lc, rho, trD, deps, sig, sig_old,
                  qa, qb, c, alive, qvw_pend, dt, dtfac):
     """Mirror of solid_tetra10._post — bulk viscosity, internal forces,
@@ -1195,10 +1195,10 @@ def tetra10_post(xe, dndx, vol, vol_tot, lc, rho, trD, deps, sig, sig_old,
 
 from .shells_qbat import qbat_pre_flat, qbat_post_flat, qbat_pre, qbat_post
 try:
-    from .shells_qeph import qeph_pre
+    from .shells_qeph import qeph_pre, qeph_post
 except ImportError:
     qeph_pre = None
-qeph_post = None
+    qeph_post = None
 
 # Contact narrow phase alias: TYPE24 uses the same algorithm and signature as TYPE7
 t24_narrow = t7_narrow

@@ -55,6 +55,7 @@ Failure:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import math
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
@@ -236,14 +237,454 @@ def build_law32(rec: Any = None, **kwargs: Any) -> Material:
     )
 
 
+def _get_params(mat: Any) -> Dict[str, Any]:
+    """Extract parameter dictionary from Material, Law32Params, dict, or object."""
+    if mat is None:
+        return {}
+    if isinstance(mat, dict):
+        return dict(mat)
+    if hasattr(mat, "params") and isinstance(mat.params, dict):
+        p = dict(mat.params)
+        for attr in (
+            "E", "nu", "G", "K", "A", "B", "n", "m", "eps0", "r00", "r45", "r90",
+            "F", "G_hill", "H_hill", "L", "M_hill", "N_hill", "A11", "A22", "A1122", "A12",
+            "sig_max", "eps_max", "i_yield", "ipla", "sigy0",
+        ):
+            if hasattr(mat, attr) and getattr(mat, attr) is not None:
+                p[attr] = getattr(mat, attr)
+        return p
+    p: Dict[str, Any] = {}
+    for attr in dir(mat):
+        if not attr.startswith("_"):
+            try:
+                val = getattr(mat, attr)
+                if not callable(val):
+                    p[attr] = val
+            except Exception:
+                pass
+    return p
+
+
+class SolidUpdateResult(tuple):
+    """3-tuple (sig, epsp, c_sound) supporting attribute access and tuple unpacking."""
+    def __new__(cls, sig: Any, epsp: Any, c_sound: Any):
+        return super().__new__(cls, (sig, epsp, c_sound))
+
+    @property
+    def sig(self) -> Any:
+        return self[0]
+
+    @property
+    def epsp(self) -> Any:
+        return self[1]
+
+    @property
+    def pla(self) -> Any:
+        return self[1]
+
+    @property
+    def c_sound(self) -> Any:
+        return self[2]
+
+
+@dataclass
+class Law32Params:
+    """Parameter structure for LAW32 /MAT/LAW32 /MAT/HILL (3D solid and shell)."""
+    id: int = 1
+    title: str = "LAW32_HILL"
+    rho0: float = 1.0
+    rhor: float = 1.0
+    is_3d: bool = True
+    E: float = 210000.0
+    nu: float = 0.3
+    G: float = 0.0
+    K: float = 0.0
+    A: float = 1.0e30
+    B: float = 0.0
+    n: float = 1.0
+    sig_max: float = 1.0e30
+    eps_max: float = 1.0e30
+    eps0: float = 1.0
+    m: float = 0.0
+    r00: float = 1.0
+    r45: float = 1.0
+    r90: float = 1.0
+    i_yield: int = 0
+    ipla: int = 0
+    F: float = 0.5
+    G_hill: float = 0.5
+    H_hill: float = 0.5
+    L: float = 1.5
+    M_hill: float = 1.5
+    N_hill: float = 1.5
+    A11: float = 1.0
+    A22: float = 1.0
+    A1122: float = 1.0
+    A12: float = 3.0
+    sigy0: float = 1.0e30
+
+    def __init__(
+        self,
+        id: int = 1,
+        title: str = "LAW32_HILL",
+        rho0: float = 1.0,
+        rhor: float = 1.0,
+        is_3d: bool = True,
+        E: float = 210000.0,
+        nu: float = 0.3,
+        G: Optional[float] = None,
+        K: Optional[float] = None,
+        A: float = 1.0e30,
+        B: float = 0.0,
+        n: float = 1.0,
+        sig_max: float = 1.0e30,
+        eps_max: float = 1.0e30,
+        eps0: float = 1.0,
+        m: float = 0.0,
+        r00: float = 1.0,
+        r45: float = 1.0,
+        r90: float = 1.0,
+        i_yield: int = 0,
+        ipla: int = 0,
+        F: Optional[float] = None,
+        G_hill: Optional[float] = None,
+        H_hill: Optional[float] = None,
+        L: Optional[float] = None,
+        M_hill: Optional[float] = None,
+        N_hill: Optional[float] = None,
+        A11: Optional[float] = None,
+        A22: Optional[float] = None,
+        A1122: Optional[float] = None,
+        A12: Optional[float] = None,
+        sigy0: float = 1.0e30,
+        **kwargs: Any,
+    ):
+        self.id = id
+        self.title = title
+        self.rho0 = rho0
+        self.rhor = rhor
+        self.is_3d = is_3d
+        self.E = E
+        self.nu = nu if nu < 0.5 else 0.499
+        self.A = A
+        self.B = B
+        self.n = n
+        self.sig_max = sig_max
+        self.eps_max = eps_max
+        self.eps0 = eps0
+        self.m = m
+        self.r00 = r00
+        self.r45 = r45
+        self.r90 = r90
+        self.i_yield = i_yield
+        self.ipla = ipla
+        self.sigy0 = sigy0
+
+        self.G = float(G) if G is not None else float(self.E / (2.0 * (1.0 + self.nu)))
+        self.K = float(K) if K is not None else float(self.E / (3.0 * (1.0 - 2.0 * self.nu)))
+
+        if F is not None and G_hill is not None and H_hill is not None:
+            self.F = float(F)
+            self.G_hill = float(G_hill)
+            self.H_hill = float(H_hill)
+            self.N_hill = float(N_hill) if N_hill is not None else 1.5
+            self.L = float(L) if L is not None else self.N_hill
+            self.M_hill = float(M_hill) if M_hill is not None else self.N_hill
+            self.A11 = self.G_hill + self.H_hill if A11 is None else float(A11)
+            self.A22 = self.F + self.H_hill if A22 is None else float(A22)
+            self.A1122 = 2.0 * self.H_hill if A1122 is None else float(A1122)
+            self.A12 = 2.0 * self.N_hill if A12 is None else float(A12)
+        else:
+            f_h, g_h, h_h, l_h, m_h, n_h = hill1948_params_from_r_values(self.r00, self.r45, self.r90, self.i_yield)
+            self.F = f_h if F is None else float(F)
+            self.G_hill = g_h if G_hill is None else float(G_hill)
+            self.H_hill = h_h if H_hill is None else float(H_hill)
+            self.L = l_h if L is None else float(L)
+            self.M_hill = m_h if M_hill is None else float(M_hill)
+            self.N_hill = n_h if N_hill is None else float(N_hill)
+            self.A11 = self.G_hill + self.H_hill if A11 is None else float(A11)
+            self.A22 = self.F + self.H_hill if A22 is None else float(A22)
+            self.A1122 = 2.0 * self.H_hill if A1122 is None else float(A1122)
+            self.A12 = 2.0 * self.N_hill if A12 is None else float(A12)
+
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    @property
+    def bulk(self) -> float:
+        return self.K
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
+
+    def __getitem__(self, key: str) -> Any:
+        return getattr(self, key)
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key)
+
+
+def hill1948_equivalent_stress(
+    sig: np.ndarray,
+    F: float = 0.5,
+    G: float = 0.5,
+    H: float = 0.5,
+    L: float = 1.5,
+    M: float = 1.5,
+    N: float = 1.5,
+) -> Union[float, np.ndarray]:
+    """Compute 3D Hill 1948 equivalent stress sigma_eq.
+
+    sigma_eq = sqrt( F*(syy - szz)^2 + G*(szz - sxx)^2 + H*(sxx - syy)^2
+                     + 2*L*syz^2 + 2*M*szx^2 + 2*N*sxy^2 )
+    """
+    sig_arr = np.asarray(sig, dtype=float)
+    is_1d = (sig_arr.ndim == 1)
+    if is_1d:
+        sig_arr = sig_arr[None, :]
+
+    sxx = sig_arr[:, 0]
+    syy = sig_arr[:, 1]
+    szz = sig_arr[:, 2]
+    sxy = sig_arr[:, 3]
+    syz = sig_arr[:, 4] if sig_arr.shape[1] > 4 else np.zeros_like(sxx)
+    szx = sig_arr[:, 5] if sig_arr.shape[1] > 5 else np.zeros_like(sxx)
+
+    phi = (
+        F * (syy - szz) ** 2
+        + G * (szz - sxx) ** 2
+        + H * (sxx - syy) ** 2
+        + 2.0 * L * (syz ** 2)
+        + 2.0 * M * (szx ** 2)
+        + 2.0 * N * (sxy ** 2)
+    )
+    seq = np.sqrt(np.maximum(0.0, phi))
+    return float(seq[0]) if is_1d else seq
+
+
+def hill1948_yield_function(
+    sig: np.ndarray,
+    F: float = 0.5,
+    G: float = 0.5,
+    H: float = 0.5,
+    L: float = 1.5,
+    M: float = 1.5,
+    N: float = 1.5,
+    sigy: float = 0.0,
+) -> Union[float, np.ndarray]:
+    """Compute Hill 1948 yield function f = sigma_eq - sigma_y."""
+    seq = hill1948_equivalent_stress(sig, F, G, H, L, M, N)
+    return seq - sigy
+
+
+def hill1948_gradient(
+    sig: np.ndarray,
+    F: float = 0.5,
+    G: float = 0.5,
+    H: float = 0.5,
+    L: float = 1.5,
+    M: float = 1.5,
+    N: float = 1.5,
+) -> Tuple[Union[float, np.ndarray], np.ndarray]:
+    """Compute 3D Hill equivalent stress and analytical gradient N = d(sigma_eq)/d(sigma).
+
+    Voigt convention:
+      N = [d(seq)/d(sxx), d(seq)/d(syy), d(seq)/d(szz), d(seq)/d(sxy), d(seq)/d(syz), d(seq)/d(szx)]
+
+    Upstream Fortran reference:
+      C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\mat\\mat032\\sigeps32.F
+    """
+    sig_arr = np.asarray(sig, dtype=float)
+    is_1d = (sig_arr.ndim == 1)
+    if is_1d:
+        sig_arr = sig_arr[None, :]
+
+    n = sig_arr.shape[0]
+    grad = np.zeros((n, 6), dtype=float)
+
+    sxx = sig_arr[:, 0]
+    syy = sig_arr[:, 1]
+    szz = sig_arr[:, 2]
+    sxy = sig_arr[:, 3]
+    syz = sig_arr[:, 4] if sig_arr.shape[1] > 4 else np.zeros(n, dtype=float)
+    szx = sig_arr[:, 5] if sig_arr.shape[1] > 5 else np.zeros(n, dtype=float)
+
+    phi = (
+        F * (syy - szz) ** 2
+        + G * (szz - sxx) ** 2
+        + H * (sxx - syy) ** 2
+        + 2.0 * L * (syz ** 2)
+        + 2.0 * M * (szx ** 2)
+        + 2.0 * N * (sxy ** 2)
+    )
+    seq = np.sqrt(np.maximum(0.0, phi))
+    inv_seq = np.where(seq > _EM20, 1.0 / np.maximum(seq, _EM20), 0.0)
+
+    grad[:, 0] = ((G + H) * sxx - H * syy - G * szz) * inv_seq
+    grad[:, 1] = (-H * sxx + (F + H) * syy - F * szz) * inv_seq
+    grad[:, 2] = (-G * sxx - F * syy + (F + G) * szz) * inv_seq
+    grad[:, 3] = (2.0 * N * sxy) * inv_seq
+    grad[:, 4] = (2.0 * L * syz) * inv_seq
+    grad[:, 5] = (2.0 * M * szx) * inv_seq
+
+    if is_1d:
+        return float(seq[0]), grad[0]
+    return seq, grad
+
+
+def hill1948_r_values(
+    F: float = 0.5,
+    G: float = 0.5,
+    H: float = 0.5,
+    L: float = 1.5,
+    M: float = 1.5,
+    N: float = 1.5,
+) -> Tuple[float, float, float]:
+    """Compute Lankford anisotropy r-values (r00, r45, r90) from Hill coefficients.
+
+    Formulas:
+      r00 = H / G
+      r90 = H / F
+      r45 = (2*N - (F + G)) / (2 * (F + G))
+    """
+    r00 = H / max(G, _EM20)
+    r90 = H / max(F, _EM20)
+    denom = 2.0 * (F + G)
+    r45 = (2.0 * N - (F + G)) / max(denom, _EM20)
+    return float(r00), float(r45), float(r90)
+
+
+def hill1948_params_from_r_values(
+    r00: float = 1.0,
+    r45: float = 1.0,
+    r90: float = 1.0,
+    i_yield: int = 0,
+) -> Tuple[float, float, float, float, float, float]:
+    """Compute Hill 1948 anisotropy parameters (F, G, H, L, M, N) from Lankford r-values.
+
+    Follows hm_read_mat32.F lines 157-168:
+      R = 0.25 * (r00 + 2*r45 + r90)
+      H = R / (1 + R)
+      A11   = H * (1 + 1/r00)
+      A22   = H * (1 + 1/r90)
+      A1122 = 2 * H
+      A12   = 2 * H * (r45 + 0.5) * (1/r00 + 1/r90)
+
+    If i_yield > 0:
+      Normalize such that A11 = 1.0 (G + H = 1.0).
+    """
+    r00_c = max(r00, 1.0e-6)
+    r45_c = max(r45, 1.0e-6)
+    r90_c = max(r90, 1.0e-6)
+
+    r_mean = 0.25 * (r00_c + 2.0 * r45_c + r90_c)
+    h_bar = r_mean / (1.0 + r_mean)
+
+    h = h_bar
+    g = h_bar / r00_c
+    f = h_bar / r90_c
+    n = 0.5 * (2.0 * r45_c + 1.0) * (f + g)
+
+    if i_yield > 0:
+        norm = g + h
+        f = f / norm
+        g = g / norm
+        h = h / norm
+        n = n / norm
+
+    l = n
+    m = n
+    return float(f), float(g), float(h), float(l), float(m), float(n)
+
+
+def _eval_yield_stress_3d(
+    p: Dict[str, Any],
+    epsp: np.ndarray,
+    epsd: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Evaluate dynamic yield stress and hardening slope.
+
+    sigma_y = min(sig_max, A * (B + eps_p)^n * (eps_dot / eps0)^m)
+    Follows hm_read_mat32.F lines 184-190 and m32plas.F lines 128-129.
+    """
+    a = float(p.get("A", p.get("sigy0", _INF)))
+    b = float(p.get("B", 0.0))
+    n = float(p.get("n", 1.0))
+    m = float(p.get("m", 0.0))
+    eps0 = float(p.get("eps0", 1.0))
+    sig_max = float(p.get("sig_max", _INF))
+
+    epsp_arr = np.asarray(epsp, dtype=float)
+    epsd_arr = np.asarray(epsd, dtype=float)
+
+    if m != 0.0:
+        rate_ratio = np.maximum(epsd_arr, eps0) / eps0
+        rate_fact = rate_ratio ** m
+    else:
+        rate_fact = 1.0
+
+    eff_ep = np.maximum(b + epsp_arr, 0.0)
+
+    if a >= _INF or a >= 1.0e28:
+        sy = np.full_like(epsp_arr, _INF)
+        h = np.zeros_like(epsp_arr)
+        return sy, h
+
+    sy_unclamped = a * (eff_ep ** n) * rate_fact
+    sy = np.minimum(sig_max, sy_unclamped)
+
+    pos = (sy_unclamped < sig_max) & (eff_ep > _EM20)
+    h = np.zeros_like(epsp_arr)
+    rf = rate_fact if isinstance(rate_fact, float) else rate_fact[pos]
+    h[pos] = a * n * (eff_ep[pos] ** (n - 1.0)) * rf
+
+    return sy, h
+
+
 # ============================================================================
 # Sound Speed & Kinematics
 # ============================================================================
 
-def sound_speed(mat: Material, rho: Optional[float] = None, extra: Any = None) -> float:
-    """Sound speed SDSP = sqrt(YOUNG / RHO0) matching hm_read_mat32.F:155."""
-    rho_val = float(rho) if rho is not None else float(mat.rho0)
-    e = float(mat.params.get("E", mat.E))
+def sound_speed_solid_law32(mat: Any, rho: Optional[float] = None, extra: Any = None) -> float:
+    """Dilatational sound speed c = sqrt((K + 4/3*G) / rho0) for 3D solids.
+
+    Follows hm_read_mat32.F lines 198-201:
+      IPM(252)= 2, PM(105) = (1 - 2*nu)/(1 - nu)
+    """
+    p = _get_params(mat)
+    if rho is not None:
+        rho0 = float(rho)
+    elif hasattr(mat, "rho0") and getattr(mat, "rho0") is not None and getattr(mat, "rho0") > 0.0:
+        rho0 = float(getattr(mat, "rho0"))
+    else:
+        rho0 = float(p.get("rho0", p.get("density", 1.0)))
+    e = float(p.get("E", 210000.0))
+    nu = float(p.get("nu", 0.3))
+    denom = max((1.0 + nu) * (1.0 - 2.0 * nu), _EM20)
+    k_plus_43g = e * (1.0 - nu) / denom
+    return float(math.sqrt(k_plus_43g / max(rho0, _EM20)))
+
+
+def sound_speed(mat: Any, rho: Optional[float] = None, extra: Any = None) -> float:
+    """Sound speed SDSP = sqrt(YOUNG / RHO0) matching hm_read_mat32.F:155.
+
+    If extra contains is_3d or mat is solid, returns 3D dilatational sound speed.
+    """
+    p = _get_params(mat)
+    is_3d = False
+    if extra is not None and isinstance(extra, dict):
+        is_3d = bool(extra.get("is_3d", False))
+    if not is_3d and not isinstance(mat, Law32Params):
+        is_3d = bool(p.get("is_3d", getattr(mat, "is_3d", False)))
+    if is_3d:
+        return sound_speed_solid_law32(mat, rho, extra)
+    if rho is not None:
+        rho_val = float(rho)
+    elif hasattr(mat, "rho0") and getattr(mat, "rho0") is not None and getattr(mat, "rho0") > 0.0:
+        rho_val = float(getattr(mat, "rho0"))
+    else:
+        rho_val = float(p.get("rho0", p.get("density", 1.0)))
+    e = float(p.get("E", 210000.0))
     return float(math.sqrt(e / max(rho_val, _EM20)))
 
 
@@ -255,9 +696,343 @@ def extra_shapes(mat: Material, nip: int = 1) -> Dict[str, Tuple[int, ...]]:
     }
 
 
-def solid_update(*args: Any, **kwargs: Any) -> None:
-    """LAW32 (/MAT/LAW32 / /MAT/HILL) is implemented for shell elements only."""
-    raise NotImplementedError("LAW32 (Hill orthotropic plasticity) is implemented for shell elements only.")
+def solid_update(
+    mat: Any,
+    sig: np.ndarray,
+    deps: np.ndarray,
+    epsp: Optional[Union[float, np.ndarray]] = None,
+    dt: float = 0.0,
+    extra: Optional[Dict[str, Any]] = None,
+    return_sound_speed: bool = True,
+    **kwargs: Any,
+) -> Union[SolidUpdateResult, Tuple[np.ndarray, np.ndarray, Any], Tuple[np.ndarray, np.ndarray]]:
+    """3D solid constitutive update for Hill 1948 anisotropic plasticity with Newton radial return.
+
+    Upstream Fortran reference:
+      C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\mat\\mat032\\sigeps32.F
+
+    Yield surface:
+        sigma_eq = sqrt( F*(syy - szz)^2 + G*(szz - sxx)^2 + H*(sxx - syy)^2
+                        + 2*L*syz^2 + 2*M*szx^2 + 2*N*sxy^2 ) = sigma_y
+
+    Plastic return:
+        Cutting-plane incremental Newton iterations on equivalent plastic strain.
+        Associated flow rule with deviatoric plastic strain increment (tr(deps_p) = 0).
+    """
+    p = _get_params(mat)
+
+    if "sigy0" in kwargs and "A" not in p:
+        p["A"] = kwargs["sigy0"]
+    if "sigy" in kwargs and "A" not in p:
+        p["A"] = kwargs["sigy"]
+
+    sig_arr = np.asarray(sig, dtype=float).copy()
+    deps_arr = np.asarray(deps, dtype=float).copy()
+    is_1d = (sig_arr.ndim == 1)
+    if is_1d:
+        sig_arr = sig_arr[None, :]
+        deps_arr = deps_arr[None, :]
+
+    n = sig_arr.shape[0]
+
+    # Plastic strain extraction
+    if extra is not None and "pla32" in extra and extra["pla32"] is not None:
+        pla = np.asarray(extra["pla32"], dtype=float).copy().flatten()
+    elif extra is not None and "uv32" in extra and extra["uv32"] is not None:
+        uv = np.asarray(extra["uv32"], dtype=float)
+        pla = uv[:, 0].copy().flatten() if uv.ndim > 1 else uv.copy().flatten()
+    elif extra is not None and "pla" in extra and extra["pla"] is not None:
+        pla = np.asarray(extra["pla"], dtype=float).copy().flatten()
+    elif extra is not None and "epsp" in extra and extra["epsp"] is not None:
+        pla = np.asarray(extra["epsp"], dtype=float).copy().flatten()
+    elif epsp is not None:
+        pla = np.asarray(epsp, dtype=float).copy().flatten()
+    else:
+        pla = np.zeros(n, dtype=float)
+
+    if len(pla) == 1 and n > 1:
+        pla = np.full(n, float(pla[0]), dtype=float)
+
+    # Element active/deletion flag
+    off = np.ones(n, dtype=float)
+    if extra is not None:
+        for k in ("off32", "off"):
+            if k in extra and extra[k] is not None:
+                o_arr = np.asarray(extra[k], dtype=float).flatten()
+                if len(o_arr) == n:
+                    off = o_arr.copy()
+                elif len(o_arr) == 1 and n > 1:
+                    off = np.full(n, float(o_arr[0]), dtype=float)
+                break
+
+    # Elastic parameters
+    e0 = float(p.get("E", 210000.0))
+    nu = float(p.get("nu", 0.3))
+    if nu >= 0.5:
+        nu = 0.499
+    g = float(p.get("G", e0 / (2.0 * (1.0 + nu))))
+    k = float(p.get("K", e0 / (3.0 * (1.0 - 2.0 * nu))))
+    lam = k - (2.0 / 3.0) * g
+
+    # Elastic trial stress
+    tr_deps = deps_arr[:, 0] + deps_arr[:, 1] + deps_arr[:, 2]
+    sig_tr = np.zeros_like(sig_arr)
+    sig_tr[:, 0] = sig_arr[:, 0] + lam * tr_deps + 2.0 * g * deps_arr[:, 0]
+    sig_tr[:, 1] = sig_arr[:, 1] + lam * tr_deps + 2.0 * g * deps_arr[:, 1]
+    sig_tr[:, 2] = sig_arr[:, 2] + lam * tr_deps + 2.0 * g * deps_arr[:, 2]
+    sig_tr[:, 3] = sig_arr[:, 3] + g * deps_arr[:, 3]
+    if sig_arr.shape[1] > 4:
+        sig_tr[:, 4] = sig_arr[:, 4] + g * deps_arr[:, 4]
+    if sig_arr.shape[1] > 5:
+        sig_tr[:, 5] = sig_arr[:, 5] + g * deps_arr[:, 5]
+
+    # Effective strain rate
+    epsd = np.zeros(n, dtype=float)
+    if dt > 0.0:
+        tr3 = tr_deps / 3.0
+        exx = deps_arr[:, 0] - tr3
+        eyy = deps_arr[:, 1] - tr3
+        ezz = deps_arr[:, 2] - tr3
+        exy = 0.5 * deps_arr[:, 3]
+        eyz = 0.5 * deps_arr[:, 4] if deps_arr.shape[1] > 4 else 0.0
+        ezx = 0.5 * deps_arr[:, 5] if deps_arr.shape[1] > 5 else 0.0
+        ee = exx**2 + eyy**2 + ezz**2 + 2.0 * (exy**2 + eyz**2 + ezx**2)
+        epsd = np.sqrt(np.maximum(0.0, (2.0 / 3.0) * ee)) / max(dt, _EM20)
+
+    # Hill anisotropy parameters
+    r00 = float(p.get("r00", 1.0))
+    r45 = float(p.get("r45", 1.0))
+    r90 = float(p.get("r90", 1.0))
+    iyld = int(p.get("i_yield", 0))
+
+    if "F" in p and "G_hill" in p and "H_hill" in p:
+        f_h = float(p["F"])
+        g_h = float(p["G_hill"])
+        h_h = float(p["H_hill"])
+        n_h = float(p.get("N_hill", 1.5))
+        l_h = float(p.get("L", n_h))
+        m_h = float(p.get("M_hill", n_h))
+    else:
+        f_h, g_h, h_h, l_h, m_h, n_h = hill1948_params_from_r_values(r00, r45, r90, iyld)
+
+    # Initial yield stress
+    sy_0, _ = _eval_yield_stress_3d(p, pla, epsd)
+
+    sig_out = np.zeros_like(sig_tr)
+    epsp_out = pla.copy()
+    dpla = np.zeros(n, dtype=float)
+
+    max_iter = 30
+    tol = 1.0e-7
+
+    for i in range(n):
+        if off[i] <= 0.0:
+            sig_out[i] = 0.0
+            continue
+
+        s_tr_i = sig_tr[i]
+        seq_tr = hill1948_equivalent_stress(s_tr_i, f_h, g_h, h_h, l_h, m_h, n_h)
+        sy_i = sy_0[i]
+
+        if seq_tr <= sy_i:
+            sig_out[i] = s_tr_i
+            dpla[i] = 0.0
+            continue
+
+        s_cur = s_tr_i.copy()
+        dlam = 0.0
+
+        for it in range(max_iter):
+            seq_i, N_i = hill1948_gradient(s_cur, f_h, g_h, h_h, l_h, m_h, n_h)
+            sy_cur, h_cur = _eval_yield_stress_3d(p, np.array([pla[i] + dlam]), np.array([epsd[i]]))
+            res = seq_i - sy_cur[0]
+
+            if abs(res) < tol * max(sy_i, 1.0) or abs(res) < 1.0e-9:
+                break
+
+            N_star = np.array([N_i[0], N_i[1], N_i[2], 0.5 * N_i[3], 0.5 * N_i[4], 0.5 * N_i[5]])
+            denom = 2.0 * g * float(np.dot(N_i, N_star)) + max(float(h_cur[0]), 0.0)
+            ddlam = res / max(denom, 1.0e-12)
+            dlam += ddlam
+            s_cur -= 2.0 * g * ddlam * N_star
+
+        sig_out[i] = s_cur
+        dpla[i] = dlam
+        epsp_out[i] += dlam
+
+    # Element deletion on failure
+    eps_max = float(p.get("eps_max", _INF))
+    if eps_max > 0.0 and eps_max < _INF:
+        failed = epsp_out >= eps_max
+        if np.any(failed):
+            sig_out[failed] = 0.0
+            off[failed] = 0.0
+
+    # Sound speed calculation
+    c_sound_val = sound_speed_solid_law32(mat)
+    c_sound = np.full(n, c_sound_val, dtype=float)
+
+    # State update in extra
+    if extra is not None:
+        for k_name in ("pla32", "pla", "epsp"):
+            if k_name in extra and isinstance(extra[k_name], np.ndarray):
+                extra[k_name].flat = epsp_out
+            elif k_name in extra:
+                extra[k_name] = epsp_out[0] if is_1d else epsp_out
+
+        if "uv32" in extra and isinstance(extra["uv32"], np.ndarray):
+            if extra["uv32"].ndim == 2 and extra["uv32"].shape[1] >= 1:
+                extra["uv32"][:, 0] = epsp_out
+            else:
+                extra["uv32"].flat = epsp_out
+
+        for k_name in ("off32", "off"):
+            if k_name in extra and isinstance(extra[k_name], np.ndarray):
+                extra[k_name].flat = off
+            elif k_name in extra:
+                extra[k_name] = off[0] if is_1d else off
+
+        for k_name in ("sig32", "sig_solid"):
+            if k_name in extra and isinstance(extra[k_name], np.ndarray):
+                extra[k_name][:] = sig_out[0] if (extra[k_name].ndim == 1 and is_1d) else sig_out
+            elif k_name in extra:
+                extra[k_name] = sig_out[0] if is_1d else sig_out
+
+    if epsp is not None and isinstance(epsp, np.ndarray):
+        epsp.flat = epsp_out
+
+    if is_1d:
+        sig_res = sig_out[0]
+        epsp_res = float(epsp_out[0])
+        c_res = float(c_sound[0])
+    else:
+        sig_res = sig_out
+        epsp_res = epsp_out
+        c_res = c_sound
+
+    if not return_sound_speed:
+        return sig_res, epsp_res
+    return SolidUpdateResult(sig_res, epsp_res, c_res)
+
+
+def solid_tangent(
+    mat_or_group: Any = None,
+    sig: Optional[np.ndarray] = None,
+    deps: Optional[np.ndarray] = None,
+    dt: float = 0.0,
+    extra: Optional[Dict[str, Any]] = None,
+    symmetric: bool = True,
+    **kwargs: Any,
+) -> np.ndarray:
+    """Consistent 3D solid algorithmic tangent stiffness tensor C^alg (6, 6) or (n, 6, 6).
+
+    Upstream Fortran reference:
+      C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\mat\\mat032\\sigeps32.F
+    """
+    mat = getattr(mat_or_group, "mat", mat_or_group)
+    if mat is None:
+        mat = kwargs.get("mat")
+    p = _get_params(mat)
+
+    e0 = float(p.get("E", 210000.0))
+    nu = float(p.get("nu", 0.3))
+    if nu >= 0.5:
+        nu = 0.499
+    g = float(p.get("G", e0 / (2.0 * (1.0 + nu))))
+    k = float(p.get("K", e0 / (3.0 * (1.0 - 2.0 * nu))))
+    lam = k - (2.0 / 3.0) * g
+
+    c_el = np.zeros((6, 6), dtype=float)
+    c_el[0, 0] = c_el[1, 1] = c_el[2, 2] = lam + 2.0 * g
+    c_el[0, 1] = c_el[1, 0] = lam
+    c_el[0, 2] = c_el[2, 0] = lam
+    c_el[1, 2] = c_el[2, 1] = lam
+    c_el[3, 3] = g
+    c_el[4, 4] = g
+    c_el[5, 5] = g
+
+    if sig is None:
+        return c_el
+
+    sig_arr = np.asarray(sig, dtype=float)
+    is_1d = (sig_arr.ndim == 1)
+    if is_1d:
+        sig_arr = sig_arr[None, :]
+
+    n = sig_arr.shape[0]
+    d_tangent = np.zeros((n, 6, 6), dtype=float)
+
+    r00 = float(p.get("r00", 1.0))
+    r45 = float(p.get("r45", 1.0))
+    r90 = float(p.get("r90", 1.0))
+    iyld = int(p.get("i_yield", 0))
+
+    if "F" in p and "G_hill" in p and "H_hill" in p:
+        f_h = float(p["F"])
+        g_h = float(p["G_hill"])
+        h_h = float(p["H_hill"])
+        n_h = float(p.get("N_hill", 1.5))
+        l_h = float(p.get("L", n_h))
+        m_h = float(p.get("M_hill", n_h))
+    else:
+        f_h, g_h, h_h, l_h, m_h, n_h = hill1948_params_from_r_values(r00, r45, r90, iyld)
+
+    pla = np.zeros(n, dtype=float)
+    if extra is not None:
+        for k_name in ("pla32", "pla", "epsp"):
+            if k_name in extra and extra[k_name] is not None:
+                pla = np.asarray(extra[k_name], dtype=float).flatten()
+                break
+
+    sy_arr, h_arr = _eval_yield_stress_3d(p, pla, np.zeros(n, dtype=float))
+
+    for i in range(n):
+        s_i = sig_arr[i]
+        seq_i, N_i = hill1948_gradient(s_i, f_h, g_h, h_h, l_h, m_h, n_h)
+
+        if seq_i < sy_arr[i] - 1.0e-6:
+            d_tangent[i] = c_el
+            continue
+
+        N_star = np.array([N_i[0], N_i[1], N_i[2], 0.5 * N_i[3], 0.5 * N_i[4], 0.5 * N_i[5]])
+        denom = 2.0 * g * float(np.dot(N_i, N_star)) + max(float(h_arr[i]), 0.0)
+
+        c_N_star = 2.0 * g * N_star
+        rank1 = np.outer(c_N_star, c_N_star) / max(denom, 1.0e-12)
+        d_tangent[i] = c_el - rank1
+
+        if symmetric:
+            d_tangent[i] = 0.5 * (d_tangent[i] + d_tangent[i].T)
+
+    return d_tangent[0] if is_1d else d_tangent
+
+
+consistent_solid_tangent = solid_tangent
+solid_update_law32 = solid_update
+
+
+def tangent(group: Any = None, sig: Optional[np.ndarray] = None, **kwargs: Any) -> Optional[np.ndarray]:
+    """Elemental / group tangent interface compliance for LAW32.
+
+    Dispatches to shell_membrane_tangent for shell elements or solid_tangent
+    for 3D solid elements.
+    """
+    if group is None:
+        return None
+    if sig is not None:
+        mat = getattr(group, "mat", group)
+        return solid_tangent(mat, sig, **kwargs)
+    mat = getattr(group, "mat", group)
+    elem_type = getattr(group, "elem_type", getattr(group, "type", "solid"))
+    if "shell" in str(elem_type).lower():
+        try:
+            return shell_membrane_tangent(mat)
+        except Exception:
+            return None
+    try:
+        return solid_tangent(mat, np.zeros(6, dtype=float), **kwargs)
+    except Exception:
+        return None
 
 
 # ============================================================================

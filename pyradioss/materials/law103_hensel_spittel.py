@@ -360,11 +360,8 @@ def compute_hensel_spittel_flow_stress(
 
     # 2. Strain rate scale factor (sigeps103.F:167-175)
     if m3 != 0.0:
-        rate = eps_dot * time_fac
-        if rate > 0.0:
-            yld_sr = rate ** m3
-        else:
-            yld_sr = 0.0
+        rate = max(eps_dot * time_fac, 1e-6)
+        yld_sr = rate ** m3
     else:
         yld_sr = 1.0
 
@@ -735,8 +732,8 @@ def solid_update_array(
 
     # Strain rate factor
     if params.m3 != 0.0:
-        rate = epsd * params.time_fac
-        yld_sr = np.where(rate > 0.0, rate ** params.m3, 0.0)
+        rate = np.maximum(epsd * params.time_fac, 1e-6)
+        yld_sr = rate ** params.m3
     else:
         yld_sr = np.ones(nel, dtype=np.float64)
 

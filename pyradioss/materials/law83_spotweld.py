@@ -1,15 +1,47 @@
 """
 LAW83 — solid spotweld material (/MAT/LAW83, /MAT/CONNECT, /MAT/SPR_JOU).
 
-Fortran origin: ``engine/source/materials/mat/mat083/sigeps83.F``,
-``starter/source/materials/mat/mat083/hm_read_mat83.F``.
+Fortran origin:
+  ``engine/source/materials/mat/mat083/sigeps83.F``
+  Subroutine SIGEPS83 (lines 30-468)
+  ``starter/source/materials/mat/mat083/hm_read_mat83.F``
+  Subroutine HM_READ_MAT83 (lines 46-265)
+  ``engine/source/elements/solid/sconnect/suser43.F``
+  Subroutine SUSER43 (lines 80-460)
 
-This material is specifically designed for the CONNECT (TYPE43) solid element,
-which only features normal and shear strains/stresses in its local frame (ZZ, YZ, ZX).
+This material is specifically designed for the CONNECT (TYPE43) solid element
+and discrete spotweld connections (/MAT/SPR_JOU) connecting shell panels.
+It only features normal and shear strains/stresses in its local frame (ZZ, YZ, ZX).
+
+Formulation:
+1. Local stress & strain components:
+   Normal: sigma_zz, deps_zz
+   Transverse shear: sigma_yz, sigma_zx, deps_yz, deps_zx
+2. Tensile/compressive asymmetry via `icomp`:
+   - icomp = 0: elastoplastic in both tension and compression.
+   - icomp = 1: linear elastic in compression (using E_comp),
+                elastoplastic in tension (using Young's modulus E).
+                In compression, normal stress is purely elastic; only transverse
+                shears undergo plastic flow.
+3. Yield surface:
+   Phi = a_n * |sigma_zz|^beta + a_s * (sigma_yz^2 + sigma_zx^2)^(beta/2) - sigma_y^beta <= 0
+   with:
+     a_n = 1.0 / max(1e-20, R_n * (1.0 - alpha * sin(theta)))^beta
+     a_s = 1.0 / max(1e-20, R_s)^beta
+4. Return mapping:
+   - beta == 2: fast quadratic radial return mapping (sigeps83.F lines 215-322).
+   - beta != 2: non-quadratic power-law return mapping with analytical Newton-Raphson
+                iteration (sigeps83.F lines 324-454).
+5. Rate filtering (asrate / fcut):
+   - vp = 0: total displacement/strain rate filtering.
+   - vp = 1: plastic strain rate filtering.
+6. Failure in tension or shear:
+   - Evaluates normal and shear failure criteria and deletes failed connections.
 """
 
 from __future__ import annotations
 
+import math
 import numpy as np
 
 from ..model.entities import Material
@@ -17,9 +49,20 @@ from ..model.entities import Material
 _EM20 = 1e-20
 
 
-def _ensure_params(mat: Material) -> dict:
-    """Ensure material params contain both CFG and direct keys with robust defaults."""
-    p = mat.params
+def _ensure_params(mat: Material | dict | object) -> dict:
+    """Ensure material params contain both CFG and direct keys with robust defaults.
+    Cites starter/source/materials/mat/mat083/hm_read_mat83.F lines 105-192.
+    """
+    if isinstance(mat, Material):
+        p = mat.params
+        rho0_val = mat.rho0
+    elif isinstance(mat, dict):
+        p = mat.get("params", mat)
+        rho0_val = mat.get("rho0", mat.get("rho", mat.get("MAT_RHO")))
+    else:
+        p = getattr(mat, "params", {})
+        rho0_val = getattr(mat, "rho0", None)
+
     E = float(p.get("E") or p.get("MAT_E") or 0.0)
     G = float(p.get("G") or p.get("MAT_G") or 0.0)
     if G <= 0.0 and E > 0.0:
@@ -44,6 +87,12 @@ def _ensure_params(mat: Material) -> dict:
     ifun_n = int(p.get("ifun_n") or p.get("FUN_A2") or p.get("fun_a2") or 0)
     ifun_t = int(p.get("ifun_t") or p.get("FUN_A3") or p.get("fun_a3") or 0)
 
+    # Failure parameters
+    fail_n = p.get("fail_n") or p.get("max_dn") or p.get("MAT_FAIL_N")
+    fail_s = p.get("fail_s") or p.get("max_dt") or p.get("MAT_FAIL_S")
+    beta_f = float(p.get("beta_f") or p.get("BETA_F") or 2.0)
+    epsp_max = p.get("epsp_max") or p.get("eps_max") or p.get("fail_p") or p.get("MAT_EPSP_MAX")
+
     p.setdefault("E", E)
     p.setdefault("G", G)
     p.setdefault("nu", nu)
@@ -63,6 +112,15 @@ def _ensure_params(mat: Material) -> dict:
     p.setdefault("id_yield", id_yield)
     p.setdefault("ifun_n", ifun_n)
     p.setdefault("ifun_t", ifun_t)
+    p.setdefault("fail_n", fail_n)
+    p.setdefault("fail_s", fail_s)
+    p.setdefault("beta_f", beta_f)
+    p.setdefault("epsp_max", epsp_max)
+
+    if rho0_val is not None:
+        p.setdefault("rho0", float(rho0_val))
+    else:
+        p.setdefault("rho0", float(p.get("MAT_RHO", 1.0)))
 
     # CFG mirrored keys
     p.setdefault("MAT_E", E)
@@ -149,16 +207,22 @@ def build_law83(rec) -> Material:
         "sig_y": float(p.get("MAT_SIGY") or p.get("sig_y") or p.get("yield") or 1e20),
         "fsmooth": int(p.get("Fsmooth") or p.get("fsmooth") or 0),
         "fcut": float(p.get("Fcut") or p.get("fcut") or 1e30),
+        "fail_n": p.get("fail_n") or p.get("max_dn") or p.get("MAT_FAIL_N"),
+        "fail_s": p.get("fail_s") or p.get("max_dt") or p.get("MAT_FAIL_S"),
+        "beta_f": float(p.get("beta_f") or p.get("BETA_F") or 2.0),
+        "epsp_max": p.get("epsp_max") or p.get("eps_max") or p.get("fail_p") or p.get("MAT_EPSP_MAX"),
     }
     mat = Material(id=mat_id, law=83, rho0=density, title=title, params=params)
     _ensure_params(mat)
     return mat
 
 
-def resolve(mat: Material, model, log):
+def resolve(mat: Material | dict, model, log):
     """Resolve /FUNCT references into plain array views for the Engine."""
     if model is None or not hasattr(model, "functions"):
         return
+
+    p = mat.params if hasattr(mat, "params") else mat
 
     def _resolve_one(fid, prefix):
         if fid == 0:
@@ -166,23 +230,22 @@ def resolve(mat: Material, model, log):
         fct = model.functions.get(fid)
         if fct is None:
             if log is not None:
-                log.error(f"/MAT/LAW83/{mat.id}: function {fid} not defined", "MAT CHECK")
+                log.error(f"/MAT/LAW83/{getattr(mat, 'id', 0)}: function {fid} not defined", "MAT CHECK")
             return
         if np.any(fct.x < 0.0) and log is not None:
-            log.error(f"/MAT/LAW83/{mat.id}: curve {fid} has negative abscissae", "MAT CHECK")
-        mat.params[f"{prefix}_x"] = fct.x.copy()
-        mat.params[f"{prefix}_y"] = fct.y.copy()
-        mat.params[f"{prefix}_s"] = getattr(fct, "slope", None)
-        if mat.params[f"{prefix}_s"] is None:
-            # Compute slopes on the fly if needed
+            log.error(f"/MAT/LAW83/{getattr(mat, 'id', 0)}: curve {fid} has negative abscissae", "MAT CHECK")
+        p[f"{prefix}_x"] = fct.x.copy()
+        p[f"{prefix}_y"] = fct.y.copy()
+        p[f"{prefix}_s"] = getattr(fct, "slope", None)
+        if p[f"{prefix}_s"] is None:
             dx = np.diff(fct.x)
             dy = np.diff(fct.y)
             slopes = np.where(dx != 0.0, dy / np.maximum(dx, 1e-20), 0.0)
-            mat.params[f"{prefix}_s"] = np.append(slopes, slopes[-1] if len(slopes) > 0 else 0.0)
+            p[f"{prefix}_s"] = np.append(slopes, slopes[-1] if len(slopes) > 0 else 0.0)
 
-    _resolve_one(mat.params.get("ifun_n", 0), "curve_n")
-    _resolve_one(mat.params.get("ifun_t", 0), "curve_t")
-    _resolve_one(mat.params.get("id_yield", 0), "curve_y")
+    _resolve_one(p.get("ifun_n", 0), "curve_n")
+    _resolve_one(p.get("ifun_t", 0), "curve_t")
+    _resolve_one(p.get("id_yield", 0), "curve_y")
 
 
 def _curve_eval(cx: np.ndarray, cy: np.ndarray, cs: np.ndarray, e: np.ndarray):
@@ -196,8 +259,95 @@ def _curve_eval(cx: np.ndarray, cy: np.ndarray, cs: np.ndarray, e: np.ndarray):
     return cy[i] + s * (e - cx[i]), s
 
 
+def check_spotweld_failure(
+    mat: Material | dict,
+    sig: np.ndarray,
+    deps: np.ndarray,
+    epsp: np.ndarray,
+    extra: dict | None = None,
+) -> np.ndarray:
+    """Evaluate spotweld failure in tension, shear, or combined normal/shear modes.
+    Returns boolean array failed (nel,) where True indicates element failure.
+    Cites engine/source/materials/fail/connect/fail_connect.F lines 104-250.
+    """
+    p = _ensure_params(mat)
+    nel = len(sig)
+    failed = np.zeros(nel, dtype=bool)
+
+    if extra is not None and "failed" in extra and extra["failed"] is not None:
+        failed = failed | np.asarray(extra["failed"], dtype=bool)
+
+    fail_n = p.get("fail_n")
+    fail_s = p.get("fail_s")
+    beta_f = float(p.get("beta_f") or 2.0)
+    epsp_max = p.get("epsp_max")
+
+    if extra is not None:
+        if "fail_n" in extra and extra["fail_n"] is not None:
+            fail_n = extra["fail_n"]
+        if "fail_s" in extra and extra["fail_s"] is not None:
+            fail_s = extra["fail_s"]
+        if "epsp_max" in extra and extra["epsp_max"] is not None:
+            epsp_max = extra["epsp_max"]
+
+    # Equivalent plastic strain failure
+    if epsp_max is not None and float(epsp_max) > 0.0:
+        failed = failed | (epsp >= float(epsp_max))
+
+    # Damage failure (D >= 1.0)
+    if extra is not None and "dmg" in extra and extra["dmg"] is not None:
+        dmg = np.asarray(extra["dmg"], dtype=float)
+        failed = failed | (dmg >= 1.0)
+
+    # Strain/deformation failure
+    eps_tot = extra.get("eps_tot") if extra is not None and "eps_tot" in extra else deps
+    if eps_tot is not None and len(eps_tot) == nel:
+        if eps_tot.ndim == 1:
+            eps_tot = eps_tot.reshape(1, -1)
+        if eps_tot.shape[1] >= 6:
+            ezz = eps_tot[:, 2]
+            eyz = eps_tot[:, 4]
+            ezx = eps_tot[:, 5]
+        elif eps_tot.shape[1] >= 3:
+            ezz = eps_tot[:, 0]
+            eyz = eps_tot[:, 1]
+            ezx = eps_tot[:, 2]
+        else:
+            ezz = eps_tot[:, 0]
+            eyz = np.zeros(nel)
+            ezx = np.zeros(nel)
+
+        gamma = np.sqrt(eyz**2 + ezx**2)
+
+        if fail_n is not None and float(fail_n) > 0.0:
+            failed = failed | (ezz >= float(fail_n))
+
+        if fail_s is not None and float(fail_s) > 0.0:
+            failed = failed | (gamma >= float(fail_s))
+
+        if fail_n is not None and float(fail_n) > 0.0 and fail_s is not None and float(fail_s) > 0.0:
+            fn = float(fail_n)
+            fs = float(fail_s)
+            comb = (np.maximum(0.0, ezz) / fn)**beta_f + (gamma / fs)**beta_f
+            failed = failed | (comb >= 1.0)
+
+    # Normal stress failure threshold
+    sig_max_n = p.get("sig_max_n")
+    if sig_max_n is not None and float(sig_max_n) > 0.0:
+        failed = failed | (sig[:, 2] >= float(sig_max_n))
+
+    # Shear stress failure threshold
+    sig_max_s = p.get("sig_max_s")
+    if sig_max_s is not None and float(sig_max_s) > 0.0:
+        tau = np.sqrt(sig[:, 4]**2 + sig[:, 5]**2)
+        failed = failed | (tau >= float(sig_max_s))
+
+    return failed
+
+
 def solid_update(mat, sig: np.ndarray, deps: np.ndarray, epsp=None, dt: float = 0.0, extra: dict = None):
     """Update solid spotweld stress (ZZ, YZ, ZX only in local element coordinates).
+    Cites engine/source/materials/mat/mat083/sigeps83.F lines 30-468.
     Returns (sig, epsp, c).
     """
     nel = len(sig)
@@ -209,13 +359,14 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray, epsp=None, dt: float = 
     G = p["G"]
     E_comp = p["E_comp"]
     icomp = p["icomp"]
-    beta = p["beta"]
+    beta = float(p["beta"])
     alpha = p["alpha"]
     yfac = p["yfac"]
     xfac = p["xfac"]
     xscale = p["xscale"]
     vp = p["vp"]
-    rho0 = float(getattr(mat, "rho0", 1.0) or p.get("rho0") or 1.0)
+    fcut = float(p.get("fcut", 1e30))
+    rho0 = float(getattr(mat, "rho0", None) or p.get("rho0") or p.get("MAT_RHO", 1.0))
 
     # Auto-initialize extra dictionary
     if extra is None:
@@ -231,6 +382,23 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray, epsp=None, dt: float = 
         extra["asrate"] = np.zeros(nel, dtype=float)
 
     epsp_val = extra["epsp"]
+    epsp_initial = epsp_val.copy()
+
+    # Orientation angle sym (for a_n = 1 / (rn * (1 - alpha * sin(sym)))^beta)
+    sym_angle = extra.get("sym") if "sym" in extra and extra["sym"] is not None else (
+        extra.get("theta") if "theta" in extra and extra["theta"] is not None else np.zeros(nel, dtype=float)
+    )
+    if np.isscalar(sym_angle):
+        sym_angle = np.full(nel, float(sym_angle))
+    elif len(sym_angle) != nel:
+        sym_angle = np.zeros(nel, dtype=float)
+
+    # Element active/deletion flag off (1.0 = on, 0.0 = off)
+    off = extra.get("off") if "off" in extra and extra["off"] is not None else np.ones(nel, dtype=float)
+    if np.isscalar(off):
+        off = np.full(nel, float(off))
+    elif len(off) != nel:
+        off = np.ones(nel, dtype=float)
 
     # Extract strain increments: support 6-component [xx, yy, zz, xy, yz, zx] or 3-component [zz, yz, zx]
     if deps is None:
@@ -254,10 +422,19 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray, epsp=None, dt: float = 
             d_zx = np.zeros(nel, dtype=float)
 
     # 1. Update strain rate filter (asrate)
+    # Fortran lines 128-132, suser43.F line 241-242: ALPHA = min(1.0, 2*pi*fcut*dt)
+    if fcut < 1e20 and fcut > 0.0 and dt > 0.0:
+        asrate_coef = min(1.0, 2.0 * math.pi * fcut * dt)
+    elif "asrate_filter" in extra:
+        asrate_coef = float(extra["asrate_filter"])
+    else:
+        asrate_coef = xscale
+
     deps_eff = np.sqrt(d_zz**2 + d_yz**2 + d_zx**2)
+    dt_inv = (1.0 / dt) if dt > 1e-20 else 0.0
     if vp == 0:
-        epsp_rate = (deps_eff / dt) if dt > 1e-20 else np.zeros_like(deps_eff)
-        extra["asrate"][:] = xscale * epsp_rate + (1.0 - xscale) * extra["asrate"]
+        epsp_rate = deps_eff * dt_inv
+        extra["asrate"][:] = asrate_coef * epsp_rate + (1.0 - asrate_coef) * extra["asrate"]
     epsd = extra["asrate"]
 
     # 2. Extract curves / static properties
@@ -281,6 +458,7 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray, epsp=None, dt: float = 
     hyield = hyield * yfac
 
     # 3. Compute Elastic Trial Stresses
+    # sigeps83.F lines 138-164
     if icomp == 0:
         young = np.full(nel, E)
     elif icomp == 1:
@@ -289,21 +467,22 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray, epsp=None, dt: float = 
     else:
         young = np.full(nel, E)
 
-    sig_tr_zz = sig[:, 2] + young * d_zz
-    sig_tr_yz = sig[:, 4] + G * d_yz
-    sig_tr_zx = sig[:, 5] + G * d_zx
+    sig_tr_zz = sig[:, 2] + young * d_zz * off
+    sig_tr_yz = sig[:, 4] + G * d_yz * off
+    sig_tr_zx = sig[:, 5] + G * d_zx * off
 
     # 4. Plasticity Return Mapping
     if beta == 2.0:
+        # -----------------------------------------------------------------
+        # BETA == 2.0: Quadratic return mapping (sigeps83.F lines 215-322)
+        # -----------------------------------------------------------------
         mask1 = np.ones(nel, dtype=bool) if icomp == 0 else (sig_tr_zz > 0.0)
         mask2 = np.zeros(nel, dtype=bool) if icomp == 0 else (sig_tr_zz <= 0.0)
 
-        # ---------------------------
         # Branch 1: tension or icomp == 0
-        # ---------------------------
         if np.any(mask1):
             m1 = mask1
-            aa = rn[m1] * (1.0 - alpha * 0.0)
+            aa = rn[m1] * (1.0 - alpha * np.sin(sym_angle[m1]))
             an = 1.0 / np.maximum(_EM20, aa)**2
             as_t = 1.0 / np.maximum(_EM20, rs[m1])**2
 
@@ -358,16 +537,14 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray, epsp=None, dt: float = 
                         sig_eff_n = an_y * sig_zz_n**2 + ast_y * (sig_yz_n**2 + sig_zx_n**2)
                         phi_y = sig_eff_n - fy_n**2
 
-                dep = np.maximum(0.0, dep)
                 full_idx = np.nonzero(m1)[0][ym]
+                dep = np.maximum(0.0, dep) * off[full_idx]
                 epsp_val[full_idx] += dep
                 sig_tr_zz[full_idx] = szz_y - E_y * dep * nzz
                 sig_tr_yz[full_idx] = syz_y - G * dep * nyz
                 sig_tr_zx[full_idx] = szx_y - G * dep * nzx
 
-        # ---------------------------
         # Branch 2: icomp == 1 and compression (sig_tr_zz <= 0)
-        # ---------------------------
         if np.any(mask2):
             m2 = mask2
             as_t = 1.0 / np.maximum(_EM20, rs[m2])**2
@@ -413,18 +590,246 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray, epsp=None, dt: float = 
                         sig_eff_n = ast_y * (sig_yz_n**2 + sig_zx_n**2)
                         phi_y = sig_eff_n - fy_n**2
 
-                dep = np.maximum(0.0, dep)
                 full_idx = np.nonzero(m2)[0][ym]
+                dep = np.maximum(0.0, dep) * off[full_idx]
                 epsp_val[full_idx] += dep
                 sig_tr_yz[full_idx] = syz_y - G * dep * nyz
                 sig_tr_zx[full_idx] = szx_y - G * dep * nzx
+
+    else:
+        # -----------------------------------------------------------------
+        # BETA != 2.0: General power-law return mapping (sigeps83.F lines 324-454)
+        # -----------------------------------------------------------------
+        mask1 = np.ones(nel, dtype=bool) if icomp == 0 else (sig_tr_zz > 0.0)
+        mask2 = np.zeros(nel, dtype=bool) if icomp == 0 else (sig_tr_zz <= 0.0)
+
+        # Branch 1: tension or icomp == 0
+        if np.any(mask1):
+            m1 = mask1
+            aa = rn[m1] * (1.0 - alpha * np.sin(sym_angle[m1]))
+            an = 1.0 / np.maximum(_EM20, aa)**beta
+            as_t = 1.0 / np.maximum(_EM20, rs[m1])**beta
+
+            szz = sig_tr_zz[m1]
+            syz = sig_tr_yz[m1]
+            szx = sig_tr_zx[m1]
+            fy = fyield[m1]
+            hy = hyield[m1]
+            E_val = young[m1]
+
+            svmn = np.abs(szz)
+            svmt = np.sqrt(syz**2 + szx**2)
+            sig_eff = an * (svmn**beta) + as_t * (svmt**beta)
+            phi = sig_eff - fy**beta
+
+            yield_mask = (sig_eff > 0.0) & (phi > 0.0)
+            if np.any(yield_mask):
+                ym = yield_mask
+                an_y = an[ym]
+                ast_y = as_t[ym]
+                szz_y, syz_y, szx_y = szz[ym], syz[ym], szx[ym]
+                fy_y, hy_y = fy[ym], hy[ym]
+                E_y = E_val[ym]
+                phi_y = phi[ym]
+
+                normef = np.maximum(np.sqrt(szz_y**2 + syz_y**2 + szx_y**2), _EM20)
+                nzz = szz_y / normef
+                nyz = syz_y / normef
+                nzx = szx_y / normef
+
+                facn = beta * an_y * E_y
+                fact = beta * ast_y * G
+
+                dep = np.zeros(np.count_nonzero(ym))
+                sig_zz_n = szz_y.copy()
+                sig_yz_n = syz_y.copy()
+                sig_zx_n = szx_y.copy()
+                fy_n = fy_y.copy()
+
+                for it in range(10):
+                    if np.all(np.abs(phi_y) <= 1e-8 * np.maximum(fy_n**beta, 1.0)):
+                        break
+                    svmt_cur = np.maximum(np.sqrt(sig_yz_n**2 + sig_zx_n**2), _EM20)
+                    abs_szz = np.maximum(np.abs(sig_zz_n), _EM20)
+                    sign_szz = np.where(sig_zz_n >= 0.0, 1.0, -1.0)
+                    fy_cur = np.maximum(fy_n, _EM20)
+
+                    dszz = -facn * nzz * (abs_szz**(beta - 1.0)) * sign_szz
+                    dsyz = -fact * nyz * sig_yz_n * (svmt_cur**(beta - 2.0))
+                    dszx = -fact * nzx * sig_zx_n * (svmt_cur**(beta - 2.0))
+                    dyld = -beta * hy_y * (fy_cur**(beta - 1.0))
+                    fprim = dszz + dsyz + dszx + dyld
+
+                    valid = np.abs(fprim) > _EM20
+                    if np.any(valid):
+                        dep[valid] = dep[valid] - phi_y[valid] / fprim[valid]
+                        sig_zz_n = szz_y - E_y * dep * nzz
+                        sig_yz_n = syz_y - G * dep * nyz
+                        sig_zx_n = szx_y - G * dep * nzx
+                        fy_n = np.maximum(0.0, fy_y + hy_y * dep)
+                        svmt_n = np.sqrt(sig_yz_n**2 + sig_zx_n**2)
+                        sig_eff_n = an_y * (np.abs(sig_zz_n)**beta) + ast_y * (svmt_n**beta)
+                        phi_y = sig_eff_n - fy_n**beta
+
+                full_idx = np.nonzero(m1)[0][ym]
+                dep = np.maximum(0.0, dep) * off[full_idx]
+                epsp_val[full_idx] += dep
+                sig_tr_zz[full_idx] = szz_y - E_y * dep * nzz
+                sig_tr_yz[full_idx] = syz_y - G * dep * nyz
+                sig_tr_zx[full_idx] = szx_y - G * dep * nzx
+
+        # Branch 2: icomp == 1 and compression (sig_tr_zz <= 0)
+        if np.any(mask2):
+            m2 = mask2
+            as_t = 1.0 / np.maximum(_EM20, rs[m2])**beta
+            syz = sig_tr_yz[m2]
+            szx = sig_tr_zx[m2]
+            fy = fyield[m2]
+            hy = hyield[m2]
+
+            svmt = np.sqrt(syz**2 + szx**2)
+            sig_eff = as_t * (svmt**beta)
+            phi = sig_eff - fy**beta
+
+            yield_mask = (sig_eff > 0.0) & (phi > 0.0)
+            if np.any(yield_mask):
+                ym = yield_mask
+                ast_y = as_t[ym]
+                syz_y, szx_y = syz[ym], szx[ym]
+                fy_y, hy_y = fy[ym], hy[ym]
+                phi_y = phi[ym]
+
+                normef = np.maximum(np.sqrt(syz_y**2 + szx_y**2), _EM20)
+                nyz = syz_y / normef
+                nzx = szx_y / normef
+
+                fact = beta * ast_y * G
+                dep = np.zeros(np.count_nonzero(ym))
+                sig_yz_n = syz_y.copy()
+                sig_zx_n = szx_y.copy()
+                fy_n = fy_y.copy()
+
+                for it in range(10):
+                    if np.all(np.abs(phi_y) <= 1e-8 * np.maximum(fy_n**beta, 1.0)):
+                        break
+                    svmt_cur = np.maximum(np.sqrt(sig_yz_n**2 + sig_zx_n**2), _EM20)
+                    fy_cur = np.maximum(fy_n, _EM20)
+
+                    dsyz = -fact * nyz * sig_yz_n * (svmt_cur**(beta - 2.0))
+                    dszx = -fact * nzx * sig_zx_n * (svmt_cur**(beta - 2.0))
+                    dyld = -beta * hy_y * (fy_cur**(beta - 1.0))
+                    fprim = dsyz + dszx + dyld
+
+                    valid = np.abs(fprim) > _EM20
+                    if np.any(valid):
+                        dep[valid] = dep[valid] - phi_y[valid] / fprim[valid]
+                        sig_yz_n = syz_y - G * dep * nyz
+                        sig_zx_n = szx_y - G * dep * nzx
+                        fy_n = np.maximum(0.0, fy_y + hy_y * dep)
+                        svmt_n = np.sqrt(sig_yz_n**2 + sig_zx_n**2)
+                        sig_eff_n = ast_y * (svmt_n**beta)
+                        phi_y = sig_eff_n - fy_n**beta
+
+                full_idx = np.nonzero(m2)[0][ym]
+                dep = np.maximum(0.0, dep) * off[full_idx]
+                epsp_val[full_idx] += dep
+                sig_tr_yz[full_idx] = syz_y - G * dep * nyz
+                sig_tr_zx[full_idx] = szx_y - G * dep * nzx
+
+    # Rate filtering for VP == 1 (plastic strain rate, sigeps83.F lines 458-464)
+    if vp == 1:
+        d_epsp = np.maximum(0.0, epsp_val - epsp_initial)
+        epsp_dot = d_epsp * dt_inv
+        extra["asrate"][:] = asrate_coef * epsp_dot + (1.0 - asrate_coef) * extra["asrate"]
 
     sig[:, 2] = sig_tr_zz
     sig[:, 4] = sig_tr_yz
     sig[:, 5] = sig_tr_zx
 
+    # Failure check
+    failed = check_spotweld_failure(mat, sig, deps, epsp_val, extra)
+    if np.any(failed):
+        if "failed" not in extra or extra["failed"] is None:
+            extra["failed"] = failed.copy()
+        else:
+            extra["failed"] = np.asarray(extra["failed"], dtype=bool) | failed
+        if "off" not in extra or extra["off"] is None:
+            extra["off"] = np.where(failed, 0.0, 1.0)
+        else:
+            extra["off"][failed] = 0.0
+        sig[failed, :] = 0.0
+
     c = np.full(nel, np.sqrt(max(E, _EM20) / max(rho0, _EM20)))
     return sig, epsp_val, c
+
+
+def discrete_connection_update(
+    mat: Material | dict,
+    forces: np.ndarray,
+    du: np.ndarray,
+    area: float = 1.0,
+    length: float = 1.0,
+    epsp: np.ndarray | None = None,
+    dt: float = 0.0,
+    extra: dict | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Discrete connection update for shell-to-shell or node-to-node spotweld.
+    Translates relative displacement increments du = [du_z, du_y, du_x] into
+    strains deps = du / length, calls solid_update for [sig_zz, sig_yz, sig_zx],
+    and computes connection forces F = sig * area.
+    """
+    forces = np.asarray(forces, dtype=float)
+    du = np.asarray(du, dtype=float)
+    if forces.ndim == 1:
+        forces = forces.reshape(1, -1)
+    if du.ndim == 1:
+        du = du.reshape(1, -1)
+    nel = forces.shape[0]
+
+    # Convert forces to stresses: sigma = F / area
+    sig6 = np.zeros((nel, 6), dtype=float)
+    sig6[:, 2] = forces[:, 0] / max(area, _EM20)
+    if forces.shape[1] > 1:
+        sig6[:, 4] = forces[:, 1] / max(area, _EM20)
+    if forces.shape[1] > 2:
+        sig6[:, 5] = forces[:, 2] / max(area, _EM20)
+
+    # Convert displacement increments to strains: deps = du / length
+    deps6 = np.zeros((nel, 6), dtype=float)
+    deps6[:, 2] = du[:, 0] / max(length, _EM20)
+    if du.shape[1] > 1:
+        deps6[:, 4] = du[:, 1] / max(length, _EM20)
+    if du.shape[1] > 2:
+        deps6[:, 5] = du[:, 2] / max(length, _EM20)
+
+    sig_new, epsp_out, c = solid_update(mat, sig6, deps6, epsp=epsp, dt=dt, extra=extra)
+
+    # Convert updated stresses back to forces: F = sigma * area
+    forces_out = np.zeros((nel, 3), dtype=float)
+    forces_out[:, 0] = sig_new[:, 2] * area
+    forces_out[:, 1] = sig_new[:, 4] * area
+    forces_out[:, 2] = sig_new[:, 5] * area
+
+    return forces_out, epsp_out, c
+
+
+def spring_update(
+    mat: Material | dict,
+    forces: np.ndarray,
+    du: np.ndarray,
+    area: float = 1.0,
+    length: float = 1.0,
+    epsp: np.ndarray | None = None,
+    dt: float = 0.0,
+    extra: dict | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Spring/discrete spotweld interface for /MAT/SPR_JOU.
+    Returns (forces_new, epsp_new).
+    """
+    f_out, epsp_out, _ = discrete_connection_update(
+        mat, forces, du, area=area, length=length, epsp=epsp, dt=dt, extra=extra
+    )
+    return f_out, epsp_out
 
 
 def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
@@ -432,22 +837,49 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
     raise NotImplementedError("LAW83 (spotweld) is implemented for solid elements only.")
 
 
+def sound_speed(mat: Material | dict, extra: dict | None = None) -> float | np.ndarray:
+    """Acoustic sound speed c = sqrt(E / rho0) for LAW83 spotweld.
+    Cites hm_read_mat83.F lines 105-192.
+    """
+    p = _ensure_params(mat)
+    E = p["E"]
+    rho0 = p.get("rho0", p.get("MAT_RHO", 1.0))
+    c_val = float(np.sqrt(max(E, _EM20) / max(rho0, _EM20)))
+    if extra is not None and "nel" in extra:
+        return np.full(extra["nel"], c_val)
+    return c_val
+
+
+def extra_shapes(n: int) -> dict[str, tuple[int, ...]]:
+    """Return shapes of internal state arrays allocated in extra."""
+    return {
+        "epsp": (n,),
+        "asrate": (n,),
+        "dmg": (n,),
+        "off": (n,),
+        "sym": (n,),
+        "failed": (n,),
+    }
+
+
 def consistent_solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
     """(n, 6, 6) consistent algorithmic solid tangent matrix for LAW83 spotweld.
     Diagonal components:
-    - (2, 2) ZZ: E (or E_comp in compression)
+    - (2, 2) ZZ: E (or E_comp in compression when icomp=1)
     - (4, 4) YZ: G
     - (5, 5) ZX: G
     With elastoplastic softening reduction on active yield surface.
+    Supports general beta exponent (beta == 2 quadratic or beta != 2).
     """
     p = _ensure_params(mat)
     E = p["E"]
     G = p["G"]
     E_comp = p["E_comp"]
     icomp = p["icomp"]
+    beta = float(p.get("beta", 2.0))
 
     if sig is not None and isinstance(sig, np.ndarray):
-        n = sig.shape[0]
+        n = sig.shape[0] if sig.ndim > 1 else 1
     elif extra is not None and "F" in extra:
         n = extra["F"].shape[0]
     else:
@@ -471,8 +903,8 @@ def consistent_solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=Non
         yielding = np.asarray(epsp_incr > 0.0)
         rn = max(p["rn"], _EM20)
         rs = max(p["rs"], _EM20)
-        an = 1.0 / (rn**2)
-        ast = 1.0 / (rs**2)
+        an = 1.0 / (rn**beta)
+        ast = 1.0 / (rs**beta)
 
         for i in np.nonzero(yielding)[0]:
             szz = sig[i, 2]
@@ -482,10 +914,13 @@ def consistent_solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=Non
 
             # Gradient of yield surface d_phi / d_sigma
             n_vec = np.zeros(6)
+            svmt = max(np.sqrt(syz**2 + szx**2), _EM20)
             if szz > 0.0 or icomp == 0:
-                n_vec[2] = 2.0 * an * szz
-            n_vec[4] = 2.0 * ast * syz
-            n_vec[5] = 2.0 * ast * szx
+                abs_szz = max(abs(szz), _EM20)
+                sgn_szz = 1.0 if szz >= 0.0 else -1.0
+                n_vec[2] = beta * an * (abs_szz**(beta - 1.0)) * sgn_szz
+            n_vec[4] = beta * ast * syz * (svmt**(beta - 2.0))
+            n_vec[5] = beta * ast * szx * (svmt**(beta - 2.0))
 
             norm_grad = np.linalg.norm(n_vec)
             if norm_grad > _EM20:
@@ -498,6 +933,9 @@ def consistent_solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=Non
                     D[i] -= np.outer(Ce_n, Ce_n) / denom
 
     return D
+
+
+solid_tangent = consistent_solid_tangent
 
 
 def _register():

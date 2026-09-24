@@ -108,7 +108,7 @@ def parse_listing_line(line: str) -> Optional[Dict[str, float]]:
     except ValueError:
         return None
     try:
-        vals = [float(t) for t in tokens[1:]]
+        vals = [float(t.rstrip("%")) for t in tokens[1:]]
     except ValueError:
         return None
     status: Dict[str, float] = {"cycle": cycle}
@@ -154,12 +154,21 @@ class T01Data:
     """
 
     def __init__(self, columns: List[str], rows: List[List[float]]):
-        self.columns = columns
         self.rows = rows
         # transpose to column-major series for easy channel access
-        self._series: Dict[str, List[float]] = {c: [] for c in columns}
+        seen = {}
+        unique_cols = []
+        for c in columns:
+            if c in seen:
+                seen[c] += 1
+                unique_cols.append(f"{c}_{seen[c]}")
+            else:
+                seen[c] = 1
+                unique_cols.append(c)
+        self.columns = unique_cols
+        self._series: Dict[str, List[float]] = {c: [] for c in self.columns}
         for row in rows:
-            for c, v in zip(columns, row):
+            for c, v in zip(self.columns, row):
                 self._series[c].append(v)
 
     @property
@@ -272,7 +281,7 @@ def build_deck_summary(deck_path: str) -> Dict[str, object]:
             log = MessageLog()
             parse_starter_deck(blocks, model, log)
 
-        summary["title"] = model.title
+        summary["title"] = getattr(model, "title", "")
         summary["nodes"] = int(model.numnod)
 
         # element counts by type (raw_elems is filled at parse time, before
@@ -480,6 +489,12 @@ class JobRunner:
             cmd += ["-nt", str(self.nthread)]
         return cmd
 
+    def _engine_cmd(self) -> List[str]:
+        cmd = self._base_cmd("pyradioss.engine") + ["-i", self.engine_deck]
+        if self.backend:
+            cmd += ["-backend", self.backend]
+        return cmd
+
     def _run(self) -> None:
         self.t_end = _read_engine_t_end(self.engine_deck)
         self._emit(("t_end", self.t_end))
@@ -498,9 +513,7 @@ class JobRunner:
 
         # phase 2: ENGINE
         self._emit(("phase", "engine"))
-        cmd = self._base_cmd("pyradioss.engine") + ["-i", self.engine_deck]
-        if self.backend:
-            cmd += ["-backend", self.backend]
+        cmd = self._engine_cmd()
         rc = self._run_phase("engine", cmd)
         if self._stop.is_set():
             rc = -1
@@ -534,7 +547,7 @@ class JobRunner:
                         f" ** post-processing error: {exc}"))
 
     @staticmethod
-    def _package_env() -> Dict[str, str]:
+    def _package_env(backend: Optional[str] = None) -> Dict[str, str]:
         """Child env with the ``pyradioss`` package root on ``PYTHONPATH`` so
         ``python -m pyradioss.starter`` imports even when the child's cwd is
         the deck directory (a source checkout is not on the default path)."""
@@ -551,10 +564,12 @@ class JobRunner:
         existing = env.get("PYTHONPATH", "")
         parts = [pkg_root] + ([existing] if existing else [])
         env["PYTHONPATH"] = os.pathsep.join(parts)
+        if backend:
+            env["PYRADIOSS_BACKEND"] = str(backend)
         return env
 
     def _run_phase(self, name: str, cmd: List[str]) -> int:
-        env = self._package_env()
+        env = self._package_env(backend=self.backend)
         try:
             proc = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

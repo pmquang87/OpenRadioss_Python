@@ -34,7 +34,7 @@ from typing import Dict, List, Optional, Tuple
 
 from ..common.messages import MessageLog
 from ..model.entities import Property
-from .deck_reader import Card, KeywordBlock
+from .deck_reader import Card, KeywordBlock, parse_fortran_float
 
 # ============================================================================
 # Property TYPE numbering (IGTYP) and family rules — from the upstream
@@ -45,12 +45,16 @@ from .deck_reader import Card, KeywordBlock
 #: /PROP spelling in the cfg tree; unknown TYPE<n> spellings resolve their
 #: own number, anything else is a sentinel (-1).
 PROP_TYPE_NUMBERS: Dict[str, int] = {
-    "VOID": 0, "SHELL": 1, "TRUSS": 2, "BEAM": 3, "SPRING": 4, "RIVET": 5,
+    "VOID": 0, "SHELL": 1, "TRUSS": 2, "BEAM": 3, "SPRING": 4, "RIVET": 5, "TYPE5": 5, "PROP_TYPE5": 5,
     "SOL_ORTH": 6, "SPR_PUL": 12, "SPR_GENE": 8, "SH_ORTH": 9, "SH_COMP": 10,
-    "SH_SANDW": 11, "SPR_BEAM": 13, "SOLID": 14, "POROUS": 15, "SH_FABR": 16,
-    "STACK": 17, "INT_BEAM": 18, "TSHELL": 20, "TSH_ORTH": 21, "TSH_COMP": 22,
+    "SH_SANDW": 11, "TYPE11": 11, "PROP_TYPE11": 11, "SANDWICH": 11, "PROP_SANDWICH": 11, "PROP_SH_SANDW": 11,
+    "SPR_BEAM": 13, "SOLID": 14, "POROUS": 15, "SH_FABR": 16, "TYPE16": 16, "PROP_TYPE16": 16, "PROP_SH_FABR": 16, "FABRIC_SHELL": 16,
+    "STACK": 17, "TYPE17": 17, "SH_COMP": 17, "COMP_SHELL": 17, "INT_BEAM": 18,
+    "TSHELL": 20, "TYPE20": 20, "PROP_TYPE20": 20,
+    "TSH_ORTH": 21, "TYPE21": 21, "PROP_TYPE21": 21, "TSHELL_COMP": 21, "TSH_COMP": 22,
     "SPR_MAT": 23, "HEXA20": 23, "BRIC20": 23, "TYPE23": 23, "SPR_AXI": 25, "SPR_TAB": 26, "SPR_BDAMP": 27, "NSTRAND": 28,
     "SPR_PRE": 32, "KJOINT": 33, "SPH": 34, "STITCH": 35, "PREDIT": 36,
+    "SPR_TORS": 19, "TYPE19": 19, "TORSION": 19, "THERM_SHELL": 19, "SH_THERM": 19, "TYPE19_THERM": 19,
     "CONNECT": 43, "SPR_CRUS": 44, "KJOINT2": 45, "SPR_MUSCLE": 46,
     "PLY_STACK": 51, "TYPE51": 51, "PCOMPP": 52, "FLUID": 6,
 }
@@ -61,7 +65,7 @@ PROP_TYPE_NUMBERS: Dict[str, int] = {
 #: (the spring families) may legally carry mat_ID = 0 (a fictitious
 #: material is assigned for the spring elements).
 MATERIAL_REQUIRED_PROP_TYPES = frozenset(
-    {0, 1, 2, 3, 6, 9, 10, 11, 14, 16, 17, 18, 20, 21, 22, 23, 34, 43, 51,
+    {0, 1, 2, 3, 6, 9, 10, 11, 14, 16, 17, 18, 19, 20, 21, 22, 23, 34, 43, 51,
      52})
 
 
@@ -90,11 +94,15 @@ def prop_type_ok(req_prop: int, prop: Property) -> bool:
     pt = prop.type
     if pt == req_prop or pt == 0:
         return True
-    if req_prop == 1 and pt in (9, 16):
+    if req_prop == 1 and pt in (9, 11, 16, 17, 19):
         return True
-    if req_prop == 4 and pt in (8, 12, 13, 23, 25, 26, 27, 32, 35, 36, 44, 45, 46):
+    if req_prop == 3 and pt in (18,):
+        return True
+    if req_prop == 4 and pt in (8, 12, 13, 19, 23, 25, 26, 27, 32, 33, 35, 36, 44, 45, 46):
         return True
     if req_prop == 14 and pt in (20, 21, 22, 23, 43):
+        return True
+    if req_prop == 20 and pt in (14, 20, 21, 22, 0):
         return True
     if req_prop == 23 and pt in (14, 23, 0):
         return True
@@ -159,8 +167,8 @@ def _fv(s, default: float = 0.0) -> float:
     if s in ("", None):
         return default
     try:
-        return float(str(s).replace("D", "E").replace("d", "e"))
-    except ValueError:
+        return parse_fortran_float(str(s))
+    except (ValueError, TypeError):
         return default
 
 
@@ -168,8 +176,8 @@ def _iv(s, default: int = 0) -> int:
     if s in ("", None):
         return default
     try:
-        return int(float(str(s).replace("D", "E").replace("d", "e")))
-    except ValueError:
+        return int(parse_fortran_float(str(s)))
+    except (ValueError, TypeError):
         return default
 
 
@@ -198,7 +206,7 @@ def _is_num(card: Card) -> bool:
         return False
     for t in toks:
         try:
-            float(t.replace("D", "E").replace("d", "e"))
+            parse_fortran_float(t)
         except ValueError:
             return False
     return True
@@ -324,21 +332,123 @@ def parse_spr_gene(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
 
 
 def parse_spr_beam(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
-    """/PROP/SPR_BEAM (TYPE13) — spring-beam (cfg prop_p13_spr_beam.cfg
-    radioss2018).  Same header + 6 K/C blocks as SPR_GENE; the port reads
-    the linear K_i/C_i stiffness core and the element frame follows N1->N2
-    (see elements/spring_general.py).  The trailing Vo/Wo/Fcut card, the 6
-    per-DOF viscous cards, Ileng length normalisation, functions and
-    rupture limits are parsed-and-cut."""
+    """/PROP/SPR_BEAM (TYPE13) — spring-beam (cfg prop_p13_spr_beam.cfg radioss2018).
+    Fortran origin: starter/source/properties/spring/hm_read_prop13.F
+    Reads the full 6-DOF properties including nonlinear curves, hardening, damping,
+    scale factors, and failure/rupture limits.
+    """
     title, cards, fixed = _data_cards(block)
-    params: Dict[str, float] = {}
+    params: Dict[str, Any] = {}
     head = _get(cards, 0)
     if head is not None:
         h = _row(head, "PROP_SPR_HEAD", fixed)
         params["mass"] = _fv(h[0])
         params["inertia"] = _fv(h[1])
         params["skew_id"] = _iv(h[2])
-    params.update(_parse_spring_blocks(cards, fixed))
+        params["sens_id"] = _iv(h[3])
+        params["isensor"] = params["sens_id"]
+        params["isflag"] = _iv(h[4])
+        params["ifail"] = _iv(h[5])
+        params["ileng"] = _iv(h[6])
+        params["ifail2"] = _iv(h[7])
+    else:
+        params["mass"] = 0.0
+        params["inertia"] = 0.0
+        params["skew_id"] = 0
+        params["sens_id"] = 0
+        params["isflag"] = 0
+        params["ifail"] = 0
+        params["ileng"] = 0
+        params["ifail2"] = 0
+
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    cards_per_dof = 3 if (len(valid_cards) - 1 >= 18) else 2
+
+    # 6 DOF blocks
+    for i in range(1, 7):
+        # Card 1: Ki, Ci, Ai, Bi, Di
+        kc = _get(cards, 1 + cards_per_dof * (i - 1))
+        if kc is not None:
+            r = _row(kc, "F20X5", fixed)
+            params[f"k{i}"] = _fv(r[0])
+            params[f"c{i}"] = _fv(r[1])
+            params[f"a{i}"] = _fv(r[2], 1.0) if len(r) > 2 and r[2].strip() else 1.0
+            params[f"b{i}"] = _fv(r[3], 0.0) if len(r) > 3 and r[3].strip() else 0.0
+            params[f"d{i}"] = _fv(r[4], 1.0) if len(r) > 4 and r[4].strip() else 1.0
+        else:
+            params[f"k{i}"] = 0.0
+            params[f"c{i}"] = 0.0
+            params[f"a{i}"] = 1.0
+            params[f"b{i}"] = 0.0
+            params[f"d{i}"] = 1.0
+
+        # Card 2: FUN_Ai, HFLAGi, FUN_Bi, FUN_Ci, FUN_Di, MIN_RUPi, MAX_RUPi
+        fc = _get(cards, 2 + cards_per_dof * (i - 1))
+        if fc is not None:
+            if fixed:
+                r = _row(fc, "PROP_SPR_DOF_FCT", True)
+                params[f"fun_a{i}"] = _iv(r[0]) if len(r) > 0 else 0
+                params[f"hflag{i}"] = _iv(r[1]) if len(r) > 1 else 0
+                params[f"fun_b{i}"] = _iv(r[2]) if len(r) > 2 else 0
+                params[f"fun_c{i}"] = _iv(r[3]) if len(r) > 3 else 0
+                params[f"fun_d{i}"] = _iv(r[4]) if len(r) > 4 else 0
+                # r[5] is blank gap
+                params[f"min_rup{i}"] = _fv(r[6], -1e30) if len(r) > 6 and r[6].strip() else -1e30
+                params[f"max_rup{i}"] = _fv(r[7], 1e30) if len(r) > 7 and r[7].strip() else 1e30
+            else:
+                toks = fc.tokens()
+                params[f"fun_a{i}"] = _iv(toks[0]) if len(toks) > 0 else 0
+                params[f"hflag{i}"] = _iv(toks[1]) if len(toks) > 1 else 0
+                params[f"fun_b{i}"] = _iv(toks[2]) if len(toks) > 2 else 0
+                params[f"fun_c{i}"] = _iv(toks[3]) if len(toks) > 3 else 0
+                params[f"fun_d{i}"] = _iv(toks[4]) if len(toks) > 4 else 0
+                params[f"min_rup{i}"] = _fv(toks[5], -1e30) if len(toks) > 5 and toks[5].strip() else -1e30
+                params[f"max_rup{i}"] = _fv(toks[6], 1e30) if len(toks) > 6 and toks[6].strip() else 1e30
+        else:
+            params[f"fun_a{i}"] = 0
+            params[f"hflag{i}"] = 0
+            params[f"fun_b{i}"] = 0
+            params[f"fun_c{i}"] = 0
+            params[f"fun_d{i}"] = 0
+            params[f"min_rup{i}"] = -1e30
+            params[f"max_rup{i}"] = 1e30
+
+        # Card 3: Fi, Ei, scalei, Hi
+        if cards_per_dof >= 3:
+            sc = _get(cards, 3 + cards_per_dof * (i - 1))
+            if sc is not None:
+                r = _row(sc, "F20X4", fixed)
+                params[f"f{i}"] = _fv(r[0], 1.0) if len(r) > 0 and r[0].strip() else 1.0
+                params[f"e{i}"] = _fv(r[1], 0.0) if len(r) > 1 and r[1].strip() else 0.0
+                params[f"scale{i}"] = _fv(r[2], 1.0) if len(r) > 2 and r[2].strip() else 1.0
+                params[f"h{i}"] = _fv(r[3], 1.0) if len(r) > 3 and r[3].strip() else 1.0
+            else:
+                params[f"f{i}"] = 1.0
+                params[f"e{i}"] = 0.0
+                params[f"scale{i}"] = 1.0
+                params[f"h{i}"] = 1.0
+        else:
+            params[f"f{i}"] = 1.0
+            params[f"e{i}"] = 0.0
+            params[f"scale{i}"] = 1.0
+            params[f"h{i}"] = 1.0
+
+        # Defaults from hm_read_prop13.F lines 271-275:
+        if params[f"fun_a{i}"] == 0:
+            params[f"a{i}"] = 1.0
+            params[f"b{i}"] = 0.0
+            params[f"e{i}"] = 0.0
+
+    # Optional trailing velocity / rate card
+    vc_idx = 1 + 6 * cards_per_dof
+    vc = _get(cards, vc_idx)
+    if vc is not None:
+        r = _row(vc, "PROP_SPR_VEL", fixed)
+        params["trans_vel0"] = _fv(r[0]) if len(r) > 0 else 0.0
+        params["rot_vel0"] = _fv(r[1]) if len(r) > 1 else 0.0
+        params["asrate"] = _fv(r[2]) if len(r) > 2 else 0.0
+        params["israte"] = _iv(r[3]) if len(r) > 3 else 0
+
     return Property(id=block.user_id, type=13, title=title, params=params)
 
 
@@ -604,6 +714,210 @@ def parse_spr_bdamp(block: KeywordBlock, log: MessageLog) -> Property:
                             params=params, prop_name=typename)
 
 
+def parse_spr_pul(block: KeywordBlock, log: MessageLog) -> Property:
+    """/PROP/SPR_PUL or /PROP/TYPE12 — Pulley spring / sliding cable property.
+
+    Fortran origin: starter/source/properties/spring/hm_read_prop12.F
+    CFG: prop_p12_spr_pul.cfg
+    """
+    title, cards, fixed = _data_cards(block)
+    params = _universal_geo_params()
+
+    mass = 0.0
+    isensor = 0
+    isflag = 0
+    ileng = 0
+    fric = 0.0
+    stiff1 = 0.0
+    damp1 = 0.0
+    acoeft1 = 1.0
+    bcoeft1 = 0.0
+    dcoeft1 = 1.0
+    fun_a1 = 0
+    hflag1 = 0
+    fun_b1 = 0
+    fct_id31 = 0
+    fun_a2 = 0
+    min_rup1 = -1.0e30
+    max_rup1 = 1.0e30
+    prop_x_f = 1.0
+    prop_x_e = 0.0
+    scale1 = 1.0
+    h = 1.0
+    funct_id = 0
+    ifric = 0
+    scale2 = 1.0
+    scale3 = 1.0
+    f_min = -1.0e30
+    f_max = 1.0e30
+
+    valid_cards = [c for c in cards if not c.is_blank]
+    if valid_cards:
+        if fixed:
+            f0 = valid_cards[0].cut("PROP_TYPE12_1")
+            mass = _fv(f0[0]) if len(f0) > 0 else 0.0
+            isensor = _iv(f0[2]) if len(f0) > 2 else 0
+            isflag = _iv(f0[3]) if len(f0) > 3 else 0
+            ileng = _iv(f0[4]) if len(f0) > 4 else 0
+            fric = _fv(f0[5]) if len(f0) > 5 else 0.0
+
+            if len(valid_cards) > 1:
+                f1 = valid_cards[1].cut("PROP_TYPE12_2")
+                stiff1 = _fv(f1[0]) if len(f1) > 0 else 0.0
+                damp1 = _fv(f1[1]) if len(f1) > 1 else 0.0
+                acoeft1 = _fv(f1[2], 1.0) if len(f1) > 2 and f1[2].strip() else 1.0
+                bcoeft1 = _fv(f1[3]) if len(f1) > 3 else 0.0
+                dcoeft1 = _fv(f1[4], 1.0) if len(f1) > 4 and f1[4].strip() else 1.0
+
+            if len(valid_cards) > 2:
+                f2 = valid_cards[2].cut("PROP_TYPE12_3")
+                if len(f2) >= 8 and (f2[6].strip() or f2[7].strip()):
+                    fun_a1 = _iv(f2[0]) if len(f2) > 0 else 0
+                    hflag1 = _iv(f2[1]) if len(f2) > 1 else 0
+                    fun_b1 = _iv(f2[2]) if len(f2) > 2 else 0
+                    fct_id31 = _iv(f2[3]) if len(f2) > 3 else 0
+                    fun_a2 = _iv(f2[4]) if len(f2) > 4 else 0
+                    min_rup1 = _fv(f2[6], -1.0e30) if len(f2) > 6 and f2[6].strip() else -1.0e30
+                    max_rup1 = _fv(f2[7], 1.0e30) if len(f2) > 7 and f2[7].strip() else 1.0e30
+                else:
+                    f2_old = valid_cards[2].cut("PROP_TYPE12_3_OLD")
+                    fun_a1 = _iv(f2_old[0]) if len(f2_old) > 0 else 0
+                    hflag1 = _iv(f2_old[1]) if len(f2_old) > 1 else 0
+                    fun_b1 = _iv(f2_old[2]) if len(f2_old) > 2 else 0
+                    min_rup1 = _fv(f2_old[4], -1.0e30) if len(f2_old) > 4 and f2_old[4].strip() else -1.0e30
+                    max_rup1 = _fv(f2_old[5], 1.0e30) if len(f2_old) > 5 and f2_old[5].strip() else 1.0e30
+
+            if len(valid_cards) > 3:
+                f3 = valid_cards[3].cut("PROP_TYPE12_4")
+                prop_x_f = _fv(f3[0], 1.0) if len(f3) > 0 and f3[0].strip() else 1.0
+                prop_x_e = _fv(f3[1]) if len(f3) > 1 else 0.0
+                scale1 = _fv(f3[2], 1.0) if len(f3) > 2 and f3[2].strip() else 1.0
+                h = _fv(f3[3], 1.0) if len(f3) > 3 and f3[3].strip() else 1.0
+
+            if len(valid_cards) > 4:
+                f4 = valid_cards[4].cut("PROP_TYPE12_5")
+                funct_id = _iv(f4[0]) if len(f4) > 0 else 0
+                ifric = _iv(f4[1]) if len(f4) > 1 else 0
+                scale2 = _fv(f4[2], 1.0) if len(f4) > 2 and f4[2].strip() else 1.0
+                scale3 = _fv(f4[3], 1.0) if len(f4) > 3 and f4[3].strip() else 1.0
+                f_min = _fv(f4[4], -1.0e30) if len(f4) > 4 and f4[4].strip() else -1.0e30
+                f_max = _fv(f4[5], 1.0e30) if len(f4) > 5 and f4[5].strip() else 1.0e30
+        else:
+            t0 = valid_cards[0].tokens()
+            mass = _fv(t0[0]) if len(t0) > 0 else 0.0
+            if len(t0) == 5:
+                isensor = _iv(t0[1])
+                isflag = _iv(t0[2])
+                ileng = _iv(t0[3])
+                fric = _fv(t0[4])
+            elif len(t0) >= 6:
+                isensor = _iv(t0[2])
+                isflag = _iv(t0[3])
+                ileng = _iv(t0[4])
+                fric = _fv(t0[5])
+            elif len(t0) == 2:
+                fric = _fv(t0[1])
+
+            if len(valid_cards) > 1:
+                t1 = valid_cards[1].tokens()
+                stiff1 = _fv(t1[0]) if len(t1) > 0 else 0.0
+                damp1 = _fv(t1[1]) if len(t1) > 1 else 0.0
+                acoeft1 = _fv(t1[2], 1.0) if len(t1) > 2 else 1.0
+                bcoeft1 = _fv(t1[3]) if len(t1) > 3 else 0.0
+                dcoeft1 = _fv(t1[4], 1.0) if len(t1) > 4 else 1.0
+
+            if len(valid_cards) > 2:
+                t2 = valid_cards[2].tokens()
+                fun_a1 = _iv(t2[0]) if len(t2) > 0 else 0
+                hflag1 = _iv(t2[1]) if len(t2) > 1 else 0
+                fun_b1 = _iv(t2[2]) if len(t2) > 2 else 0
+                if len(t2) >= 7:
+                    fct_id31 = _iv(t2[3])
+                    fun_a2 = _iv(t2[4])
+                    min_rup1 = _fv(t2[5], -1.0e30)
+                    max_rup1 = _fv(t2[6], 1.0e30)
+                elif len(t2) >= 5:
+                    min_rup1 = _fv(t2[3], -1.0e30)
+                    max_rup1 = _fv(t2[4], 1.0e30)
+
+            if len(valid_cards) > 3:
+                t3 = valid_cards[3].tokens()
+                prop_x_f = _fv(t3[0], 1.0) if len(t3) > 0 else 1.0
+                prop_x_e = _fv(t3[1]) if len(t3) > 1 else 0.0
+                scale1 = _fv(t3[2], 1.0) if len(t3) > 2 else 1.0
+                h = _fv(t3[3], 1.0) if len(t3) > 3 else 1.0
+
+            if len(valid_cards) > 4:
+                t4 = valid_cards[4].tokens()
+                funct_id = _iv(t4[0]) if len(t4) > 0 else 0
+                ifric = _iv(t4[1]) if len(t4) > 1 else 0
+                scale2 = _fv(t4[2], 1.0) if len(t4) > 2 else 1.0
+                scale3 = _fv(t4[3], 1.0) if len(t4) > 3 else 1.0
+                f_min = _fv(t4[4], -1.0e30) if len(t4) > 4 else -1.0e30
+                f_max = _fv(t4[5], 1.0e30) if len(t4) > 5 else 1.0e30
+
+    params.update({
+        "mass": mass,
+        "isensor": isensor,
+        "sens_id": isensor,
+        "isflag": isflag,
+        "ileng": ileng,
+        "fric": fric,
+        "stiff1": stiff1,
+        "stiff": stiff1,
+        "k": stiff1,
+        "damp1": damp1,
+        "damp": damp1,
+        "c": damp1,
+        "acoeft1": acoeft1,
+        "a": acoeft1,
+        "bcoeft1": bcoeft1,
+        "b": bcoeft1,
+        "dcoeft1": dcoeft1,
+        "d": dcoeft1,
+        "fun_a1": fun_a1,
+        "fun_a": fun_a1,
+        "fct_id1": fun_a1,
+        "hflag1": hflag1,
+        "hflag": hflag1,
+        "fun_b1": fun_b1,
+        "fun_b": fun_b1,
+        "fct_id2": fun_b1,
+        "fct_id31": fct_id31,
+        "fun_a2": fun_a2,
+        "min_rup1": min_rup1,
+        "min_rup": min_rup1,
+        "delta_min": min_rup1,
+        "max_rup1": max_rup1,
+        "max_rup": max_rup1,
+        "delta_max": max_rup1,
+        "prop_x_f": prop_x_f,
+        "fscale": prop_x_f,
+        "prop_x_e": prop_x_e,
+        "e": prop_x_e,
+        "scale1": scale1,
+        "ascale": scale1,
+        "h": h,
+        "funct_id": funct_id,
+        "fct_idfr": funct_id,
+        "ifric": ifric,
+        "scale2": scale2,
+        "yscale_f": scale2,
+        "scale3": scale3,
+        "xscale_f": scale3,
+        "f_min": f_min,
+        "f_max": f_max,
+    })
+
+    return Property(
+        id=block.user_id,
+        type=12,
+        title=title,
+        params=params,
+        prop_name="SPR_PUL",
+    )
+
+
 
 def parse_tshell(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     """/PROP/TSHELL (TYPE20) - thick shell (cfg prop_p20_tshell.cfg)"""
@@ -615,23 +929,41 @@ def parse_tshell(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     c1 = _get(cards, 0)
     c2 = _get(cards, 1)
     
-    # NBP (Inpts) is at index 4 (column 40:50) on the first card
+    isolid = 15
+    inpts_r, inpts_s, inpts_t = 0, 0, 0
     nbp = 0
     if c1:
         if fixed:
-            nbp = _iv(c1.raw[40:50]) if len(c1.raw) >= 50 else 0
+            isolid = _iv(c1.raw[0:10]) or 15
+            inpts_r = _iv(c1.raw[30:40]) if len(c1.raw) >= 40 else 0
+            inpts_s = _iv(c1.raw[40:50]) if len(c1.raw) >= 50 else 0
+            inpts_t = _iv(c1.raw[50:60]) if len(c1.raw) >= 60 else 0
+            nbp = _iv(c1.raw[60:70]) if len(c1.raw) >= 70 else 0
         else:
             ints = c1.ints()
-            nbp = ints[4] if len(ints) > 4 else 0
-            
-    inpts_r, inpts_s, inpts_t = 0, 0, 0
-    if nbp > 200:
+            isolid = ints[0] if len(ints) > 0 else 15
+            if len(ints) >= 6:
+                inpts_r = ints[3]
+                inpts_s = ints[4]
+                inpts_t = ints[5]
+                nbp = ints[6] if len(ints) > 6 else 0
+            elif len(ints) >= 4:
+                nbp = ints[3]
+
+    if nbp > 200 and (inpts_r == 0 or inpts_s == 0 or inpts_t == 0):
         inpts_r = nbp // 100
         rem = nbp % 100
         inpts_s = rem // 10
         inpts_t = rem % 10
-    else:
-        inpts_s = nbp
+    elif nbp > 0 and inpts_t == 0:
+        inpts_t = nbp
+        
+    if inpts_r <= 0:
+        inpts_r = 2
+    if inpts_s <= 0:
+        inpts_s = 2
+    if inpts_t <= 0:
+        inpts_t = 3
         
     h = 0.0
     if c2:
@@ -645,11 +977,58 @@ def parse_tshell(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
         "npts_r": inpts_r,
         "npts_s": inpts_s,
         "npts_t": inpts_t,
-        "h": h
+        "h": h,
+        "isolid": 15,
+        "shear_corr": 5.0 / 6.0,
     }
     
     # Return an active property so that the Engine can run SHEL16 tests
     return Property(id=block.user_id, type=20, title=title, params=params)
+
+
+def parse_tshell_comp(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
+    """/PROP/TYPE21 (/PROP/TSH_ORTH, /PROP/TSHELL_COMP) — composite thick shell."""
+    title, cards, fixed = _data_cards(block)
+    if not cards:
+        log.error("/PROP/TYPE21 block is empty", block.source)
+        return None
+
+    c1 = _get(cards, 0)
+    c2 = _get(cards, 1)
+
+    nbp = 0
+    isolid = 15
+    if c1:
+        if fixed:
+            isolid = _iv(c1.raw[0:10]) or 15
+            nbp = _iv(c1.raw[40:50]) if len(c1.raw) >= 50 else 0
+        else:
+            ints = c1.ints()
+            isolid = ints[0] if len(ints) > 0 else 15
+            nbp = ints[3] if len(ints) > 3 else 0
+
+    vx, vy, vz, angle = 1.0, 0.0, 0.0, 0.0
+    if c2:
+        if fixed:
+            vx = _fv(c2.raw[0:20]) if len(c2.raw) >= 20 else 1.0
+            vy = _fv(c2.raw[20:40]) if len(c2.raw) >= 40 else 0.0
+            vz = _fv(c2.raw[40:60]) if len(c2.raw) >= 60 else 0.0
+        else:
+            flts = c2.floats()
+            vx = flts[0] if len(flts) > 0 else 1.0
+            vy = flts[1] if len(flts) > 1 else 0.0
+            vz = flts[2] if len(flts) > 2 else 0.0
+
+    params = {
+        "isolid": isolid,
+        "nbp": nbp,
+        "vx": vx,
+        "vy": vy,
+        "vz": vz,
+        "angle": angle,
+        "shear_corr": 5.0 / 6.0,
+    }
+    return Property(id=block.user_id, type=21, title=title, params=params)
 
 
 
@@ -696,10 +1075,9 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     ptype = _type_number(typename)
     if typename in ("SH_ORTH", "TYPE9"):
         return parse_sh_orth(block, 9, log)
-    if typename in ("SH_FABR", "TYPE16"):
-        # TYPE16 orientation frame is ported; per-ply composite layup is
-        # not — parse the orientation, run as a single orthotropic layer
-        return parse_sh_orth(block, 16, log)
+    if typename in ("SH_FABR", "TYPE16", "PROP_TYPE16", "PROP_SH_FABR", "FABRIC_SHELL"):
+        from .prop_shell_type16 import parse_prop16
+        return parse_prop16(block, log=log)
     if typename in ("SPR_GENE", "TYPE8"):
         return parse_spr_gene(block, log)
     if typename in ("SPR_BEAM", "TYPE13"):
@@ -710,18 +1088,45 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
         return parse_spr_tab(block, log)
     if typename in ("SPR_BDAMP", "TYPE27"):
         return parse_spr_bdamp(block, log)
-    if typename in ("TSHELL", "TYPE20"):
+    if typename in ("SPR_PUL", "TYPE12", "PROP_TYPE12", "PROP_SPR_PUL", "P12_SPR_PUL", "PULLEY"):
+        return parse_spr_pul(block, log)
+    if typename in ("TSHELL", "TYPE20", "PROP_TYPE20"):
         return parse_tshell(block, log)
+    if typename in ("TSH_ORTH", "TYPE21", "PROP_TYPE21", "TSHELL_COMP", "TSH_COMP"):
+        return parse_tshell_comp(block, log)
     if typename in ("VOID", "TYPE0"):
         return parse_void(block, log)
     if typename in ("CONNECT", "TYPE43"):
         return parse_connect(block, log)
+    if typename in ("RIVET", "TYPE5", "PROP_TYPE5"):
+        from .prop_rivet import parse_prop_rivet
+        return parse_prop_rivet(block, log)
+    if typename in ("SH_SANDW", "TYPE11", "PROP_TYPE11", "SANDWICH", "PROP_SANDWICH", "PROP_SH_SANDW"):
+        from .prop_sandwich import parse_sandwich_card
+        return parse_sandwich_card(block, log)
     if typename in ("STITCH", "TYPE35"):
         return parse_stitch(block, log)
-    if typename in ("PREDIT", "TYPE36"):
-        return parse_predit(block, log)
-    if typename in ("SPR_MUSCLE", "TYPE46"):
+    if typename in ("STACK", "TYPE17", "SH_COMP", "PROP_TYPE17", "COMP_SHELL"):
+        from .prop_composite import parse_prop17_composite
+        return parse_prop17_composite(block, log)
+    if typename in ("THERM_SHELL", "SH_THERM", "PROP_THERM_SHELL", "TYPE19_THERM"):
+        from .prop_composite import parse_prop19_thermal
+        return parse_prop19_thermal(block, log)
+    if typename in ("SPR_TORS", "TORSION"):
+        return parse_spr_tors(block, log)
+    if typename == "TYPE19":
+        _t, _cd, _ = _data_cards(block)
+        _toks = [tk for c in _cd for tk in c.tokens()]
+        if any("THERM" in tk.upper() or "HEAT" in tk.upper() for tk in _toks):
+            from .prop_composite import parse_prop19_thermal
+            return parse_prop19_thermal(block, log)
+        return parse_spr_tors(block, log)
+    if typename in ("SPR_CRUS", "TYPE44", "CRUSH_SPRING", "SPRING_CRUSH"):
+        return parse_spr_crus(block, log)
+    if typename in ("SPR_MUSCLE", "TYPE46", "MUSCLE"):
         return parse_spr_muscle(block, log)
+    if typename in ("SPR_MAT", "TYPE23", "PROP_TYPE23", "PROP_SPR_MAT", "P23_SPR_MAT"):
+        return parse_spr_mat(block, log)
     # ---- everything else: parse-only + inactive ----------------------------
     title, _cards, _fixed = _data_cards(block)
     params = _universal_geo_params()
@@ -733,90 +1138,200 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
 
 
 def parse_stitch(block: KeywordBlock, log: MessageLog) -> Property:
-    """/PROP/STITCH (TYPE35) — Stitch connection property (M149).
+    """/PROP/STITCH or /PROP/TYPE35 — Progressive damage stitch spring property.
 
-    Fortran origin: starter/source/properties/p35_stitch/hm_read_prop35.F
-    CFG: prop_stitch.cfg
+    Fortran origin: starter/source/properties/spring/hm_read_prop35.F
+    CFG: prop_p35_stitch.cfg
     """
     title, cards, fixed = _data_cards(block)
     params = _universal_geo_params()
 
-    k_tens = 0.0
-    k_comp = 0.0
-    k_shear = 0.0
-    f_tens = 0.0
-    f_shear = 0.0
-    skew_id = 0
-    iflag = 0
-    ipen = 0
-    ifail = 0
-    dist_max = 0.0
-    area = 1.0
+    amas, elastif, xlim1, xlim2, xk = 0.0, 0.0, 0.0, 0.0, 0.0
+    fun_a1, fun_b1, fun_c1, fun_d1 = 0, 0, 0, 0
+    damg, fdelay, rload, fscal = 0.0, 0.0, 0.0, 1.0
+    k_tens, k_comp, k_shear, f_tens, f_shear = 0.0, 0.0, 0.0, 0.0, 0.0
+    skew_id, iflag, ipen, ifail, dist_max, area = 0, 0, 0, 0, 0.0, 1.0
 
-    if len(cards) > 0 and not cards[0].is_blank:
+    valid_cards = [c for c in cards if not c.is_blank]
+    if valid_cards:
         if fixed:
-            f0 = cards[0].cut("PROP_STITCH_1")
-            k_tens = _fv(f0[0]) if len(f0) > 0 else 0.0
-            k_comp = _fv(f0[1]) if len(f0) > 1 else 0.0
-            k_shear = _fv(f0[2]) if len(f0) > 2 else 0.0
-            f_tens = _fv(f0[3]) if len(f0) > 3 else 0.0
-            f_shear = _fv(f0[4]) if len(f0) > 4 else 0.0
-        else:
-            t0 = cards[0].tokens()
-            k_tens = _fv(t0[0]) if len(t0) > 0 else 0.0
-            k_comp = _fv(t0[1]) if len(t0) > 1 else 0.0
-            k_shear = _fv(t0[2]) if len(t0) > 2 else 0.0
-            f_tens = _fv(t0[3]) if len(t0) > 3 else 0.0
-            f_shear = _fv(t0[4]) if len(t0) > 4 else 0.0
+            if len(valid_cards) >= 3:
+                f0 = cards[0].cut("PROP_TYPE35_1")
+                amas = _fv(f0[0]) if len(f0) > 0 else 0.0
+                elastif = _fv(f0[1]) if len(f0) > 1 else 0.0
+                xlim1 = _fv(f0[2]) if len(f0) > 2 else 0.0
+                xlim2 = _fv(f0[3]) if len(f0) > 3 else 0.0
+                xk = _fv(f0[4]) if len(f0) > 4 else 0.0
 
-    if len(cards) > 1 and not cards[1].is_blank:
-        if fixed:
-            f1 = cards[1].cut("PROP_STITCH_2")
-            skew_id = _iv(f1[0]) if len(f1) > 0 else 0
-            iflag = _iv(f1[1]) if len(f1) > 1 else 0
-            ipen = _iv(f1[2]) if len(f1) > 2 else 0
-            ifail = _iv(f1[3]) if len(f1) > 3 else 0
-            dist_max = _fv(f1[4]) if len(f1) > 4 else 0.0
-            area = _fv(f1[5], 1.0) if len(f1) > 5 else 1.0
+                f1 = cards[1].cut("PROP_TYPE35_2")
+                damg = _fv(f1[0]) if len(f1) > 0 else 0.0
+                fdelay = _fv(f1[1]) if len(f1) > 1 else 0.0
+                rload = _fv(f1[2]) if len(f1) > 2 else 0.0
+                fscal = _fv(f1[3], 1.0) if len(f1) > 3 and f1[3].strip() else 1.0
+
+                f2 = cards[2].cut("PROP_TYPE35_3")
+                fun_a1 = _iv(f2[0]) if len(f2) > 0 else 0
+                fun_b1 = _iv(f2[1]) if len(f2) > 1 else 0
+                fun_c1 = _iv(f2[2]) if len(f2) > 2 else 0
+                fun_d1 = _iv(f2[3]) if len(f2) > 3 else 0
+            else:
+                f0 = cards[0].cut("PROP_STITCH_1")
+                amas = _fv(f0[0]) if len(f0) > 0 else 0.0
+                elastif = _fv(f0[1]) if len(f0) > 1 else 0.0
+                xlim1 = _fv(f0[2]) if len(f0) > 2 else 0.0
+                xk = _fv(f0[3]) if len(f0) > 3 else 0.0
+                if len(valid_cards) > 1:
+                    f1 = cards[1].cut("PROP_STITCH_2")
+                    fun_a1 = _iv(f1[0]) if len(f1) > 0 else 0
+                    fun_b1 = _iv(f1[1]) if len(f1) > 1 else 0
+                    fun_c1 = _iv(f1[2]) if len(f1) > 2 else 0
+                    fun_d1 = _iv(f1[3]) if len(f1) > 3 else 0
+                    damg = _fv(f1[4]) if len(f1) > 4 else 0.0
+                    fdelay = _fv(f1[5]) if len(f1) > 5 else 0.0
         else:
-            t1 = cards[1].tokens()
-            skew_id = _iv(t1[0]) if len(t1) > 0 else 0
-            iflag = _iv(t1[1]) if len(t1) > 1 else 0
-            ipen = _iv(t1[2]) if len(t1) > 2 else 0
-            ifail = _iv(t1[3]) if len(t1) > 3 else 0
-            dist_max = _fv(t1[4]) if len(t1) > 4 else 0.0
-            area = _fv(t1[5], 1.0) if len(t1) > 5 else 1.0
+            t0 = valid_cards[0].tokens()
+            if len(valid_cards) >= 3 and len(valid_cards[2].tokens()) == 4:
+                amas = _fv(t0[0]) if len(t0) > 0 else 0.0
+                elastif = _fv(t0[1]) if len(t0) > 1 else 0.0
+                xlim1 = _fv(t0[2]) if len(t0) > 2 else 0.0
+                xlim2 = _fv(t0[3]) if len(t0) > 3 else 0.0
+                xk = _fv(t0[4]) if len(t0) > 4 else 0.0
+
+                t1 = valid_cards[1].tokens()
+                damg = _fv(t1[0]) if len(t1) > 0 else 0.0
+                fdelay = _fv(t1[1]) if len(t1) > 1 else 0.0
+                rload = _fv(t1[2]) if len(t1) > 2 else 0.0
+                fscal = _fv(t1[3], 1.0) if len(t1) > 3 else 1.0
+
+                t2 = valid_cards[2].tokens()
+                fun_a1 = _iv(t2[0]) if len(t2) > 0 else 0
+                fun_b1 = _iv(t2[1]) if len(t2) > 1 else 0
+                fun_c1 = _iv(t2[2]) if len(t2) > 2 else 0
+                fun_d1 = _iv(t2[3]) if len(t2) > 3 else 0
+            elif len(t0) >= 5:
+                k_tens = _fv(t0[0])
+                k_comp = _fv(t0[1])
+                k_shear = _fv(t0[2])
+                f_tens = _fv(t0[3])
+                f_shear = _fv(t0[4])
+                if len(valid_cards) > 1:
+                    t1 = valid_cards[1].tokens()
+                    skew_id = _iv(t1[0]) if len(t1) > 0 else 0
+                    iflag = _iv(t1[1]) if len(t1) > 1 else 0
+                    ipen = _iv(t1[2]) if len(t1) > 2 else 0
+                    ifail = _iv(t1[3]) if len(t1) > 3 else 0
+                    dist_max = _fv(t1[4]) if len(t1) > 4 else 0.0
+                    area = _fv(t1[5], 1.0) if len(t1) > 5 else 1.0
+            else:
+                amas = _fv(t0[0]) if len(t0) > 0 else 0.0
+                elastif = _fv(t0[1]) if len(t0) > 1 else 0.0
+                xlim1 = _fv(t0[2]) if len(t0) > 2 else 0.0
+                xk = _fv(t0[3]) if len(t0) > 3 else 0.0
+                if len(valid_cards) > 1:
+                    t1 = valid_cards[1].tokens()
+                    fun_a1 = _iv(t1[0]) if len(t1) > 0 else 0
+                    fun_b1 = _iv(t1[1]) if len(t1) > 1 else 0
+                    fun_c1 = _iv(t1[2]) if len(t1) > 2 else 0
+                    fun_d1 = _iv(t1[3]) if len(t1) > 3 else 0
+                    damg = _fv(t1[4]) if len(t1) > 4 else 0.0
+                    fdelay = _fv(t1[5]) if len(t1) > 5 else 0.0
+
+    if fscal == 0.0:
+        fscal = 1.0
 
     params.update({
+        "mass": amas, "amas": amas, "elastif": elastif, "stiff": elastif, "k": elastif,
+        "xlim1": xlim1, "x_lim1": xlim1, "xlim2": xlim2, "x_lim2": xlim2,
+        "xk": xk, "k_post": xk,
+        "fun_a1": fun_a1, "fun_b1": fun_b1, "fun_c1": fun_c1, "fun_d1": fun_d1,
+        "damg": damg, "d1": damg, "fdelay": fdelay, "d2": fdelay,
+        "rload": rload, "iload": int(rload), "fscal": fscal,
         "k_tens": k_tens, "k_comp": k_comp, "k_shear": k_shear,
         "f_tens": f_tens, "f_shear": f_shear,
         "skew_id": skew_id, "iflag": iflag, "ipen": ipen,
-        "ifail": ifail, "dist_max": dist_max, "area": area
+        "ifail": ifail, "dist_max": dist_max, "area": area,
     })
     return Property(id=block.user_id, type=35, title=title, params=params)
 
 
 def parse_predit(block: KeywordBlock, log: MessageLog) -> Property:
-    """/PROP/PREDIT (TYPE36) — Progressive Damage Interface Property (M149).
+    """/PROP/PREDIT (TYPE36) — Progressive Damage Interface Property.
 
-    Fortran origin: starter/source/properties/p36_predit/hm_read_prop36.F
-    CFG: prop_predit.cfg
+    Fortran origin:
+      starter/source/properties/spring/hm_read_prop36.F
+      config/CFG/radioss110/PROP/prop_p36_predit.cfg
     """
     title, cards, fixed = _data_cards(block)
     params = _universal_geo_params()
 
-    itype = 0
+    lutype = 1
     if len(cards) > 0 and not cards[0].is_blank:
         if fixed:
             f0 = cards[0].cut("PROP_PREDIT_1")
-            itype = _iv(f0[0]) if len(f0) > 0 else 0
+            lutype = _iv(f0[0]) if len(f0) > 0 else 1
         else:
             t0 = cards[0].tokens()
-            itype = _iv(t0[0]) if len(t0) > 0 else 0
+            lutype = _iv(t0[0]) if len(t0) > 0 else 1
 
-    params["itype"] = itype
+    params["lutype"] = lutype
+    params["itype"] = lutype
 
-    if itype == 0:
+    if lutype == 1:
+        skew_id, prop_id1, prop_id2 = 0, 0, 0
+        xk = 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            if fixed:
+                f1 = cards[1].cut("PROP_PREDIT_2A")
+                skew_id = _iv(f1[0]) if len(f1) > 0 else 0
+                prop_id1 = _iv(f1[1]) if len(f1) > 1 else 0
+                prop_id2 = _iv(f1[2]) if len(f1) > 2 else 0
+            else:
+                t1 = cards[1].tokens()
+                skew_id = _iv(t1[0]) if len(t1) > 0 else 0
+                prop_id1 = _iv(t1[1]) if len(t1) > 1 else 0
+                prop_id2 = _iv(t1[2]) if len(t1) > 2 else 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            if fixed:
+                f2 = cards[2].cut("PROP_PREDIT_3A")
+                xk = _fv(f2[0]) if len(f2) > 0 else 0.0
+            else:
+                t2 = cards[2].tokens()
+                xk = _fv(t2[0]) if len(t2) > 0 else 0.0
+        params.update({
+            "skew_csid": skew_id, "skew_id": skew_id,
+            "prop_id1": prop_id1, "prop_id2": prop_id2,
+            "xk": xk,
+        })
+    elif lutype == 2:
+        mat_id = 0
+        area, ixx, iyy, izz, ray = 0.0, 0.0, 0.0, 0.0, 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            if fixed:
+                f1 = cards[1].cut("PROP_PREDIT_2B")
+                mat_id = _iv(f1[0]) if len(f1) > 0 else 0
+            else:
+                t1 = cards[1].tokens()
+                mat_id = _iv(t1[0]) if len(t1) > 0 else 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            if fixed:
+                f2 = cards[2].cut("PROP_PREDIT_3B")
+                area = _fv(f2[0]) if len(f2) > 0 else 0.0
+                ixx = _fv(f2[1]) if len(f2) > 1 else 0.0
+                iyy = _fv(f2[2]) if len(f2) > 2 else 0.0
+                izz = _fv(f2[3]) if len(f2) > 3 else 0.0
+                ray = _fv(f2[4]) if len(f2) > 4 else 0.0
+            else:
+                t2 = cards[2].tokens()
+                area = _fv(t2[0]) if len(t2) > 0 else 0.0
+                ixx = _fv(t2[1]) if len(t2) > 1 else 0.0
+                iyy = _fv(t2[2]) if len(t2) > 2 else 0.0
+                izz = _fv(t2[3]) if len(t2) > 3 else 0.0
+                ray = _fv(t2[4]) if len(t2) > 4 else 0.0
+        params.update({
+            "mat_id": mat_id, "area": area, "ixx": ixx, "iyy": iyy, "izz": izz, "ray": ray,
+        })
+    else:
+        # Legacy/direct fallback
         fct_id1, fct_id2, fct_id3 = 0, 0, 0
         k_init = 0.0
         if len(cards) > 1 and not cards[1].is_blank:
@@ -838,34 +1353,72 @@ def parse_predit(block: KeywordBlock, log: MessageLog) -> Property:
                 t2 = cards[2].tokens()
                 k_init = _fv(t2[0]) if len(t2) > 0 else 0.0
         params.update({"fct_id1": fct_id1, "fct_id2": fct_id2, "fct_id3": fct_id3, "k_init": k_init})
-    else:
-        itype_sub = 0
-        p1, p2, p3, p4, p5 = 0.0, 0.0, 0.0, 0.0, 0.0
-        if len(cards) > 1 and not cards[1].is_blank:
-            if fixed:
-                f1 = cards[1].cut("PROP_PREDIT_2B")
-                itype_sub = _iv(f1[0]) if len(f1) > 0 else 0
-            else:
-                t1 = cards[1].tokens()
-                itype_sub = _iv(t1[0]) if len(t1) > 0 else 0
-        if len(cards) > 2 and not cards[2].is_blank:
-            if fixed:
-                f2 = cards[2].cut("PROP_PREDIT_3B")
-                p1 = _fv(f2[0]) if len(f2) > 0 else 0.0
-                p2 = _fv(f2[1]) if len(f2) > 1 else 0.0
-                p3 = _fv(f2[2]) if len(f2) > 2 else 0.0
-                p4 = _fv(f2[3]) if len(f2) > 3 else 0.0
-                p5 = _fv(f2[4]) if len(f2) > 4 else 0.0
-            else:
-                t2 = cards[2].tokens()
-                p1 = _fv(t2[0]) if len(t2) > 0 else 0.0
-                p2 = _fv(t2[1]) if len(t2) > 1 else 0.0
-                p3 = _fv(t2[2]) if len(t2) > 2 else 0.0
-                p4 = _fv(t2[3]) if len(t2) > 3 else 0.0
-                p5 = _fv(t2[4]) if len(t2) > 4 else 0.0
-        params.update({"itype_sub": itype_sub, "p1": p1, "p2": p2, "p3": p3, "p4": p4, "p5": p5})
 
     return Property(id=block.user_id, type=36, title=title, params=params)
+
+
+def parse_spr_tors(block: KeywordBlock, log: MessageLog) -> Property:
+    """/PROP/TYPE19 or /PROP/SPR_TORS: Torsion spring property."""
+    title, cards, fixed = _data_cards(block)
+    params = _universal_geo_params()
+    mass = 0.0
+    inertia = 0.0
+    k_theta = 0.0
+    c_theta = 0.0
+    if cards and not cards[0].is_blank:
+        toks = cards[0].tokens()
+        if len(toks) > 0:
+            mass = _fv(toks[0])
+        if len(toks) > 1:
+            inertia = _fv(toks[1])
+        if len(toks) > 2:
+            k_theta = _fv(toks[2])
+        if len(toks) > 3:
+            c_theta = _fv(toks[3])
+    params.update({
+        "mass": mass, "inertia": inertia, "k_theta": k_theta, "c_theta": c_theta,
+        "k": k_theta, "c": c_theta,
+    })
+    return Property(id=block.user_id, type=19, title=title, params=params)
+
+
+def parse_spr_crus(block: KeywordBlock, log: MessageLog) -> Property:
+    """/PROP/TYPE44 or /PROP/SPR_CRUS: Crushing frame spring property."""
+    title, cards, fixed = _data_cards(block)
+    params = _universal_geo_params()
+    mass = 0.0
+    inertia = 0.0
+    stiff1 = 0.0
+    k11 = 0.0
+    f_yield = 0.0
+    k_unload = 0.0
+    delta_crush = 0.0
+    c = 0.0
+    fun_a1 = 0
+    fun_b1 = 0
+    fun_a2 = 0
+    if len(cards) > 0 and not cards[0].is_blank:
+        t0 = cards[0].tokens()
+        mass = _fv(t0[0]) if len(t0) > 0 else 0.0
+        inertia = _fv(t0[1]) if len(t0) > 1 else 0.0
+        stiff1 = _fv(t0[2]) if len(t0) > 2 else 0.0
+    if len(cards) > 1 and not cards[1].is_blank:
+        t1 = cards[1].tokens()
+        k11 = _fv(t1[0]) if len(t1) > 0 else 0.0
+        k_unload = k11
+    if len(cards) > 3 and not cards[3].is_blank:
+        t3 = cards[3].tokens()
+        fun_a1 = _iv(t3[0]) if len(t3) > 0 else 0
+        fun_b1 = _iv(t3[1]) if len(t3) > 1 else 0
+        fun_a2 = _iv(t3[2]) if len(t3) > 2 else 0
+    params.update({
+        "mass": mass, "inertia": inertia, "stiff1": stiff1, "k11": k11,
+        "k_unload": k_unload if k_unload > 0 else stiff1,
+        "k": k11 if k11 > 0 else stiff1,
+        "f_yield": f_yield, "delta_crush": delta_crush, "c": c,
+        "fun_a1": fun_a1, "fun_b1": fun_b1, "fun_a2": fun_a2,
+    })
+    return Property(id=block.user_id, type=44, title=title, params=params)
 
 
 def parse_spr_muscle(block: KeywordBlock, log: MessageLog) -> Property:
@@ -988,6 +1541,91 @@ def parse_connect(block: KeywordBlock, log: MessageLog) -> Property:
             
     return Property(id=block.user_id, type=43, title=title, params=params)
 
+def parse_spr_mat(block: KeywordBlock, log: MessageLog) -> Property:
+    """/PROP/TYPE23 or /PROP/SPR_MAT: Spring with Material Laws property.
+
+    Fortran origin: starter/source/properties/spring/hm_read_prop23.F
+    CFG: prop_p23_SPR_MAT.cfg
+    """
+    title, cards, fixed = _data_cards(block)
+    params = _universal_geo_params()
+    imass = 2
+    area_or_volume = 0.0
+    inertia = 0.0
+    skew_id = 0
+    sens_id = 0
+    isflag = 0
+
+    valid_cards = [c for c in cards if not c.is_blank]
+    if valid_cards:
+        c0 = valid_cards[0]
+        if fixed:
+            raw = c0.raw if hasattr(c0, "raw") else str(c0)
+            f0 = raw[0:10].strip()
+            f1 = raw[10:30].strip()
+            f2 = raw[30:50].strip()
+            f3 = raw[50:60].strip()
+            f4 = raw[60:70].strip()
+            f5 = raw[70:80].strip() if len(raw) > 70 else ""
+            if len(f0) > 0 and "." not in f0 and (len(f1) > 0 or len(f2) > 0):
+                imass = _iv(f0, 2)
+                area_or_volume = _fv(f1)
+                inertia = _fv(f2)
+                skew_id = _iv(f3)
+                sens_id = _iv(f4)
+                isflag = _iv(f5)
+            else:
+                area_or_volume = _fv(raw[0:20].strip())
+                skew_id = _iv(raw[20:30].strip())
+                sens_id = _iv(raw[30:40].strip())
+                isflag = _iv(raw[40:50].strip())
+                imass = 1
+        else:
+            toks = c0.tokens()
+            if len(toks) >= 6:
+                imass = _iv(toks[0], 2)
+                area_or_volume = _fv(toks[1])
+                inertia = _fv(toks[2])
+                skew_id = _iv(toks[3])
+                sens_id = _iv(toks[4])
+                isflag = _iv(toks[5])
+            elif len(toks) == 4:
+                area_or_volume = _fv(toks[0])
+                skew_id = _iv(toks[1])
+                sens_id = _iv(toks[2])
+                isflag = _iv(toks[3])
+                imass = 1
+            else:
+                imass = _iv(toks[0], 2) if len(toks) > 0 else 2
+                area_or_volume = _fv(toks[1]) if len(toks) > 1 else (_fv(toks[0]) if len(toks) > 0 else 0.0)
+                inertia = _fv(toks[2]) if len(toks) > 2 else 0.0
+                skew_id = _iv(toks[3]) if len(toks) > 3 else 0
+                sens_id = _iv(toks[4]) if len(toks) > 4 else 0
+                isflag = _iv(toks[5]) if len(toks) > 5 else 0
+
+    if imass == 0:
+        imass = 2
+
+    params.update({
+        "imass": imass,
+        "area_or_volume": area_or_volume,
+        "mass": area_or_volume,
+        "inertia": inertia,
+        "skew_id": skew_id,
+        "sens_id": sens_id,
+        "sensor_id": sens_id,
+        "isens": sens_id,
+        "isflag": isflag,
+        "iflag": isflag,
+    })
+    if imass == 1:
+        params["area"] = area_or_volume
+    elif imass == 2:
+        params["volume"] = area_or_volume
+
+    return Property(id=block.user_id, type=23, title=title, params=params)
+
+
 def _type_number(typename: str) -> int:
     if typename in PROP_TYPE_NUMBERS:
         return PROP_TYPE_NUMBERS[typename]
@@ -997,3 +1635,13 @@ def _type_number(typename: str) -> int:
         except ValueError:
             return -1
     return -1
+
+
+def parse_sandwich(block: KeywordBlock, log: MessageLog) -> Property:
+    """Parse /PROP/TYPE11 (SH_SANDW, SANDWICH) sandwich shell property."""
+    from .prop_sandwich import parse_sandwich_card
+    return parse_sandwich_card(block, log)
+
+
+parse_prop11_sandwich = parse_sandwich
+

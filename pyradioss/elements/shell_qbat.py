@@ -23,6 +23,15 @@ Fortran origin: ``engine/source/elements/shell/coqueba/`` — the cycle path
     cbaproj.F   local 5-dof forces -> global 6-dof nodal forces/moments
                 (+ the free-rigid-mode projection of the warped element)
     cndt3.F     dt claim from the condensed length (via cbacoor's LL)
+    cbacoorpinch.F  CBACOORPINCH through-thickness stretch DOFs, local transform & thickness scaling
+    cbadefpinch.F   CBADEFPINCH pinching transverse shear & through-thickness normal stretch rates
+    cbastra3pinch.F CBASTRA3PINCH strain increments EPINCHXZ, EPINCHYZ, EZZ
+    cbaforipinch.F  CBAFORIPINCH internal pinching force assembly
+    cbapinchproj.F  CBAPINCHPROJ local pinching force -> global 3D nodal forces along normal
+    cbapinchthk.F   CBAPINCHTHK dynamic thickness update from through-thickness strain
+    cndt3pinch.F    CNDT3PINCH 3D solid sound speed & dt claim with pinching
+    cupdtn3pinch.F  CUPDTN3PINCH accumulation of global pinching forces
+    mulawglcpinch.F / sigeps01gpinch.F 3D Hooke's law with through-thickness stretch coupling
 
 Formulation (Batoz & Dhatt, "Modélisation des structures par éléments
 finis", vol. 3; the Q4gamma24 / DKQ12-style shell):
@@ -96,7 +105,12 @@ finis", vol. 3; the Q4gamma24 / DKQ12-style shell):
   bookkeeping: FAC2 and the final LL use the sum-of-Gauss-Jacobians area,
   the LM term keeps the FLAT-area inverse — lines 926 vs 1089/1096).
 
-* **Ithick**: thickness change is NOT ported (constant THK0 = deck value),
+* **Ipinch (pinching DOFs)**: through-thickness stretch DOFs (Ipinch=1 on
+  /PROP/SHELL) with full 3D Hooke's law coupling, dynamic thickness update,
+  and normal force projection along nodal normals (cbacoorpinch.F, cbadefpinch.F,
+  cbastra3pinch.F, cbaforipinch.F, cbapinchproj.F, cbapinchthk.F, cndt3pinch.F).
+
+* **Ithick**: thickness change without pinching is constant THK0 = deck value,
   matching the c04-family decks (Ithick = 0). Idrill > 0 (ISROT) is NOT
   ported — the deck reader does not surface Idrill; the Idrill=0 branch
   (assumed constant membrane shear, no drilling stiffness) is what every
@@ -136,6 +150,10 @@ _ETA_N = np.array([-1.0, -1.0, 1.0, 1.0])
 #: closed form dN_j/dksi = ksi_j (1 + eta eta_j)/4).
 _VKSI = 0.25 * _KSI_N[:, None] * (1.0 + _VPG[None, :, 1] * _ETA_N[:, None])
 _VETA = 0.25 * _ETA_N[:, None] * (1.0 + _VPG[None, :, 0] * _KSI_N[:, None])
+
+#: Shape function values N_j at Gauss point ng (cbacoorpinch.F lines 65-90)
+#: _TNPG[j, ng] = 0.25 * (1 + ksi_j * ksi_g) * (1 + eta_j * eta_g)
+_TNPG = 0.25 * (1.0 + _KSI_N[:, None] * _VPG[None, :, 0]) * (1.0 + _ETA_N[:, None] * _VPG[None, :, 1])
 
 #: flat/warped split tolerance (cbacoor.F TOL=EM12, ISROT=0)
 _TOL_FLAT = 1.0e-12
@@ -230,6 +248,7 @@ def init_group(group, model, log):
             mass=np.empty(0, dtype=float),
             rho0=np.empty(0, dtype=float),
             nu0=np.empty(0, dtype=float),
+            E_mod=np.empty(0, dtype=float),
             ssp0=np.empty(0, dtype=float),
             amu=np.empty(0, dtype=float),
             eint=np.empty(0, dtype=float),
@@ -239,6 +258,16 @@ def init_group(group, model, log):
             slices=[],
             off=np.empty(0, dtype=float),
             chk_fail=False,
+            ipinch=False,
+            vpinch=np.empty((0, 4, 3), dtype=float),
+            fpinch=np.empty((0, 4, 3), dtype=float),
+            thk0=np.empty(0, dtype=float),
+            ezzpg=np.empty((0, 4), dtype=float),
+            forpg_pinch=np.empty((0, 4), dtype=float),
+            mompg_pinch=np.empty((0, 4, 2), dtype=float),
+            epg_pinch_xz=np.empty((0, 4), dtype=float),
+            epg_pinch_yz=np.empty((0, 4), dtype=float),
+            epg_pinch_zz=np.empty((0, 4), dtype=float),
         )
         return np.empty(0, dtype=np.int64), np.empty(0, dtype=float), np.empty(0, dtype=float)
 
@@ -246,13 +275,14 @@ def init_group(group, model, log):
     E, det = _frame(xe)
     area = 0.25 * det
     bad = area <= EM20
-    if np.any(bad):
+    if np.any(bad) and log is not None:
         for eid in group.ids[bad]:
             log.error(f"/SHELL {eid}: zero or negative area", "SHELL INIT")
 
     thick = np.zeros(n)
     rho0 = np.zeros(n)
     nu = np.zeros(n)
+    E_mod = np.zeros(n)
     amu = np.zeros(n)
     ssp = np.zeros(n)
     nip_max = 1
@@ -261,6 +291,7 @@ def init_group(group, model, log):
         thick[sl] = params.get("thick") if "thick" in params else getattr(prop, "thick", 0.0)
         rho0[sl] = getattr(mat, "rho0", 0.0)
         nu[sl] = getattr(mat, "nu", 0.3)
+        E_mod[sl] = getattr(mat, "E", getattr(mat, "young", 0.0))
         if getattr(mat, "rho0", 0.0) > 0.0 and getattr(mat, "law", 1) != 0:
             try:
                 ssp[sl] = materials.sound_speed(mat, is_shell=True)
@@ -275,12 +306,29 @@ def init_group(group, model, log):
         amu[sl] = dn_val if dn_val > 0.0 else _DN_DEFAULT
         nip_val = int(params.get("nip", 1)) if "nip" in params else getattr(prop, "nip", 1)
         nip_max = max(nip_max, nip_val)
-        if nip_val == 1:
+        if nip_val == 1 and log is not None:
             log.warning(
                 f"/PROP/SHELL/{getattr(prop, 'id', 0)}: QBAT with N=1 runs the layered "
                 f"path with SHF=0 (membrane-only, cncoef3.F NPT==1); the "
                 f"upstream CBAFORI1/CBAVISNP1 branch is not ported",
                 "SHELL INIT")
+
+    # QBAT pinching detection (cbacoorpinch.F / sigeps01gpinch.F)
+    ipinch = bool(group.state.get("ipinch", False) or any(
+        getattr(prop, "ipinch", 0) == 1
+        or getattr(prop, "params", {}).get("ipinch", 0) == 1
+        for _, mat, prop in group.state["slices"]
+    ))
+    if ipinch:
+        # Recompute sound speed as solid P-wave speed: ssp = sqrt(PA1 / rho) (sigeps01gpinch.F line 133)
+        for sl, mat, prop in group.state["slices"]:
+            if getattr(mat, "rho0", 0.0) > 0.0 and getattr(mat, "law", 1) != 0:
+                E_mod = getattr(mat, "E", getattr(mat, "young", 0.0))
+                nu_val = nu[sl]
+                if E_mod > 0.0 and (1.0 - 2.0 * nu_val) > EM20:
+                    pa1 = E_mod * (1.0 - nu_val) / ((1.0 + nu_val) * (1.0 - 2.0 * nu_val))
+                    ssp[sl] = np.sqrt(pa1 / rho0[sl])
+
     mass = rho0 * thick * area
 
     zw = []
@@ -299,16 +347,27 @@ def init_group(group, model, log):
         mompg=np.zeros((n, 4, 3)),     # viscosity) / GBUF%MOMPG (M/t^2)
         for_mean=np.zeros((n, 5)),     # GBUF%FOR = 4-GP mean, previous cycle
         thick=thick,
+        thk0=thick.copy(),
         area0=area.copy(),
         mass=mass,
         rho0=rho0,
         nu0=nu,
+        E_mod=E_mod,
         ssp0=ssp,
         amu=amu,
         eint=np.zeros(n),
         ehour=np.zeros(n),             # cbavisc.F work -> PARTSAV(8) slot
         zw=zw,
         nip_max=nip_max,
+        ipinch=ipinch,
+        vpinch=np.zeros((n, 4, 3)),
+        fpinch=np.zeros((n, 4, 3)),
+        ezzpg=np.zeros((n, 4)),
+        forpg_pinch=np.zeros((n, 4)),
+        mompg_pinch=np.zeros((n, 4, 2)),
+        epg_pinch_xz=np.zeros((n, 4)),
+        epg_pinch_yz=np.zeros((n, 4)),
+        epg_pinch_zz=np.zeros((n, 4)),
     )
     _init_material_state(group, nk)
     node_idx = group.conn.reshape(-1)
@@ -927,6 +986,252 @@ def _warp_gp(g, ng):
 
 
 # ----------------------------------------------------------------------------
+# QBAT Pinching (Through-Thickness Stretch) Routines
+# ----------------------------------------------------------------------------
+
+def _compute_vqn(g):
+    """Nodal frames VQN = [t1 (3) | t2 (3) | n (3)] for all elements.
+
+    # Ported from engine/source/elements/shell/coqueba/cbacoor.F lines 614-650
+    """
+    n = g["n"]
+    vqn = np.zeros((n, 4, 9))
+    if len(g.get("i_w", [])):
+        vqn[g["i_w"]] = g["vqn"]
+    if len(g.get("i_f", [])):
+        i = g["i_f"]
+        mx13, my13 = g["mx13"][i], g["my13"][i]
+        mx23, my23 = g["mx23"][i], g["my23"][i]
+        cx, cy = g["cx"][i], g["cy"][i]
+        x21 = mx23 - mx13
+        y21 = my23 - my13
+        l12 = np.sqrt(x21 ** 2 + y21 ** 2)
+        sl12 = 1.0 / np.maximum(l12, EM20)
+        t1_12 = np.stack([x21 * sl12, y21 * sl12, np.zeros_like(x21)], axis=1)
+        t2_12 = np.stack([-y21 * sl12, x21 * sl12, np.zeros_like(x21)], axis=1)
+
+        x34 = 0.5 * (cx[:, 2] - cx[:, 3])
+        y34 = 0.5 * (cy[:, 2] - cy[:, 3])
+        l34 = np.sqrt(x34 ** 2 + y34 ** 2)
+        sl34 = 1.0 / np.maximum(l34, EM20)
+        t1_34 = np.stack([x34 * sl34, y34 * sl34, np.zeros_like(x34)], axis=1)
+        t2_34 = np.stack([-y34 * sl34, x34 * sl34, np.zeros_like(x34)], axis=1)
+
+        nrm = np.zeros((len(i), 3))
+        nrm[:, 2] = 1.0
+
+        for j in (0, 1):
+            vqn[i, j, 0:3] = t1_12
+            vqn[i, j, 3:6] = t2_12
+            vqn[i, j, 6:9] = nrm
+        for j in (2, 3):
+            vqn[i, j, 0:3] = t1_34
+            vqn[i, j, 3:6] = t2_34
+            vqn[i, j, 6:9] = nrm
+    return vqn
+
+
+def _cbacoorpinch(E, vqn, vpe, thick, dt, lc):
+    """Transform global pinching velocities into local frame and scale by thickness.
+
+    # Ported from engine/source/elements/shell/coqueba/cbacoorpinch.F lines 93-200
+    E     : (n, 3, 3) element corotational triad (columns e1, e2, e3)
+    vqn   : (n, 4, 9) nodal frames [t1, t2, n]
+    vpe   : (n, 4, 3) nodal pinching velocities in global coordinates
+    thick : (n,) shell thickness
+    dt    : float, time step
+    lc    : (n,) characteristic length
+    Returns: (vp_xyz, vp_t1, vp_t2, facp, ezzavg, avgthk)
+    """
+    # BETABETA = VQ^T @ VPINCH (lines 102-125): E has columns e1, e2, e3
+    betabeta = np.einsum("nka,njk->nja", E, vpe)  # (n, 4, 3)
+
+    # Project on t1, t2, normal (lines 129-168)
+    vp_t1 = np.einsum("nja,nja->nj", vqn[:, :, 0:3], betabeta)   # (n, 4)
+    vp_t2 = np.einsum("nja,nja->nj", vqn[:, :, 3:6], betabeta)   # (n, 4)
+    vp_xyz = np.einsum("nja,nja->nj", vqn[:, :, 6:9], betabeta)  # (n, 4)
+
+    # Average thickness (lines 170-176)
+    thkn = thick[:, None] * (1.0 + 2.0 * vp_xyz * dt)
+    avgthk = thkn.mean(axis=1)
+    elthkinv = 2.0 / np.maximum(avgthk, EM20)
+
+    # Divide by thickness (lines 179-194)
+    vp_xyz = vp_xyz * elthkinv[:, None]
+    vp_t1 = vp_t1 * elthkinv[:, None]
+    vp_t2 = vp_t2 * elthkinv[:, None]
+
+    # Stiffness scaling factor for dynamic condensation (line 198)
+    facp = (lc / np.maximum(avgthk, EM20)) ** 2
+    ezzavg = 0.25 * vp_xyz.sum(axis=1) * dt
+    return vp_xyz, vp_t1, vp_t2, facp, ezzavg, avgthk
+
+
+def _compute_tc_flat(g, ng):
+    """Compute 2x2 inverse Jacobian TC for flat elements at GP ng.
+
+    # Ported from engine/source/elements/shell/coqueba/cbadef.F lines 212-219
+    """
+    i = g["i_f"]
+    cx, cy = g["cx"][i], g["cy"][i]
+    m = len(i)
+    j00 = np.sum(_VKSI[:, ng][None, :] * cx, axis=1)
+    j01 = np.sum(_VKSI[:, ng][None, :] * cy, axis=1)
+    j10 = np.sum(_VETA[:, ng][None, :] * cx, axis=1)
+    j11 = np.sum(_VETA[:, ng][None, :] * cy, axis=1)
+    detj = j00 * j11 - j01 * j10
+    detj_safe = np.where(np.abs(detj) < EM20, 1.0, detj)
+    tc = np.empty((m, 2, 2))
+    tc[:, 0, 0] = j11 / detj_safe
+    tc[:, 0, 1] = -j01 / detj_safe
+    tc[:, 1, 0] = -j10 / detj_safe
+    tc[:, 1, 1] = j00 / detj_safe
+    return tc
+
+
+def _cbadefpinch(tc, vqg_11, vqg_12, vp_xyz, vp_t1, vp_t2, ng):
+    """Compute pinching transverse-shear, thickness stretch, and gradient strain rates.
+
+    # Ported from engine/source/elements/shell/coqueba/cbadefpinch.F lines 65-181
+    tc     : (n, 2, 2) inverse in-plane Jacobian at Gauss point ng
+    vqg_11 : (n,) x-component of Gauss point triad vector 1
+    vqg_12 : (n,) x-component of Gauss point triad vector 2
+    vp_xyz : (n, 4) normal pinching velocity rates
+    vp_t1  : (n, 4) tangent 1 pinching velocity rates
+    vp_t2  : (n, 4) tangent 2 pinching velocity rates
+    ng     : int, Gauss point index 0..3
+    Returns:
+        vdefpinch : (n, 3) [rate_xz, rate_yz, rate_zz]
+        bcp       : (n, 4, 2) matrix [BCP] for transverse shear due to pinching
+        bp        : (4,) shape functions at Gauss point ng
+        dbetadxy  : (n, 3) in-plane derivatives of beta
+    """
+    n = len(tc)
+    bcp = np.empty((n, 4, 2))
+    for j in range(4):
+        d1 = _VKSI[j, ng] * tc[:, 0, 0] + _VETA[j, ng] * tc[:, 1, 0]
+        d2 = _VKSI[j, ng] * tc[:, 0, 1] + _VETA[j, ng] * tc[:, 1, 1]
+        bcp[:, j, 0] = vqg_11 * d1
+        bcp[:, j, 1] = vqg_12 * d2
+
+    # Transverse shear rate due to pinching (lines 108-128)
+    bcx = np.sum(bcp[:, :, 0] * vp_xyz, axis=1)
+    bcy = np.sum(bcp[:, :, 1] * vp_xyz, axis=1)
+
+    vdefpinch = np.empty((n, 3))
+    vdefpinch[:, 0] = tc[:, 0, 0] * bcx + tc[:, 1, 0] * bcx
+    vdefpinch[:, 1] = tc[:, 0, 1] * bcx + tc[:, 1, 1] * bcy
+
+    # Through-thickness stretch rate (lines 136-144)
+    bp = _TNPG[:, ng]  # (4,)
+    vdefpinch[:, 2] = np.sum(bp[None, :] * vp_xyz, axis=1)
+
+    # In-plane derivatives of beta (lines 150-170)
+    dbetadxy = np.empty((n, 3))
+    dn_dx = _VKSI[:, ng][None, :] * tc[:, 0:1, 0] + _VETA[:, ng][None, :] * tc[:, 1:2, 0]  # (n, 4)
+    dn_dy = _VKSI[:, ng][None, :] * tc[:, 0:1, 1] + _VETA[:, ng][None, :] * tc[:, 1:2, 1]  # (n, 4)
+
+    dbetadxy[:, 0] = np.sum(dn_dx * vp_t1, axis=1)
+    dbetadxy[:, 1] = np.sum(dn_dy * vp_t2, axis=1)
+    dbetadxy[:, 2] = 0.5 * (np.sum(dn_dy * vp_t1, axis=1) + np.sum(dn_dx * vp_t2, axis=1))
+
+    return vdefpinch, bcp, bp, dbetadxy
+
+
+def _cbastra3pinch(vdefpinch, dt):
+    """Compute strain increments due to pinching.
+
+    # Ported from engine/source/elements/shell/coqueba/cbastra3pinch.F lines 65-74
+    vdefpinch : (n, 3) [rate_xz, rate_yz, rate_zz]
+    dt        : float, time step
+    Returns: (epinch_xz, epinch_yz, ezz)
+    """
+    epinch_xz = vdefpinch[:, 0] * dt
+    epinch_yz = vdefpinch[:, 1] * dt
+    ezz = vdefpinch[:, 2] * dt
+    return epinch_xz, epinch_yz, ezz
+
+
+def _cbaforipinch(cdet, thick, bcp, bp, sig_zz, mom_p):
+    """Compute internal pinching forces at the 4 nodes.
+
+    # Ported from engine/source/elements/shell/coqueba/cbaforipinch.F lines 60-72
+    cdet   : (n,) Gauss Jacobian determinant
+    thick  : (n,) shell thickness
+    bcp    : (n, 4, 2) pinching transverse shear operator
+    bp     : (4,) shape functions at Gauss point
+    sig_zz : (n,) through-thickness normal stress resultant (FF)
+    mom_p  : (n, 2) pinching shear moments [M_xz^p / t^2, M_yz^p / t^2] (MM)
+    Returns:
+        vfpinch : (n, 4) internal pinching generalized force at 4 nodes
+    """
+    c1 = (thick ** 2 / 12.0) * cdet
+    c2 = thick * cdet
+    vfpinch = np.empty((len(cdet), 4))
+    for j in range(4):
+        vfpinch[:, j] = (
+            c1 * (bcp[:, j, 0] * mom_p[:, 0] + bcp[:, j, 1] * mom_p[:, 1])
+            + c2 * bp[j] * sig_zz
+        )
+    return vfpinch
+
+
+def _cbapinchproj(E, vqn, vfpinch, thick0):
+    """Project local nodal pinching force along normal into global 3D forces.
+
+    # Ported from engine/source/elements/shell/coqueba/cbapinchproj.F lines 59-133
+    E       : (n, 3, 3) element corotational triad
+    vqn     : (n, 4, 9) nodal frames (normals at 6:9)
+    vfpinch : (n, 4) local pinching force
+    thick0  : (n,) initial thickness
+    Returns:
+        fp : (n, 4, 3) global nodal pinching force vectors
+    """
+    elthkinv = 1.0 / np.maximum(thick0, EM20)
+    # FPP = (vfpinch / thick0) * normal
+    fpp = (vfpinch * elthkinv[:, None])[:, :, None] * vqn[:, :, 6:9]  # (n, 4, 3) in local frame
+    # Global projection: FP = VQ @ FPP = E @ FPP
+    fp = np.einsum("nka,nja->njk", E, fpp)
+    return fp
+
+
+def _cbapinchthk(thick, ezzpg):
+    """Update shell thickness based on through-thickness normal strain.
+
+    # Ported from engine/source/elements/shell/coqueba/cbapinchthk.F lines 60-69
+    thick : (n,) shell thickness
+    ezzpg : (n, 4) normal strain at the 4 Gauss points
+    Returns:
+        thick_new : (n,) updated thickness
+    """
+    thkn = thick[:, None] * (1.0 + ezzpg)  # (n, 4)
+    thkavg = thkn.mean(axis=1)             # (n,)
+    return thkavg
+
+
+def _cndt3pinch(lc, amu, rho, E_mod, nu):
+    """Critical time step using 3D solid P-wave sound speed for pinched shells.
+
+    # Ported from engine/source/elements/shell/coqueba/cndt3pinch.F & sigeps01gpinch.F line 133
+    lc    : (n,) characteristic length
+    amu   : (n,) numerical damping
+    rho   : (n,) density
+    E_mod : (n,) Young's modulus
+    nu    : (n,) Poisson's ratio
+    Returns:
+        dt_e : (n,) critical time step
+        ssp  : (n,) 3D solid P-wave speed
+    """
+    denom = (1.0 + nu) * (1.0 - 2.0 * nu)
+    denom = np.where(np.abs(denom) < EM20, 1.0, denom)
+    pa1 = E_mod * (1.0 - nu) / denom
+    ssp = np.sqrt(np.maximum(pa1 / np.maximum(rho, EM20), EM20))
+    viscdt = np.sqrt(1.0 + amu ** 2) - amu
+    dt_e = lc * viscdt / ssp
+    return dt_e, ssp
+
+
+# ----------------------------------------------------------------------------
 # Engine-side forces (cbaforc3.F)
 # ----------------------------------------------------------------------------
 
@@ -960,7 +1265,7 @@ def _element_deletion_gpmajor(st):
     return off > 0.0
 
 
-def forces(group, x, v, vr, dt, fint, mint):
+def forces(group, x, v, vr, dt, fint, mint, vpinch=None, fpinch=None):
     st = group.state
     conn = group.conn
     n = group.n
@@ -1021,8 +1326,13 @@ def forces(group, x, v, vr, dt, fint, mint):
         if len(st["zw"][isl][0]) == 1:
             force_flat[sl] = True
 
+    has_pinch = bool(st.get("ipinch", False) or (vpinch is not None))
+
     from pyradioss.accel import get as accel_get
-    jit_pre = accel_get("qbat_pre")
+    jit_pre = accel_get("qbat_pre") if not has_pinch else None
+    jit_post = accel_get("qbat_post") if not has_pinch else None
+    if jit_pre is None or jit_post is None:
+        jit_pre = jit_post = None
     if jit_pre is not None:
         E, area, lc, vdef3, cdet, vdef, i_f, i_w, bm_f, bc_f, bmw_w, bmfw_w, bfw_w, bcq_w, tc_w, vqn_w, corel_w, di_w, x13n_f, x24n_f, y13n_f, y24n_f, x13n_w, x24n_w, y13n_w, y24n_w = jit_pre(x[conn], v[conn], vr[conn], off, dt, force_flat)
         g = {"lc": lc}
@@ -1049,6 +1359,26 @@ def forces(group, x, v, vr, dt, fint, mint):
         g["vdef3"] = vdef3
     volg = area * thick
 
+    if has_pinch:
+        if vpinch is not None:
+            if vpinch.ndim == 2:
+                vpe = vpinch[conn]
+            else:
+                vpe = vpinch
+        elif "vpinch" in st:
+            vpe = st["vpinch"]
+            if vpe.ndim == 2:
+                vpe = vpe[conn]
+        else:
+            vpe = np.zeros((n, 4, 3))
+
+        vqn = _compute_vqn(g)
+        vp_xyz, vp_t1, vp_t2, facp, ezzavg, avgthk = _cbacoorpinch(
+            g["E"], vqn, vpe, thick, dt, g["lc"]
+        )
+        vfpinch = np.zeros((n, 4))
+        ezzpg = np.zeros((n, 4))
+
     # CBAENERS (pre): + FOR3_mean_old * vdef3 * A*t*dt/2  (cbaforc3 l.566)
     st["eint"] += off * volg * dt * 0.5 * st["for_mean"][:, 2] * vdef3
 
@@ -1059,7 +1389,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         if getattr(mat, "law", 1) == 0:
             continue
         nip = len(st["zw"][isl][0])
-        gs_mod[sl] = 0.0 if nip == 1 else SHEAR_FACTOR * mat.G
+        gs_mod[sl] = 0.0 if nip == 1 else SHEAR_FACTOR * (getattr(mat, "G", 0.0) or getattr(mat, "g5", 0.0) or getattr(mat, "g0", 0.0))
         if nip == 1:
             bend_visc[sl] = 0.0
 
@@ -1143,6 +1473,64 @@ def forces(group, x, v, vr, dt, fint, mint):
             qsh[sl, ng] += gs_mod[sl][:, None] * dq
             de[sl] += cdet_[sl] * t_sl * np.einsum(
                 "nk,nk->n", 0.5 * (qold + qsh[sl, ng]), dq)
+
+        if has_pinch:
+            tc_all = np.empty((n, 2, 2))
+            vqg_11 = np.ones(n)
+            vqg_12 = np.ones(n)
+            if len(i_f):
+                tc_all[i_f] = _compute_tc_flat(g, ng)
+            if len(i_w):
+                tc_all[i_w] = ops_w[ng][4]
+                vqg_11[i_w] = g["vqg"][:, ng, 0]
+                vqg_12[i_w] = g["vqg"][:, ng, 3]
+
+            vdefp, bcp, bp, dbetadxy = _cbadefpinch(
+                tc_all, vqg_11, vqg_12, vp_xyz, vp_t1, vp_t2, ng
+            )
+            epinch_xz, epinch_yz, ezz = _cbastra3pinch(vdefp, dt)
+            ezzpg[:, ng] = ezz
+            st["epg_pinch_xz"][:, ng] = epinch_xz
+            st["epg_pinch_yz"][:, ng] = epinch_yz
+            st["epg_pinch_zz"][:, ng] = ezz
+
+            # 3D Hooke's law coupling for through-thickness stress (sigeps01gpinch.F)
+            for sl, mat, prop in st["slices"]:
+                if getattr(mat, "law", 1) == 0:
+                    continue
+                E_mod = getattr(mat, "E", getattr(mat, "young", 0.0))
+                nu_val = st["nu0"][sl]
+                denom = (1.0 + nu_val) * (1.0 - 2.0 * nu_val)
+                denom = np.where(np.abs(denom) < EM20, 1.0, denom)
+                pa1 = E_mod * (1.0 - nu_val) / denom
+                pa2 = E_mod * nu_val / denom
+                pa3 = E_mod / (2.0 * (1.0 + nu_val))
+                b3 = pa3 * thick[sl] / 12.0
+
+                sig_zz_old = st["forpg_pinch"][sl, ng].copy()
+                d_sig_zz = pa2 * (exx[sl] + eyy[sl]) + pa1 * ezz[sl]
+                sig_zz_new = sig_zz_old + d_sig_zz
+                st["forpg_pinch"][sl, ng] = sig_zz_new
+
+                mom_p_old = st["mompg_pinch"][sl, ng].copy()
+                mom_p_new = np.empty_like(mom_p_old)
+                mom_p_new[:, 0] = mom_p_old[:, 0] + b3 * epinch_xz[sl]
+                mom_p_new[:, 1] = mom_p_old[:, 1] + b3 * epinch_yz[sl]
+                st["mompg_pinch"][sl, ng] = mom_p_new
+
+                npg_[sl, 0] += thick[sl] * pa2 * ezz[sl]
+                npg_[sl, 1] += thick[sl] * pa2 * ezz[sl]
+
+                sig_zz_mid = 0.5 * (sig_zz_old + sig_zz_new)
+                de[sl] += cdet_[sl] * thick[sl] * sig_zz_mid * ezz[sl]
+                mom_p_mid = 0.5 * (mom_p_old + mom_p_new)
+                de[sl] += cdet_[sl] * (thick[sl] ** 2 / 12.0) * (
+                    mom_p_mid[:, 0] * epinch_xz[sl] + mom_p_mid[:, 1] * epinch_yz[sl]
+                )
+
+            vfpinch += _cbaforipinch(
+                cdet_, thick, bcp, bp, st["forpg_pinch"][:, ng], st["mompg_pinch"][:, ng]
+            )
 
         # CBAENER (post): remove the per-GP NEW-stress (pre-viscous) work
         de -= 0.5 * off * thick * cdet_ * (npg_[:, 2] / np.maximum(
@@ -1250,9 +1638,20 @@ def forces(group, x, v, vr, dt, fint, mint):
     if mint is not None:
         scatter_add3(mint, flat_idx, -mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
-    # ---- dt claim (cndt3.F): condensed LC * (sqrt(1+dn^2)-dn) / ssp ------
+    if has_pinch:
+        st["thick"] = _cbapinchthk(thick, ezzpg)
+        thk0_ref = st.get("thk0", thick)
+        fp = _cbapinchproj(g["E"], vqn, vfpinch, thk0_ref)
+        st["fpinch"] = -fp
+        if fpinch is not None:
+            scatter_add3(fpinch, flat_idx, -fp.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+
+    # ---- dt claim (cndt3.F / cndt3pinch.F): condensed LC * (sqrt(1+dn^2)-dn) / ssp ------
     viscdt = np.sqrt(1.0 + st["amu"] ** 2) - st["amu"]
     dt_e = g["lc"] * viscdt / np.maximum(st["ssp0"], EM20)
+    if has_pinch:
+        dt_p, _ = _cndt3pinch(g["lc"], st["amu"], st["rho0"], st.get("E_mod", np.zeros(n)), st["nu0"])
+        dt_e = np.minimum(dt_e, dt_p)
     is_void = np.zeros(n, dtype=bool)
     for sl, mat, prop in st.get("slices", []):
         if getattr(mat, "law", 1) == 0:

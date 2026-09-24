@@ -310,7 +310,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     n = group.n
     if n == 0 or len(conn) == 0:
         return np.empty(0, dtype=float)
-    if dt < 0.0:
+    if dt is None or dt < 0.0:
         return np.full(n, EP30)
 
     xe = np.zeros((n, 20, 3), dtype=np.float64)
@@ -395,7 +395,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         rho0 = getattr(mat, "rho0", 0.0)
         E = getattr(mat, "E", 0.0)
         rho[sl] = rho0
-        c_sound[sl] = np.sqrt(max(E, 0.0) / max(rho0, EM20))
+        nu = getattr(mat, "nu", 0.3)
+        K = E / (3.0 * max(1.0 - 2.0 * nu, 1e-4))
+        G = E / (2.0 * (1.0 + nu))
+        c_sound[sl] = np.sqrt(max(K + 4.0 * G / 3.0, 0.0) / max(rho0, EM20))
         qa[sl] = getattr(prop, "qa", 1.1)
         qb[sl] = getattr(prop, "qb", 0.05)
 

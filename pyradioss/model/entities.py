@@ -13,7 +13,7 @@ exactly like the Fortran ``USR2SYS`` machinery.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Union, Any, Tuple, Sequence
 
 import math
 
@@ -1155,6 +1155,13 @@ class Sensor:
     func_name: str = ""
     target_id: int = 0   # SPH, AIRBAG, MONVOL, SHELL, SOLID (M136)
     dflag: int = 0       # DIST deactivation flag (M165)
+    # Extended sensor threshold aliases
+    a_max: float = 0.0
+    e_max: float = 0.0
+    f_max: float = 0.0
+    t_max: float = 0.0
+    energy_type: str = ""
+
 
 
 @dataclass
@@ -1468,6 +1475,7 @@ class Interface:
     grnod_id: int = 0     # secondary nodes (7: 0 = self-impact; 2: required; 24: node-to-surface; 16: secondary nodes)
     surf_id: int = 0      # main surface (types 7, 2, 24)
     surf_id1: int = 0     # secondary surface (type 24 surface-to-surface)
+    surf_id2: int = 0     # main/secondary surface 2 (types 3, 20, 24)
     line_id1: int = 0     # secondary edges (type 11)
     line_id2: int = 0     # main edges (type 11)
     grbric_id1: int = 0   # secondary brick group (type 17) or main brick group (type 16)
@@ -1538,6 +1546,11 @@ class Interface:
     c3: float = 0.0       # type 25: friction constant 3
     c4: float = 0.0       # type 25: friction constant 4
     c5: float = 0.0       # type 25: friction constant 5
+    depth: float = 0.0    # type 21: drawbead depth
+    pmax: float = 1e30    # type 21: maximum contact pressure / force limit
+    itlim: int = 0        # type 21: tangential force limit flag (0=limited, 1=deactivated)
+    fpenmax: float = 1.0  # type 23: max fraction of initial penetration
+    params: dict = field(default_factory=dict)  # generic/extended interface parameters
 
 
 @dataclass
@@ -1851,6 +1864,20 @@ class InitialTemperature:
     fld_type: int = 0       # 0 = uniform on group, 1 = nodal table
     nodal_temps: Dict[int, float] = field(default_factory=dict)  # node_id -> temp
     title: str = ""
+    part_id: Optional[int] = None
+    element_set_id: Optional[int] = None
+    node_ids: Optional[Sequence[int]] = None
+    gradient: Optional[Tuple[float, float, float]] = None
+    x0: Optional[Tuple[float, float, float]] = None
+    t_top: Optional[float] = None
+    t_mid: Optional[float] = None
+    t_bot: Optional[float] = None
+    layer_temperatures: Optional[Sequence[float]] = None
+    additive: bool = False
+
+
+InitempRecordEntity = InitialTemperature
+InitempParamsEntity = InitialTemperature
 
 
 @dataclass
@@ -2376,6 +2403,9 @@ class BcsNrf:
     isub: int = 0
     ityp: int = 0
     factor: float = 0.0
+    rho: float = 0.0
+    cp: float = 0.0
+    cs: float = 0.0
 
     def __post_init__(self):
         if not self.grnod_id and self.set_id:
@@ -2425,6 +2455,7 @@ class RigidLink:
     skew_id: int = 0
     grnod_id: int = 0
     ipol: int = 0
+    node_ids: List[int] = field(default_factory=list)
 
     @property
     def tx(self) -> int:
@@ -2476,6 +2507,7 @@ class CylJoint:
     axis_dir: int = 1
     skew_id: int = 0
     tol: float = 1e-6
+    secondary_nodes: List[int] = field(default_factory=list)
 
     def __post_init__(self):
         if not self.node1 and self.node_id1:
@@ -2489,14 +2521,15 @@ class CylJoint:
 
 
 @dataclass
-class GeneralJoint:
-    """/GJOINT (M102): General kinematic joint (GEAR, RACK, DIFF).
+class GJoint:
+    """/GJOINT (M102, M594): General kinematic mechanism joint (GEAR, DIFF, RACK, CV).
 
-    Fortran origin: ``starter/source/constraints/general/gjoint/hm_read_gjoint.F``.
+    Fortran origin: ``starter/source/constraints/general/gjoint/hm_read_gjoint.F``,
+    ``engine/source/tools/lagmul/lag_gjnt.F``, ``gjnt_gear.F``, ``gjnt_diff.F``, ``gjnt_rack.F``.
     """
     id: int
     title: str = ""
-    subtype: str = "DEFAULT"  # DEFAULT, GEAR, RACK, DIFF
+    subtype: str = "DEFAULT"  # DEFAULT, GEAR, RACK, DIFF, CV
     node_id0: int = 0
     fscale: float = 1.0
     mass0: float = 0.0
@@ -2513,6 +2546,42 @@ class GeneralJoint:
     mass3: float = 0.0
     inertia3: float = 0.0
     r3: Tuple[float, float, float] = (1.0, 0.0, 0.0)
+
+    @property
+    def alpha(self) -> float:
+        return self.fscale
+
+
+GeneralJoint = GJoint
+
+
+@dataclass
+class KJoint:
+    """/PROP/TYPE33, /PROP/TYPE45, /PROP/KJOINT, /PROP/KJOINT2 kinematic mechanism joint (M602)."""
+    id: int
+    node1: int
+    node2: int
+    prop_id: int = 0
+    joint_type: int | str = 1
+    title: str = ""
+    skew_id: int = 0
+    kn: float = 0.0
+    cr: float = 0.0
+    scale: float = 1.0
+    ktx: float = 0.0
+    kty: float = 0.0
+    ktz: float = 0.0
+    krx: float = 0.0
+    kry: float = 0.0
+    krz: float = 0.0
+    ctx: float = 0.0
+    cty: float = 0.0
+    ctz: float = 0.0
+    crx: float = 0.0
+    cry: float = 0.0
+    crz: float = 0.0
+    prop: Any = None
+
 
 
 @dataclass
@@ -2897,6 +2966,7 @@ class MonvolPres:
     """
     id: int
     title: str = ""
+    vol_type: str = "PRES"
     surf_id: int = 0
     fscale: float = 1.0
     p_ext: float = 0.0
@@ -2911,6 +2981,7 @@ class MonvolGas:
     """
     id: int
     title: str = ""
+    vol_type: str = "GAS"
     surf_id: int = 0
     heat_t0: float = 0.0
     scal_t: float = 1.0
@@ -3280,14 +3351,141 @@ class IncludeDyna:
 
 
 @dataclass
-class MonvolFvmBag1:
-    """/MONVOL/FVMBAG1 (M108): Finite Volume Method Airbag model.
+class FvmChamber:
+    id: int
+    surf_id: int = 0
+    mat_id: int = 0
+    pext: float = 0.0
+    t_initial: float = 293.15
+    iequil: int = 0
+    volume: float = 0.0
+    volume_old: float = 0.0
+    area: float = 0.0
+    mass: float = 0.0
+    energy: float = 0.0
+    temperature: float = 293.15
+    pressure: float = 0.0
+    density: float = 0.0
+    gamma: float = 1.4
+    cpa: float = 1004.0
+    cpb: float = 0.0
+    cpc: float = 0.0
+    cpd: float = 0.0
+    cpe: float = 0.0
+    cpf: float = 0.0
+    r_spec: float = 287.0
+    element_ids: List[int] = field(default_factory=list)
 
-    Fortran origin: ``starter/source/control_volume/fvmbag1.F`` / CFG ``monvol_fvmbag1.cfg``.
+
+@dataclass
+class FvmOrifice:
+    id: int = 0
+    surf_id: int = 0
+    chamber1_id: int = 1
+    chamber2_id: int = 2
+    area: float = 0.0
+    cd: float = 0.8
+    pdef: float = 0.0
+    dtpdef: float = 0.0
+    tstart: float = 0.0
+    tstop: float = 1e30
+    is_open: bool = True
+    fct_t: int = 0
+    fct_p: int = 0
+    title: str = ""
+
+
+@dataclass
+class FvmVent:
+    id: int = 0
+    surf_id: int = 0
+    chamber_id: int = 1
+    iform: int = 1
+    avent: float = 1.0
+    bvent: float = 0.0
+    area: float = 0.0
+    cd: float = 0.6
+    tstart: float = 0.0
+    tstop: float = 1e30
+    dpdef: float = 0.0
+    dtpdef: float = 0.0
+    idtpdef: int = 0
+    is_open: bool = True
+    fct_t: int = 0
+    fct_p: int = 0
+    fct_a: int = 0
+    fscale_t: float = 1.0
+    fscale_p: float = 1.0
+    fscale_a: float = 1.0
+    fct_v: int = 0
+    fscale_v: float = 1.0
+    title: str = ""
+
+
+@dataclass
+class FvmPorousSurface:
+    id: int = 0
+    surf_id: int = 0
+    chamber_id: int = 1
+    iformps: int = 1
+    iblockage: int = 0
+    tstart: float = 0.0
+    tstop: float = 1e30
+    dpdef: float = 0.0
+    dtpdef: float = 0.0
+    idtpdef: int = 0
+    is_open: bool = True
+    fct_v: int = 0
+    fscale_v: float = 1.0
+    title: str = ""
+    lr1: float = 0.0
+    fthk: float = 0.0
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+
+
+@dataclass
+class FvmInjector:
+    id: int = 0
+    inject_id: int = 0
+    sens_id: int = 0
+    surf_id: int = 0
+    chamber_id: int = 1
+    fct_vel: int = 0
+    scale_vel: float = 1.0
+    mass_flow: float = 0.0
+    fct_mass: int = 0
+    scale_mass: float = 1.0
+    temperature: float = 293.15
+    fct_temp: int = 0
+    scale_temp: float = 1.0
+    cpa: float = 1004.0
+    cpb: float = 0.0
+    cpc: float = 0.0
+    cpd: float = 0.0
+    cpe: float = 0.0
+    cpf: float = 0.0
+    r_spec: float = 287.0
+    normal: Tuple[float, float, float] = (0.0, 0.0, 1.0)
+    area: float = 0.0
+    is_active: bool = False
+
+
+@dataclass
+class MonvolFvmbag:
+    """/MONVOL/FVMBAG, /MONVOL/FVMBAG1, /MONVOL/FVMBAG2 (M108, M111, M583):
+    Finite Volume Method Airbag model with multiple chambers, internal orifices,
+    external vents, fabric porosity, and gas injectors.
     """
     id: int
     title: str = ""
+    vol_type: str = "FVMBAG1"
     surf_id: int = 0
+    surf_id_ex: int = 0
+    surf_id_in: int = 0
+    hconv: float = 0.0
+    ih3d: int = 0
     scale_t: float = 1.0
     scale_p: float = 1.0
     scale_s: float = 1.0
@@ -3296,26 +3494,47 @@ class MonvolFvmBag1:
     mat_id: int = 0
     pext: float = 0.0
     ttot: float = 0.0
-    params: Dict = field(default_factory=dict)
-
-
-@dataclass
-class MonvolFvmBag2:
-    """/MONVOL/FVMBAG2 (M111): Dual-Chamber Finite Volume Method Airbag model.
-
-    Fortran origin: ``starter/source/control_volume/fvmbag2.F`` / CFG ``monvol_fvmbag2.cfg``.
-    """
-    id: int
-    title: str = ""
-    surf_id_ex: int = 0
-    surf_id_in: int = 0
-    hconv: float = 0.0
-    ih3d: int = 0
-    mat_id: int = 0
-    pext: float = 0.0
     t0: float = 0.0
+    t_initial: float = 293.15
+    iequil: int = 0
     i_ttf: int = 0
+    injectors: List[FvmInjector] = field(default_factory=list)
+    vents: List[FvmVent] = field(default_factory=list)
+    porous_surfaces: List[FvmPorousSurface] = field(default_factory=list)
+    orifices: List[FvmOrifice] = field(default_factory=list)
+    chambers: Dict[int, FvmChamber] = field(default_factory=dict)
+    kmesh: int = 1
+    cgmerg: float = 0.0
+    tswitch: float = 1e30
+    iswitch: int = 0
+    pswitch: float = 0.0
+    dtsca: float = 0.9
+    dtmin: float = 0.0
+    qa: float = 0.0
+    qb: float = 0.0
+    hmin: float = 0.0
     params: Dict = field(default_factory=dict)
+    volume: float = 0.0
+    pressure: float = 0.0
+    temperature: float = 293.15
+    mass: float = 0.0
+    energy: float = 0.0
+    is_initialized: bool = False
+
+    def __post_init__(self):
+        if self.surf_id_ex == 0 and self.surf_id != 0:
+            self.surf_id_ex = self.surf_id
+        elif self.surf_id == 0 and self.surf_id_ex != 0:
+            self.surf_id = self.surf_id_ex
+        if self.t0 != 0.0 and self.t_initial == 293.15:
+            self.t_initial = self.t0
+        elif self.t_initial != 293.15 and self.t0 == 0.0:
+            self.t0 = self.t_initial
+
+
+# Aliases for backwards compatibility with earlier milestones
+MonvolFvmBag1 = MonvolFvmbag
+MonvolFvmBag2 = MonvolFvmbag
 
 
 @dataclass
@@ -4167,6 +4386,19 @@ class NbcsNode:
     wz: int = 0
     skew_id: int = 0
     node_id: int = 0
+    tra: Any = None
+    rot: Any = None
+    active: bool = True
+
+    def __post_init__(self):
+        if self.tra is not None and len(self.tra) >= 3:
+            self.tx = int(self.tra[0])
+            self.ty = int(self.tra[1])
+            self.tz = int(self.tra[2])
+        if self.rot is not None and len(self.rot) >= 3:
+            self.wx = int(self.rot[0])
+            self.wy = int(self.rot[1])
+            self.wz = int(self.rot[2])
 
 
 @dataclass
@@ -6062,6 +6294,12 @@ class MaterialLaw90:
     fct_ids: List[int] = field(default_factory=list)
     eps_dots: List[float] = field(default_factory=list)
     fscales: List[float] = field(default_factory=list)
+    alpha: float = 1.0
+    gamma: float = 1.0
+    tflag: int = 1
+    fail: int = 0
+    econt: float = 0.0
+    tcut: float = 1e20
 
 
 @dataclass
@@ -6981,6 +7219,55 @@ class MaterialLaw126:
     powt: float = 0.0
     cc: float = 0.0
     powc: float = 0.0
+
+
+@dataclass
+class MaterialLaw169:
+    """/MAT/LAW169 or /MAT/ARUP_ADHESIVE (M591): Arup structural adhesive cohesive model.
+
+    Fortran origin: ``starter/source/materials/mat/mat169/hm_read_mat169.F90``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    young: float = 0.0
+    nu: float = 0.0
+    sht_sl: float = 0.0
+    tenmax: float = 1e20
+    gcten: float = 1e20
+    shrmax: float = 1e20
+    gcshr: float = 1e20
+    pwrt: int = 2
+    pwrs: int = 2
+    shrp: float = 0.0
+
+    @property
+    def e(self) -> float:
+        return self.young
+
+    @e.setter
+    def e(self, val: float) -> None:
+        self.young = val
+
+    @property
+    def rho(self) -> float:
+        return self.rho0
+
+    @rho.setter
+    def rho(self, val: float) -> None:
+        self.rho0 = val
+
+    @property
+    def pr(self) -> float:
+        return self.nu
+
+    @pr.setter
+    def pr(self, val: float) -> None:
+        self.nu = val
+
+
+MatLaw169 = MaterialLaw169
+MatArupAdhesive = MaterialLaw169
 
 
 @dataclass
@@ -8954,6 +9241,9 @@ class MatLaw190:
     fun_1: int = 0
     xscale_1: float = 1.0
     scale_1: float = 1.0
+    tcut: float = 1.0e20
+    fail: int = 0
+    table: Any = None
     title: str = ""
 
 
@@ -10345,7 +10635,7 @@ class MatLaw87:
 
     @property
     def alpha_vol(self) -> float:
-        return self.alpha
+        return float(self.alpha)
 
     @property
     def n_hard(self) -> float:
@@ -11051,6 +11341,43 @@ PropCompStack = PropType17
 
 
 @dataclass
+class PropType19:
+    """/PROP/TYPE19 or /PROP/SPR_TORS: Torsion spring property."""
+    id: int = 0
+    mass: float = 0.0
+    inertia: float = 0.0
+    k_theta: float = 0.0
+    c_theta: float = 0.0
+    title: str = ""
+
+
+PropSprTors = PropType19
+
+@dataclass
+class PropTorsion:
+    """/PROP/TORSION or /PROP/TYPE35 (M152): Torsion bar spring property."""
+    id: int = 0
+    title: str = ""
+    mass: float = 0.0
+    k_elas: float = 0.0
+    x_lim1: float = 0.0
+    x_lim2: float = 0.0
+    k_post: float = 0.0
+    d1: float = 0.0
+    d2: float = 0.0
+    r_load: float = 0.0
+    f_scal: float = 0.0
+    fct_id1: int = 0
+    fct_id2: int = 0
+    fct_id3: int = 0
+    fct_id4: int = 0
+    inertia: float = 0.0
+    k_theta: float = 0.0
+    c_theta: float = 0.0
+
+
+
+@dataclass
 class PropType44:
     """/PROP/TYPE44 or /PROP/SPR_CRUS (M184): Crushing frame spring property."""
     id: int
@@ -11588,11 +11915,20 @@ class PropType12:
     fun_a1: int = 0
     hflag1: int = 0
     fun_b1: int = 0
+    fct_id31: int = 0
+    fun_a2: int = 0
     min_rup1: float = -1.0e30
     max_rup1: float = 1.0e30
     prop_x_f: float = 1.0
     prop_x_e: float = 0.0
     scale1: float = 1.0
+    h: float = 1.0
+    funct_id: int = 0
+    ifric: int = 0
+    scale2: float = 1.0
+    scale3: float = 1.0
+    f_min: float = -1.0e30
+    f_max: float = 1.0e30
     title: str = ""
 
     @property
@@ -11665,6 +12001,8 @@ class PropType28:
     strain2: float = 1.0e30
     mu1: float = 0.0
     mu2: float = 0.0
+    fscale11: float = 1.0
+    fscale22: float = 1.0
     layers: list[PropStrandLayer] = field(default_factory=list)
     title: str = ""
 
@@ -11936,6 +12274,10 @@ class PropType35:
     fun_d1: int = 0
     damg: float = 0.0
     fdelay: float = 0.0
+    xlim2: float = 0.0
+    rload: float = 0.0
+    iload: int = 0
+    fscal: float = 1.0
     title: str = ""
 
 
@@ -12682,9 +13024,9 @@ PropKinematicJoint2 = PropType45
 
 @dataclass
 class PropType36:
-    """``/PROP/TYPE36`` or ``/PROP/PREDIT``: Progressive delamination interface property."""
+    """``/PROP/TYPE36`` or ``/PROP/PREDIT``: Progressive damage interface spring property."""
     id: int = 0
-    lutype: int = 0
+    lutype: int = 1
     skew_csid: int = 0
     prop_id1: int = 0
     prop_id2: int = 0
@@ -12695,7 +13037,29 @@ class PropType36:
     iyy: float = 0.0
     izz: float = 0.0
     ray: float = 0.0
+    # Direct / inherited material & failure parameters
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    g: float = 0.0
+    sig0: float = 0.0
+    hpla: float = 0.0
+    m: float = 1.0
+    sfac: float = 1.0
+    ay: float = 1.0
+    az: float = 1.0
+    by: float = 1.0
+    bz: float = 1.0
+    cx: float = 1.0
+    dc: float = 0.99999
+    pr: float = 1.0e30
+    ps: float = 1.0e30
+    ifunc: int = 0
     title: str = ""
+
+    @property
+    def type(self) -> int:
+        return 36
 
 
 PropPredit = PropType36
@@ -14011,6 +14375,20 @@ class FailWilkins:
     ifail_sh: int = 0
     ifail_so: int = 0
     title: str = ""
+
+
+@dataclass
+class FailTbutcher:
+    """``/FAIL/TBUTCHER``: Tuler-Butcher dynamic spall fracture model."""
+    id: int = 0
+    mat_id: int = 0
+    lam: float = 1.0
+    k: float = 1.0e30
+    sigr: float = 0.0
+    ifail_sh: int = 1
+    ifail_so: int = 1
+    title: str = ""
+
 
 
 @dataclass
@@ -17217,6 +17595,18 @@ class PropType18:
     wy2: int = 0
     wz2: int = 0
     title: str = ""
+    area: float = 0.0
+    iyy: float = 0.0
+    izz: float = 0.0
+    ixx: float = 0.0
+    zy: float = 0.0
+    zz: float = 0.0
+    ishear: int = 0
+    iform: int = 0
+    params: Dict[str, Any] = field(default_factory=dict)
+
+
+PropIntBeam = PropType18
 
 
 @dataclass
@@ -17606,6 +17996,7 @@ MatDPrag2 = MatLaw102
 class PropType23:
     """``/PROP/TYPE23`` or ``/PROP/SPR_MAT`` (M195): Spring material property."""
     id: int
+    type: int = 23
     title: str = ""
     mass: float = 0.0
     skew_id: int = 0
@@ -18802,8 +19193,8 @@ class BcsLagmul:
     """``/BCS/LAGMUL/id`` (M202): Lagrange multiplier constraint on node group."""
     id: int = 0
     title: str = ""
-    tra: str = "111"
-    rot: str = "111"
+    tra: Any = "111"
+    rot: Any = "111"
     skew_id: int = 0
     grnod_id: int = 0
 
@@ -19274,6 +19665,7 @@ class PropSpringTors:
     stiffness_k: float = 0.0
     damping_c: float = 0.0
     fcut: float = 0.0
+    inertia: float = 0.0
 
     @property
     def k(self) -> float:
@@ -19281,6 +19673,14 @@ class PropSpringTors:
 
     @property
     def c(self) -> float:
+        return self.damping_c
+
+    @property
+    def k_theta(self) -> float:
+        return self.stiffness_k
+
+    @property
+    def c_theta(self) -> float:
         return self.damping_c
 
 

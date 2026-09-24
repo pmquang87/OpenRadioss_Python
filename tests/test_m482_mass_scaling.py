@@ -511,10 +511,10 @@ class TestCstMassScaling:
         noda.apply(mass_eff, inv_mass, v, t=0.0)
 
         # After scaling, each node's k and M should give:
-        # sqrt(2 M / K) = dt_min / dt_sca
+        # sqrt(2 M / K) = sqrt(1.00001) * dt_min / dt_sca (Fortran 1.00001 factor, dtnoda.F)
         # We can verify via the returned mass:
         k_per_node = 2.0 * 1.0 / 0.005**2   # mass_share=1.0
-        m_needed = k_per_node * (dt_min / dt_sca)**2 / 2.0
+        m_needed = 1.00001 * k_per_node * (dt_min / dt_sca)**2 / 2.0
         for i in range(4):
             assert model.mass[i] == pytest.approx(m_needed, rel=1e-12)
 

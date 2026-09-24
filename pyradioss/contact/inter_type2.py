@@ -101,6 +101,16 @@ def _segment_frames(xs: np.ndarray):
     t1 = np.where((norm_r > EM20)[:, None], r / norm_r_clamped[:, None], np.array([1.0, 0.0, 0.0]))
 
     t2 = np.cross(n, t1)
+    norm_t2 = np.linalg.norm(t2, axis=1)
+    deg_t2 = norm_t2 <= EM20
+    if np.any(deg_t2):
+        alt = np.where(np.abs(n[:, 0:1]) < 0.9, np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0]))
+        t1_cand = np.cross(n, alt)
+        norm_t1_cand = np.maximum(np.linalg.norm(t1_cand, axis=1, keepdims=True), EM20)
+        t1 = np.where(deg_t2[:, None], t1_cand / norm_t1_cand, t1)
+        t2 = np.cross(n, t1)
+    norm_t2_clamped = np.maximum(np.linalg.norm(t2, axis=1, keepdims=True), EM20)
+    t2 = t2 / norm_t2_clamped
     return t1, t2, n
 
 
@@ -118,6 +128,13 @@ class ContactType2:
             return
 
         segs = surf.segments if surf.segments is not None else np.zeros((0, 4), dtype=np.int64)
+        segs = np.asarray(segs, dtype=np.int64)
+        if segs.ndim == 2 and segs.shape[1] == 3:
+            segs = np.column_stack([segs, segs[:, 2]])
+        elif segs.ndim == 2 and segs.shape[1] == 4:
+            segs = segs.copy()
+            neg = segs[:, 3] < 0
+            segs[neg, 3] = segs[neg, 2]
 
         grp = model.node_groups.get(itf.grnod_id)
         if grp is None or grp.node_idx is None:
@@ -126,6 +143,7 @@ class ContactType2:
             return
 
         cand = np.asarray(grp.node_idx, dtype=np.int64)
+        cand = np.unique(cand[(cand >= 0) & (cand < len(model.mass))])
         if len(cand) == 0 or len(segs) == 0:
             self._init_empty()
             return
@@ -147,7 +165,8 @@ class ContactType2:
         # ---- projection search (Starter i2buc1/i2dst3) --------------------
         # closest point of every candidate on every segment, chunked to
         # bound memory; keep the best segment within the search distance
-        area = _segment_areas(model.x0, segs)
+        x0 = model.x0 if getattr(model, "x0", None) is not None and len(model.x0) > 0 else getattr(model, "x", np.zeros((0, 3)))
+        area = _segment_areas(x0, segs)
         lc = float(np.sqrt(area.mean())) if len(area) else 1.0
         dsearch = itf.dsearch if itf.dsearch > 0 else lc
 
@@ -155,7 +174,6 @@ class ContactType2:
         best_d = np.full(nbest, np.inf)
         best_seg = np.full(nbest, -1, dtype=np.int64)
         best_w = np.zeros((nbest, 4))
-        x0 = model.x0
         chunk = max(1, 2 ** 22 // max(nbest, 1))     # ~4M pairs per chunk
         for s0 in range(0, len(segs), chunk):
             sc = segs[s0:s0 + chunk]
@@ -241,7 +259,7 @@ class ContactType2:
         self.active = np.ones(len(self.snode), dtype=bool)
 
         # deletion bookkeeping (release, not force filtering)
-        self.deletable = tracking.any_deletable(model, self.seg_gtype)
+        self.deletable = tracking.any_deletable(model, self.seg_gtype, sec_nodes=self.snode)
         if self.deletable:
             self.ref_total = tracking.node_reference_counts(
                 model, alive_only=False)
@@ -291,6 +309,7 @@ class ContactType2:
         for k in range(4):
             np.add.at(mass_eff, seg[:, k], -w[:, k] * m_s)
         touched = np.unique(seg)
+        touched = touched[touched >= 0]
         inv_mass_eff[touched] = np.where(mass_eff[touched] > 0.0, 1.0 / np.maximum(mass_eff[touched], 1e-30), 0.0)
         self.active[dead] = False
 
@@ -337,22 +356,29 @@ class ContactType2:
                 if sf == 1:
                     # Spotflag 1 (Solid main): moment to force couple (I2FOMO3)
                     xs = x[seg]
-                    x0 = np.mean(xs, axis=1)
+                    is_tri = seg[:, 3] == seg[:, 2]
+                    w_corner = np.ones((len(sn), 4, 1))
+                    w_corner[is_tri, 3] = 0.0
+                    counts = np.where(is_tri, 3.0, 4.0)[:, None]
+                    x0 = np.sum(xs * w_corner, axis=1) / counts
                     r = xs - x0[:, None, :]
+                    r_eff = r * np.sqrt(w_corner)
 
-                    # Pseudo-inertia tensor I (unit mass at each node)
+                    # Pseudo-inertia tensor I (unit mass at each vertex)
                     I_tensor = np.zeros((len(sn), 3, 3))
-                    I_tensor[:, 0, 0] = np.sum(r[:, :, 1]**2 + r[:, :, 2]**2, axis=1)
-                    I_tensor[:, 1, 1] = np.sum(r[:, :, 0]**2 + r[:, :, 2]**2, axis=1)
-                    I_tensor[:, 2, 2] = np.sum(r[:, :, 0]**2 + r[:, :, 1]**2, axis=1)
-                    I_tensor[:, 0, 1] = I_tensor[:, 1, 0] = -np.sum(r[:, :, 0] * r[:, :, 1], axis=1)
-                    I_tensor[:, 0, 2] = I_tensor[:, 2, 0] = -np.sum(r[:, :, 0] * r[:, :, 2], axis=1)
-                    I_tensor[:, 1, 2] = I_tensor[:, 2, 1] = -np.sum(r[:, :, 1] * r[:, :, 2], axis=1)
+                    I_tensor[:, 0, 0] = np.sum(r_eff[:, :, 1]**2 + r_eff[:, :, 2]**2, axis=1)
+                    I_tensor[:, 1, 1] = np.sum(r_eff[:, :, 0]**2 + r_eff[:, :, 2]**2, axis=1)
+                    I_tensor[:, 2, 2] = np.sum(r_eff[:, :, 0]**2 + r_eff[:, :, 1]**2, axis=1)
+                    I_tensor[:, 0, 1] = I_tensor[:, 1, 0] = -np.sum(r_eff[:, :, 0] * r_eff[:, :, 1], axis=1)
+                    I_tensor[:, 0, 2] = I_tensor[:, 2, 0] = -np.sum(r_eff[:, :, 0] * r_eff[:, :, 2], axis=1)
+                    I_tensor[:, 1, 2] = I_tensor[:, 2, 1] = -np.sum(r_eff[:, :, 1] * r_eff[:, :, 2], axis=1)
 
                     try:
                         I_inv = np.linalg.pinv(I_tensor, rcond=1e-8)
                         A = np.einsum("nij,nj->ni", I_inv, M_tot)
                         F_couple = np.cross(A[:, None, :], r)
+                        if np.any(is_tri):
+                            F_couple[is_tri, 3] = 0.0
                     except Exception:
                         F_couple = np.zeros_like(r)
 
@@ -390,18 +416,23 @@ class ContactType2:
 
             if sf == 1:
                 # Spotflag 1 (Solid main): derive rotational velocity (I2VIROT3)
-                x0 = np.mean(xs, axis=1)
+                is_tri = self.seg[act, 3] == self.seg[act, 2]
+                w_corner = np.ones((len(sn), 4, 1))
+                w_corner[is_tri, 3] = 0.0
+                counts = np.where(is_tri, 3.0, 4.0)[:, None]
+                x0 = np.sum(xs * w_corner, axis=1) / counts
                 r = xs - x0[:, None, :]
+                r_eff = r * np.sqrt(w_corner)
                 vs = v[self.seg[act]]
-                L = np.sum(np.cross(r, vs), axis=1)
+                L = np.sum(np.cross(r, vs) * w_corner, axis=1)
 
                 I_tensor = np.zeros((len(sn), 3, 3))
-                I_tensor[:, 0, 0] = np.sum(r[:, :, 1]**2 + r[:, :, 2]**2, axis=1)
-                I_tensor[:, 1, 1] = np.sum(r[:, :, 0]**2 + r[:, :, 2]**2, axis=1)
-                I_tensor[:, 2, 2] = np.sum(r[:, :, 0]**2 + r[:, :, 1]**2, axis=1)
-                I_tensor[:, 0, 1] = I_tensor[:, 1, 0] = -np.sum(r[:, :, 0] * r[:, :, 1], axis=1)
-                I_tensor[:, 0, 2] = I_tensor[:, 2, 0] = -np.sum(r[:, :, 0] * r[:, :, 2], axis=1)
-                I_tensor[:, 1, 2] = I_tensor[:, 2, 1] = -np.sum(r[:, :, 1] * r[:, :, 2], axis=1)
+                I_tensor[:, 0, 0] = np.sum(r_eff[:, :, 1]**2 + r_eff[:, :, 2]**2, axis=1)
+                I_tensor[:, 1, 1] = np.sum(r_eff[:, :, 0]**2 + r_eff[:, :, 2]**2, axis=1)
+                I_tensor[:, 2, 2] = np.sum(r_eff[:, :, 0]**2 + r_eff[:, :, 1]**2, axis=1)
+                I_tensor[:, 0, 1] = I_tensor[:, 1, 0] = -np.sum(r_eff[:, :, 0] * r_eff[:, :, 1], axis=1)
+                I_tensor[:, 0, 2] = I_tensor[:, 2, 0] = -np.sum(r_eff[:, :, 0] * r_eff[:, :, 2], axis=1)
+                I_tensor[:, 1, 2] = I_tensor[:, 2, 1] = -np.sum(r_eff[:, :, 1] * r_eff[:, :, 2], axis=1)
 
                 try:
                     I_inv = np.linalg.pinv(I_tensor, rcond=1e-8)
@@ -417,6 +448,55 @@ class ContactType2:
 
         x[sn] = x_new
         self.x_prev[act] = x_new
+
+    def compute_thermal_conduction(
+        self,
+        temp: np.ndarray,
+        dt: float,
+        kthe: Optional[float] = None,
+        theaccfact: float = 1.0,
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
+        """Compute thermal conduction across the tied contact interface.
+
+        Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\interfaces\\interf\\i2therm.F
+
+        Parameters
+        ----------
+        temp : np.ndarray
+            Nodal temperatures.
+        dt : float
+            Time step dt.
+        kthe : Optional[float]
+            Thermal contact conductivity KTHE. If None, uses itf.kthe.
+        theaccfact : float
+            Thermal acceleration factor (default 1.0).
+
+        Returns
+        -------
+        fthe : np.ndarray
+            Nodal heat increments [J].
+        condn : np.ndarray
+            Nodal conductance [W/K].
+        heat_transferred : float
+            Total heat transferred across interface [J].
+        """
+        from .thermal_contact import thermal_contact_type2
+
+        if kthe is None:
+            kthe = getattr(self.itf, "kthe", 0.0) or getattr(self.itf, "cond", 0.0)
+
+        x = getattr(self.model, "x", getattr(self.model, "x0", np.zeros((len(temp), 3))))
+        return thermal_contact_type2(
+            x=x,
+            temp=temp,
+            slave_nodes=self.snode,
+            master_segs=self.seg,
+            weights=self.w,
+            kthe=kthe,
+            dt=dt,
+            theaccfact=theaccfact,
+            active_mask=getattr(self, "alive", None),
+        )
 
 
 class LagmulType2:
@@ -789,11 +869,16 @@ class LagmulType2:
                     eq_ids.append(eq_z)
                 else:
                     # Degenerate inertia fallback to isoparametric
+                    w = self.active_weights[i]
+                    if nir == 3:
+                        seg_w = [float(w[0]), float(w[1]), float(w[2] + w[3])]
+                    else:
+                        seg_w = [float(w[k]) for k in range(4)]
                     for dof in range(3):
                         eq_id = n_rows
                         n_rows += 1
                         for k in range(nir):
-                            data.append(fact)
+                            data.append(seg_w[k])
                             nodes.append(int(seg[k]))
                             dofs.append(dof)
                             eq_ids.append(eq_id)
@@ -846,4 +931,54 @@ class LagmulType2:
             np.asarray(eq_ids, dtype=np.int64),
             n_rows,
         )
+
+    def compute_thermal_conduction(
+        self,
+        temp: np.ndarray,
+        dt: float,
+        kthe: Optional[float] = None,
+        theaccfact: float = 1.0,
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
+        """Compute thermal conduction across the tied contact interface.
+
+        Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\interfaces\\interf\\i2therm.F
+
+        Parameters
+        ----------
+        temp : np.ndarray
+            Nodal temperatures.
+        dt : float
+            Time step dt.
+        kthe : Optional[float]
+            Thermal contact conductivity KTHE. If None, uses itf.kthe.
+        theaccfact : float
+            Thermal acceleration factor (default 1.0).
+
+        Returns
+        -------
+        fthe : np.ndarray
+            Nodal heat increments [J].
+        condn : np.ndarray
+            Nodal conductance [W/K].
+        heat_transferred : float
+            Total heat transferred across interface [J].
+        """
+        from .thermal_contact import thermal_contact_type2
+
+        if kthe is None:
+            kthe = getattr(self.itf, "kthe", 0.0) or getattr(self.itf, "cond", 0.0)
+
+        x = getattr(self.model, "x", getattr(self.model, "x0", np.zeros((len(temp), 3))))
+        return thermal_contact_type2(
+            x=x,
+            temp=temp,
+            slave_nodes=self.snode,
+            master_segs=self.seg,
+            weights=self.w,
+            kthe=kthe,
+            dt=dt,
+            theaccfact=theaccfact,
+            active_mask=self.alive,
+        )
+
 

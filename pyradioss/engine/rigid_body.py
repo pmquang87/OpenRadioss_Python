@@ -275,21 +275,25 @@ class RigidBodyEngine:
         self.rot_disp_drives = []
         impdisp_list = getattr(loads, "impdisp", [])
         for k, entry in enumerate(impdisp_list):
-            idx, dof, x0d = entry[0], entry[1], entry[-1]
+            idx, dof = entry[0], entry[1]
+            x0d = entry[7] if len(entry) >= 8 else entry[-1]
+            sens_id = entry[8] if len(entry) >= 9 else 0
             if self.master in idx:
                 if dof < 3:
                     pos = int(np.where(idx == self.master)[0][0])
-                    self.disp_drives.append(entry[1:-1] + (float(x0d[pos]),))
+                    self.disp_drives.append(entry[1:7] + (float(x0d[pos]),))
                 else:
-                    self.rot_disp_drives.append((dof - 3,) + entry[2:-1])
+                    self.rot_disp_drives.append((dof - 3,) + entry[2:7])
             hit = np.isin(idx, self.nodes)
             if np.any(hit):
                 if len(self.slaves) > 0 and np.isin(self.slaves, idx).any() and log is not None:
                     log.warning(f"{who}: /IMPDISP drives slave node(s) — "
                                 f"the rigid body wins (kinematic clash)",
                                 "RBODY INIT")
-                impdisp_list[k] = (idx[~hit],) + entry[1:-1] + (
-                    x0d[~hit] if x0d is not None else None,)
+                new_entry = [idx[~hit]] + list(entry[1:7]) + [x0d[~hit] if x0d is not None else None]
+                if len(entry) >= 9:
+                    new_entry.append(sens_id)
+                impdisp_list[k] = tuple(new_entry)
         # a pivoted (fully translation-clamped) master cannot TRANSLATE, so
         # translational drives are moot; a ROTATIONAL drive about the pivot
         # is perfectly valid, so it is NOT warned away.
@@ -418,46 +422,27 @@ class RigidBodyEngine:
         REFERENCE point's velocity that gets prescribed.  Work is booked
         J . v_imp, the convention of the global-dof drives above.
         """
-        if not self.skew_drives:
+        if not self.skew_drives or self.pivot:
             return 0.0
         wext = 0.0
-        Jsp = self.R @ self.J0 @ self.R.T
         for row, dof, fct, scale, facx, t0, t1, x0 in self.skew_drives:
-            if t < t0 or t > t1:
+            if dof >= 3 or t < t0 or t > t1:
                 continue
-            axis_idx = dof - 3 if dof >= 3 else dof
-            e = self.skews.axes[row][axis_idx]
-            if dof < 3:
-                if self.pivot:
+            e = self.skews.axes[row][dof]
+            if x0 is None:                                   # /IMPVEL
+                vimp = scale * fct.eval((t - 0.5 * dt) * facx)
+            else:                                            # /IMPDISP
+                if dt <= 0.0:
                     continue
-                if x0 is None:                                   # /IMPVEL
-                    vimp = scale * fct.eval((t - 0.5 * dt) * facx)
-                else:                                            # /IMPDISP
-                    if dt <= 0.0:
-                        continue
-                    # land the MASTER on x0 + d(t) along the skew axis
-                    target = float(x0 @ e) + scale * fct.eval(t * facx)
-                    vimp = (target - float(x[self.master] @ e)) / dt
-                vref_new = vimp - float(
-                    cross3(self.w, x[self.master] - self.x_ref) @ e)
-                dv = vref_new - float(self.v_ref @ e)
-                v_old_e = float(v_ref_old @ e) if v_ref_old is not None else float(self.v_ref @ e)
-                wext += self.M * dv * 0.5 * (v_old_e + vref_new)
-                self.v_ref += e * dv
-            else:
-                if x0 is None:                                   # /IMPVEL
-                    wimp = scale * fct.eval((t - 0.5 * dt) * facx)
-                else:                                            # /IMPDISP
-                    if dt <= 0.0:
-                        continue
-                    wimp = scale * (fct.eval(t * facx) - fct.eval((t - dt) * facx)) / dt
-                dw = wimp - float(self.w @ e)
-                w_new = self.w + e * dw
-                dL = Jsp @ (e * dw)
-                w_mid = 0.5 * (self.w + w_new)
-                wext += float(dL @ w_mid)
-                self.w = w_new
-                self.L = Jsp @ self.w
+                # land the MASTER on x0 + d(t) along the skew axis
+                target = float(x0 @ e) + scale * fct.eval(t * facx)
+                vimp = (target - float(x[self.master] @ e)) / dt
+            vref_new = vimp - float(
+                cross3(self.w, x[self.master] - self.x_ref) @ e)
+            dv = vref_new - float(self.v_ref @ e)
+            v_old_e = float(v_ref_old @ e) if v_ref_old is not None else float(self.v_ref @ e)
+            wext += self.M * dv * 0.5 * (v_old_e + vref_new)
+            self.v_ref += e * dv
         return wext
 
     # ------------------------------------------------------------------
@@ -580,11 +565,23 @@ class RigidBodyEngine:
             wimp = scale * (fct.eval(t_next * facx)
                             - fct.eval((t_next - dt) * facx)) / dt
             wext += _spin_drive(rdof, wimp)
-        for row, dof, fct, scale, facx, t0, t1, _ in self.skew_drives:
+        for row, dof, fct, scale, facx, t0, t1, x0 in self.skew_drives:
             if dof >= 3 and t_next >= t0 and t_next <= t1:
                 axis_idx = dof - 3
                 e = self.skews.axes[row][axis_idx]
-                w += e * (float(self.w @ e) - float(w @ e))
+                if x0 is None:
+                    wimp = scale * fct.eval(t_next * facx)
+                else:
+                    if dt <= 0.0:
+                        continue
+                    wimp = scale * (fct.eval(t_next * facx)
+                                    - fct.eval((t_next - dt) * facx)) / dt
+                dw = wimp - float(w @ e)
+                w_end = w + e * dw
+                dL = Jsp @ (e * dw)
+                w_mid = 0.5 * (w_old + w_end)
+                wext += float(dL @ w_mid)
+                w = w_end
                 self.L = Jsp @ w
         # /BCS in a /SKEW on the master (M39): project the constrained skew
         # axes out of BOTH the reference velocity and the spin

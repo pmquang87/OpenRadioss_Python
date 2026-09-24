@@ -244,7 +244,7 @@ def _exact_dt_factor(dndx: np.ndarray, vol: np.ndarray, lc: np.ndarray,
         eig = np.linalg.eigvals(C[None, :, :] @ BBt[sl])
         w2max = (8.0 / mat.rho0) * eig.real.max(axis=1)
         dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
-        fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
+        fac[sl] = np.minimum(dt_exact / np.maximum(lc[sl] / c, EM20), 1.0)
     return fac
 
 
@@ -283,7 +283,7 @@ def init_group(group, model, log):
 
     xe = model.x0[group.conn]                      # (n, 8, 3)
     dndx0, vol = _geometry(xe)
-    bad = vol <= 0.0
+    bad = vol <= EM20
     if np.any(bad):
         for eid in group.ids[bad]:
             log.error(f"/BRICK {eid}: zero or negative volume "
@@ -877,22 +877,25 @@ def forces(group, x, v, vr, dt, fint, mint):
         # current sound speed uses current density (stiffness constant);
         # laws that returned their own (nonlinear) c keep it
         if sl.stop > sl.start and not c_from_law[sl.start]:
-            c[sl] = np.sqrt((getattr(mat, "K", 0.0) + 4.0 * getattr(mat, "G", 0.0) / 3.0) / rho[sl])
+            c[sl] = np.sqrt((getattr(mat, "K", 0.0) + 4.0 * getattr(mat, "G", 0.0) / 3.0) / np.maximum(rho[sl], EM20))
         qa[sl] = getattr(prop, "params", {}).get("qa", 1.1)
         qb[sl] = getattr(prop, "params", {}).get("qb", 0.05)
         hcoef[sl] = getattr(prop, "params", {}).get("h", 0.1)
 
     # ---- post block: viscosity, forces, hourglass, energies, dt -----------
     # (dispatched to the numba mirror when that backend is active)
+    dtfac = st.get("dtfac", 0.9)
+    if np.ndim(dtfac) == 0:
+        dtfac = np.full(group.n, float(dtfac))
     jit = accel_get("hexa_post")
     if jit is not None:
         fe, dt_crit, w_visc, qvw_new, deint0, dehour = jit(
             xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
-            qa, qb, c, hcoef, alive, st["qvw_pend"], dt, st["dtfac"])
+            qa, qb, c, hcoef, alive, st["qvw_pend"], dt, dtfac)
     else:
         fe, dt_crit, w_visc, qvw_new, deint0, dehour = _post(
             xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
-            qa, qb, c, hcoef, alive, st["qvw_pend"], dt, st["dtfac"])
+            qa, qb, c, hcoef, alive, st["qvw_pend"], dt, dtfac)
 
     if "eos_mask" in st:
         # /EOS elements (M6): their energy equation already integrated
@@ -1404,3 +1407,17 @@ def static_internal_forces(group, x, u, ur, fint, mint):
 
     if fint is not None:
         scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+
+
+def compute_sdlenmax(xe, lc=None, vol=None):
+    """Compute maximum characteristic length for Hexa8 (sdlenmax.F)."""
+    from ..engine.element_erosion import compute_sdlenmax as _c
+    return _c(xe, lc=lc, vol=vol)
+
+
+def check_solid_geometric_erosion(group, x, dt_ctrl):
+    """Check geometric deletion criteria for solid elements (sgeodel3.F)."""
+    from ..engine.element_erosion import check_solid_geometric_erosion as _c
+    return _c(group, x, dt_ctrl)
+
+

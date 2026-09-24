@@ -196,10 +196,11 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
     # equivalent (deviatoric) strain rate of the increment, for the JC
     # rate term: eps_eq_dot = sqrt(2/3 e:e) / dt
     if dt > 0.0:
+        dt_safe = max(dt, 1e-20)
         exx, eyy, ezz = deps[:, 0] - tr3, deps[:, 1] - tr3, deps[:, 2] - tr3
         ee = exx ** 2 + eyy ** 2 + ezz ** 2 \
             + 0.5 * (deps[:, 3] ** 2 + deps[:, 4] ** 2 + deps[:, 5] ** 2)
-        rate = np.sqrt((2.0 / 3.0) * ee) / dt
+        rate = np.sqrt((2.0 / 3.0) * ee) / dt_safe
     else:
         rate = np.zeros(len(deps))
     rate_fac = _rate_factor(mat, rate)
@@ -273,7 +274,8 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
     ee = (dxx - tr3) ** 2 + (dyy - tr3) ** 2 + (dzz - tr3) ** 2 \
         + 0.5 * dxy ** 2
     if dt > 0.0:
-        rate = np.sqrt((2.0 / 3.0) * ee) / dt
+        dt_safe = max(dt, 1e-20)
+        rate = np.sqrt((2.0 / 3.0) * ee) / dt_safe
     else:
         rate = np.zeros(len(deps))
     rate_fac = _rate_factor(mat, rate)

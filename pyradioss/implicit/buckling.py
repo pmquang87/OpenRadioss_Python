@@ -150,7 +150,12 @@ def buckling_factors(model, nev=4, log=None, constraints=None, contacts=None):
     Kg = Kg.toarray()
 
     # (-K_geo) phi = theta K_mat phi ; K_mat PD (scipy checks via Cholesky)
-    theta, vecs = sla.eigh(-Kg, Km)
+    try:
+        theta, vecs = sla.eigh(-Kg, Km)
+    except (sla.LinAlgError, ValueError) as err:
+        if log is not None:
+            log.error(f"/IMPL/BUCKL: generalized eigensolve failed ({err})")
+        return np.zeros(0), []
     order = np.argsort(-theta)                    # largest theta first
     factors = []
     modes = []

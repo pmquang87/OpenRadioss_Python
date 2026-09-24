@@ -62,7 +62,8 @@ from ..model.model import EngineControls, Model
 from ..output import TimeHistory, write_anim_state
 from ..starter.restart import read_restart, write_restart
 from .airbag import update_airbag_thermodynamics, update_airbag_volume, apply_airbag_forces
-from .damping import Dampers
+from .airbag_fvm import update_fvmbag_volume, update_fvmbag_thermodynamics, apply_fvmbag_forces
+from .damping import Dampers, DynamicRelaxation
 from .kinematics import LoadsAndConstraints
 from .lagmul import LagmulSolver
 from .mass_scaling import NodalTimeStep
@@ -71,8 +72,14 @@ from .mpc import build_mpc
 from .rbe3 import build_rbe3
 from .rigid_body import build_rigid_bodies
 from .rigid_wall import RigidWalls
+from .cyl_joint import build_cyl_joints
+from .gjoint import build_gjoints
+from .rlink import build_rlinks
+from .kjoint import build_kjoints
 from .sections import SectionForces
 from .sensors import Sensors
+from .element_erosion import compute_sdlenmax, check_solid_geometric_erosion, SdLenMaxArray  # noqa: F401
+
 
 
 def run_name_from_input(path: str):
@@ -102,6 +109,18 @@ class EngineState:
         self.e_damp = 0.0      # /DAMP dissipation (M6)
         self.dt_prev = None    # previous cycle time step for leapfrog dt12
         self.stop_reason = ""
+        self.crit_elem_id = 0  # critical element user ID (NELTST)
+        self.crit_elem_type = ""  # critical element group name (ITYPTST)
+        self.ek_ams = 0.0      # dual kinetic energy under AMS (sms_encin_2.F)
+
+    @property
+    def e_ext(self) -> float:
+        """Alias for wext (external work ledger)."""
+        return self.wext
+
+    @e_ext.setter
+    def e_ext(self, val: float) -> None:
+        self.wext = val
 
 
 def _deleted_count(model: Model) -> int:
@@ -112,6 +131,34 @@ def _deleted_count(model: Model) -> int:
         if off is not None:
             ndel += int((off == 0.0).sum())
     return ndel
+
+
+def _matches_elem_dt_control(name: str, key: str) -> bool:
+    """Check if element group name matches /DT/<elem> keyword specification (M580, M605)."""
+    k = key.upper()
+    if k in ("ELEM", "ALL"):
+        return True
+    if k in ("SOLID", "SOLI", "HEXA", "BRIC", "BRICK"):
+        return any(s in name for s in ("bric", "hexa", "heph", "penta", "tshell", "soli", "solid"))
+    if k in ("PENTA", "PENTA6", "WEDGE") and ("penta" in name or "wedge" in name):
+        return True
+    if k in ("SHELL", "SHEL", "COQUE"):
+        return ("shell" in name and "tshell" not in name) or "coque" in name
+    if k in ("SH3N", "SH_3N", "TRI", "TRIA") and ("sh3n" in name or "tri" in name):
+        return True
+    if k in ("TSHELL", "TSH", "SHEL16") and ("tshell" in name or "shel16" in name):
+        return True
+    if k in ("TETRA", "TETRA10", "TETRA4") and "tetra" in name:
+        return True
+    if k in ("QUAD", "QUA") and "quad" in name:
+        return True
+    if k in ("BEAM",) and "beam" in name:
+        return True
+    if k in ("TRUSS",) and "truss" in name:
+        return True
+    if k in ("SPRING", "SPRIN") and "spring" in name:
+        return True
+    return False
 
 
 def _element_energy_sum(model: Model) -> float:
@@ -163,8 +210,10 @@ _ENERGY_START_FLOOR = 1.0e-6
 def _energies(model: Model, state: EngineState) -> dict:
     ie = he = 0.0
     for _, group in model.element_groups():
-        ie += float(group.state["eint"].sum())
-        he += float(group.state["ehour"].sum())
+        if "eint" in group.state:
+            ie += float(np.sum(group.state["eint"]))
+        if "ehour" in group.state:
+            he += float(np.sum(group.state["ehour"]))
     real = model.mass < 1e29
     ke = float(0.5 * (model.mass[real, None] * model.v[real] ** 2).sum())
     if getattr(model, "inertia", None) is not None and getattr(model, "vr", None) is not None:
@@ -291,7 +340,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             k_upper = kind.upper()
             for gname, group in model.element_groups():
                 match = (k_upper in ("ELEM", "ALL") or
-                         (k_upper in ("BRICK", "BRIC") and "bric" in gname) or
+                         (k_upper in ("BRICK", "BRIC", "SOLID") and ("bric" in gname or "hexa" in gname or "heph" in gname or "penta" in gname or "tshell" in gname)) or
+                         (k_upper in ("PENTA", "PENTA6", "WEDGE") and "penta" in gname) or
                          (k_upper in ("SHELL", "SHEL") and ("shel" in gname or "sh3n" in gname)) or
                          (k_upper in ("SH3N", "TRI", "TRIA") and "sh3n" in gname) or
                          (k_upper in ("TETRA", "TETRA10") and "tetra" in gname) or
@@ -328,11 +378,16 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     rbe3s = build_rbe3(model, log)
     mpc = build_mpc(model, loads, log)     # /MPC (M6)
     lagmul = LagmulSolver(model, loads, log)
+    cyl_joints = build_cyl_joints(model, log)  # /CYL_JOINT (M586)
+    rlinks = build_rlinks(model, log)          # /RLINK (M586)
+    gjoints = build_gjoints(model, log)        # /GJOINT (M594)
+    kjoints = build_kjoints(model, log)        # /PROP/TYPE33, /PROP/TYPE45 (M602)
     sections = SectionForces(model, log)
     # /DT/NODA[/CST] (M6): nodal time step + mass scaling. Nodes whose
     # motion a constraint prescribes carry no stability constraint of
     # their own (see engine/mass_scaling.py).
     dampers = Dampers(model, log)          # /DAMP   (M6)
+    dyn_relax = DynamicRelaxation(model, controls, log)  # /DYREL /KEREL
     sensors = Sensors(model, log)          # /SENSOR (M6)
     model.sensors_state = sensors
     for mat in model.materials.values():
@@ -352,7 +407,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             # body still claims a nodal dt (rgbodfp.F/dtnoda.F — otherwise a
             # stiff shell welded into the body never constrains dt; the
             # RD-E-1000 rolling bug). No-op where no /RBODY exists.
-            noda.add_rigid_body(rb.nodes, rb.master, rb.M, rb.J0, model.x0)
+            noda.add_rigid_body(rb.nodes, rb.master, rb.M, rb.J0, model.x0, rb=rb)
         for t2 in tied:
             noda.set_prescribed(t2.snode[t2.active])
         for r3 in rbe3s:
@@ -402,6 +457,14 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         mpc.enforce(model.v, model.vr, inv_mass, inv_inertia)
     if len(lagmul) > 0:
         lagmul.enforce(model.v, model.vr, inv_mass, inv_inertia)
+    for rl in rlinks:
+        rl.apply_velocity(model.v, mass_eff, getattr(model, "vr", None), getattr(model, "inertia", None))
+    for cj in cyl_joints:
+        cj.apply_velocity(model.v, model.x, mass_eff)
+    for gj in gjoints:
+        gj.apply_velocity(model.v, getattr(model, "vr", None), model.x, mass_eff, getattr(model, "inertia", None))
+    for kj in kjoints:
+        kj.apply_velocity(model.v, getattr(model, "vr", None), model.x, mass_eff, getattr(model, "inertia", None))
 
     real = model.mass < 1e29
     if resumed:
@@ -414,10 +477,13 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             setattr(state, key, saved[key])
         state.dt_prev = saved.get("dt_prev", None)
         _energies.e0 = saved["e0"]
+        if saved.get("dyn_relax"):
+            dyn_relax.ke_prev = saved["dyn_relax"].get("ke_prev", 0.0)
         dt = saved["dt"]
         next_th = saved["next_th"]
         next_anim = saved["next_anim"]
         anim_no = saved["anim_no"]
+        next_state = saved.get("next_state", controls.state_tstart) if controls.state_dt > 0 else EP30
         log.info(f" RESUMED TIME STEP  . . . . . . . . . : {dt:12.5E}\n")
     else:
         # initial energy = reference E0 of the balance: kinetic + any
@@ -486,7 +552,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
 
     # /STATE/DT (M6): periodic restart snapshots (crash recovery / early
     # chaining points) — each write refreshes RunName_{nn}.rst
-    next_state = controls.state_tstart if controls.state_dt > 0 else EP30
+    if not resumed:
+        next_state = controls.state_tstart if controls.state_dt > 0 else EP30
 
     def _engine_snapshot():
         """The accumulated-state dict of the restart contract (see
@@ -498,6 +565,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             "e_damp": state.e_damp, "e0": _energies.e0, "dt": dt,
             "dt_prev": state.dt_prev,
             "next_th": next_th, "next_anim": next_anim, "anim_no": anim_no,
+            "next_state": next_state,
             "sensors": dict(sensors.fire_time),
             "sensors_status": dict(sensors.status),
             "rbodies": {rb.rb.id: {
@@ -510,6 +578,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                 "iner_added": noda.iner_added,
                 "mom_added": noda.mom_added.copy(), "mass0": noda.mass0,
                 "reported": noda._reported},
+            "dyn_relax": {"ke_prev": dyn_relax.ke_prev},
         }
 
     rst_path = os.path.join(out_dir, f"{run_name}_{run_num:04d}.rst")
@@ -518,6 +587,17 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     # this, a deck with dT_min = 0 can spin forever at dt ~ 1e-18
     dt_ref = dt
     t_wall0 = time.time()
+
+    # Write t = 0.0 initial state to TimeHistory (BUG-OUT-04)
+    if not resumed and controls.th_dt > 0:
+        model.fint = fint
+        model.fext = fext
+        e0 = _energies(model, state)
+        mom0 = (model.mass[real, None] * model.v[real]).sum(axis=0)
+        svals0 = sections.compute(model.x, fint, mint) if len(sections) else None
+        th.write(0.0, e0, float(model.mass[real].sum()), mom0, svals0)
+        while next_th <= state.t:
+            next_th += controls.th_dt
 
     # ======================================================================
     #                       THE EXPLICIT TIME LOOP
@@ -571,11 +651,65 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         mint[:] = 0.0
         dt_next = EP30
         claims = []
+        try:
+            from .element_erosion import check_solid_geometric_erosion
+        except ImportError:
+            def check_solid_geometric_erosion(group, x, ctrl):
+                return np.zeros(len(group.conn) if hasattr(group, "conn") else 0, dtype=bool)
+
         for name, group in model.element_groups():
             dt_e = KERNELS[name].forces(group, model.x, model.v, model.vr,
                                         dt, fint, mint)
+            # ---- M580/M605: /DT/<elem> element time-step & geometric controls (dtchk.F, sgeodel3.F) --
+            if getattr(controls, "dt_controls", None):
+                off = group.state.get("off") if hasattr(group, "state") else None
+                if off is None:
+                    off = np.ones(len(dt_e), dtype=np.float64)
+                    if hasattr(group, "state"):
+                        group.state["off"] = off
+                for ctrl_key, ctrl in controls.dt_controls.items():
+                    if _matches_elem_dt_control(name, ctrl_key):
+                        action = ctrl.get("action", "")
+                        if action == "DEL":
+                            dt_min = ctrl.get("dt_min", 0.0)
+                            del_mask_dt = (dt_e < dt_min) if dt_min > 0.0 else np.zeros(len(dt_e), dtype=bool)
+                            del_mask_geom = check_solid_geometric_erosion(group, model.x, ctrl)
+                            del_mask = (off > 0.0) & (del_mask_dt | del_mask_geom)
+                            if np.any(del_mask):
+                                off[del_mask] = 0.0
+                                dt_e = dt_e.copy()
+                                dt_e[del_mask] = EP30
+                                state.ndel = getattr(state, "ndel", 0) + int(np.sum(del_mask))
+                        elif action in ("STOP", ""):
+                            dt_min = ctrl.get("dt_min", 0.0)
+                            if dt_min > 0.0:
+                                stop_mask = (off > 0.0) & (dt_e < dt_min)
+                                if np.any(stop_mask):
+                                    idx = np.where(stop_mask)[0][0]
+                                    eid = group.ids[idx] if hasattr(group, "ids") else idx
+                                    state.stop_reason = f"/DT/{ctrl_key}/STOP: ELEMENT {eid} TIME STEP BELOW MINIMUM {dt_min:.3E}"
+                                    break
+                        if ctrl.get("scale", 0.9) != 0.9 and ctrl.get("scale", 0.9) > 0.0:
+                            scale_ratio = ctrl["scale"] / 0.9
+                            dt_e = dt_e * scale_ratio
             claims.append(dt_e)
-            dt_next = min(dt_next, float(dt_e.min()))
+            if len(dt_e) > 0:
+                dt_next_prev = dt_next
+                dt_min_val = float(dt_e.min())
+                dt_next = min(dt_next, dt_min_val)
+                if dt_min_val < dt_next_prev:
+                    min_idx = int(np.argmin(dt_e))
+                    state.crit_elem_id = group.ids[min_idx] if hasattr(group, "ids") else min_idx
+                    state.crit_elem_type = name
+            if state.stop_reason:
+                break
+        if state.stop_reason:
+            break
+
+        # /SPHCEL / SPH particle step (M_SPH)
+        if hasattr(model, 'sph_cells') and model.sph_cells:
+            from .sph_engine import sph_step
+            sph_step(model, dt, state)
 
         # ---- 2. contact forces -------------------------------------------
         # (into their own array — see the fcont declaration and step 5b;
@@ -597,6 +731,11 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             if noda is None:
                 dt_next = min(dt_next, dt_i)
 
+        # ALE advection step (M_ALE)
+        if getattr(controls, 'ale_on', False) or (hasattr(model, 'ale_bcs') and model.ale_bcs):
+            from .ale_engine import ale_step
+            ale_step(model, dt, state)
+
         # ---- 3. external loads (gravity, /CLOAD, /PLOAD) -------------------
         fext[:] = 0.0
         loads.external_forces(state.t, fext, model.x, sensors)
@@ -607,6 +746,51 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                 update_airbag_volume(mv, model, model.x)
                 update_airbag_thermodynamics(mv, model, dt, state.t)
                 apply_airbag_forces(mv, model, model.x, fext)
+            elif mv.vol_type == 'GAS':
+                from .airbag import update_monvol_gas
+                update_airbag_volume(mv, model, model.x)
+                update_monvol_gas(mv, model, dt, state.t)
+                apply_airbag_forces(mv, model, model.x, fext)
+            elif mv.vol_type == 'PRES':
+                from .airbag import update_monvol_pres
+                update_airbag_volume(mv, model, model.x)
+                update_monvol_pres(mv, model, dt, state.t)
+                apply_airbag_forces(mv, model, model.x, fext)
+
+        # Standalone /MONVOL/GAS or /MONVOL/PRES not in monitored_volumes
+        if hasattr(model, "monvol_gases") and model.monvol_gases:
+            for _, mg in model.monvol_gases.items():
+                if mg.id not in model.monitored_volumes:
+                    from .airbag import update_monvol_gas
+                    update_airbag_volume(mg, model, model.x)
+                    update_monvol_gas(mg, model, dt, state.t)
+                    apply_airbag_forces(mg, model, model.x, fext)
+
+        if hasattr(model, "monvol_pres") and model.monvol_pres:
+            for _, mp in model.monvol_pres.items():
+                if mp.id not in model.monitored_volumes:
+                    from .airbag import update_monvol_pres
+                    update_airbag_volume(mp, model, model.x)
+                    update_monvol_pres(mp, model, dt, state.t)
+                    apply_airbag_forces(mp, model, model.x, fext)
+
+        # /MONVOL/FVMBAG1 and /MONVOL/FVMBAG2 (M108, M111, M583)
+        if hasattr(model, "monvol_fvmbags") and model.monvol_fvmbags:
+            for _, fv in model.monvol_fvmbags.items():
+                update_fvmbag_volume(fv, model, model.x)
+                update_fvmbag_thermodynamics(fv, model, dt, state.t)
+                apply_fvmbag_forces(fv, model, model.x, fext)
+
+        if hasattr(model, "monvol_fvmbag2s") and model.monvol_fvmbag2s:
+            for _, fv in model.monvol_fvmbag2s.items():
+                update_fvmbag_volume(fv, model, model.x)
+                update_fvmbag_thermodynamics(fv, model, dt, state.t)
+                apply_fvmbag_forces(fv, model, model.x, fext)
+
+        # FSI coupling forces (M_FSI)
+        if hasattr(model, 'inter_fsi') and model.inter_fsi:
+            from .fsi_coupling import fsi_step
+            fsi_step(model, dt, state, fext)
 
         # ---- 3b. tied interfaces (/INTER/TYPE2, i2for3): move the tied
         # nodes' internal + external forces onto their main segments (the
@@ -619,6 +803,14 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                                state.cycle)
         for r3 in rbe3s:
             r3.transfer_forces(fint, fext, fcont, mint, model.x)
+        for cj in cyl_joints:
+            cj.transfer_forces(fint, fext, fcont, mint, model.x)
+        for rl in rlinks:
+            rl.transfer_forces(fint, fext, fcont, mint, mass_eff)
+        for gj in gjoints:
+            gj.transfer_forces(fint, fext, fcont, mint, model.x, mass_eff, inv_mass, inv_inertia)
+        for kj in kjoints:
+            kj.transfer_forces(fint, fext, fcont, mint, model.x, mass_eff, inv_mass, inv_inertia)
 
         # ---- 3c. /DT/NODA[/CST]: nodal time step + mass scaling (M6) ------
         # Runs BEFORE the acceleration so the mass added for the target
@@ -635,9 +827,18 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
 
         if noda is not None:
             noda.assemble(claims)
+            if getattr(controls, "damp_alpha", 0.0) > 0.0 or getattr(controls, "damp_beta", 0.0) > 0.0:
+                noda.apply_rayleigh_damping_stiffness(getattr(controls, "damp_alpha", 0.0),
+                                                      getattr(controls, "damp_beta", 0.0))
             dt_next = noda.apply(mass_eff, inv_mass, model.v, state.t,
                                  model.inertia, inv_inertia, ams_nodes)
             state.e_madd = noda.e_madd
+            if getattr(noda, "cst", False) and getattr(noda, "crit_node_id", 0) > 0:
+                state.crit_elem_id = noda.crit_node_id
+                state.crit_elem_type = "NODE"
+            if getattr(noda, "stopped", False):
+                state.stop_reason = f"/DT/NODA/STOP: NODE {noda.stop_node} TIME STEP BELOW MINIMUM {noda.dt_min:.3E}"
+                break
 
         dt_prev = state.dt_prev if state.dt_prev is not None else dt
         dt = controls.dt_scale * dt_next
@@ -645,6 +846,9 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         if controls.stop_tstop > 0 and state.t + dt >= controls.stop_tstop:
             dt = max(controls.stop_tstop - state.t, 0.0)
         dt12 = 0.5 * (dt_prev + dt)
+        if dyn_relax.active and getattr(controls, "adyrel_active", False):
+            dt = dyn_relax.compute_timestep_reduction(dt, dt12)
+            dt12 = 0.5 * (dt_prev + dt)
 
         # ---- 3d. /MPC Lagrange forces (M6): the tiny coupled solve that
         # makes the ordinary update below satisfy G a = 0 (see mpc.py);
@@ -663,15 +867,49 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         if M_offdiag is not None:
             M_diag = mass_eff + diag_added
             acc = f_total * inv_mass[:, None]
-            iters, rel_res = ams.solve(acc, f_total, M_diag, M_offdiag)
+            rb_m_list = []
+            rb_s_list = []
+            for rb in rbodies:
+                for s in rb.nodes:
+                    if s != rb.master:
+                        rb_m_list.append(rb.master)
+                        rb_s_list.append(s)
+            rb_masters_arr = np.array(rb_m_list, dtype=np.int64) if rb_m_list else None
+            rb_slaves_arr = np.array(rb_s_list, dtype=np.int64) if rb_s_list else None
+            fix_tra = getattr(loads, "fix_tra", None)
+            iters, rel_res = ams.solve(acc, f_total, M_diag, M_offdiag,
+                                       fix_tra=fix_tra,
+                                       rb_masters=rb_masters_arr,
+                                       rb_slaves=rb_slaves_arr)
             state.ams_iters = getattr(state, "ams_iters", 0) + iters
+            state.ek_ams = ams.compute_kinetic_energy(model.v, acc, dt12, model.mass, M_diag, M_offdiag)
         else:
             acc = f_total * inv_mass[:, None]
+        if noda is not None and getattr(controls, "dt_noda", "") == "SET":
+            noda.apply_set_acceleration(acc)
+        ar = mint * inv_inertia[:, None] if getattr(model, "vr", None) is not None else None
+        for rl in rlinks:
+            rl.apply_acceleration(acc, mass_eff, ar, getattr(model, "inertia", None))
+        for cj in cyl_joints:
+            cj.apply_acceleration(acc, model.x, mass_eff)
+        for gj in gjoints:
+            gj.apply_acceleration(acc, ar, model.x, mass_eff, getattr(model, "inertia", None))
+        for kj in kjoints:
+            kj.apply_acceleration(acc, ar, model.x, mass_eff, getattr(model, "inertia", None))
+        # /IMPACC imposed acceleration (M595)
+        state.wext += loads.apply_acceleration(
+            state.t, dt12, acc, ar, mass_eff, getattr(model, "inertia", None),
+            model.v, getattr(model, "vr", None), v_old, vr_old, sensors
+        )
+        model.impacc_reactions = loads.impacc_reactions
         model.fint = fint
         model.fext = fext
         model.a = acc
         model.v += acc * dt12
-        model.vr += mint * inv_inertia[:, None] * dt12
+        if ar is not None:
+            model.vr += ar * dt12
+        else:
+            model.vr += mint * inv_inertia[:, None] * dt12
         state.dt_prev = dt
 
         # ---- 4b. /DAMP mass damping (M6): exact integrating factor on the
@@ -703,6 +941,11 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                 resid += float(np.einsum("nb,nb->", mint[di], 0.5 * (model.vr[di] - vr_star[di]))) * dt
             state.e_num += resid
 
+        # ---- 4c. dynamic relaxation (/DYREL /KEREL) -----------------------
+        if len(dyn_relax):
+            state.e_damp += dyn_relax.apply(state.t, dt12, model.v, model.vr,
+                                            model.mass, model.inertia)
+
         # ---- 5. kinematic conditions overwrite velocities -----------------
         # 5a. rigid bodies (/RBODY, /RBE2 — rbyfor/rbycor): gather the
         # body forces, advance the 6-DOF EOM, scatter the rigid velocity
@@ -712,6 +955,9 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         for rb in rbodies:
             state.wext += rb.advance(fint, fext, fcont, mint, model.v,
                                      model.vr, model.x, dt, state.t + dt)
+            w_sq = float(np.sum(rb.w ** 2))
+            if dt ** 2 * w_sq > 1.0:
+                log.warning(f"** WARNING: RIGID BODY {rb.rb.id} ROTATION ANGLE PER STEP EXCEEDS STABILITY LIMIT (DT^2*OMEGA^2 = {dt**2 * w_sq:.3f} > 1.0)")
         # (mass_eff: an /IMPVEL driving a tied main node reacts against
         # the secondary inertia it carries too. v_old is v^{n-1/2}, the
         # start-of-cycle velocity, so the constraint work is booked at the
@@ -720,7 +966,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # balance instead of booking twice the work at cycle 1.)
         state.wext += loads.apply_kinematic(state.t + dt, model.v, model.vr,
                                             mass_eff, model.x, dt, v_old,
-                                            model.inertia, vr_old)
+                                            model.inertia, vr_old,
+                                            sensors=sensors)
         de_wall, dw_wall = walls.apply(model.x, model.v, v_old,
                                        model.mass, dt)
         state.econt += de_wall
@@ -740,11 +987,26 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # assembled forces in its FSAV blocks.)
         if contacts:
             state.econt -= float(np.einsum(
-                "nb,nb->", fcont, 0.5 * (v_old + model.v))) * dt
+                "nb,nb->", fcont, 0.5 * (v_old + model.v))) * dt12
 
         # external work of the loads: force x actual displacement, booked with
         # midstep average velocity (resol.F:6289, force.F90:322)
-        state.wext += float(np.einsum("nb,nb->", fext, 0.5 * (v_old + model.v))) * dt
+        state.wext += float(np.einsum("nb,nb->", fext, 0.5 * (v_old + model.v))) * dt12
+
+        # /MPC and /LAGMUL velocity cleanup: enforce constraints on velocities
+        # BEFORE position update to prevent geometric drift (BUG-ENG-05)
+        if mpc is not None:
+            mpc.enforce(model.v, model.vr, inv_mass, inv_inertia)
+        if len(lagmul) > 0:
+            lagmul.enforce(model.v, model.vr, inv_mass, inv_inertia)
+        for rl in rlinks:
+            rl.apply_velocity(model.v, mass_eff, getattr(model, "vr", None), getattr(model, "inertia", None))
+        for cj in cyl_joints:
+            cj.apply_velocity(model.v, model.x, mass_eff)
+        for gj in gjoints:
+            gj.apply_velocity(model.v, getattr(model, "vr", None), model.x, mass_eff, getattr(model, "inertia", None))
+        for kj in kjoints:
+            kj.apply_velocity(model.v, getattr(model, "vr", None), model.x, mass_eff, getattr(model, "inertia", None))
 
         # ---- 6. position update -------------------------------------------
         model.x += model.v * dt
@@ -758,12 +1020,14 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             t2.enforce(model.x, model.v, model.vr, dt)
         for r3 in rbe3s:
             r3.enforce(model.x, model.v, model.vr, dt)
-        # /MPC velocity cleanup: remove what walls/BCS/placements may have
-        # re-injected into G v (zero booked work — see mpc.py)
-        if mpc is not None:
-            mpc.enforce(model.v, model.vr, inv_mass, inv_inertia)
-        if len(lagmul) > 0:
-            lagmul.enforce(model.v, model.vr, inv_mass, inv_inertia)
+        for rl in rlinks:
+            rl.enforce(model.x, model.v, dt)
+        for cj in cyl_joints:
+            cj.enforce(model.x, model.v, dt)
+        for gj in gjoints:
+            gj.enforce(model.x, model.v, getattr(model, "vr", None), dt)
+        for kj in kjoints:
+            kj.enforce(model.x, model.v, getattr(model, "vr", None), dt)
 
         # ---- 6c. numerical-dissipation ledger (M6) --------------------------
         # The kernels book internal energy as a STATE FUNCTION
@@ -801,6 +1065,16 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         state.e_num += w_leave - (e_booked - state.e_booked_prev)
         state.e_booked_prev = e_booked
 
+        # ---- ADYREL adaptive dynamic relaxation frequency adaptation (static.F:312) ---
+        if dyn_relax.adyrel_active:
+            ke_curr = float(0.5 * np.sum(model.mass[real, None] * (model.v[real] ** 2)))
+            if getattr(model, "vr", None) is not None and getattr(model, "inertia", None) is not None:
+                has_in = (model.inertia[real] > 0.0)
+                if np.any(has_in):
+                    ir = real[has_in]
+                    ke_curr += float(0.5 * np.sum(model.inertia[ir, None] * (model.vr[ir] ** 2)))
+            dyn_relax.update_adaptive_frequency(state.t, dt, state.cycle, e_booked, ke_curr)
+
         state.t += dt
         state.cycle += 1
 
@@ -812,21 +1086,24 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             svals = sections.compute(model.x, fint, mint) if len(sections) \
                 else None
             th.write(state.t, e, float(model.mass[real].sum()), mom, svals)
-            next_th += controls.th_dt
+            while next_th <= state.t:
+                next_th += controls.th_dt
         if controls.anim_dt > 0 and state.t >= next_anim:
             path = os.path.join(out_dir, f"{run_name}A{anim_no:03d}.vtk")
             write_anim_state(path, model, state.t,
                              controls.anim_vect, controls.anim_elem,
                              cycle=state.cycle)
             anim_no += 1
-            next_anim += controls.anim_dt
-        if state.t >= next_state:
+            while next_anim <= state.t:
+                next_anim += controls.anim_dt
+        if controls.state_dt > 0 and state.t >= next_state:
             # /STATE/DT snapshot: a full restart, resumable by the next
             # run of the chain (and the crash-recovery point)
             write_restart(model, rst_path, engine=_engine_snapshot())
             log.info(f" -- /STATE: RESTART SNAPSHOT WRITTEN AT TIME "
                      f"{state.t:12.5E}")
-            next_state += controls.state_dt
+            while next_state <= state.t and controls.state_dt > 0:
+                next_state += controls.state_dt
         if state.cycle % controls.print_cycles == 0 or \
                 state.t >= controls.t_end:
             # element-deletion report (the original prints a "RUPTURE /
@@ -855,9 +1132,10 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             # The NAN/INF check stays UNCONDITIONAL — a non-finite state
             # is always fatal.  The 15% / 30% limits are unchanged.
             if e["REF"] > _ENERGY_START_FLOOR:
+                state.epeak = max(state.epeak, e["IE"] + e["KE"])
                 if abs(e["ERR"]) > controls.energy_error_stop:
                     state.stop_reason = (
-                        f"/STOP/ENERGY ERROR {e['ERR']:.1f}% EXCEEDS "
+                        f"ENERGY ERROR {e['ERR']:.1f}% EXCEEDS "
                         f"LIMIT {controls.energy_error_stop}%")
                     break
                 # a strongly NEGATIVE numerical-dissipation ledger is
@@ -875,6 +1153,19 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                         f"LIMIT {2.0 * controls.energy_error_stop}% — "
                         f"RUN UNSTABLE")
                     break
+            if controls.mass_error_stop > 0.0 and noda is not None:
+                frac_m = 100.0 * noda.mass_added / max(noda.mass0, 1e-20)
+                if frac_m > controls.mass_error_stop:
+                    state.stop_reason = f"/STOP: MASS ERROR {frac_m:.2f}% EXCEEDED LIMIT {controls.mass_error_stop:.2f}%"
+                    break
+            if controls.nodal_mass_error_stop > 0.0 and noda is not None:
+                top_nodes = noda.get_top_mass_nodes(1)
+                if top_nodes and top_nodes[0][2] * 100.0 > controls.nodal_mass_error_stop:
+                    state.stop_reason = f"/STOP: NODAL MASS ERROR {top_nodes[0][2]*100.0:.2f}% ON NODE {top_nodes[0][0]} EXCEEDED LIMIT {controls.nodal_mass_error_stop:.2f}%"
+                    break
+            if dyn_relax.active and dyn_relax.check_convergence(e["KE"], e["IE"], max(state.epeak, e["REF"])):
+                state.stop_reason = f"/STOP/STATIC CONVERGENCE REACHED AT TIME {state.t:.5E}"
+                break
             if not all(np.isfinite(v) for v in (e["KE"], e["IE"], e["HE"], e["CE"], e["EW"], e["EN"], e["DE"], e["REF"])):
                 state.stop_reason = "NAN/INF DETECTED — RUN DIVERGED"
                 break
@@ -894,6 +1185,9 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             state.stop_reason = (f"TIME STEP COLLAPSED ({dt:.3E}, WAS "
                                  f"{dt_ref:.3E}) — RUN DEAD")
             break
+        if not np.isfinite(dt) or dt <= 0.0:
+            state.stop_reason = "NAN/INF DETECTED — RUN DIVERGED"
+            break
 
     # ======================================================================
     # final state + termination summary (like the original's final page)
@@ -911,6 +1205,9 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     # expose the exact accumulated state to callers/tests (not pickled —
     # attached after the restart write)
     model.engine_state = state
+
+    if not state.stop_reason and not np.isfinite(state.t):
+        state.stop_reason = "NAN/INF DETECTED — RUN DIVERGED"
 
     e = _energies(model, state)
     log.info("\n     ------------------------------------------------")

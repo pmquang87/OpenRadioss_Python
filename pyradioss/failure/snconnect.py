@@ -52,11 +52,19 @@ def _get_state(fail, dama):
         snc_cache = _get_state._snc
 
     if base_id not in snc_cache:
-        snc_cache[base_id] = {
-            "epsp": np.zeros(n, dtype=np.float64),
-            "pla1": np.zeros(n, dtype=np.float64),
-            "pla2": np.zeros(n, dtype=np.float64),
-        }
+        existing = None
+        for old_entry in reversed(list(snc_cache.values())):
+            if isinstance(old_entry, dict) and old_entry.get("epsp") is not None and len(old_entry["epsp"]) == n:
+                existing = old_entry
+                break
+        if existing is not None:
+            snc_cache[base_id] = existing
+        else:
+            snc_cache[base_id] = {
+                "epsp": np.zeros(n, dtype=np.float64),
+                "pla1": np.zeros(n, dtype=np.float64),
+                "pla2": np.zeros(n, dtype=np.float64),
+            }
 
     snc = snc_cache[base_id]
     if snc["epsp"].shape[0] != n:

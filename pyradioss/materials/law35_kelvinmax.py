@@ -57,10 +57,73 @@ EPSXX inputs — same objectivity caveat as LAW70), the air pressure
 from __future__ import annotations
 
 import math
+from typing import Optional, Union
 
 import numpy as np
 
 from ..model.entities import Material
+
+
+# ============================================================================
+# 1D Kelvin-Voigt & Maxwell Relations (Analytical & Softening)
+# ============================================================================
+
+def kelvin_voigt_stress(
+    eps: float | np.ndarray,
+    deps_dt: float | np.ndarray,
+    E: float,
+    eta: float,
+    eps_max: Optional[float] = None,
+    softening: Optional[float] = None,
+) -> float | np.ndarray:
+    """1D Kelvin-Voigt viscoelastic stress relation with optional max strain softening:
+        sigma = (E * eps + eta * deps_dt) * soft_factor
+
+    Cited from:
+    - engine/source/materials/mat/mat035/sigeps35.F (SUBROUTINE SIGEPS35, lines 260-280)
+    - starter/source/materials/mat/mat035/hm_read_mat35.F (HM_READ_MAT35)
+
+    Parameters:
+        eps: Total strain
+        deps_dt: Strain rate d(eps)/dt
+        E: Young's modulus (MPa)
+        eta: Viscosity coefficient (MPa*s)
+        eps_max: Optional maximum strain threshold for softening
+        softening: Softening rate parameter (default 1.0)
+    """
+    is_scalar = np.isscalar(eps) and np.isscalar(deps_dt)
+    e_val = np.asarray(eps, dtype=float)
+    edot_val = np.asarray(deps_dt, dtype=float)
+    sig = float(E) * e_val + float(eta) * edot_val
+    if eps_max is not None and eps_max > 0.0:
+        rate = softening if softening is not None else 1.0
+        abs_e = np.abs(e_val)
+        soft = np.where(abs_e > eps_max, np.maximum(0.01, 1.0 - rate * (abs_e - eps_max)), 1.0)
+        sig = sig * soft
+    return float(sig) if is_scalar else sig
+
+
+def kelvin_maxwell_relaxation(
+    t: float | np.ndarray,
+    E: float,
+    Et: float,
+    mu: float,
+    eps0: float,
+) -> float | np.ndarray:
+    """Analytical stress relaxation under constant strain eps0 for standard linear solid:
+        sigma(t) = sigma_inf + (sigma_0 - sigma_inf) * exp(-t / tau)
+    where tau = mu / (E - Et) or tau = mu / E.
+
+    Cited from:
+    - engine/source/materials/mat/mat035/sigeps35.F lines 260-280
+    """
+    is_scalar = np.isscalar(t)
+    t_arr = np.asarray(t, dtype=float)
+    sig0 = float(E) * float(eps0)
+    sig_inf = float(Et) * float(eps0)
+    tau = float(mu) / max(float(E), 1e-20)
+    sig_t = sig_inf + (sig0 - sig_inf) * np.exp(-t_arr / max(tau, 1e-20))
+    return float(sig_t) if is_scalar else sig_t
 
 
 def build_law35(rec) -> Material:
@@ -94,10 +157,13 @@ def build_law35(rec) -> Material:
     if not (-1.0 < nut < 0.5):
         raise ValueError(f"/MAT/LAW35/{rec_id}: tangent Poisson ratio nu_t={nut:g} outside (-1, 0.5)")
 
-    mu = _get(["MAT_ETA2", "mu_visc", "mu", "eta2", "ETA2"])
+    mu = _get(["MAT_ETA2", "mu_visc", "mu", "eta2", "ETA2", "eta", "ETA", "eta_0", "ETA_0"])
     if mu <= 0.0:
         raise ValueError(f"/MAT/LAW35/{rec_id}: the Navier viscosity (MAT_ETA2) must be > 0 — "
                          f"the Kelvin-Maxwell relaxation rate (G2+Gt2)/(2*mu) is singular without it")
+
+    eps_max = _get(["MAT_EPS_MAX", "eps_max", "EPS_MAX", "max_strain", "MAX_STRAIN"], 0.0)
+    softening = _get(["MAT_SOFTENING", "softening", "SOFTENING", "soft_rate"], 1.0)
 
     pmin = _get(["MAT_PC", "pmin", "pc", "PC"])
     if pmin == 0.0:
@@ -145,6 +211,7 @@ def build_law35(rec) -> Material:
         "P0": p0, "phi": phi, "gama0": gama0,
         "fct_id": fct_id, "fscale": fscale,
         "ismooth": ismooth, "fcut": fcut,
+        "eps_max": eps_max, "softening": softening,
     }
     density = getattr(rec, "density", getattr(rec, "rho", getattr(rec, "rho0", 1.0)))
     if isinstance(density, (int, float)):
@@ -365,6 +432,14 @@ def solid_update(mat, sig, deps, *args, **kwargs):
     sig[:] = ds + dsdt * dt
     for k in range(3):
         sig[:, k] += pr - sigair
+
+    eps_max = p.get("eps_max", 0.0)
+    if eps_max > 0.0:
+        eq_strain = np.sqrt((2.0 / 3.0) * (de[:, 0]**2 + de[:, 1]**2 + de[:, 2]**2 + 2.0 * (de[:, 3]**2 + de[:, 4]**2 + de[:, 5]**2)))
+        soft_rate = p.get("softening", 1.0)
+        soft_fac = np.where(eq_strain > eps_max, np.maximum(0.01, 1.0 - soft_rate * (eq_strain - eps_max)), 1.0)
+        sig *= soft_fac[:, None]
+
     sigair_old[:] = sigair
     return sig, c
 

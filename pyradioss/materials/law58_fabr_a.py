@@ -78,6 +78,7 @@ The LAW58 fabric model represents a woven fabric composed of two interlaced yarn
 from __future__ import annotations
 
 import math
+from enum import IntEnum
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
@@ -87,6 +88,105 @@ from ..model.entities import Material
 
 _EM20 = 1e-20
 _INF = 1e30
+
+
+class FabricState(IntEnum):
+    """Fabric deformation states for LAW58 A-formulation wrinkling model.
+
+    States:
+    - SLACK = 0: Bi-compression; both warp and weft fibers are in compression.
+      The membrane is completely loose/slack. It carries no normal tension and
+      exhibits no in-plane shear stiffness (sxx = 0, syy = 0, sxy = 0).
+    - TAUT = 1 (TENSIONED = 1): Bi-tension; both warp and weft fibers are in tension.
+      The membrane is fully stretched. Full normal stiffness and full Trellis
+      shear stiffness (G0 or post-lock Gt) are active.
+    - WRINKLED = 2: Uniaxial tension & compression; one fiber direction in tension,
+      the other in compression. Wrinkles form parallel to the tension direction.
+      The compressed fiber buckles out-of-plane and cannot sustain compression.
+      Crucially, the membrane exhibits no shear stiffness when compressed (sxy = 0).
+    """
+    SLACK = 0
+    TAUT = 1
+    TENSIONED = 1
+    WRINKLED = 2
+
+
+def classify_fabric_state(
+    sxx: Union[float, np.ndarray],
+    syy: Union[float, np.ndarray],
+    ec: Optional[Union[float, np.ndarray]] = None,
+    et: Optional[Union[float, np.ndarray]] = None,
+    tol: float = 1e-9,
+) -> Union[FabricState, np.ndarray]:
+    """Classify fabric deformation into TAUT (1), WRINKLED (2), or SLACK (0).
+
+    Parameters
+    ----------
+    sxx : warp normal stress or tension indicator
+    syy : weft normal stress or tension indicator
+    ec : optional warp engineering strain
+    et : optional weft engineering strain
+    tol : numerical threshold for compression
+
+    Returns
+    -------
+    FabricState or np.ndarray of FabricState
+    """
+    sxx_arr = np.asarray(sxx, dtype=float)
+    syy_arr = np.asarray(syy, dtype=float)
+    is_scalar = (sxx_arr.ndim == 0 and syy_arr.ndim == 0)
+
+    comp_c = sxx_arr < -tol
+    comp_t = syy_arr < -tol
+    if ec is not None:
+        comp_c = comp_c | (np.asarray(ec, dtype=float) < -tol)
+    if et is not None:
+        comp_t = comp_t | (np.asarray(et, dtype=float) < -tol)
+
+    state = np.full(sxx_arr.shape, FabricState.TAUT, dtype=int)
+    wrinkled_mask = (comp_c & ~comp_t) | (~comp_c & comp_t)
+    state[wrinkled_mask] = FabricState.WRINKLED
+    slack_mask = comp_c & comp_t
+    state[slack_mask] = FabricState.SLACK
+
+    if is_scalar:
+        return FabricState(int(state))
+    return state
+
+
+def is_taut(state: Union[FabricState, int, np.ndarray]) -> Union[bool, np.ndarray]:
+    """Check if fabric state is TAUT (tensioned in both warp and weft)."""
+    return np.asarray(state) == FabricState.TAUT
+
+
+def is_wrinkled(state: Union[FabricState, int, np.ndarray]) -> Union[bool, np.ndarray]:
+    """Check if fabric state is WRINKLED (one direction tension, one compression)."""
+    return np.asarray(state) == FabricState.WRINKLED
+
+
+def is_slack(state: Union[FabricState, int, np.ndarray]) -> Union[bool, np.ndarray]:
+    """Check if fabric state is SLACK (both directions compressed)."""
+    return np.asarray(state) == FabricState.SLACK
+
+
+def get_fabric_state(
+    mat: Any,
+    sig: np.ndarray,
+    deps: Optional[np.ndarray] = None,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Union[FabricState, np.ndarray]:
+    """Query current fabric state(s) from material, stress/strain, or extra dict."""
+    if extra is not None and "fabric_state" in extra:
+        st = extra["fabric_state"]
+        if np.ndim(st) == 0:
+            return FabricState(int(st))
+        return st
+    sig_arr = np.asarray(sig, dtype=float)
+    if sig_arr.ndim == 1:
+        sxx = float(sig_arr[0])
+        syy = float(sig_arr[1]) if len(sig_arr) > 1 else 0.0
+        return classify_fabric_state(sxx, syy)
+    return classify_fabric_state(sig_arr[:, 0], sig_arr[:, 1])
 
 
 def _get_curve_points(curve: Any) -> list[tuple[float, float]]:
@@ -267,6 +367,10 @@ class Law58Params:
     fun_a6: Any = None
     scale6: float = 1.0
 
+    # Wrinkling model (A-formulation 3-state: TAUT, WRINKLED, SLACK)
+    iwrinkle: int = 0  # 0: standard formulation, 1: active 3-state wrinkling model
+    wrinkling: bool = False  # boolean flag for wrinkling model
+
     # Derived geometric & constitutive constants
     nc: int = field(init=False)
     nt: int = field(init=False)
@@ -303,6 +407,11 @@ class Law58Params:
     sxyi: float = field(init=False, default=0.0)
 
     def __post_init__(self) -> None:
+        if self.wrinkling and self.iwrinkle == 0:
+            self.iwrinkle = 1
+        elif self.iwrinkle > 0:
+            self.wrinkling = True
+
         self.nc = max(int(self.n1), 1)
         self.nt = max(int(self.n2), 1)
         self.embc = self.s1 if self.s1 != 0.0 else 0.1
@@ -507,6 +616,9 @@ def _get_params(mat: Any) -> Law58Params:
     fun_a6 = _get(("fun_a6", "FUN_A6"), None)
     scale6 = _f(("scale6", "scale_6", "C6_unload", "c6_unload"), 1.0)
 
+    iwrinkle = _i(("iwrinkle", "IWRINKLE", "wrinkle", "WRINKLE"), 0)
+    wrinkling = bool(_get(("wrinkling", "WRINKLING"), False)) or (iwrinkle > 0)
+
     return Law58Params(
         rho0=rho0, rhor=rhor, e1=e1, b1=b1, e2=e2, b2=b2,
         flex=flex, g0=g0, gt=gt, alphat=alphat, g5=g5,
@@ -515,6 +627,7 @@ def _get_params(mat: Any) -> Law58Params:
         s1=s1, s2=s2, c4=c4, c5=c5,
         fun_a1=fun_a1, c1=c1, fun_a2=fun_a2, c2=c2, fun_a3=fun_a3, c3=c3,
         fun_a4=fun_a4, scale4=scale4, fun_a5=fun_a5, scale5=scale5, fun_a6=fun_a6, scale6=scale6,
+        iwrinkle=iwrinkle, wrinkling=wrinkling,
     )
 
 
@@ -850,6 +963,17 @@ def shell_update_law58(
     if "t58" not in extra:
         extra["t58"] = np.zeros(nel, dtype=float)
     t_arr = extra["t58"]
+
+    if "fabric_state" not in extra:
+        extra["fabric_state"] = np.full(nel, FabricState.TAUT, dtype=int)
+    fabric_state_arr = extra["fabric_state"]
+
+    is_wrinkling_active = (
+        p.iwrinkle > 0
+        or getattr(p, "wrinkling", False)
+        or bool(kwargs.get("wrinkling", False))
+        or (extra is not None and bool(extra.get("wrinkling", False)))
+    )
 
     if "epsmax_c" not in extra:
         extra["epsmax_c"] = np.zeros(nel, dtype=float)
@@ -1217,6 +1341,40 @@ def shell_update_law58(
         syz = (sig_arr[i, 3] if sig_arr.shape[1] > 3 else 0.0) + (p.g5 * deps_arr[i, 3] if deps_arr.shape[1] > 3 else 0.0)
         szx = (sig_arr[i, 4] if sig_arr.shape[1] > 4 else 0.0) + (p.g5 * deps_arr[i, 4] if deps_arr.shape[1] > 4 else 0.0)
 
+        # Determine fabric deformation state (TAUT, WRINKLED, SLACK)
+        comp_c = (dcc < -1e-9) or (ec < -1e-9) or (sxx < -1e-9)
+        comp_t = (dtt < -1e-9) or (et < -1e-9) or (syy < -1e-9)
+
+        if not comp_c and not comp_t:
+            st = FabricState.TAUT
+        elif comp_c and comp_t:
+            st = FabricState.SLACK
+        else:
+            st = FabricState.WRINKLED
+
+        fabric_state_arr[i] = int(st)
+
+        # Three-state A-formulation wrinkling response
+        if is_wrinkling_active:
+            if st == FabricState.WRINKLED:
+                # No shear stiffness when compressed (wrinkled state)
+                sxy = 0.0
+                sigv_xy = 0.0
+                if comp_c:
+                    sxx = 0.0
+                    sigv_xx = 0.0
+                if comp_t:
+                    syy = 0.0
+                    sigv_yy = 0.0
+            elif st == FabricState.SLACK:
+                # Both fibers compressed: slack fabric carries no membrane stresses
+                sxx = 0.0
+                syy = 0.0
+                sxy = 0.0
+                sigv_xx = 0.0
+                sigv_yy = 0.0
+                sigv_xy = 0.0
+
         # Total stress
         tot_sxx = sxx + sigv_xx
         tot_syy = syy + sigv_yy
@@ -1288,9 +1446,20 @@ def sound_speed_shell_law58(mat: Any, rho0: Optional[float] = None) -> float:
     return float(math.sqrt(kmax / dens))
 
 
-def shell_membrane_tangent(mat: Any) -> np.ndarray:
-    """(3, 3) reference in-plane elastic membrane tangent matrix."""
+def shell_membrane_tangent(mat: Any, state: Optional[Union[FabricState, int]] = None) -> np.ndarray:
+    """(3, 3) reference in-plane elastic membrane tangent matrix.
+    If state is WRINKLED: zero shear stiffness (G0 = 0).
+    If state is SLACK: zero all in-plane stiffnesses.
+    """
     p = _get_params(mat)
+    if state == FabricState.SLACK:
+        return np.zeros((3, 3), dtype=float)
+    if state == FabricState.WRINKLED:
+        return np.array([
+            [p.e1, 0.0, 0.0],
+            [0.0, p.e2, 0.0],
+            [0.0, 0.0, 0.0],
+        ], dtype=float)
     return np.array([
         [p.e1, 0.0, 0.0],
         [0.0, p.e2, 0.0],
@@ -1387,8 +1556,8 @@ def tangent_law58_shell(
         ex_p = _copy_extra(extra)
         ex_m = _copy_extra(extra)
 
-        sp, _ = shell_update_law58(p, sig_arr.copy(), deps_arr + ej, epsp=epsp, dt=dt, extra=ex_p)
-        sm, _ = shell_update_law58(p, sig_arr.copy(), deps_arr - ej, epsp=epsp, dt=dt, extra=ex_m)
+        sp, _ = shell_update_law58(p, sig_arr.copy(), deps_arr + ej, epsp=epsp, dt=dt, extra=ex_p, **kwargs)
+        sm, _ = shell_update_law58(p, sig_arr.copy(), deps_arr - ej, epsp=epsp, dt=dt, extra=ex_m, **kwargs)
 
         if sp.ndim == 1:
             sp = sp.reshape(1, -1)
@@ -1421,6 +1590,7 @@ def extra_shapes(mat: Any = None, nip: Optional[int] = None) -> Dict[str, Tuple[
         "tan_phi": (nip,) if nip else (),
         "sigi58": (nip, 3) if nip else (3,),
         "t58": (nip,) if nip else (),
+        "fabric_state": (nip,) if nip else (),
     }
 
 
@@ -1462,6 +1632,9 @@ def build_law58(rec: Any) -> FabricAMaterial:
     fun_a6 = p.get("FUN_A6") or p.get("fun_a6")
     scale6 = float(p.get("scale6") or p.get("scale_6") or 1.0)
 
+    iwrinkle = int(p.get("IWRINKLE") or p.get("iwrinkle") or p.get("WRINKLE") or 0)
+    wrinkling = bool(p.get("wrinkling") or (iwrinkle > 0))
+
     params_obj = Law58Params(
         rho0=rec.density, rhor=rec.density,
         e1=e1, b1=b1, e2=e2, b2=b2, flex=flex,
@@ -1471,6 +1644,7 @@ def build_law58(rec: Any) -> FabricAMaterial:
         s1=s1, s2=s2, c4=c4, c5=c5,
         fun_a1=fun_a1, c1=c1, fun_a2=fun_a2, c2=c2, fun_a3=fun_a3, c3=c3,
         fun_a4=fun_a4, scale4=scale4, fun_a5=fun_a5, scale5=scale5, fun_a6=fun_a6, scale6=scale6,
+        iwrinkle=iwrinkle, wrinkling=wrinkling,
     )
 
     p_dict = {
@@ -1491,6 +1665,7 @@ def build_law58(rec: Any) -> FabricAMaterial:
         "hc0": params_obj.hc0, "ht0": params_obj.ht0,
         "lc0": params_obj.lc0, "lt0": params_obj.lt0,
         "dc0": params_obj.dc0, "dt0": params_obj.dt0,
+        "iwrinkle": iwrinkle, "wrinkling": wrinkling,
         "params_obj": params_obj,
     }
 
@@ -1517,3 +1692,15 @@ shell_update = shell_update_law58
 sound_speed_shell = sound_speed_shell_law58
 tangent_shell = tangent_law58_shell
 consistent_shell_tangent = tangent_law58_shell
+
+
+def shell_update_wrinkled(mat: Any, sig: np.ndarray, deps: np.ndarray, *args: Any, **kwargs: Any) -> Tuple[np.ndarray, np.ndarray]:
+    """Shell update forcing the 3-state wrinkling model (no shear stiffness in wrinkled state)."""
+    kwargs["wrinkling"] = True
+    return shell_update_law58(mat, sig, deps, *args, **kwargs)
+
+
+def tangent_wrinkled_shell(mat: Any, *args: Any, **kwargs: Any) -> np.ndarray:
+    """Consistent shell tangent forcing the 3-state wrinkling model."""
+    kwargs["wrinkling"] = True
+    return tangent_law58_shell(mat, *args, **kwargs)

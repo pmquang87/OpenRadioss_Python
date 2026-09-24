@@ -1,4 +1,5 @@
 import numpy as np
+from math import sqrt
 try:
     from numba import njit
 except ImportError:
@@ -8,6 +9,17 @@ except ImportError:
         def dec(fn):
             return fn
         return dec
+
+EM20 = 1e-20
+EP30 = 1e30
+_CVIS = 1.0
+_FBEND_V = 3.464
+_C7 = 4.0 / 3.0
+_COEF = 0.85
+_COEFH = 0.999
+_STIER = 16.0 / 3.0
+_UNDOUZSR = float(np.sqrt(1.0 / 12.0))
+_TOL_PLAS = 1.0e-18
 
 @njit(cache=True)
 def qeph_pre(xe, ve, vre, dt, npt1, alive):
@@ -231,7 +243,7 @@ def qeph_pre(xe, ve, vre, dt, npt1, alive):
             c_v13_1 -= ddrx * c_v13_2 + ddrz2 * v13x
             c_v24_1 -= ddrx * c_v24_2 + ddrz2 * v24x
             c_vhi_1 -= ddrx * c_vhi_2 + ddrz2 * vhix
-        is_plat = c_z1 * c_z1 < c_lm * TOL_PLAT or npt1[e]
+        is_plat = c_lm <= EM20 or c_area <= EM20 or c_z1 * c_z1 < c_lm * TOL_PLAT or npt1[e]
         plat[e] = is_plat
         if is_plat:
             c_z1 = 0.0
@@ -241,21 +253,25 @@ def qeph_pre(xe, ve, vre, dt, npt1, alive):
             a_4 = 0.25 * c_area
             sz1 = c_mx13 * c_y24 - c_my13 * c_x24
             sz = z2 * l24[e]
-            sl = 1.0 / np.sqrt(sz + (a_4 + sz1) ** 2)
+            d0 = np.sqrt(sz + (a_4 + sz1) ** 2)
+            sl = 1.0 / (d0 if d0 > EM20 else EM20)
             vqn_0_0 = -c_z1 * c_y24 * sl
             vqn_0_1 = c_z1 * c_x24 * sl
             vqn_0_2 = (a_4 + sz1) * sl
-            sl = 1.0 / np.sqrt(sz + (a_4 - sz1) ** 2)
+            d1 = np.sqrt(sz + (a_4 - sz1) ** 2)
+            sl = 1.0 / (d1 if d1 > EM20 else EM20)
             vqn_2_0 = c_z1 * c_y24 * sl
             vqn_2_1 = -c_z1 * c_x24 * sl
             vqn_2_2 = (a_4 - sz1) * sl
             sz1 = c_mx13 * c_y13 - c_my13 * c_x13
             sz = z2 * l13[e]
-            sl = 1.0 / np.sqrt(sz + (a_4 + sz1) ** 2)
+            d2 = np.sqrt(sz + (a_4 + sz1) ** 2)
+            sl = 1.0 / (d2 if d2 > EM20 else EM20)
             vqn_1_0 = -c_z1 * c_y13 * sl
             vqn_1_1 = c_z1 * c_x13 * sl
             vqn_1_2 = (a_4 + sz1) * sl
-            sl = 1.0 / np.sqrt(sz + (a_4 - sz1) ** 2)
+            d3 = np.sqrt(sz + (a_4 - sz1) ** 2)
+            sl = 1.0 / (d3 if d3 > EM20 else EM20)
             vqn_3_0 = c_z1 * c_y13 * sl
             vqn_3_1 = -c_z1 * c_x13 * sl
             vqn_3_2 = (a_4 - sz1) * sl
@@ -520,9 +536,19 @@ def qeph_pre(xe, ve, vre, dt, npt1, alive):
     return vdef, vhg, plat, vqn, di, db, E, area, a_i, z1, corx, cory, x13, x24, y13, y24, mx13, mx23, mx34, my13, my23, my34, l13, l24, ll, lm
 
 @njit(cache=True)
-def qeph_post(thick, Nres, Mres, qres, st_amu, st_cspd, st_yld, st_fmat, vhg, dt, alive, plat, vqn, di, db, E, area, a_i, z1, corx, cory, x13, x24, y13, y24, mx13, mx23, mx34, my13, my23, my34, l13, l24, ll, lm):
+def qeph_post(thick, Nres, Mres, qres, st_amu, st_cspd, st_yld, st_fmat, vhg, dt, alive, plat, vqn, di, db, E, area, a_i, z1, corx, cory, x13, x24, y13, y24, mx13, mx23, mx34, my13, my23, my34, l13, l24, ll, lm, a11, a12, npt1, gs, vg):
     n = len(thick)
-    n = len(x13)
+    has_yield = st_yld > 0.0
+    sigy2_arr = np.maximum(st_yld * st_yld, _TOL_PLAS)
+    amu = st_amu
+    rho0 = np.ones(n)
+    gsr = np.ones(n)
+    shfsr = np.ones(n)
+    a11sr = np.ones(n)
+    a12sr = np.ones(n)
+    gmod = np.ones(n)
+    ehour = np.zeros(n)
+    eint = np.zeros(n)
     VF = np.zeros((n, 3, 4))
     VM = np.zeros((n, 2, 4))
     for e in range(n):

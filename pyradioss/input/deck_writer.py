@@ -142,7 +142,7 @@ from __future__ import annotations
 import os
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from .deck_reader import Card, KeywordBlock
+from .deck_reader import Card, KeywordBlock, parse_fortran_float
 from .starter_keywords import split_imposed_card
 
 # ============================================================================
@@ -171,7 +171,7 @@ class DeckWriterError(ValueError):
 class StarterDeck:
     """Emitter for a ``*_0000.rad`` starter deck in fixed 2022 format."""
 
-    def __init__(self, runname: str, header_comment: str = ""):
+    def __init__(self, runname: str = "MODEL", header_comment: str = ""):
         self.runname = runname
         self.lines: List[str] = ["#RADIOSS STARTER"]
         if header_comment:
@@ -206,6 +206,10 @@ class StarterDeck:
                      else "PORT-DIALECT block")
         self.lines.append(header if header.startswith("/") else "/" + header)
         self.lines.extend(str(c).rstrip("\r\n") for c in cards)
+
+    def card_block(self, b: KeywordBlock, groups: Optional[Dict] = None) -> None:
+        """Convert and emit a parsed KeywordBlock."""
+        _convert_block(self, b, groups or {})
 
     def render(self) -> str:
         if not self._ended:
@@ -276,6 +280,10 @@ class StarterDeck:
         """``/BRICK/part_ID`` — cfg ELEMENTS/brick.cfg: elem_ID + 8 node
         ids, all %10d (proven M35)."""
         self._elems("BRICK", part_id, rows)
+
+    def penta6(self, part_id, rows):
+        """``/PENTA6/part_ID`` — elem_ID + 6 node ids, %10d (M590)."""
+        self._elems("PENTA6", part_id, rows)
 
     def tetra4(self, part_id, rows):
         """``/TETRA4/part_ID`` — elem_ID + 4 node ids, %10d."""
@@ -9530,6 +9538,371 @@ class StarterDeck:
         kwargs.setdefault("law_name", "COMPOSITE_PLAS")
         return self.mat_law25(*args, **kwargs)
 
+    def mat_law120(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho: float = 0.0,
+        refer_rho: Optional[float] = None,
+        e: float = 0.0,
+        nu: float = 0.0,
+        iform: int = 0,
+        itrx: int = 0,
+        idam: int = 0,
+        thick: float = 0.0,
+        tab_id: int = 0,
+        xscale: float = 1.0,
+        yscale: float = 1.0,
+        tau0: float = 0.0,
+        q: float = 0.0,
+        beta: float = 0.0,
+        h: float = 0.0,
+        af1: float = 0.0,
+        af2: float = 0.0,
+        ah1: float = 0.0,
+        ah2: float = 0.0,
+        as_: float = 0.0,
+        cc: float = 0.0,
+        gam0: float = 0.0,
+        gamf: float = 0.0,
+        d1c: float = 0.0,
+        d2c: float = 0.0,
+        d1f: float = 0.0,
+        d2f: float = 0.0,
+        dtrx: float = 0.0,
+        djc: float = 0.0,
+        exp_n: float = 0.0,
+        law_name: str = "LAW120",
+        unit_id: Optional[int] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW120`` (/MAT/TAPO, /MAT/TAB_PONT_ORTH) — Tape / Pont-Pack Woven Fabric model."""
+        mat_obj = None
+        if hasattr(mid, "id") or hasattr(mid, "rho0") or hasattr(mid, "tab_id") or hasattr(mid, "tau0"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+        elif len(args) > 0 and not isinstance(args[0], (int, float, str)):
+            mat_obj = args[0]
+        elif "mat_obj" in kwargs:
+            mat_obj = kwargs["mat_obj"]
+        elif "mat" in kwargs:
+            mat_obj = kwargs["mat"]
+        elif "material" in kwargs:
+            mat_obj = kwargs["material"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho0", getattr(mat_obj, "rho", rho))
+            refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", refer_rho))
+            e = getattr(mat_obj, "e", getattr(mat_obj, "E", e))
+            nu = getattr(mat_obj, "nu", getattr(mat_obj, "NU", nu))
+            iform = getattr(mat_obj, "iform", iform)
+            itrx = getattr(mat_obj, "itrx", itrx)
+            idam = getattr(mat_obj, "idam", idam)
+            thick = getattr(mat_obj, "thick", thick)
+            tab_id = getattr(mat_obj, "tab_id", tab_id)
+            xscale = getattr(mat_obj, "xscale", xscale)
+            yscale = getattr(mat_obj, "yscale", yscale)
+            tau0 = getattr(mat_obj, "tau0", getattr(mat_obj, "tau", tau0))
+            q = getattr(mat_obj, "q", q)
+            beta = getattr(mat_obj, "beta", getattr(mat_obj, "b", beta))
+            h = getattr(mat_obj, "h", h)
+            af1 = getattr(mat_obj, "af1", af1)
+            af2 = getattr(mat_obj, "af2", af2)
+            ah1 = getattr(mat_obj, "ah1", ah1)
+            ah2 = getattr(mat_obj, "ah2", ah2)
+            as_ = getattr(mat_obj, "as_", getattr(mat_obj, "as", as_))
+            cc = getattr(mat_obj, "cc", cc)
+            gam0 = getattr(mat_obj, "gam0", gam0)
+            gamf = getattr(mat_obj, "gamf", gamf)
+            d1c = getattr(mat_obj, "d1c", d1c)
+            d2c = getattr(mat_obj, "d2c", d2c)
+            d1f = getattr(mat_obj, "d1f", d1f)
+            d2f = getattr(mat_obj, "d2f", d2f)
+            dtrx = getattr(mat_obj, "dtrx", getattr(mat_obj, "d_trx", dtrx))
+            djc = getattr(mat_obj, "djc", getattr(mat_obj, "d_jc", djc))
+            exp_n = getattr(mat_obj, "exp_n", getattr(mat_obj, "exp", exp_n))
+            if hasattr(mat_obj, "params") and isinstance(mat_obj.params, dict):
+                p = mat_obj.params
+                if rho == 0.0: rho = float(p.get("MAT_RHO", p.get("rho", rho)))
+                if refer_rho is None: refer_rho = p.get("refer_rho", p.get("rhor", None))
+                if e == 0.0: e = float(p.get("E", p.get("e", p.get("MAT_E", e))))
+                if nu == 0.0: nu = float(p.get("NU", p.get("nu", p.get("MAT_NU", nu))))
+                if iform == 0: iform = int(p.get("iform", p.get("MAT_IFORM", iform)))
+                if itrx == 0: itrx = int(p.get("itrx", p.get("MAT_ITRX", itrx)))
+                if idam == 0: idam = int(p.get("idam", p.get("MAT_IDAM", idam)))
+                if thick == 0.0: thick = float(p.get("thick", p.get("THICK", p.get("MAT_THICK", thick))))
+                if tab_id == 0: tab_id = int(p.get("tab_id", p.get("TAB_ID", p.get("MAT_TAB_ID", tab_id))))
+                if xscale == 1.0: xscale = float(p.get("xscale", p.get("XSCALE", p.get("MAT_Xscale", xscale))))
+                if yscale == 1.0: yscale = float(p.get("yscale", p.get("YSCALE", p.get("MAT_Yscale", yscale))))
+                if tau0 == 0.0: tau0 = float(p.get("tau0", p.get("tau", p.get("TAU", p.get("MAT_TAU", tau0)))))
+                if q == 0.0: q = float(p.get("q", p.get("MAT_Q", q)))
+                if beta == 0.0: beta = float(p.get("beta", p.get("b", p.get("MAT_B", beta))))
+                if h == 0.0: h = float(p.get("h", p.get("MAT_H", h)))
+                if af1 == 0.0: af1 = float(p.get("af1", p.get("MAT_AF1", af1)))
+                if af2 == 0.0: af2 = float(p.get("af2", p.get("MAT_AF2", af2)))
+                if ah1 == 0.0: ah1 = float(p.get("ah1", p.get("MAT_AH1", ah1)))
+                if ah2 == 0.0: ah2 = float(p.get("ah2", p.get("MAT_AH2", ah2)))
+                if as_ == 0.0: as_ = float(p.get("as_", p.get("as", p.get("MAT_AS", as_))))
+                if cc == 0.0: cc = float(p.get("cc", p.get("MAT_CC", cc)))
+                if gam0 == 0.0: gam0 = float(p.get("gam0", p.get("MAT_GAM0", gam0)))
+                if gamf == 0.0: gamf = float(p.get("gamf", p.get("MAT_GAMF", gamf)))
+                if d1c == 0.0: d1c = float(p.get("d1c", p.get("MAT_D1C", d1c)))
+                if d2c == 0.0: d2c = float(p.get("d2c", p.get("MAT_D2C", d2c)))
+                if d1f == 0.0: d1f = float(p.get("d1f", p.get("MAT_D1F", d1f)))
+                if d2f == 0.0: d2f = float(p.get("d2f", p.get("MAT_D2F", d2f)))
+                if dtrx == 0.0: dtrx = float(p.get("dtrx", p.get("d_trx", p.get("D_TRX", dtrx))))
+                if djc == 0.0: djc = float(p.get("djc", p.get("d_jc", p.get("D_JC", djc))))
+                if exp_n == 0.0: exp_n = float(p.get("exp_n", p.get("exp", p.get("MAT_EXP", exp_n))))
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("rho", "rho0", "rho_i", "mat_rho"): rho = float(v)
+            elif kl in ("refer_rho", "rhor", "rho_ref"): refer_rho = float(v)
+            elif kl in ("e", "mat_e", "young"): e = float(v)
+            elif kl in ("nu", "mat_nu", "poisson"): nu = float(v)
+            elif kl in ("iform", "mat_iform"): iform = int(v)
+            elif kl in ("itrx", "mat_itrx"): itrx = int(v)
+            elif kl in ("idam", "mat_idam"): idam = int(v)
+            elif kl in ("thick", "mat_thick"): thick = float(v)
+            elif kl in ("tab_id", "tabid", "mat_tab_id"): tab_id = int(v)
+            elif kl in ("xscale", "mat_xscale"): xscale = float(v)
+            elif kl in ("yscale", "mat_yscale"): yscale = float(v)
+            elif kl in ("tau0", "tau", "mat_tau"): tau0 = float(v)
+            elif kl in ("q", "mat_q"): q = float(v)
+            elif kl in ("beta", "b", "mat_b"): beta = float(v)
+            elif kl in ("h", "mat_h"): h = float(v)
+            elif kl in ("af1", "mat_af1"): af1 = float(v)
+            elif kl in ("af2", "mat_af2"): af2 = float(v)
+            elif kl in ("ah1", "mat_ah1"): ah1 = float(v)
+            elif kl in ("ah2", "mat_ah2"): ah2 = float(v)
+            elif kl in ("as_", "as", "mat_as"): as_ = float(v)
+            elif kl in ("cc", "mat_cc"): cc = float(v)
+            elif kl in ("gam0", "mat_gam0"): gam0 = float(v)
+            elif kl in ("gamf", "mat_gamf"): gamf = float(v)
+            elif kl in ("d1c", "mat_d1c"): d1c = float(v)
+            elif kl in ("d2c", "mat_d2c"): d2c = float(v)
+            elif kl in ("d1f", "mat_d1f"): d1f = float(v)
+            elif kl in ("d2f", "mat_d2f"): d2f = float(v)
+            elif kl in ("dtrx", "d_trx", "mat_dtrx"): dtrx = float(v)
+            elif kl in ("djc", "d_jc", "mat_djc"): djc = float(v)
+            elif kl in ("exp_n", "exp", "mat_exp"): exp_n = float(v)
+
+        if data_cards is not None and len(data_cards) > 0:
+            hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+            self.lines.append(hdr)
+            self._title(title)
+            for cd in data_cards:
+                self.lines.append(cd if isinstance(cd, str) else str(cd))
+            return self
+
+        hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+        self.lines.append(hdr)
+        self._title(title)
+
+        # Card 1: RHO_I, Refer_Rho
+        if refer_rho is not None and float(refer_rho) > 0.0:
+            self.lines.append(fmt_float(rho) + fmt_float(refer_rho))
+        else:
+            self.lines.append(fmt_float(rho))
+
+        # Card 2: E, NU, Iform, Itrx, Idam, blank(10), THICK
+        self.lines.append(
+            fmt_float(e) + fmt_float(nu) + fmt_int(iform)
+            + fmt_int(itrx) + fmt_int(idam) + blank(10) + fmt_float(thick)
+        )
+
+        # Card 3: TAB_ID, Xscale, Yscale
+        self.lines.append(fmt_int(tab_id) + fmt_float(xscale) + fmt_float(yscale))
+
+        # Card 4: TAU0, Q, BETA, H
+        self.lines.append(fmt_float(tau0) + fmt_float(q) + fmt_float(beta) + fmt_float(h))
+
+        # Card 5: AF1, AF2, AH1, AH2, AS
+        self.lines.append(fmt_float(af1) + fmt_float(af2) + fmt_float(ah1) + fmt_float(ah2) + fmt_float(as_))
+
+        # Card 6: CC, GAM0, GAMF
+        self.lines.append(fmt_float(cc) + fmt_float(gam0) + fmt_float(gamf))
+
+        # Card 7: D1C, D2C, D1F, D2F
+        self.lines.append(fmt_float(d1c) + fmt_float(d2c) + fmt_float(d1f) + fmt_float(d2f))
+
+        # Card 8: DTRX, DJC, EXP_N
+        self.lines.append(fmt_float(dtrx) + fmt_float(djc) + fmt_float(exp_n))
+
+        return self
+
+    def mat_tapo(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/TAPO`` — synonym for ``/MAT/LAW120``."""
+        kwargs.setdefault("law_name", "TAPO")
+        return self.mat_law120(*args, **kwargs)
+
+    def mat_tab_pont_orth(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/TAB_PONT_ORTH`` — synonym for ``/MAT/LAW120``."""
+        kwargs.setdefault("law_name", "TAB_PONT_ORTH")
+        return self.mat_law120(*args, **kwargs)
+
+    def mat_law121(
+        self,
+        mid: int = 0,
+        title: str = "",
+        data_cards: Any = None,
+        rho: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        ires: int = 2,
+        ivisc: int = 0,
+        fcut: float = 0.0,
+        dtmin: float = 0.0,
+        fct_sig0: int = 0,
+        xscale_sig0: float = 1.0,
+        yscale_sig0: float = 1.0,
+        fct_youn: int = 0,
+        xscale_youn: float = 1.0,
+        yscale_youn: float = 1.0,
+        fct_tang: int = 0,
+        xscale_tang: float = 1.0,
+        tang: float = 0.0,
+        fct_fail: int = 0,
+        ifail: int = 0,
+        xscale_fail: float = 1.0,
+        yscale_fail: float = 1.0,
+        law_name: str = "LAW121",
+        unit_id: Optional[int] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> StarterDeck:
+        """``/MAT/LAW121`` (/MAT/PLAS_RATE, /MAT/PLAS_TAB_RATE) — Tabulated rate-dependent elastoplastic material."""
+        mat_obj = None
+        if hasattr(mid, "id") or hasattr(mid, "rho0") or hasattr(mid, "fct_sig0") or hasattr(mid, "sig0_curve"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+        elif len(args) > 0 and not isinstance(args[0], (int, float, str)):
+            mat_obj = args[0]
+        elif "mat_obj" in kwargs:
+            mat_obj = kwargs["mat_obj"]
+        elif "mat" in kwargs:
+            mat_obj = kwargs["mat"]
+        elif "material" in kwargs:
+            mat_obj = kwargs["material"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", mid)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho0", getattr(mat_obj, "rho", rho))
+            e = getattr(mat_obj, "e", getattr(mat_obj, "E", e))
+            nu = getattr(mat_obj, "nu", getattr(mat_obj, "NU", nu))
+            ires = getattr(mat_obj, "ires", ires)
+            ivisc = getattr(mat_obj, "ivisc", ivisc)
+            fcut = getattr(mat_obj, "fcut", fcut)
+            dtmin = getattr(mat_obj, "dtmin", dtmin)
+            fct_sig0 = getattr(mat_obj, "fct_sig0", fct_sig0)
+            xscale_sig0 = getattr(mat_obj, "xscale_sig0", xscale_sig0)
+            yscale_sig0 = getattr(mat_obj, "yscale_sig0", yscale_sig0)
+            fct_youn = getattr(mat_obj, "fct_youn", fct_youn)
+            xscale_youn = getattr(mat_obj, "xscale_youn", xscale_youn)
+            yscale_youn = getattr(mat_obj, "yscale_youn", yscale_youn)
+            fct_tang = getattr(mat_obj, "fct_tang", fct_tang)
+            xscale_tang = getattr(mat_obj, "xscale_tang", xscale_tang)
+            tang = getattr(mat_obj, "tang", tang)
+            fct_fail = getattr(mat_obj, "fct_fail", fct_fail)
+            ifail = getattr(mat_obj, "ifail", ifail)
+            xscale_fail = getattr(mat_obj, "xscale_fail", xscale_fail)
+            yscale_fail = getattr(mat_obj, "yscale_fail", yscale_fail)
+            if hasattr(mat_obj, "params") and isinstance(mat_obj.params, dict):
+                p = mat_obj.params
+                if rho == 0.0: rho = float(p.get("MAT_RHO", p.get("rho", rho)))
+                if e == 0.0: e = float(p.get("E", p.get("e", p.get("MAT_E", e))))
+                if nu == 0.0: nu = float(p.get("NU", p.get("nu", p.get("MAT_NU", nu))))
+                if ires == 2: ires = int(p.get("ires", p.get("MAT_IRES", ires)))
+                if ivisc == 0: ivisc = int(p.get("ivisc", p.get("MAT_IVISC", ivisc)))
+                if fcut == 0.0: fcut = float(p.get("fcut", p.get("MAT_FCUT", fcut)))
+                if dtmin == 0.0: dtmin = float(p.get("dtmin", p.get("MAT_DTMIN", dtmin)))
+                if fct_sig0 == 0: fct_sig0 = int(p.get("fct_sig0", p.get("MAT_FCT_SIG0", fct_sig0)))
+                if xscale_sig0 == 1.0: xscale_sig0 = float(p.get("xscale_sig0", p.get("MAT_XSCALE_SIG0", xscale_sig0)))
+                if yscale_sig0 == 1.0: yscale_sig0 = float(p.get("yscale_sig0", p.get("MAT_YSCALE_SIG0", yscale_sig0)))
+                if fct_youn == 0: fct_youn = int(p.get("fct_youn", p.get("MAT_FCT_YOUN", fct_youn)))
+                if xscale_youn == 1.0: xscale_youn = float(p.get("xscale_youn", p.get("MAT_XSCALE_YOUN", xscale_youn)))
+                if yscale_youn == 1.0: yscale_youn = float(p.get("yscale_youn", p.get("MAT_YSCALE_YOUN", yscale_youn)))
+                if fct_tang == 0: fct_tang = int(p.get("fct_tang", p.get("MAT_FCT_TANG", fct_tang)))
+                if xscale_tang == 1.0: xscale_tang = float(p.get("xscale_tang", p.get("MAT_XSCALE_TANG", xscale_tang)))
+                if tang == 0.0: tang = float(p.get("tang", p.get("MAT_TANG", tang)))
+                if fct_fail == 0: fct_fail = int(p.get("fct_fail", p.get("MAT_FCT_FAIL", fct_fail)))
+                if ifail == 0: ifail = int(p.get("ifail", p.get("MAT_IFAIL", ifail)))
+                if xscale_fail == 1.0: xscale_fail = float(p.get("xscale_fail", p.get("MAT_XSCALE_FAIL", xscale_fail)))
+                if yscale_fail == 1.0: yscale_fail = float(p.get("yscale_fail", p.get("MAT_YSCALE_FAIL", yscale_fail)))
+
+        for k, v in kwargs.items():
+            kl = k.lower()
+            if kl in ("rho", "rho0", "rho_i", "mat_rho"): rho = float(v)
+            elif kl in ("e", "mat_e", "young"): e = float(v)
+            elif kl in ("nu", "mat_nu", "poisson"): nu = float(v)
+            elif kl in ("ires", "mat_ires"): ires = int(v)
+            elif kl in ("ivisc", "mat_ivisc"): ivisc = int(v)
+            elif kl in ("fcut", "mat_fcut"): fcut = float(v)
+            elif kl in ("dtmin", "mat_dtmin"): dtmin = float(v)
+            elif kl in ("fct_sig0", "fct_sig", "fctsig0", "mat_fct_sig0"): fct_sig0 = int(v)
+            elif kl in ("xscale_sig0", "mat_xscale_sig0"): xscale_sig0 = float(v)
+            elif kl in ("yscale_sig0", "mat_yscale_sig0"): yscale_sig0 = float(v)
+            elif kl in ("fct_youn", "fctyoun", "mat_fct_youn"): fct_youn = int(v)
+            elif kl in ("xscale_youn", "mat_xscale_youn"): xscale_youn = float(v)
+            elif kl in ("yscale_youn", "mat_yscale_youn"): yscale_youn = float(v)
+            elif kl in ("fct_tang", "fcttang", "mat_fct_tang"): fct_tang = int(v)
+            elif kl in ("xscale_tang", "mat_xscale_tang"): xscale_tang = float(v)
+            elif kl in ("tang", "mat_tang"): tang = float(v)
+            elif kl in ("fct_fail", "fctfail", "mat_fct_fail"): fct_fail = int(v)
+            elif kl in ("ifail", "mat_ifail"): ifail = int(v)
+            elif kl in ("xscale_fail", "mat_xscale_fail"): xscale_fail = float(v)
+            elif kl in ("yscale_fail", "mat_yscale_fail"): yscale_fail = float(v)
+
+        if data_cards is not None and len(data_cards) > 0:
+            hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+            self.lines.append(hdr)
+            self._title(title)
+            for cd in data_cards:
+                self.lines.append(cd if isinstance(cd, str) else str(cd))
+            return self
+
+        hdr = f"/MAT/{law_name}/{mid}" if unit_id is None else f"/MAT/{law_name}/{mid}/{unit_id}"
+        self.lines.append(hdr)
+        self._title(title)
+
+        # Card 1: RHO_I
+        self.lines.append(fmt_float(rho))
+
+        # Card 2: E, NU, Ires, Ivisc, Fcut, dtmin
+        self.lines.append(
+            fmt_float(e) + fmt_float(nu) + fmt_int(ires)
+            + fmt_int(ivisc) + fmt_float(fcut) + fmt_float(dtmin)
+        )
+
+        # Card 3: Fct_SIG0, blank(10), Xscale_SIG0, Yscale_SIG0
+        self.lines.append(fmt_int(fct_sig0) + blank(10) + fmt_float(xscale_sig0) + fmt_float(yscale_sig0))
+
+        # Card 4: Fct_YOUN, blank(10), Xscale_YOUN, Yscale_YOUN
+        self.lines.append(fmt_int(fct_youn) + blank(10) + fmt_float(xscale_youn) + fmt_float(yscale_youn))
+
+        # Card 5: Fct_TANG, blank(10), Xscale_TANG, TANG
+        self.lines.append(fmt_int(fct_tang) + blank(10) + fmt_float(xscale_tang) + fmt_float(tang))
+
+        # Card 6: Fct_FAIL, Ifail, Xscale_FAIL, Yscale_FAIL
+        self.lines.append(fmt_int(fct_fail) + fmt_int(ifail) + fmt_float(xscale_fail) + fmt_float(yscale_fail))
+
+        return self
+
+    def mat_plas_rate(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/PLAS_RATE`` — synonym for ``/MAT/LAW121``."""
+        kwargs.setdefault("law_name", "PLAS_RATE")
+        return self.mat_law121(*args, **kwargs)
+
+    def mat_plas_tab_rate(self, *args: Any, **kwargs: Any) -> StarterDeck:
+        """``/MAT/PLAS_TAB_RATE`` — synonym for ``/MAT/LAW121``."""
+        kwargs.setdefault("law_name", "PLAS_TAB_RATE")
+        return self.mat_law121(*args, **kwargs)
+
     # ---- failure / EOS -----------------------------------------------------------
 
     def fail_johnson(self, mat_id: int, d1, d2, d3, d4, d5=0.0,
@@ -10003,6 +10376,11 @@ class StarterDeck:
         self._header("FAIL", "CONNECT", fid)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
+    def fail_generic(self, kind: str, fid: int, data_cards) -> None:
+        """Generic pass-through for any ``/FAIL/<kind>/mat_ID``."""
+        self._header("FAIL", kind.upper(), fid)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
     def transform_generic(self, kind: str, tid: int, title: str, data_cards) -> None:
         """Generic pass-through for ``/TRANSFORM/<kind>``."""
         self._header("TRANSFORM", kind, tid)
@@ -10051,6 +10429,32 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
+    def eos_generic(self, kind: str, eid: int, title: str, data_cards) -> None:
+        """``/EOS/<kind>``."""
+        self._header("EOS", kind, eid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def eos_jwl(self, eid: int, title: str, data_cards) -> None:
+        """``/EOS/JWL``."""
+        self.eos_generic("JWL", eid, title, data_cards)
+
+    def eos_murnaghan(self, eid: int, title: str, data_cards) -> None:
+        """``/EOS/MURNAGHAN``."""
+        self.eos_generic("MURNAGHAN", eid, title, data_cards)
+
+    def eos_noble_abel(self, eid: int, title: str, data_cards) -> None:
+        """``/EOS/NOBLE-ABEL``."""
+        self.eos_generic("NOBLE-ABEL", eid, title, data_cards)
+
+    def eos_nasg(self, eid: int, title: str, data_cards) -> None:
+        """``/EOS/NASG``."""
+        self.eos_generic("NASG", eid, title, data_cards)
+
+    def eos_puff(self, eid: int, title: str, data_cards) -> None:
+        """``/EOS/PUFF``."""
+        self.eos_generic("PUFF", eid, title, data_cards)
+
     def euler_mat(self, mid: int, title: str, data_cards) -> None:
         """``/EULER/MAT``."""
         self._header("EULER", "MAT", mid)
@@ -10097,8 +10501,80 @@ class StarterDeck:
 
     def inishe_generic(self, kind: str, iid: int, title: str, data_cards) -> None:
         """Generic pass-through for ``/INISHE/<kind>``."""
-        self._header("INISHE", kind, iid)
-        self._title(title)
+        if kind:
+            self._header("INISHE", kind, iid)
+        else:
+            self._header("INISHE", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def inibri_generic(self, kind: str, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/INIBRI/<kind>``."""
+        if kind:
+            self._header("INIBRI", kind, iid)
+        else:
+            self._header("INIBRI", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def initru_generic(self, kind: str, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/INITRU/<kind>``."""
+        if kind:
+            self._header("INITRU", kind, iid)
+        else:
+            self._header("INITRU", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def inibea_generic(self, kind: str, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/INIBEA/<kind>``."""
+        if kind:
+            self._header("INIBEA", kind, iid)
+        else:
+            self._header("INIBEA", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def inispr_generic(self, kind: str, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/INISPR/<kind>``."""
+        if kind:
+            self._header("INISPR", kind, iid)
+        else:
+            self._header("INISPR", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def inisphcel_generic(self, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/INISPHCEL``."""
+        self._header("INISPHCEL", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def sphio_generic(self, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/SPHIO``."""
+        self._header("SPHIO", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def rlink_generic(self, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/LINK``."""
+        self._header("LINK", iid)
+        if title:
+            self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def cyl_joint_generic(self, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/JOINT``."""
+        self._header("JOINT", iid)
+        if title:
+            self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
     def impacc(self, iid: int, title: str, data_cards) -> None:
@@ -10846,7 +11322,7 @@ def _title_cards(block: KeywordBlock) -> Tuple[str, List[Card]]:
     numeric = bool(toks)
     for t in toks:
         try:
-            float(t.replace("D", "E").replace("d", "e"))
+            parse_fortran_float(t)
         except ValueError:
             numeric = False
             break
@@ -11595,6 +12071,122 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law109(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
     elif law in ("110", "LAW110", "VEGTER", "PLAS_VEGTER", "LAW110_VEGTER", "MLAW110", "MAT_LAW110", "MAT_VEGTER", "MAT_PLAS_VEGTER", "MAT_110"):
         d.mat_law110(mid, title=title, data_cards=[c.raw for c in cards], law_name=law, unit_id=b.unit_id)
+    elif law in ("120", "LAW120", "TAPO", "MAT_TAPO", "TAB_PONT_ORTH", "MAT_TAB_PONT_ORTH", "LAW120_TAPO", "MLAW120", "MAT_LAW120"):
+        kw: Dict = {}
+        rho_ref = None
+        is_fixed = getattr(b, "fixed", False)
+        vcards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
+        if len(vcards) >= 1:
+            toks = vcards[0].cut("MAT_LAW120_1") if is_fixed and hasattr(vcards[0], "cut") else vcards[0].tokens()
+            if len(toks) >= 1 and toks[0]: kw["rho"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: rho_ref = float(toks[1])
+        if len(vcards) >= 2:
+            if is_fixed and hasattr(vcards[1], "cut"):
+                toks = vcards[1].cut("MAT_LAW120_2")
+                if len(toks) >= 1 and toks[0]: kw["e"] = float(toks[0])
+                if len(toks) >= 2 and toks[1]: kw["nu"] = float(toks[1])
+                if len(toks) >= 3 and toks[2]: kw["iform"] = int(float(toks[2]))
+                if len(toks) >= 4 and toks[3]: kw["itrx"] = int(float(toks[3]))
+                if len(toks) >= 5 and toks[4]: kw["idam"] = int(float(toks[4]))
+                if len(toks) >= 7 and toks[6]: kw["thick"] = float(toks[6])
+            else:
+                toks = vcards[1].tokens()
+                if len(toks) >= 1 and toks[0]: kw["e"] = float(toks[0])
+                if len(toks) >= 2 and toks[1]: kw["nu"] = float(toks[1])
+                if len(toks) >= 3 and toks[2]: kw["iform"] = int(float(toks[2]))
+                if len(toks) >= 4 and toks[3]: kw["itrx"] = int(float(toks[3]))
+                if len(toks) >= 5 and toks[4]: kw["idam"] = int(float(toks[4]))
+                if len(toks) >= 6 and toks[5]: kw["thick"] = float(toks[5])
+        if len(vcards) >= 3:
+            toks = vcards[2].cut("MAT_LAW120_3") if is_fixed and hasattr(vcards[2], "cut") else vcards[2].tokens()
+            if len(toks) >= 1 and toks[0]: kw["tab_id"] = int(float(toks[0]))
+            if len(toks) >= 2 and toks[1]: kw["xscale"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["yscale"] = float(toks[2])
+        if len(vcards) >= 4:
+            toks = vcards[3].cut("MAT_LAW120_4") if is_fixed and hasattr(vcards[3], "cut") else vcards[3].tokens()
+            if len(toks) >= 1 and toks[0]: kw["tau0"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["q"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["beta"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["h"] = float(toks[3])
+        if len(vcards) >= 5:
+            toks = vcards[4].cut("MAT_LAW120_5") if is_fixed and hasattr(vcards[4], "cut") else vcards[4].tokens()
+            if len(toks) >= 1 and toks[0]: kw["af1"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["af2"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["ah1"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["ah2"] = float(toks[3])
+            if len(toks) >= 5 and toks[4]: kw["as_"] = float(toks[4])
+        if len(vcards) >= 6:
+            toks = vcards[5].cut("MAT_LAW120_6") if is_fixed and hasattr(vcards[5], "cut") else vcards[5].tokens()
+            if len(toks) >= 1 and toks[0]: kw["cc"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["gam0"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["gamf"] = float(toks[2])
+        if len(vcards) >= 7:
+            toks = vcards[6].cut("MAT_LAW120_7") if is_fixed and hasattr(vcards[6], "cut") else vcards[6].tokens()
+            if len(toks) >= 1 and toks[0]: kw["d1c"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["d2c"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["d1f"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["d2f"] = float(toks[3])
+        if len(vcards) >= 8:
+            toks = vcards[7].cut("MAT_LAW120_8") if is_fixed and hasattr(vcards[7], "cut") else vcards[7].tokens()
+            if len(toks) >= 1 and toks[0]: kw["dtrx"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["djc"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["exp_n"] = float(toks[2])
+        d.mat_law120(mid, refer_rho=rho_ref, title=title, unit_id=b.unit_id, law_name=law, **kw)
+    elif law in ("121", "LAW121", "PLAS_RATE", "MAT_PLAS_RATE", "PLAS_TAB_RATE", "MAT_PLAS_TAB_RATE", "LAW121_PLAS_RATE", "MLAW121", "MAT_LAW121"):
+        kw: Dict = {}
+        is_fixed = getattr(b, "fixed", False)
+        vcards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
+        if len(vcards) >= 1:
+            toks = vcards[0].cut("MAT_LAW121_1") if is_fixed and hasattr(vcards[0], "cut") else vcards[0].tokens()
+            if len(toks) >= 1 and toks[0]: kw["rho"] = float(toks[0])
+        if len(vcards) >= 2:
+            toks = vcards[1].cut("MAT_LAW121_2") if is_fixed and hasattr(vcards[1], "cut") else vcards[1].tokens()
+            if len(toks) >= 1 and toks[0]: kw["e"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["nu"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["ires"] = int(float(toks[2]))
+            if len(toks) >= 4 and toks[3]: kw["ivisc"] = int(float(toks[3]))
+            if len(toks) >= 5 and toks[4]: kw["fcut"] = float(toks[4])
+            if len(toks) >= 6 and toks[5]: kw["dtmin"] = float(toks[5])
+        if len(vcards) >= 3:
+            if is_fixed and hasattr(vcards[2], "cut"):
+                toks = vcards[2].cut("MAT_LAW121_3")
+                if len(toks) >= 1 and toks[0]: kw["fct_sig0"] = int(float(toks[0]))
+                if len(toks) >= 3 and toks[2]: kw["xscale_sig0"] = float(toks[2])
+                if len(toks) >= 4 and toks[3]: kw["yscale_sig0"] = float(toks[3])
+            else:
+                toks = vcards[2].tokens()
+                if len(toks) >= 1 and toks[0]: kw["fct_sig0"] = int(float(toks[0]))
+                if len(toks) >= 2 and toks[1]: kw["xscale_sig0"] = float(toks[1])
+                if len(toks) >= 3 and toks[2]: kw["yscale_sig0"] = float(toks[2])
+        if len(vcards) >= 4:
+            if is_fixed and hasattr(vcards[3], "cut"):
+                toks = vcards[3].cut("MAT_LAW121_4")
+                if len(toks) >= 1 and toks[0]: kw["fct_youn"] = int(float(toks[0]))
+                if len(toks) >= 3 and toks[2]: kw["xscale_youn"] = float(toks[2])
+                if len(toks) >= 4 and toks[3]: kw["yscale_youn"] = float(toks[3])
+            else:
+                toks = vcards[3].tokens()
+                if len(toks) >= 1 and toks[0]: kw["fct_youn"] = int(float(toks[0]))
+                if len(toks) >= 2 and toks[1]: kw["xscale_youn"] = float(toks[1])
+                if len(toks) >= 3 and toks[2]: kw["yscale_youn"] = float(toks[2])
+        if len(vcards) >= 5:
+            if is_fixed and hasattr(vcards[4], "cut"):
+                toks = vcards[4].cut("MAT_LAW121_5")
+                if len(toks) >= 1 and toks[0]: kw["fct_tang"] = int(float(toks[0]))
+                if len(toks) >= 3 and toks[2]: kw["xscale_tang"] = float(toks[2])
+                if len(toks) >= 4 and toks[3]: kw["tang"] = float(toks[3])
+            else:
+                toks = vcards[4].tokens()
+                if len(toks) >= 1 and toks[0]: kw["fct_tang"] = int(float(toks[0]))
+                if len(toks) >= 2 and toks[1]: kw["xscale_tang"] = float(toks[1])
+                if len(toks) >= 3 and toks[2]: kw["tang"] = float(toks[2])
+        if len(vcards) >= 6:
+            toks = vcards[5].cut("MAT_LAW121_6") if is_fixed and hasattr(vcards[5], "cut") else vcards[5].tokens()
+            if len(toks) >= 1 and toks[0]: kw["fct_fail"] = int(float(toks[0]))
+            if len(toks) >= 2 and toks[1]: kw["ifail"] = int(float(toks[1]))
+            if len(toks) >= 3 and toks[2]: kw["xscale_fail"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["yscale_fail"] = float(toks[3])
+        d.mat_law121(mid, title=title, unit_id=b.unit_id, law_name=law, **kw)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")
@@ -11823,6 +12415,22 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
             d.eos_stiff_gas(b.user_id, title, cards)
         elif key == "/EOS/GRUNEISEN":
             d.eos_gruneisen(b.user_id, title, cards)
+        elif key == "/EOS/JWL":
+            d.eos_jwl(b.user_id, title, cards)
+        elif key == "/EOS/MURNAGHAN":
+            d.eos_murnaghan(b.user_id, title, cards)
+        elif key == "/EOS/NOBLE-ABEL":
+            d.eos_noble_abel(b.user_id, title, cards)
+        elif key == "/EOS/NASG":
+            d.eos_nasg(b.user_id, title, cards)
+        elif key == "/EOS/PUFF":
+            d.eos_puff(b.user_id, title, cards)
+        elif key in (
+            "/EOS/TILLOTSON", "/EOS/OSBORNE", "/EOS/LSZK", "/EOS/COMPACTION",
+            "/EOS/COMPACTION2", "/EOS/COMPACTION_TAB", "/EOS/POWDER-BURN",
+            "/EOS/EXPONENTIAL", "/EOS/IDEAL-GAS-VT", "/EOS/TABULATED", "/EOS/SESAME",
+        ):
+            d.eos_generic(kind, b.user_id, title, cards)
         else:
             d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                         note=f"unknown eos {kind}")
@@ -12110,9 +12718,37 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
         else:
             d.raw_block("/".join(b.parts), [c.raw for c in b.cards], note=f"unknown load {kind}")
     elif key0 == "INISHE":
-        kind = b.parts[1].upper() if len(b.parts) > 1 else ""
+        kind = b.parts[1].upper() if len(b.parts) > 1 and not b.parts[1].isdigit() else ""
         title, cards = _title_cards(b)
         d.inishe_generic(kind, b.user_id, title, cards)
+    elif key0 == "INIBRI":
+        kind = b.parts[1].upper() if len(b.parts) > 1 and not b.parts[1].isdigit() else ""
+        title, cards = _title_cards(b)
+        d.inibri_generic(kind, b.user_id, title, cards)
+    elif key0 in ("INITRU", "INITRUSS"):
+        kind = b.parts[1].upper() if len(b.parts) > 1 and not b.parts[1].isdigit() else ""
+        title, cards = _title_cards(b)
+        d.initru_generic(kind, b.user_id, title, cards)
+    elif key0 in ("INIBEA", "INIBEAM"):
+        kind = b.parts[1].upper() if len(b.parts) > 1 and not b.parts[1].isdigit() else ""
+        title, cards = _title_cards(b)
+        d.inibea_generic(kind, b.user_id, title, cards)
+    elif key0 in ("INISPR", "INISPRI"):
+        kind = b.parts[1].upper() if len(b.parts) > 1 and not b.parts[1].isdigit() else ""
+        title, cards = _title_cards(b)
+        d.inispr_generic(kind, b.user_id, title, cards)
+    elif key0 == "INISPHCEL":
+        title, cards = _title_cards(b)
+        d.inisphcel_generic(b.user_id, title, cards)
+    elif key0 in ("SPHIO", "SPH_IO"):
+        title, cards = _title_cards(b)
+        d.sphio_generic(b.user_id, title, cards)
+    elif key0 in ("RLINK", "LINK"):
+        title, cards = _title_cards(b)
+        d.rlink_generic(b.user_id, title, cards)
+    elif key0 in ("CYL_JOINT", "CYL_JO", "JOINT"):
+        title, cards = _title_cards(b)
+        d.cyl_joint_generic(b.user_id, title, cards)
     elif key0 == "IMPACC":
         title, cards = _title_cards(b)
         d.impacc(b.user_id, title, cards)
@@ -12245,3 +12881,400 @@ def write_engine_from_port_lines(lines: Sequence[str], path: str,
         e.lines.append(src[i].rstrip())
         i += 1
     e.write(path)
+
+
+def write_engine_deck(ec: Any, path: Optional[str] = None) -> str:
+    """Serialize an EngineControls instance into an OpenRadioss engine deck (*_0001.rad).
+
+    Supports explicit engine settings as well as the full suite of /IMPL cards from
+    freimpl.F (Component 5 & 6) and extended fatigue options.
+
+    Parameters
+    ----------
+    ec : EngineControls
+        The engine controls configuration to serialize.
+    path : str, optional
+        If provided, writes the rendered deck to this filesystem path.
+
+    Returns
+    -------
+    str
+        The serialized engine deck text.
+    """
+    lines: List[str] = ["#RADIOSS ENGINE"]
+
+    # /RUN
+    run_name = getattr(ec, "run_name", "RUN") or "RUN"
+    t_end = getattr(ec, "t_end", 0.0)
+    lines.append(f"/RUN/{run_name}/1")
+    lines.append(f"{t_end:g}")
+
+    # Timestep
+    dt_scale = getattr(ec, "dt_scale", 0.9)
+    dt_min = getattr(ec, "dt_min", 0.0)
+    dt_noda = getattr(ec, "dt_noda", "")
+    if dt_noda:
+        if dt_noda == "CST":
+            lines.append("/DT/NODA/CST")
+        else:
+            lines.append("/DT/NODA")
+        lines.append(f"{dt_scale:g} {dt_min:g}")
+    else:
+        lines.append("/DT")
+        lines.append(f"{dt_scale:g} {dt_min:g}")
+
+    # Output frequencies
+    th_dt = getattr(ec, "th_dt", 0.0)
+    if th_dt > 0.0:
+        lines.append("/TFILE")
+        lines.append(f"{th_dt:g}")
+
+    anim_dt = getattr(ec, "anim_dt", 0.0)
+    if anim_dt > 0.0:
+        lines.append("/ANIM/DT")
+        lines.append(f"0.0 {anim_dt:g}")
+
+    print_cycles = getattr(ec, "print_cycles", 0)
+    if print_cycles > 0:
+        lines.append(f"/PRINT/-{print_cycles}")
+
+    # Animation variables
+    anim_vect = getattr(ec, "anim_vect", [])
+    for v in anim_vect:
+        lines.append(f"/ANIM/VECT/{v}")
+
+    anim_elem = getattr(ec, "anim_elem", [])
+    for e in anim_elem:
+        lines.append(f"/ANIM/ELEM/{e}")
+
+    # Implicit controls
+    if getattr(ec, "implicit", False):
+        lines.append("/IMPL")
+
+        impl_dt = getattr(ec, "impl_dt", 0.0)
+        if impl_dt > 0.0:
+            lines.append("/IMPL/DTINI")
+            lines.append(f"{impl_dt:g}")
+
+        if getattr(ec, "impl_line", False):
+            ilintf = getattr(ec, "impl_line_ilintf", 0)
+            iscau = getattr(ec, "impl_line_iscau", 0)
+            if ilintf > 0:
+                lines.append(f"/IMPL/LINE/INTER/{ilintf}")
+            elif iscau > 0:
+                lines.append("/IMPL/LINE/SCAUC")
+            else:
+                lines.append("/IMPL/LINE")
+
+        if getattr(ec, "impl_nonl", False):
+            ikt = getattr(ec, "impl_nonl_ikt", 0)
+            if ikt == 1:
+                lines.append("/IMPL/NONL/KTANG")
+            elif ikt == 2:
+                lines.append("/IMPL/NONL/KTFUL")
+            elif ikt == 3:
+                lines.append("/IMPL/NONL/KTFU8")
+            elif ikt == 4:
+                lines.append("/IMPL/NONL/KTCON")
+
+            if getattr(ec, "impl_nonl_smdisp", 0) == 1:
+                lines.append("/IMPL/NONL/SMDIS")
+            if getattr(ec, "impl_nonl_solvnfo", 0) == 1:
+                lines.append("/IMPL/NONL/SOLVI")
+
+            ipupd = getattr(ec, "impl_nonl_ipupd", 0)
+            if ipupd > 0:
+                lines.append(f"/IMPL/NONL/PITER/{ipupd}")
+
+            insolv = getattr(ec, "impl_nonl_insolv", 0)
+            nitol = getattr(ec, "impl_nonl_nitol", 0)
+            n_lim = getattr(ec, "impl_nonl_n_lim", 0)
+            if insolv > 0 or nitol > 0 or n_lim > 0:
+                lines.append(f"/IMPL/NONL/{insolv}")
+                max_it = n_lim if n_lim > 0 else getattr(ec, "impl_max_iter", 25)
+                if nitol == 12:
+                    tole = getattr(ec, "impl_nonl_n_tole", 1e-4)
+                    tolf = getattr(ec, "impl_nonl_n_tolf", 1e-3)
+                    lines.append(f"{max_it} {nitol} {tole:g} {tolf:g}")
+                elif nitol == 13:
+                    tole = getattr(ec, "impl_nonl_n_tole", 1e-4)
+                    tolu = getattr(ec, "impl_nonl_n_tolu", 1e-3)
+                    lines.append(f"{max_it} {nitol} {tole:g} {tolu:g}")
+                elif nitol == 23:
+                    tolf = getattr(ec, "impl_nonl_n_tolf", 1e-3)
+                    tolu = getattr(ec, "impl_nonl_n_tolu", 1e-3)
+                    lines.append(f"{max_it} {nitol} {tolf:g} {tolu:g}")
+                elif nitol == 123:
+                    tole = getattr(ec, "impl_nonl_n_tole", 1e-4)
+                    tolf = getattr(ec, "impl_nonl_n_tolf", 1e-3)
+                    tolu = getattr(ec, "impl_nonl_n_tolu", 1e-3)
+                    lines.append(f"{max_it} {nitol} {tole:g} {tolf:g} {tolu:g}")
+                else:
+                    tol = getattr(ec, "impl_nonl_n_tol", 0.0)
+                    if tol <= 0.0:
+                        tol = getattr(ec, "impl_tol", 1e-6)
+                    lines.append(f"{max_it} {nitol} {tol:g}")
+        elif getattr(ec, "impl_nlgeom", False):
+            lines.append("/IMPL/NONLIN")
+
+        if getattr(ec, "impl_arc", False):
+            dl = getattr(ec, "impl_arc_dl", 0.0)
+            maxinc = getattr(ec, "impl_arc_maxinc", 200)
+            itdes = getattr(ec, "impl_arc_itdes", 5)
+            lines.append("/IMPL/ARCL")
+            lines.append(f"{dl:g} {maxinc} {itdes}")
+
+        if getattr(ec, "impl_solv", False):
+            isolv = getattr(ec, "impl_solv_isolv", 0)
+            iprec = getattr(ec, "impl_solv_iprec", 0)
+            l_lim = getattr(ec, "impl_solv_l_lim", 0)
+            itol = getattr(ec, "impl_solv_itol", 0)
+            l_tol = getattr(ec, "impl_solv_l_tol", 0.0)
+            lines.append(f"/IMPL/SOLV/{isolv}")
+            lines.append(f"{iprec} {l_lim} {itol} {l_tol:g}")
+        elif getattr(ec, "impl_linsolve", ""):
+            lines.append(f"/IMPL/LSOLVER/{ec.impl_linsolve}")
+
+        if getattr(ec, "impl_sbcs", False):
+            msg_lvl = getattr(ec, "impl_sbcs_msg_lvl", 0)
+            b_order = getattr(ec, "impl_sbcs_b_order", 0)
+            b_mcore = getattr(ec, "impl_sbcs_b_mcore", 0)
+            if msg_lvl != 0:
+                lines.append(f"/IMPL/SBCS/MSGLV/{msg_lvl}")
+            if b_order != 0:
+                lines.append(f"/IMPL/SBCS/ORDER/{b_order}")
+            if b_mcore != 0:
+                lines.append("/IMPL/SBCS/OUTCO")
+
+        if getattr(ec, "impl_mumps", False):
+            m_msg = getattr(ec, "impl_mumps_m_msg", 0)
+            m_order = getattr(ec, "impl_mumps_m_order", 0)
+            m_ocore = getattr(ec, "impl_mumps_m_ocore", 0)
+            if m_msg != 0:
+                lines.append(f"/IMPL/MUMPS/MSGLV/{m_msg}")
+            if m_order == 5:
+                lines.append("/IMPL/MUMPS/ORDER/METIS")
+            elif m_order == 4:
+                lines.append("/IMPL/MUMPS/ORDER/PORD")
+            elif m_order != 0:
+                lines.append(f"/IMPL/MUMPS/ORDER/{m_order}")
+            if m_ocore == 1:
+                lines.append("/IMPL/MUMPS/OUTCO")
+            elif m_ocore == -1:
+                lines.append("/IMPL/MUMPS/AUTOC")
+
+        ncycl_stop = getattr(ec, "impl_ncycl_stop", 0)
+        if ncycl_stop > 0:
+            lines.append("/IMPL/NCYCL/STOP")
+            lines.append(f"{ncycl_stop}")
+
+        rref = getattr(ec, "impl_rref", 1)
+        if rref != 1:
+            if rref == 0:
+                lines.append("/IMPL/RREF/OFF")
+            else:
+                irefi = getattr(ec, "impl_rref_irefi", 0)
+                rf_min = getattr(ec, "impl_rref_rf_min", 0.0)
+                rf_max = getattr(ec, "impl_rref_rf_max", 0.0)
+                if irefi > 0:
+                    lines.append(f"/IMPL/RREF/INTER/{irefi}")
+                elif rf_min != 0.0 or rf_max != 0.0:
+                    lines.append("/IMPL/RREF/LIMIT")
+                    lines.append(f"{rf_min:g} {rf_max:g}")
+                elif rref == 2:
+                    lines.append("/IMPL/RREF")
+
+        if getattr(ec, "impl_diver", False):
+            tol_div = getattr(ec, "impl_tol_div", 0.0)
+            ndiver = getattr(ec, "impl_ndiver", 0)
+            if tol_div > 0.0:
+                lines.append("/IMPL/DIVER/TOL")
+                lines.append(f"{tol_div:g}")
+            if ndiver != 0:
+                lines.append(f"/IMPL/DIVER/{ndiver}")
+
+        if getattr(ec, "impl_gstif", False):
+            if getattr(ec, "impl_gstif_ikg", 1) == 0:
+                lines.append("/IMPL/GSTIF/OFF")
+            else:
+                lines.append("/IMPL/GSTIF")
+
+        if getattr(ec, "impl_pstif", False):
+            if getattr(ec, "impl_pstif_ikpres", 1) == 0:
+                lines.append("/IMPL/PSTIF/OFF")
+            else:
+                lines.append("/IMPL/PSTIF")
+
+        ikproj = getattr(ec, "impl_shpproj_ikproj", 0)
+        if ikproj == -1:
+            lines.append("/IMPL/SHPOF")
+        elif ikproj == 1:
+            lines.append("/IMPL/SHPON")
+
+        isprn = getattr(ec, "impl_sprin_isprn", 1)
+        if isprn == 0:
+            lines.append("/IMPL/SPRIN/LINE")
+        elif isprn == 1:
+            lines.append("/IMPL/SPRIN/NONL")
+
+        if getattr(ec, "impl_monvo_impmv", 1) == 0:
+            lines.append("/IMPL/MONVO/OFF")
+
+        if getattr(ec, "impl_contr", False):
+            dt_stop = getattr(ec, "impl_contr_dt_stop", (0.0, 0.0))
+            if dt_stop != (0.0, 0.0):
+                lines.append("/IMPL/CONTR/DT/STOP")
+                lines.append(f"{dt_stop[0]:g} {dt_stop[1]:g}")
+            kz_tol = getattr(ec, "impl_contr_kz_tol", 0.0)
+            if kz_tol != 0.0:
+                lines.append("/IMPL/CONTR/SHEL")
+                lines.append(f"{kz_tol:g}")
+            sk_int = getattr(ec, "impl_contr_sk_int", 0.0)
+            if sk_int != 0.0:
+                lines.append("/IMPL/CONTR/INTER")
+                lines.append(f"{sk_int:g}")
+
+        if getattr(ec, "impl_print", False):
+            p_line = getattr(ec, "impl_print_line", 0)
+            p_nonl = getattr(ec, "impl_print_nonl", 0)
+            stif_tol = getattr(ec, "impl_print_stif_tol", 0.0)
+            stif_nc = getattr(ec, "impl_print_stif_nc", 0)
+            stif_it = getattr(ec, "impl_print_stif_it", 0)
+            if p_line > 0:
+                lines.append(f"/IMPL/PRINT/LINE/{p_line}")
+            if p_nonl > 0:
+                lines.append(f"/IMPL/PRINT/NONL/{p_nonl}")
+            if stif_tol != 0.0 or stif_nc > 0:
+                lines.append("/IMPL/PRINT/STIF")
+                lines.append(f"{stif_tol:g} {stif_nc} {stif_it}")
+
+        if getattr(ec, "impl_check", 0) > 0:
+            lines.append("/IMPL/CHECK")
+
+        if getattr(ec, "impl_bfgs", False):
+            lbfgs = getattr(ec, "impl_lbfgs", 10)
+            if lbfgs > 0:
+                lines.append(f"/IMPL/LBFGS/{lbfgs}")
+            else:
+                lines.append("/IMPL/BFGS")
+
+        if getattr(ec, "impl_line_search", False):
+            iline_s = getattr(ec, "impl_iline_s", 3)
+            nls_lim = getattr(ec, "impl_nls_lim", 4)
+            ls_tol = getattr(ec, "impl_ls_tol", 0.5)
+            lines.append(f"/IMPL/LSEAR/{iline_s}")
+            lines.append(f"{nls_lim} {ls_tol:g}")
+
+        qstat = getattr(ec, "impl_qstat", 0)
+        if qstat > 0:
+            scal_dtq = getattr(ec, "impl_qstat_scal_dtq", 1.0)
+            irig_m = getattr(ec, "impl_qstat_irig_m", 0)
+            e_ref = getattr(ec, "impl_qstat_e_ref", (0.0, 0.0, 0.0))
+            if scal_dtq != 1.0:
+                lines.append("/IMPL/QSTAT/DTSCA")
+                lines.append(f"{scal_dtq:g}")
+            elif irig_m > 0:
+                lines.append("/IMPL/QSTAT/MRIGM")
+                lines.append(f"{e_ref[0]:g} {e_ref[1]:g} {e_ref[2]:g}")
+            else:
+                lines.append(f"/IMPL/QSTAT/{qstat}")
+
+        autos = getattr(ec, "impl_autos", 1)
+        if autos == 0:
+            lines.append("/IMPL/AUTOS/OFF")
+        elif autos == 2:
+            lines.append("/IMPL/AUTOS/ALL")
+
+        if getattr(ec, "impl_sprb", False):
+            lines.append("/IMPL/SPRB")
+
+        dyna = getattr(ec, "impl_dyna", 0)
+        if dyna > 0:
+            if dyna == 1:
+                alpha = getattr(ec, "impl_dyna_alpha", 0.0)
+                lines.append("/IMPL/DYNA/1")
+                lines.append(f"{alpha:g}")
+            elif dyna == 2:
+                gamma = getattr(ec, "impl_dyna_gamma", 0.5)
+                beta = getattr(ec, "impl_dyna_beta", 0.25)
+                lines.append("/IMPL/DYNA/2")
+                lines.append(f"{gamma:g} {beta:g}")
+            elif dyna == 3:
+                am = getattr(ec, "impl_dyna_alpha_m", 0.0)
+                af = getattr(ec, "impl_dyna_alpha_f", 0.0)
+                lines.append("/IMPL/DYNA/3")
+                lines.append(f"{am:g} {af:g}")
+            if getattr(ec, "impl_dyna_damp", False):
+                dampa = getattr(ec, "impl_dyna_dampa", 0.0)
+                dampb = getattr(ec, "impl_dyna_dampb", 0.0)
+                lines.append("/IMPL/DYNA/DAMP")
+                lines.append(f"{dampa:g} {dampb:g}")
+
+        dt_min_imp = getattr(ec, "impl_dt_min", 0.0)
+        dt_max_imp = getattr(ec, "impl_dt_max", 0.0)
+        if dt_min_imp > 0.0 or dt_max_imp > 0.0:
+            lines.append("/IMPL/DT/STOP")
+            lines.append(f"{dt_min_imp:g} {dt_max_imp:g}")
+
+        itw = getattr(ec, "impl_dt_itw", 6)
+        sc_up = getattr(ec, "impl_dt_scaleup", 1.1)
+        sc_dn = getattr(ec, "impl_dt_scaledn", 0.5)
+        if itw != 6 or sc_up != 1.1 or sc_dn != 0.5:
+            lines.append("/IMPL/DT/1")
+            lines.append(f"{itw} {sc_up:g} 0 {sc_dn:g}")
+
+        dt_fixp = getattr(ec, "impl_dt_fixp", [])
+        if dt_fixp:
+            lines.append("/IMPL/DT/FIXP")
+            lines.append(" ".join(f"{x:g}" for x in dt_fixp))
+
+        buckl = getattr(ec, "impl_buckl", 0)
+        if buckl > 0:
+            nmode = getattr(ec, "impl_buckl_nmode", 4)
+            lines.append(f"/IMPL/BUCKL/{buckl}")
+            lines.append(f"0.0 0.0 {nmode} 0 8 0.01")
+
+        if getattr(ec, "impl_fatig_steinberg", False):
+            lines.append("/IMPL/FATIG/STEINBERG")
+
+        if getattr(ec, "impl_fatig_zhao_baker", False):
+            lines.append("/IMPL/FATIG/ZHAO_BAKER")
+
+        mean_meth = getattr(ec, "impl_fatig_mean_method", "")
+        if mean_meth:
+            lines.append(f"/IMPL/FATIG/MEAN/{mean_meth.upper()}")
+            ult = getattr(ec, "impl_fatig_mean_ult", 0.0)
+            yld = getattr(ec, "impl_fatig_mean_yield", 0.0)
+            sigf = getattr(ec, "impl_fatig_mean_sigf", 0.0)
+            gamma = getattr(ec, "impl_fatig_mean_gamma", 0.5)
+            lines.append(f"{ult:g} {yld:g} {sigf:g} {gamma:g}")
+
+        if getattr(ec, "impl_fatig_en", False):
+            lines.append("/IMPL/FATIG/EN")
+            e = getattr(ec, "impl_fatig_en_e", 0.0)
+            sigf = getattr(ec, "impl_fatig_en_sigf", 0.0)
+            b = getattr(ec, "impl_fatig_en_b", 0.0)
+            epsf = getattr(ec, "impl_fatig_en_epsf", 0.0)
+            c = getattr(ec, "impl_fatig_en_c", 0.0)
+            kp = getattr(ec, "impl_fatig_en_kp", 0.0)
+            np = getattr(ec, "impl_fatig_en_np", 0.0)
+            lines.append(f"{e:g} {sigf:g} {b:g} {epsf:g} {c:g} {kp:g} {np:g}")
+
+        if getattr(ec, "impl_fatig_notch", False):
+            notch_meth = getattr(ec, "impl_fatig_notch_method", "")
+            lines.append(f"/IMPL/FATIG/NOTCH/{notch_meth.upper()}")
+            kt = getattr(ec, "impl_fatig_notch_kt", 1.0)
+            e = getattr(ec, "impl_fatig_notch_e", 0.0)
+            kp = getattr(ec, "impl_fatig_notch_kp", 0.0)
+            np = getattr(ec, "impl_fatig_notch_np", 0.0)
+            lines.append(f"{kt:g} {e:g} {kp:g} {np:g}")
+
+    deck_str = "\n".join(lines) + "\n"
+    if path is not None:
+        with open(path, "w", newline="\n", encoding="utf-8") as fh:
+            fh.write(deck_str)
+    return deck_str
+
+
+DeckWriter = StarterDeck
+

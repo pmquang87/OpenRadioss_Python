@@ -171,10 +171,17 @@ class ContactType11:
     def __init__(self, itf, model: Model, log):
         self.itf = itf
         self.model = model
+        params = getattr(itf, "params", {}) or {}
 
         def _line(lid, side):
-            ln = model.lines.get(lid)
+            ln = model.lines.get(lid) if hasattr(model, "lines") else None
             if ln is None:
+                key = "line1" if side == "secondary" else "line2"
+                if key in params and params[key] is not None:
+                    segs = np.asarray(params[key], dtype=np.int64)
+                    return (segs,
+                            np.zeros(len(segs), dtype="<U8"),
+                            np.full(len(segs), -1, dtype=np.int64))
                 log.error(f"/INTER/TYPE11/{itf.id}: {side} line {lid} not found in model", "CONTACT INIT")
                 return (np.zeros((0, 2), dtype=np.int64),
                         np.zeros(0, dtype="<U8"), np.zeros(0, dtype=np.int64))
@@ -186,34 +193,36 @@ class ContactType11:
             seg_gtype = (ln.seg_gtype if ln.seg_gtype is not None
                          else np.zeros(len(ln.segments), dtype="<U8"))
             seg_elem = (ln.seg_elem if ln.seg_elem is not None
-                        else np.full(len(ln.segments), -1, dtype=np.int64))
+                         else np.full(len(ln.segments), -1, dtype=np.int64))
             return ln.segments, seg_gtype, seg_elem
 
-        self.es, self.es_gtype, self.es_elem = _line(itf.line_id1,
+        self.es, self.es_gtype, self.es_elem = _line(getattr(itf, "line_id1", 0),
                                                      "secondary")
-        self.em, self.em_gtype, self.em_elem = _line(itf.line_id2, "main")
+        self.em, self.em_gtype, self.em_elem = _line(getattr(itf, "line_id2", 0), "main")
 
         if len(self.es) == 0 or len(self.em) == 0:
             self._init_empty()
             return
 
         # ---- per-edge stiffness and gap (i11sti3) --------------------------
-        scale = itf.stfac if itf.istf != 1 else 1.0
+        scale = itf.stfac if getattr(itf, "istf", 0) != 1 else 1.0
         self.Ks, gs = edge_stiffness_gap(model, self.es, self.es_gtype,
                                          self.es_elem, scale)
         self.Km, gm = edge_stiffness_gap(model, self.em, self.em_gtype,
                                          self.em_elem, scale)
 
         # ---- gap (same default policy as TYPE7) ----------------------------
-        if len(self.em):
-            lc = float(np.linalg.norm(model.x0[self.em[:, 1]]
-                                      - model.x0[self.em[:, 0]],
+        x_coords = model.x0 if getattr(model, "x0", None) is not None and len(model.x0) > 0 else getattr(model, "x", np.zeros((0, 3)))
+        if len(self.em) and len(x_coords) > 0 and np.max(self.em) < len(x_coords):
+            lc = float(np.linalg.norm(x_coords[self.em[:, 1]]
+                                      - x_coords[self.em[:, 0]],
                                       axis=1).mean())
         else:
             lc = 1.0
         both = (gm.mean() if len(gm) else 0.0) + (gs.mean() if len(gs)
                                                   else 0.0)
-        gap_floor = itf.gap if itf.gap > 0 else (
+        gap_param = float(params.get("gap", getattr(itf, "gap", 0.0)) or 0.0)
+        gap_floor = gap_param if gap_param > 0 else (
             both if both > 0 else 0.02 * lc)
         if itf.igap == 1:
             self.gap_s = gs
@@ -281,14 +290,16 @@ class ContactType11:
         K_s = combine_stiffness(itf.istf, itf.stfac,
                                 np.full(len(self.es), self.Km.max() if len(self.Km) > 0 else 0.0),
                                 self.Ks)
-        dt_s = np.sqrt(2.0 * mass[self.es].min(axis=1)
-                       / np.maximum(K_s, EM20)).min()
+        m_s = mass[self.es].min(axis=1)
+        m_s_pos = m_s > 0.0
+        dt_s = np.sqrt(2.0 * m_s[m_s_pos] / np.maximum(K_s[m_s_pos], EM20)).min() if np.any(m_s_pos) else np.inf
         K_m = combine_stiffness(itf.istf, itf.stfac, self.Km,
                                 np.full(len(self.em),
                                         self.Ks.max() if len(self.Ks)
                                         else 0.0))
-        dt_m = np.sqrt(2.0 * mass[self.em].min(axis=1)
-                       / np.maximum(K_m, EM20)).min()
+        m_m = mass[self.em].min(axis=1)
+        m_m_pos = m_m > 0.0
+        dt_m = np.sqrt(2.0 * m_m[m_m_pos] / np.maximum(K_m[m_m_pos], EM20)).min() if np.any(m_m_pos) else np.inf
         return float(min(dt_s, dt_m))
 
     # ------------------------------------------------------------------
@@ -434,8 +445,12 @@ class ContactType11:
         v_b = (eb_flat >= 0) & (eb_flat < n_nod)
         Knode += np.bincount(eb_flat[v_b], weights=w_b[v_b], minlength=n_nod)
         loaded = Knode > 0.0
-        dt_int = min(self.dt_bound, float(
-            np.sqrt(2.0 * mass[loaded] / Knode[loaded]).min()))
+        if np.any(loaded):
+            m_loaded = np.maximum(mass[loaded], EM20)
+            dt_int = min(self.dt_bound, float(
+                np.sqrt(2.0 * m_loaded / Knode[loaded]).min()))
+        else:
+            dt_int = self.dt_bound
         if stifn is not None:                    # /DT/NODA accumulation
             stifn[loaded] += Knode[loaded]
 
@@ -531,3 +546,349 @@ class ContactType11:
 
         wrk = float(np.einsum("nb,nb->", Fvec, vrel)) * dt
         return -wrk, dt_int
+
+    def compute_thermal_conduction(
+        self,
+        temp: np.ndarray,
+        dt: float,
+        kthe: Optional[float] = None,
+        frad: Optional[float] = None,
+        drad: Optional[float] = None,
+        iform: Optional[int] = None,
+        tint: Optional[float] = None,
+        mat_cond: Optional[np.ndarray] = None,
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
+        """Compute thermal conduction and radiation for /INTER/TYPE11 edge-to-edge contact.
+
+        Ported from C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\interfaces\\int11\\i11therm.F
+
+        Parameters
+        ----------
+        temp : np.ndarray
+            Nodal temperatures.
+        dt : float
+            Time step dt.
+        kthe : Optional[float]
+            Thermal interface conductivity KTHE.
+        frad : Optional[float]
+            Radiation coefficient.
+        drad : Optional[float]
+            Radiation cutoff distance.
+        iform : Optional[int]
+            0 = ambient exchange, 1 = slave-master exchange.
+        tint : Optional[float]
+            Ambient temperature.
+        mat_cond : Optional[np.ndarray]
+            Material conductivity per pair.
+
+        Returns
+        -------
+        fthe : np.ndarray
+            Nodal thermal energy increments [J].
+        condint : np.ndarray
+            Thermal conductance per pair [W/K].
+        heat_transferred : float
+            Total thermal energy transferred across edges [J].
+        """
+        from .thermal_contact import thermal_contact_type11
+
+        itf = self.itf
+        if kthe is None:
+            kthe = getattr(itf, "kthe", 0.0) or getattr(itf, "rstif", 0.0)
+        if frad is None:
+            frad = getattr(itf, "frad", 0.0)
+        if drad is None:
+            drad = getattr(itf, "drad", 0.0)
+        if iform is None:
+            iform = getattr(itf, "iform_th", getattr(itf, "iform", 1))
+        if tint is None:
+            tint = getattr(itf, "tint", 293.15)
+
+        if len(self.pairs_s) == 0:
+            return np.zeros(len(temp), dtype=float), np.zeros(0, dtype=float), 0.0
+
+        live = self.es_alive[self.pairs_s] & self.em_alive[self.pairs_m]
+        ps = self.pairs_s[live]
+        pm = self.pairs_m[live]
+        if len(ps) == 0:
+            return np.zeros(len(temp), dtype=float), np.zeros(0, dtype=float), 0.0
+
+        ea = self.es[ps]
+        eb = self.em[pm]
+        x = getattr(self.model, "x", getattr(self.model, "x0", np.zeros((len(temp), 3))))
+
+        s, t, cA, cB = _closest_points_on_segments(
+            x[ea[:, 0]], x[ea[:, 1]], x[eb[:, 0]], x[eb[:, 1]]
+        )
+        d = norm3(cA - cB)
+
+        if self.itf.igap == 1:
+            gap = self.gap_s[ps] + self.gap_m[pm]
+            if self.gap_min > 0.0:
+                gap = np.maximum(gap, self.gap_min)
+            if self.gap_max < np.inf:
+                gap = np.minimum(gap, self.gap_max)
+        else:
+            gap = np.full(len(ps), self.gap_const)
+
+        penrad = d - gap
+        hs = np.column_stack([1.0 - s, s])
+        hm = np.column_stack([1.0 - t, t])
+
+        # Tributary area: length of edge times gap
+        l_ea = norm3(x[ea[:, 1]] - x[ea[:, 0]])
+        l_eb = norm3(x[eb[:, 1]] - x[eb[:, 0]])
+        areac = 0.5 * (l_ea + l_eb) * gap
+
+        return thermal_contact_type11(
+            temp=temp,
+            slave_edge_nodes=ea,
+            master_edge_nodes=eb,
+            hs=hs,
+            hm=hm,
+            kthe=kthe,
+            dt=dt,
+            areac=areac,
+            penrad=penrad,
+            gapv=gap,
+            frad=frad,
+            drad=drad,
+            iform=iform,
+            tint=tint,
+            mat_cond=mat_cond,
+        )
+
+
+class LagmulType11:
+    """One /INTER/LAGMUL/TYPE11 edge-to-edge constraint, engine-side."""
+
+    def __init__(self, itf, model: Model, log=None):
+        self.itf = itf
+        self.model = model
+        self.log = log if log is not None else getattr(model, "log", None)
+        self.penalty_handler = ContactType11(itf, model, self.log)
+        if hasattr(itf, "params") and isinstance(itf.params, dict):
+            if "line1" in itf.params and "line2" in itf.params:
+                self.penalty_handler.es = np.asarray(itf.params["line1"], dtype=np.int64)
+                self.penalty_handler.em = np.asarray(itf.params["line2"], dtype=np.int64)
+                self.penalty_handler.es_alive = np.ones(len(self.penalty_handler.es), dtype=bool)
+                self.penalty_handler.em_alive = np.ones(len(self.penalty_handler.em), dtype=bool)
+                gap_val = float(itf.params.get("gap", 0.05))
+                self.penalty_handler.gap_const = gap_val
+                self.penalty_handler.gap_bound = gap_val
+                n_s = len(self.penalty_handler.es)
+                n_m = len(self.penalty_handler.em)
+                ps, pm = np.meshgrid(np.arange(n_s, dtype=np.int64), np.arange(n_m, dtype=np.int64), indexing="ij")
+                self.penalty_handler.pairs_s = ps.ravel()
+                self.penalty_handler.pairs_m = pm.ravel()
+
+    def generate_l_constraint_rows(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Generate constraint rows (L_data, L_row, L_col) for edge-to-edge Lagrange multiplier contact.
+
+        Constraint condition: normal gap rate (v_S - v_M) . n <= 0 for penetrating edge pairs.
+        Returns:
+            L_data: Non-zero values of the constraint matrix L.
+            L_row:  Row indices (equation index).
+            L_col:  Column indices (node_index * 3 + dof).
+        """
+        res = self.generate_l_matrix(1e-6)
+        if len(res) == 3:
+            return res
+        data, nodes, dofs, eq_ids, n_rows = res
+        if n_rows == 0:
+            return (np.zeros(0, dtype=np.float64),
+                    np.zeros(0, dtype=np.int64),
+                    np.zeros(0, dtype=np.int64))
+        L_data = data
+        L_row = eq_ids
+        L_col = nodes * 3 + dofs
+        return L_data, L_row, L_col
+
+    def generate_l_matrix(self, dt=None):
+        """Yield (data, node_indices, dof_indices, eq_indices, n_rows) for global LagmulSolver.
+        If dt is provided, returns (L_data, L_row, L_col).
+
+        Only penetrating edge pairs approaching each other (vn <= 0) generate constraints.
+        """
+        handler = self.penalty_handler
+        x = getattr(self.model, "x", getattr(self.model, "x0", None))
+        if x is None or len(x) == 0:
+            if dt is not None:
+                return (np.zeros(0, dtype=np.float64),
+                        np.zeros(0, dtype=np.int64),
+                        np.zeros(0, dtype=np.int64))
+            return (np.zeros(0, dtype=float), np.zeros(0, dtype=np.int64),
+                    np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64), 0)
+
+        v = getattr(self.model, "v", None)
+        if v is None or len(v) != len(x):
+            v = np.zeros_like(x)
+
+        dt_val = float(dt) if (dt is not None and isinstance(dt, (int, float))) else getattr(self.model, "dt", 1e-6)
+
+        if len(handler.es) == 0 or len(handler.em) == 0:
+            if dt is not None:
+                return (np.zeros(0, dtype=np.float64),
+                        np.zeros(0, dtype=np.int64),
+                        np.zeros(0, dtype=np.int64))
+            return (np.zeros(0, dtype=float), np.zeros(0, dtype=np.int64),
+                    np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64), 0)
+
+        if handler.deletable:
+            handler.es_alive = tracking.alive_segment_mask(
+                handler.model, handler.es_gtype, handler.es_elem)
+            handler.em_alive = tracking.alive_segment_mask(
+                handler.model, handler.em_gtype, handler.em_elem)
+
+        cycle = getattr(self.model, "cycle", 0)
+        if cycle - handler._last_refresh >= handler.refresh:
+            handler._broad_phase(x, v, dt_val)
+            handler._last_refresh = cycle
+
+        if len(handler.pairs_s) == 0:
+            if dt is not None:
+                return (np.zeros(0, dtype=np.float64),
+                        np.zeros(0, dtype=np.int64),
+                        np.zeros(0, dtype=np.int64))
+            return (np.zeros(0, dtype=float), np.zeros(0, dtype=np.int64),
+                    np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64), 0)
+
+        live = handler.es_alive[handler.pairs_s] & handler.em_alive[handler.pairs_m]
+        ps = handler.pairs_s[live]
+        pm = handler.pairs_m[live]
+        if len(ps) == 0:
+            if dt is not None:
+                return (np.zeros(0, dtype=np.float64),
+                        np.zeros(0, dtype=np.int64),
+                        np.zeros(0, dtype=np.int64))
+            return (np.zeros(0, dtype=float), np.zeros(0, dtype=np.int64),
+                    np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64), 0)
+
+        ea = handler.es[ps]
+        eb = handler.em[pm]
+
+        s, t, cA, cB = _closest_points_on_segments(
+            x[ea[:, 0]], x[ea[:, 1]], x[eb[:, 0]], x[eb[:, 1]])
+        dvec = cA - cB
+        d = norm3(dvec)
+
+        if handler.itf.igap == 1:
+            gap = handler.gap_s[ps] + handler.gap_m[pm]
+            if handler.gap_min > 0.0:
+                gap = np.maximum(gap, handler.gap_min)
+            if handler.gap_max < np.inf:
+                gap = np.minimum(gap, handler.gap_max)
+        else:
+            gap = np.full(len(ps), handler.gap_const)
+
+        pen = gap - d
+        active = pen > 0.0
+        if not np.any(active):
+            if dt is not None:
+                return (np.zeros(0, dtype=np.float64),
+                        np.zeros(0, dtype=np.int64),
+                        np.zeros(0, dtype=np.int64))
+            return (np.zeros(0, dtype=float), np.zeros(0, dtype=np.int64),
+                    np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64), 0)
+
+        ea = ea[active]
+        eb = eb[active]
+        s = s[active]
+        t = t[active]
+        d_act = d[active]
+        dvec_act = dvec[active]
+
+        norm_d = norm3(dvec_act)
+        deg = norm_d <= EM20
+        if np.any(deg):
+            e1 = x[ea[:, 1]] - x[ea[:, 0]]
+            e2 = x[eb[:, 1]] - x[eb[:, 0]]
+            n_cross = np.cross(e1, e2)
+            n_cross_norm = norm3(n_cross)
+            valid_cross = n_cross_norm > EM20
+            fallback = np.where(valid_cross[:, None],
+                                n_cross / np.maximum(n_cross_norm, EM20)[:, None],
+                                np.array([0.0, 0.0, 1.0]))
+            d_safe = np.maximum(norm_d, EM20)
+            nvec = np.where(deg[:, None], fallback, dvec_act / d_safe[:, None])
+        else:
+            d_safe = np.maximum(d_act, EM20)
+            nvec = dvec_act / d_safe[:, None]
+
+        # Relative velocity between closest points on secondary and master edges
+        vA = (1.0 - s)[:, None] * v[ea[:, 0]] + s[:, None] * v[ea[:, 1]]
+        vB = (1.0 - t)[:, None] * v[eb[:, 0]] + t[:, None] * v[eb[:, 1]]
+        vrel = vA - vB
+        vn = np.einsum("nb,nb->n", vrel, nvec)
+
+        # Approaching edges condition: vn <= 0
+        approaching = vn <= 0.0
+        if not np.any(approaching):
+            if dt is not None:
+                return (np.zeros(0, dtype=np.float64),
+                        np.zeros(0, dtype=np.int64),
+                        np.zeros(0, dtype=np.int64))
+            return (np.zeros(0, dtype=float), np.zeros(0, dtype=np.int64),
+                    np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64), 0)
+
+        ea_app = ea[approaching]
+        eb_app = eb[approaching]
+        s_app = s[approaching]
+        t_app = t[approaching]
+        nvec_app = nvec[approaching]
+        n_rows = len(ea_app)
+
+        data: list[float] = []
+        nodes: list[int] = []
+        dofs: list[int] = []
+        eq_ids: list[int] = []
+
+        for i in range(n_rows):
+            eq_id = i
+            s1, s2 = int(ea_app[i, 0]), int(ea_app[i, 1])
+            m1, m2 = int(eb_app[i, 0]), int(eb_app[i, 1])
+            si = float(s_app[i])
+            ti = float(t_app[i])
+            nx, ny, nz = float(nvec_app[i, 0]), float(nvec_app[i, 1]), float(nvec_app[i, 2])
+
+            for dof, n_dof in enumerate((nx, ny, nz)):
+                # Secondary edge nodes (+v_S . n):
+                # node s1 with weight (1 - s)
+                data.append((1.0 - si) * n_dof)
+                nodes.append(s1)
+                dofs.append(dof)
+                eq_ids.append(eq_id)
+
+                # node s2 with weight s
+                data.append(si * n_dof)
+                nodes.append(s2)
+                dofs.append(dof)
+                eq_ids.append(eq_id)
+
+                # Master edge nodes (-v_M . n):
+                # node m1 with weight -(1 - t)
+                data.append(-(1.0 - ti) * n_dof)
+                nodes.append(m1)
+                dofs.append(dof)
+                eq_ids.append(eq_id)
+
+                # node m2 with weight -t
+                data.append(-ti * n_dof)
+                nodes.append(m2)
+                dofs.append(dof)
+                eq_ids.append(eq_id)
+
+        if dt is not None:
+            L_data = np.asarray(data, dtype=np.float64)
+            L_row = np.asarray(eq_ids, dtype=np.int64)
+            L_col = np.asarray(nodes, dtype=np.int64) * 3 + np.asarray(dofs, dtype=np.int64)
+            return L_data, L_row, L_col
+
+        return (
+            np.asarray(data, dtype=np.float64),
+            np.asarray(nodes, dtype=np.int64),
+            np.asarray(dofs, dtype=np.int64),
+            np.asarray(eq_ids, dtype=np.int64),
+            n_rows,
+        )
+

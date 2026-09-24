@@ -1,3 +1,7 @@
+# Ported from OpenRadioss Fortran:
+# Source: engine/source/materials/mat/mat027/sigeps27c.F
+# Subroutines: SIGEPS27C, M27CRAK, M27ELAS, M27PLAS
+# Starter reader: starter/source/materials/mat/mat027/hm_read_mat27.F
 """
 LAW27 — brittle elastic material with directional tensile cracking
 (/MAT/LAW27, /MAT/PLAS_BRIT). Shells only.
@@ -59,6 +63,8 @@ plus the shared ``layfail`` (1 alive / 0 broken) array of the kernels.
 """
 
 from __future__ import annotations
+
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -238,6 +244,9 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
                 yld_i = (p_A + p_B * (e_new ** p_n)) * rf
                 if p_sigmax > 0.0:
                     yld_i = np.where(yld_i > p_sigmax, p_sigmax, yld_i)
+                H_i = p_n * p_B * ((e_new + 1e-7) ** (p_n - 1.0)) * rf
+                if p_sigmax > 0.0:
+                    H_i = np.where(yld_i >= p_sigmax, 0.0, H_i)
                     
                 dr = 0.5 * E * dpla_i / yld_i
                 
@@ -422,3 +431,24 @@ def consistent_shell_tangent(mat, extra):
     # broken layers carry no stress and no stiffness
     C[layfail == 0.0] = 0.0
     return C
+
+
+def solid_tangent(mat: Any = None, **kwargs: Any) -> np.ndarray:
+    """LAW27 is defined strictly for shell elements (/MAT/LAW27, /MAT/PLAS_BRIT)."""
+    raise NotImplementedError("LAW27 (brittle tensile cracking) is implemented for shell elements only.")
+
+
+shell_tangent = consistent_shell_tangent
+tangent = consistent_shell_tangent
+consistent_solid_tangent = solid_tangent
+
+
+def extra_shapes(mat: Any = None, nip: int = 1) -> dict[str, tuple[int, ...]]:
+    """Extra state arrays needed by LAW27 per shell layer."""
+    return {
+        "eps27": (nip, 3),
+        "crk27": (nip,),
+        "ang27": (nip,),
+        "dmg27": (nip, 2),
+    }
+

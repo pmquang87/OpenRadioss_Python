@@ -197,7 +197,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     lc = _char_length(xe, safe_area)
 
     # Initial cycle dt <= 0 check
-    if dt <= 0.0 or v is None:
+    if dt is None or dt <= 0.0 or v is None:
         c_sound = np.zeros(n)
         for sl, mat, prop in st.get("slices", []):
             law = getattr(mat, "law", 1)

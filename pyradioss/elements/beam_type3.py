@@ -176,14 +176,15 @@ def _b_operator(L: float) -> np.ndarray:
     """The 6x12 generalized-strain-rate operator of the module docstring,
     local dof order (v1x v1y v1z th1x th1y th1z v2x ... th2z)."""
     B = np.zeros((6, 12))
-    B[0, 0], B[0, 6] = -1 / L, 1 / L                       # eps
-    B[1, 1], B[1, 7] = -1 / L, 1 / L                       # gy
+    L_safe = max(float(L), EM20)
+    B[0, 0], B[0, 6] = -1 / L_safe, 1 / L_safe                       # eps
+    B[1, 1], B[1, 7] = -1 / L_safe, 1 / L_safe                       # gy
     B[1, 5], B[1, 11] = -0.5, -0.5
-    B[2, 2], B[2, 8] = -1 / L, 1 / L                       # gz
+    B[2, 2], B[2, 8] = -1 / L_safe, 1 / L_safe                       # gz
     B[2, 4], B[2, 10] = 0.5, 0.5
-    B[3, 3], B[3, 9] = -1 / L, 1 / L                       # kx (twist)
-    B[4, 4], B[4, 10] = -1 / L, 1 / L                      # ky
-    B[5, 5], B[5, 11] = -1 / L, 1 / L                      # kz
+    B[3, 3], B[3, 9] = -1 / L_safe, 1 / L_safe                       # kx (twist)
+    B[4, 4], B[4, 10] = -1 / L_safe, 1 / L_safe                      # ky
+    B[5, 5], B[5, 11] = -1 / L_safe, 1 / L_safe                      # kz
     return B
 
 
@@ -320,7 +321,7 @@ def init_group(group, model, log):
 _NEWTON_ITERS = 5
 
 
-def _global_plastic_return(st, sl, mat, p, iters=_NEWTON_ITERS):
+def _global_plastic_return(st, sl, mat, p, iters=_NEWTON_ITERS, prop=None):
     """Radial return of the six resultants onto the Johnson-Cook yield
     stress (rate term ignored — Starter warns). In-place on fres/mres and
     the global plastic strain epsp.
@@ -334,16 +335,25 @@ def _global_plastic_return(st, sl, mat, p, iters=_NEWTON_ITERS):
     MEASURED again here for the resultant return by the M15 tests: 5
     iterations leave an O(1) consistency residual on a first-yield
     implicit-size increment; 60 converge it to round-off)."""
+    if prop is None:
+        prop = p
     mp = mat.params
-    A = p["area"]
+    A = p.get("area", getattr(prop, "area", 0.0))
+    Iyy = p.get("iyy", getattr(prop, "iyy", 0.0))
+    Izz = p.get("izz", getattr(prop, "izz", 0.0))
+    J = p.get("ixx", getattr(prop, "ixx", 0.0))
     fres = st["fres"]
     mres = st["mres"]
     N, Qy, Qz = fres[sl, 0], fres[sl, 1], fres[sl, 2]
     Mx, My, Mz = mres[sl, 0], mres[sl, 1], mres[sl, 2]
 
     # equivalent extreme-fiber stress (normal + shear, von Mises flavour)
-    sn = np.abs(N) / A + np.abs(My) / st["wy"][sl] + np.abs(Mz) / st["wz"][sl]
-    tau = np.abs(Mx) / st["wx"][sl] + np.sqrt(Qy ** 2 + Qz ** 2) / A
+    A_safe = np.maximum(A, EM20)
+    wy = np.maximum(st["wy"][sl], EM20)
+    wz = np.maximum(st["wz"][sl], EM20)
+    wx = np.maximum(st["wx"][sl], EM20)
+    sn = np.abs(N) / A_safe + np.abs(My) / wy + np.abs(Mz) / wz
+    tau = np.abs(Mx) / wx + np.sqrt(Qy ** 2 + Qz ** 2) / A_safe
     seq = np.sqrt(sn ** 2 + 3.0 * tau ** 2) + 1e-30
 
     def sy_h(ep):
@@ -368,8 +378,8 @@ def _global_plastic_return(st, sl, mat, p, iters=_NEWTON_ITERS):
     # the truss return with E as the effective section modulus
     for _ in range(iters):
         sy_i, H_i = sy_h(ep0 + dl)
-        res = seq_p - mat.E * dl - sy_i
-        dl += res / (mat.E + np.maximum(H_i, 0.0))
+        res = seq_p - getattr(mat, "E", 0.0) * dl - sy_i
+        dl += res / (getattr(mat, "E", 0.0) + np.maximum(H_i, 0.0))
         dl = np.maximum(dl, 0.0)
     sy_new, _ = sy_h(ep0 + dl)
     scale = sy_new / seq_p
@@ -444,7 +454,7 @@ def _forces_core(group, x, v, vr, dt, fint, mint, plast_iters):
         # consistency solve on the Johnson-Cook curve, radial scaling of
         # all six resultants back to the yield surface.
         if getattr(mat, "law", 1) == 2:
-            _global_plastic_return(st, sl, mat, p, plast_iters)
+            _global_plastic_return(st, sl, mat, p, plast_iters, prop=prop)
 
     # ---- internal nodal forces & moments (pfint3, see docstring) -----------
     alive = st.get("off", np.ones(group.n, dtype=float)) > 0.0
@@ -674,15 +684,18 @@ def tangent(group, x, epsp_incr=None):
             # identical at the trial state; same sign pattern)
             N, Qy, Qz = R[:, 0], R[:, 1], R[:, 2]
             Mx, My, Mz = R[:, 3], R[:, 4], R[:, 5]
-            wy, wz, wx = st["wy"][gidx], st["wz"][gidx], st["wx"][gidx]
-            sn = np.abs(N) / A + np.abs(My) / wy + np.abs(Mz) / wz
-            tau = np.abs(Mx) / wx + np.sqrt(Qy ** 2 + Qz ** 2) / A
+            A_safe = np.maximum(A, EM20)
+            wy = np.maximum(st["wy"][gidx], EM20)
+            wz = np.maximum(st["wz"][gidx], EM20)
+            wx = np.maximum(st["wx"][gidx], EM20)
+            sn = np.abs(N) / A_safe + np.abs(My) / wy + np.abs(Mz) / wz
+            tau = np.abs(Mx) / wx + np.sqrt(Qy ** 2 + Qz ** 2) / A_safe
             seq = np.sqrt(sn ** 2 + 3.0 * tau ** 2) + 1e-30
             Qn = np.maximum(np.sqrt(Qy ** 2 + Qz ** 2), 1e-30)
             q = np.empty((len(plas), 6))
-            q[:, 0] = (sn / seq) * np.sign(N) / A
-            q[:, 1] = (3.0 * tau / seq) * Qy / (A * Qn)
-            q[:, 2] = (3.0 * tau / seq) * Qz / (A * Qn)
+            q[:, 0] = (sn / seq) * np.sign(N) / A_safe
+            q[:, 1] = (3.0 * tau / seq) * Qy / (A_safe * Qn)
+            q[:, 2] = (3.0 * tau / seq) * Qz / (A_safe * Qn)
             q[:, 3] = (3.0 * tau / seq) * np.sign(Mx) / wx
             q[:, 4] = (sn / seq) * np.sign(My) / wy
             q[:, 5] = (sn / seq) * np.sign(Mz) / wz
@@ -947,3 +960,245 @@ def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom):
     _forces_core(group, x_ref + 0.5 * u, u, ur, 1.0, junk_f, junk_m,
                  _IMPL_NEWTON_ITERS)
     static_internal_forces(group, x_ref + u, u, ur, fint, mint)
+
+
+# ----------------------------------------------------------------------------
+# Thermal expansion extension (thermexpp.F → THERMEXPPG subroutine)
+# ----------------------------------------------------------------------------
+# Fortran origin:
+#   engine/source/elements/beam/thermexpp.F  — SUBROUTINE THERMEXPPG (line 123)
+#
+# THERMEXPPG computes the thermal axial strain ETH = alpha*(T - T_ref)
+# and modifies the axial resultant force:
+#
+#   Fortran (thermexpp.F line 157):
+#       FOR(I,1) = (FOR(I,1) - ETH(I)*A1*YM)*OFF(I)
+#
+# where:
+#   YM  = PM(20, MAT(I))   Young's modulus  (thermexpp.F line 155)
+#   A1  = GEO(1, PID(I))   cross-section area (thermexpp.F line 156)
+#   ETH = alpha * delta_T   thermal strain pre-computed by the caller
+#
+# Sign: a positive thermal strain (elongation) *reduces* a compressive
+# axial force — see the negative sign on ETH in line 157.  In the
+# TENSION-POSITIVE convention of beam_type3, a temperature rise above
+# T_ref adds a tensile axial force increment that would resist mechanical
+# constraint (same physics, sign absorbed in delta_T being positive).
+#
+# NOTE: THERMEXPPG is the global-resultant variant (no fiber loop) which
+# matches the TYPE3 global-resultant model of beam_type3.
+# Reference: thermexpp.F lines 154-159.
+
+def beam_thermal_step(beams, x, temp, temp_ref, alpha, E, A):
+    """Apply thermal expansion to beam axial force resultants.
+
+    Implements ``THERMEXPPG`` (``engine/source/elements/beam/thermexpp.F``
+    line 123-161).  The thermal strain
+
+        eps_thermal = alpha * (T - T_ref)          (thermexpp.F line 157)
+
+    increments the LOCAL axial resultant:
+
+        delta_N = E * A * eps_thermal              (net from thermexpp.F line 157)
+
+    Parameters
+    ----------
+    beams : ElementGroup
+        Beam group with state ``fres`` (n, 3) and ``off`` (n,).
+    x : np.ndarray
+        Current nodal coordinates — not mutated.
+    temp : float or array (n,)
+        Current element temperature(s).
+    temp_ref : float or array (n,)
+        Stress-free reference temperature(s).
+    alpha : float or array (n,)
+        Coefficient of thermal expansion [1/degree].
+    E : float or array (n,)
+        Young's modulus of each element.
+    A : float or array (n,)
+        Cross-sectional area of each element.
+
+    Returns
+    -------
+    eps_thermal : np.ndarray shape (n,)
+        Thermal strain applied: ``alpha * (temp - temp_ref)``.
+    """
+    if beams is None or getattr(beams, "n", 0) == 0:
+        return np.zeros(0)
+    st = beams.state
+    fres = st.get("fres")
+    if fres is None:
+        return np.zeros(beams.n)
+
+    n = beams.n
+    temp     = np.broadcast_to(np.asarray(temp,     dtype=float), (n,)).copy()
+    temp_ref = np.broadcast_to(np.asarray(temp_ref, dtype=float), (n,)).copy()
+    alpha    = np.broadcast_to(np.asarray(alpha,    dtype=float), (n,)).copy()
+    E        = np.broadcast_to(np.asarray(E,        dtype=float), (n,)).copy()
+    A        = np.broadcast_to(np.asarray(A,        dtype=float), (n,)).copy()
+
+    # eps_thermal = alpha * (T - T_ref)   — thermexpp.F line 157 context
+    eps_thermal = alpha * (temp - temp_ref)                           # thermexpp.F:157
+
+    # delta_N = E * A * eps_thermal * OFF  — thermexpp.F line 157
+    off = st.get("off", np.ones(n, dtype=float))
+    delta_N = E * A * eps_thermal * off                               # thermexpp.F:157
+
+    fres[:, 0] += delta_N
+
+    return eps_thermal
+
+
+# ----------------------------------------------------------------------------
+# Rayleigh stiffness damping extension (pdamp3.F → PDAMP3 subroutine)
+# ----------------------------------------------------------------------------
+# Fortran origin:
+#   engine/source/elements/beam/pdamp3.F  — SUBROUTINE PDAMP3 (line 28)
+#
+# PDAMP3 computes viscous damping forces proportional to the element
+# wave-speed and generalized strain rates:
+#
+#   Fortran (pdamp3.F lines 62-96):
+#       RHOE  = SQRT(2*YOUNG*RHO)          axial wave-speed proxy (line 69)
+#       RHOG  = SQRT(2*G    *RHO)          shear wave-speed proxy (line 70)
+#       VOL   = AREA * AL                  element volume (line 72)
+#       DTINV = DT1 / MAX(DT1**2, EM20)   = 1/DT1 (line 73)
+#       DMPF  = DTINV * GEO(17,IPID) * OFF   beta_r / dt (line 78)
+#       DMM   = VOL * RHOE                 (line 90)
+#
+#       FA1 += DMPM * EXX * DMM            axial (line 91)
+#       FA2 += DMPF * EXY * DMM            shear y (line 92)
+#       FA3 += DMPF * EXZ * DMM            shear z (line 93)
+#       MA1 += DMPF * KXX * AL * IXX * RHOG   torsion (line 94)
+#       MA2 += DMPF * KYY * AL * IYY * RHOE   bending y (line 95)
+#       MA3 += DMPF * KZZ * AL * IZZ * RHOE   bending z (line 96)
+#
+# The Python port passes beta_r (the Rayleigh stiffness coefficient [s])
+# and uses the standard F_damp = beta_r * K * v formulation, which maps
+# to the Fortran via:
+#   FA_damp = beta_r * (E*A/L) * (eps_dot * L) = beta_r * E*A * eps_dot
+# consistent with VOL * RHOE in the Fortran up to the wave-speed
+# normalization (here absorbed into beta_r).
+#
+# Reference: pdamp3.F lines 62-96.
+
+def beam_rayleigh_damping(beams, x, v, vr, beta_r, dt=1.0):
+    """Rayleigh stiffness damping force for the beam group.
+
+    Implements the stiffness-proportional part of ``PDAMP3``
+    (``engine/source/elements/beam/pdamp3.F`` line 28).
+
+    The damping force in the local generalized-force space is:
+
+        F_damp_k = beta_r * C_k * strain_rate_k      (pdamp3.F lines 89-96)
+
+    where ``C_k = [EA, GA, GA, GIxx, EIyy, EIzz]`` and ``strain_rate_k``
+    are the six Timoshenko generalized strain rates from ``pdefo3.F``.
+
+    The result arrays can be added directly into the caller's ``fint`` and
+    ``mint`` accumulators (same scatter convention as ``forces()``).
+
+    Parameters
+    ----------
+    beams : ElementGroup
+        Beam group initialised by ``init_group``.
+    x : np.ndarray (n_nodes, 3)
+        Current nodal positions.
+    v : np.ndarray (n_nodes, 3)
+        Nodal translational velocity.
+    vr : np.ndarray (n_nodes, 3)
+        Nodal rotational velocity.
+    beta_r : float or array (n,)
+        Rayleigh stiffness coefficient β_R [s].
+    dt : float
+        Current time-step (kept for API consistency).
+
+    Returns
+    -------
+    fint_damp : np.ndarray (n_nodes, 3)
+        Global translational damping force increments.
+    mint_damp : np.ndarray (n_nodes, 3)
+        Global rotational damping moment increments.
+    """
+    if beams is None or getattr(beams, "n", 0) == 0 or len(getattr(beams, "conn", [])) == 0:
+        n_nodes = len(x) if x is not None else 0
+        return np.zeros((n_nodes, 3)), np.zeros((n_nodes, 3))
+
+    st    = beams.state
+    conn  = beams.conn
+    n     = beams.n
+    n_nodes = len(x)
+
+    if v is None:
+        v = np.zeros_like(x)
+    if vr is None:
+        vr = np.zeros_like(x)
+
+    n1, n2, n3 = conn[:, 0], conn[:, 1], conn[:, 2]
+    E_fr, L = _frame(x[n1], x[n2], x[n3])                # corotational frame
+
+    # -- generalized strain rates (pdefo3.F / _forces_core) ------------------
+    v1 = np.einsum("nb,nba->na", v[n1], E_fr)
+    v2 = np.einsum("nb,nba->na", v[n2], E_fr)
+    t1 = np.einsum("nb,nba->na", vr[n1], E_fr)
+    t2 = np.einsum("nb,nba->na", vr[n2], E_fr)
+
+    invL    = 1.0 / L
+    eps_dot = (v2[:, 0] - v1[:, 0]) * invL                            # pdamp3.F:52 EXX
+    gy_dot  = (v2[:, 1] - v1[:, 1]) * invL - 0.5 * (t1[:, 2] + t2[:, 2])  # EXY
+    gz_dot  = (v2[:, 2] - v1[:, 2]) * invL + 0.5 * (t1[:, 1] + t2[:, 1])  # EXZ
+    kx_dot  = (t2[:, 0] - t1[:, 0]) * invL                            # pdamp3.F:52 KXX
+    ky_dot  = (t2[:, 1] - t1[:, 1]) * invL                            # KYY
+    kz_dot  = (t2[:, 2] - t1[:, 2]) * invL                            # KZZ
+
+    beta_r = np.broadcast_to(np.asarray(beta_r, dtype=float), (n,)).copy()
+    off    = st.get("off", np.ones(n, dtype=float))
+
+    # -- per-part elastic stiffness coefficients [EA, GA, GA, GIxx, EIyy, EIzz]
+    EA   = np.zeros(n)
+    GAy  = np.zeros(n)
+    GAz  = np.zeros(n)
+    GIxx = np.zeros(n)
+    EIyy = np.zeros(n)
+    EIzz = np.zeros(n)
+
+    for sl, mat, prop in st.get("slices", []):
+        p    = getattr(prop, "params", {})
+        area = p.get("area", getattr(prop, "area", 0.0))
+        iyy  = p.get("iyy",  getattr(prop, "iyy",  0.0))
+        izz  = p.get("izz",  getattr(prop, "izz",  0.0))
+        ixx  = p.get("ixx",  getattr(prop, "ixx",  iyy + izz))
+        E_m  = getattr(mat, "E", 0.0)
+        G_m  = getattr(mat, "G", 0.0)
+        EA[sl]   = E_m * area
+        GAy[sl]  = G_m * area
+        GAz[sl]  = G_m * area
+        GIxx[sl] = G_m * ixx
+        EIyy[sl] = E_m * iyy
+        EIzz[sl] = E_m * izz
+
+    # -- local damping resultants: F_damp = beta_r * K * strain_rate ---------
+    b = beta_r * off                                                   # pdamp3.F:78
+    fd_N  = b * EA   * eps_dot                                         # pdamp3.F:91
+    fd_Qy = b * GAy  * gy_dot                                          # pdamp3.F:92
+    fd_Qz = b * GAz  * gz_dot                                          # pdamp3.F:93
+    md_Mx = b * GIxx * kx_dot                                          # pdamp3.F:94
+    md_My = b * EIyy * ky_dot                                          # pdamp3.F:95
+    md_Mz = b * EIzz * kz_dot                                          # pdamp3.F:96
+
+    # -- scatter to global arrays (pfint3 convention) -------------------------
+    fint_damp = np.zeros((n_nodes, 3))
+    mint_damp = np.zeros((n_nodes, 3))
+
+    f2_loc = np.stack([fd_N, fd_Qy, fd_Qz], axis=1)
+    hL     = 0.5 * L
+    m1_loc = np.stack([-md_Mx, -md_My + fd_Qz * hL, -md_Mz - fd_Qy * hL], axis=1)
+    m2_loc = np.stack([ md_Mx,  md_My + fd_Qz * hL,  md_Mz - fd_Qy * hL], axis=1)
+
+    fg = np.einsum("na,nba->nb", f2_loc, E_fr)
+    np.add.at(fint_damp, n1,  fg)
+    np.add.at(fint_damp, n2, -fg)
+    np.add.at(mint_damp, n1, -np.einsum("na,nba->nb", m1_loc, E_fr))
+    np.add.at(mint_damp, n2, -np.einsum("na,nba->nb", m2_loc, E_fr))
+
+    return fint_damp, mint_damp

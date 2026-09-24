@@ -32,6 +32,7 @@ _DEFAULT_YLD0 = 1.0e20
 _DEFAULT_EPS_ISO = 1.0e20
 _DEFAULT_EPS_AD = 2.0e20
 _DEFAULT_FCUT = 10000.0
+_EPS20 = 1.0e-20
 
 
 class DruckerConstants(NamedTuple):
@@ -796,12 +797,16 @@ def shell_update(
         else:
             # Radial scaling for plane stress
             ratio = yld / (sigdr + 1.0e-20)
-            sig_out[i] = np.array([s_xx * ratio, s_yy * ratio, s_xy * ratio])
+            sxx = s_xx * ratio
+            syy = s_yy * ratio
+            sig_out[i] = np.array([sxx, syy, s_xy * ratio])
             d_pla = (1.0 - ratio) * sigdr / (3.0 * q33)
             epsp_out[i] = p_old + max(0.0, d_pla)
 
             # Thickness thinning
-            d_eps_zz = -(nu / (1.0 - nu)) * (d_eps[0] + d_eps[1]) - d_pla
+            sig_y = yld
+            dezz_pl = - d_pla * 0.5 * (sxx + syy) / max(_EPS20, sig_y)
+            d_eps_zz = -(nu / (1.0 - nu)) * (d_eps[0] + d_eps[1]) + dezz_pl
             if thk is not None:
                 if hasattr(thk, "__setitem__"):
                     thk[i] *= (1.0 + d_eps_zz * thkly)

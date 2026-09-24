@@ -1215,8 +1215,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     st["eint"] += area * de_layers
 
     jit_post = accel_get("qeph_post")
-    if jit_post is not None:
-        fg, mg, dt_e = jit_post(thick, Nres, Mres, qres, st["amu"], st["cspd"], st["yld"], st["fmat"], vhg, dt, alive, plat, vqn, di, db, E, area, a_i, z1, corx, cory, x13, x24, y13, y24, mx13, mx23, mx34, my13, my23, my34, l13, l24, ll, lm)
+    if jit_post is not None and "E" in G:
+        fg, mg, dt_e = jit_post(thick, Nres, Mres, qres, st["amu"], st["cspd"], st["yld"], st["fmat"], vhg, dt, alive, plat, vqn, di, db, G["E"], G["area"], G["a_i"], G["z1"], G["corx"], G["cory"], G["x13"], G["x24"], G["y13"], G["y24"], G["mx13"], G["mx23"], G["mx34"], G["my13"], G["my23"], G["my34"], G["l13"], G["l24"], G["ll"], G["lm"], st["a11"], st["a12"], st["npt1"], st["gs"], st["hgstr"])
     else:
         fg, mg, dt_e = _post(G, thick, Nres, Mres, qres, st, vhg, dt, alive, plat, vqn, di, db)
 

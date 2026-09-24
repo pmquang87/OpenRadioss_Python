@@ -187,9 +187,9 @@ def _t18_forces(x, v, mass, sec_nodes, main_nodes, stfval, gap, stiff_dc, cand_p
             H[idx3, 3] = wa3[m3] + 0.25 * wc3[m3]
             pt[idx3] = pt3[m3]
 
-        e12 = xq2 - xq1
-        e14 = xq4 - xq1
-        nf = cross3(e12, e14)
+        d13 = xq3 - xq1
+        d24 = xq4 - xq2
+        nf = cross3(d13, d24)
         nf_norm = norm3(nf)
         n_face[q_idx] = np.where(
             nf_norm[:, None] > EM20,
@@ -315,6 +315,22 @@ class ContactType18:
 
         self.cand_p = np.zeros(len(self.sec_nodes), dtype=float)
 
+        if self.gap <= 0.0:
+            if len(self.main_faces) > 0 and hasattr(model, "x0") and model.x0 is not None and len(model.x0) > 0:
+                f = self.main_faces
+                max_idx = max(int(f[:, 0].max()), int(f[:, 1].max())) if len(f) > 0 else 0
+                if max_idx < len(model.x0):
+                    v0 = model.x0[f[:, 0]]
+                    v1 = model.x0[f[:, 1]]
+                    d01 = norm3(v1 - v0)
+                    d01_pos = d01[d01 > EM20]
+                    lc = float(d01_pos.mean()) if len(d01_pos) > 0 else 1.0
+                    self.gap = 0.02 * lc
+                else:
+                    self.gap = 0.02
+            else:
+                self.gap = 0.02
+
         log.info(f"Initialized /INTER/TYPE18/{self.id} '{self.title}' "
                  f"({len(self.sec_nodes)} secondary nodes vs {len(self.main_faces)} main segments)")
 
@@ -439,7 +455,7 @@ class ContactType18:
         if stifn is not None:
             stifn += K_node
 
-        loaded = K_node > 0.0
+        loaded = (K_node > 0.0) & (mass > 0.0)
         if np.any(loaded):
             dt_int = float(np.min(np.sqrt(2.0 * mass[loaded] / K_node[loaded])))
         else:

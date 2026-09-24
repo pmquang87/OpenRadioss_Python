@@ -45,7 +45,7 @@ class TimeHistory:
     def __init__(self, path: str, model: Model, log):
         self.path = path
         self.model = model
-        self._fh = open(path, "w")
+        self._fh = open(path, "w", encoding="utf-8")
         self._cols: List[str] = [
             "TIME", "IE", "KE", "HE", "CE", "EN", "DE", "EW", "ERR%",
             "MASS", "MOMX", "MOMY", "MOMZ"]
@@ -59,8 +59,11 @@ class TimeHistory:
             for oid in th.ids:
                 for var in th.variables:
                     if th.kind == "NODE":
-                        self._node_req.append(
-                            (f"N{oid}_{var}", model.node_index(oid), var))
+                        try:
+                            idx = model.node_index(oid)
+                        except (KeyError, ValueError):
+                            continue
+                        self._node_req.append((f"N{oid}_{var}", idx, var))
                     elif th.kind in ("SECT", "SECTIO", "SECTION"):
                         self._sect_req.append((f"S{oid}_{var}", oid, var))
                     elif th.kind == "PART":
@@ -98,7 +101,7 @@ class TimeHistory:
                 conn = group.state.get("mass_conn", group.conn)
                 if conn is None or conn.size == 0 or conn.shape[1] == 0:
                     continue
-                safe_conn = np.maximum(conn[mask], 0)
+                safe_conn = np.clip(conn[mask], 0, max(0, len(model.v) - 1))
                 ve = model.v[safe_conn]
                 v2 = np.einsum("nib,nib->n", ve, ve) / conn.shape[1]
                 mass = group.state.get("mass")
@@ -201,8 +204,8 @@ class TimeHistory:
                     elif var_upper in ("E", "IE", "ENERGY"):
                         return float(st["eint"][r]) if "eint" in st else 0.0
 
-        elif kind in ("SHEL", "SHELL", "BRIC", "BRICK", "SH3N", "TETR", "TETRA", "QUAD", "BEAM", "TRUS", "TRUSS", "SOLID"):
-            for attr in ("shells", "shells_qbat", "shells_qeph", "bricks", "bricks_heph", "tetras", "sh3n", "sh3n_dkt18", "bric20s", "shel16s", "tetra10s", "quads", "beams", "trusses"):
+        elif kind in ("SHEL", "SHELL", "BRIC", "BRICK", "SH3N", "TETR", "TETRA", "QUAD", "BEAM", "TRUS", "TRUSS", "SOLID", "TSHELL", "PENTA", "PENTA6", "WEDGE"):
+            for attr in ("shells", "shells_qbat", "shells_qeph", "bricks", "bricks_heph", "tshells", "tetras", "sh3n", "sh3n_dkt18", "bric20s", "penta6s", "shel16s", "tetra10s", "quads", "beams", "trusses"):
                 g = getattr(model, attr, None)
                 if g is not None and oid in g.ids:
                     row = np.where(g.ids == oid)[0]
@@ -218,6 +221,36 @@ class TimeHistory:
                         elif var_upper in ("VM", "VONM", "VON_MISES"):
                             from .anim_vtk import _von_mises
                             return float(_von_mises(attr, g)[r])
+                        elif var_upper in ("N", "FX", "FY", "FZ"):
+                            if "fres" in st:
+                                f = st["fres"]
+                                c = {"N": 0, "FX": 0, "FY": 1, "FZ": 2}[var_upper]
+                                if f.ndim > 1 and f.shape[1] > c:
+                                    return float(f[r, c])
+                                elif f.ndim == 1 and c == 0:
+                                    return float(f[r])
+                            return 0.0
+                        elif var_upper in ("MX", "MY", "MZ"):
+                            c = {"MX": 0, "MY": 1, "MZ": 2}[var_upper]
+                            if "mres" in st:
+                                m = st["mres"]
+                                if m.ndim > 1 and m.shape[1] > c:
+                                    return float(m[r, c])
+                            elif "fres" in st:
+                                f = st["fres"]
+                                if f.ndim > 1 and f.shape[1] > (3 + c):
+                                    return float(f[r, 3 + c])
+                            return 0.0
+                        elif var_upper in ("F", "FORCE"):
+                            if "fres" in st:
+                                f = st["fres"][r]
+                                return float(np.linalg.norm(f) if hasattr(f, "__len__") else f)
+                            return 0.0
+                        elif var_upper in ("M", "MOM", "MOMENT"):
+                            if "mres" in st:
+                                m = st["mres"][r]
+                                return float(np.linalg.norm(m) if hasattr(m, "__len__") else m)
+                            return 0.0
                         elif var_upper in _STRESS_MAP:
                             c_idx = _STRESS_MAP[var_upper]
                             sig = st.get("sig")
@@ -225,6 +258,10 @@ class TimeHistory:
                                 s_elem = sig[r]
                                 if s_elem.ndim > 1:
                                     s_elem = s_elem.mean(axis=0)
+                                if np.ndim(s_elem) == 0:
+                                    if var_upper in ("P", "PRESSURE"):
+                                        return float(-s_elem / 3.0)
+                                    return float(s_elem) if c_idx == 0 else 0.0
                                 if len(s_elem) == 3:
                                     shell_map = {0: 0, 1: 1, 3: 2}
                                     if c_idx in shell_map:
@@ -271,6 +308,8 @@ class TimeHistory:
                     row.append((fext_val + fint_val) / m if m > 0 else 0.0)
             elif var_upper.startswith("F"):
                 row.append(model.fint[idx, comp] if hasattr(model, "fint") and model.fint is not None else 0.0)
+            elif var_upper in ("X", "Y", "Z", "COORDX", "COORDY", "COORDZ"):
+                row.append(float(model.x[idx, comp]))
             else:
                 row.append(0.0)
         for _, pid, var in self._part_req:

@@ -1,14 +1,26 @@
 """
-LAW57 — Barlat-Lian (1989) 3-Parameter Anisotropic Plasticity (/MAT/LAW57, /MAT/BARLAT3).
+LAW57 — Barlat 1991 6-Parameter & Barlat-Lian 1989 3-Parameter Anisotropic Plasticity (/MAT/LAW57, /MAT/BARLAT3).
 
 Upstream Fortran reference:
+  - 3D solid constitutive kernel: engine/source/materials/mat/mat057/sigeps57.F
+  - 2D shell plane-stress constitutive kernel: engine/source/materials/mat/mat057/sigeps57c.F90
   - Starter reader & setup: starter/source/materials/mat/mat057/hm_read_mat57.F90
   - Newton-Raphson solver for parameter p: starter/source/materials/mat/mat057/calculp2.F90
-  - 2D shell plane-stress constitutive kernel: engine/source/materials/mat/mat057/sigeps57c.F90
   - CFG card definition: hm_cfg_files/config/CFG/radioss140/MAT/matl57_BARLAT3.cfg
 
 Theory
 ------
+Barlat 1991 anisotropic yield criterion for 3D solids:
+    Phi = |s1 - s2|^m + |s2 - s3|^m + |s3 - s1|^m = 2 * sigma_y^m
+    sigma_eq = (0.5 * Phi)**(1 / m)
+where s1, s2, s3 are the principal stresses of the transformed stress tensor:
+    s_xx = [c*(sigma_xx - sigma_yy) - b*(sigma_zz - sigma_xx)] / 3
+    s_yy = [a*(sigma_yy - sigma_zz) - c*(sigma_xx - sigma_yy)] / 3
+    s_zz = [b*(sigma_zz - sigma_xx) - a*(sigma_yy - sigma_zz)] / 3
+    s_yz = f * sigma_yz
+    s_zx = g * sigma_zx
+    s_xy = h * sigma_xy
+
 Barlat-Lian (1989) non-quadratic anisotropic yield function in plane stress:
     Phi = 0.5 * (a * |K1 + K2|^m + a * |K1 - K2|^m + c * |2*K2|^m)
     sigma_eq = Phi^(1/m)
@@ -77,6 +89,17 @@ class BarlatParams(NamedTuple):
     a: float
     h_bar: float
     p: float
+
+
+class Barlat1991Params(NamedTuple):
+    """Barlat 1991 yield criterion 6-parameter anisotropic constants."""
+    a: float = 1.0
+    b: float = 1.0
+    c: float = 1.0
+    f: float = 1.0
+    g: float = 1.0
+    h: float = 1.0
+    m: float = 6.0
 
 
 def calculp2(a: float, c: float, h_bar: float, p: float = 1.0,
@@ -181,10 +204,24 @@ class Law57Params:
     E_curve_x: Optional[np.ndarray] = None
     E_curve_y: Optional[np.ndarray] = None
     E_curve_s: Optional[np.ndarray] = None
+    a_barlat: float = 1.0
+    b_barlat: float = 1.0
+    c_barlat: float = 1.0
+    f_barlat: float = 1.0
+    g_barlat: float = 1.0
+    h_barlat: float = 1.0
 
     @property
     def G(self) -> float:
         return self.E / (2.0 * (1.0 + self.nu))
+
+    @property
+    def bulk(self) -> float:
+        return self.E / max(3.0 * (1.0 - 2.0 * self.nu), 1.0e-15)
+
+    @property
+    def K(self) -> float:
+        return self.bulk
 
     @property
     def A11(self) -> float:
@@ -197,6 +234,23 @@ class Law57Params:
     @property
     def barlat(self) -> BarlatParams:
         return barlat_params(self.r00, self.r45, self.r90, self.m)
+
+    @property
+    def barlat1991(self) -> Barlat1991Params:
+        if (self.a_barlat == 1.0 and self.b_barlat == 1.0 and self.c_barlat == 1.0 and
+            self.f_barlat == 1.0 and self.g_barlat == 1.0 and self.h_barlat == 1.0 and
+            (self.r00 != 1.0 or self.r45 != 1.0 or self.r90 != 1.0)):
+            a, b, c, f, g, h = calibrate_barlat1991(self.r00, self.r45, self.r90, self.m)
+            return Barlat1991Params(a=a, b=b, c=c, f=f, g=g, h=h, m=self.m)
+        return Barlat1991Params(
+            a=self.a_barlat,
+            b=self.b_barlat,
+            c=self.c_barlat,
+            f=self.f_barlat,
+            g=self.g_barlat,
+            h=self.h_barlat,
+            m=self.m,
+        )
 
     @property
     def rho(self) -> float:
@@ -270,6 +324,263 @@ def barlat_equivalent_stress(
     if is_1d:
         return float(seq[0])
     return seq
+
+
+# ============================================================================
+# Barlat 1991 3D Anisotropic Yield Surface & Normal Gradient
+# ============================================================================
+
+def barlat1991_yield_function(
+    sig: np.ndarray,
+    a: float = 1.0,
+    b: float = 1.0,
+    c: float = 1.0,
+    f: float = 1.0,
+    g: float = 1.0,
+    h: float = 1.0,
+    m: float = 6.0,
+) -> Tuple[Union[float, np.ndarray], Union[float, np.ndarray]]:
+    """Evaluate Barlat 1991 3D yield function value and equivalent stress.
+
+    Upstream Fortran reference:
+      C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\mat\\mat057\\sigeps57.F
+
+    Theory
+    ------
+    Yield surface:
+        Phi = |s1 - s2|^m + |s2 - s3|^m + |s3 - s1|^m = 2 * sigma_y^m
+        sigma_eq = (0.5 * Phi)**(1 / m)
+
+    where s1, s2, s3 are the principal stresses of the transformed stress tensor s:
+        s_xx = [c*(sigma_xx - sigma_yy) - b*(sigma_zz - sigma_xx)] / 3
+        s_yy = [a*(sigma_yy - sigma_zz) - c*(sigma_xx - sigma_yy)] / 3
+        s_zz = [b*(sigma_zz - sigma_xx) - a*(sigma_yy - sigma_zz)] / 3
+        s_yz = f * sigma_yz
+        s_zx = g * sigma_zx
+        s_xy = h * sigma_xy
+
+    Returns
+    -------
+    phi : yield function value |s1-s2|^m + |s2-s3|^m + |s3-s1|^m
+    seq : Barlat equivalent stress (0.5 * phi)**(1 / m)
+    """
+    sig_arr = np.asarray(sig, dtype=float)
+    is_1d = (sig_arr.ndim == 1)
+    if is_1d:
+        sig_arr = sig_arr[None, :]
+
+    n = sig_arr.shape[0]
+    phi_res = np.zeros(n, dtype=float)
+    seq_res = np.zeros(n, dtype=float)
+
+    for i in range(n):
+        sxx = ((c + b) * sig_arr[i, 0] - c * sig_arr[i, 1] - b * sig_arr[i, 2]) / 3.0
+        syy = (-c * sig_arr[i, 0] + (a + c) * sig_arr[i, 1] - a * sig_arr[i, 2]) / 3.0
+        szz = (-b * sig_arr[i, 0] - a * sig_arr[i, 1] + (a + b) * sig_arr[i, 2]) / 3.0
+        sxy = h * sig_arr[i, 3] if sig_arr.shape[1] > 3 else 0.0
+        syz = f * sig_arr[i, 4] if sig_arr.shape[1] > 4 else 0.0
+        szx = g * sig_arr[i, 5] if sig_arr.shape[1] > 5 else 0.0
+
+        S = np.array([
+            [sxx, sxy, szx],
+            [sxy, syy, syz],
+            [szx, syz, szz]
+        ], dtype=float)
+
+        vals = np.linalg.eigvalsh(S)
+        s1, s2, s3 = vals[0], vals[1], vals[2]
+
+        d12 = abs(s1 - s2)
+        d23 = abs(s2 - s3)
+        d31 = abs(s3 - s1)
+
+        phi = d12**m + d23**m + d31**m
+        phi_res[i] = phi
+        if phi > 0.0:
+            seq_res[i] = (0.5 * phi) ** (1.0 / m)
+
+    if is_1d:
+        return float(phi_res[0]), float(seq_res[0])
+    return phi_res, seq_res
+
+
+def barlat1991_equivalent_stress(
+    sig: np.ndarray,
+    a: float = 1.0,
+    b: float = 1.0,
+    c: float = 1.0,
+    f: float = 1.0,
+    g: float = 1.0,
+    h: float = 1.0,
+    m: float = 6.0,
+) -> Union[float, np.ndarray]:
+    """Compute Barlat 1991 equivalent stress (0.5 * Phi)**(1 / m).
+
+    Upstream Fortran reference: sigeps57.F
+    """
+    _, seq = barlat1991_yield_function(sig, a, b, c, f, g, h, m)
+    return seq
+
+
+def barlat1991_gradient(
+    sig: np.ndarray,
+    a: float = 1.0,
+    b: float = 1.0,
+    c: float = 1.0,
+    f: float = 1.0,
+    g: float = 1.0,
+    h: float = 1.0,
+    m: float = 6.0,
+) -> Tuple[Union[float, np.ndarray], np.ndarray]:
+    """Compute Barlat 1991 equivalent stress and its gradient d(sigma_eq)/d(sigma).
+
+    Upstream Fortran reference:
+      C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\mat\\mat057\\sigeps57.F
+
+    Returns
+    -------
+    seq  : equivalent stress (float if 1D, (n,) if 2D)
+    grad : normal vector to yield surface in stress space (shape (6,) or (n, 6)).
+           Voigt order: [xx, yy, zz, xy, yz, zx].
+    """
+    sig_arr = np.asarray(sig, dtype=float)
+    is_1d = (sig_arr.ndim == 1)
+    if is_1d:
+        sig_arr = sig_arr[None, :]
+
+    n = sig_arr.shape[0]
+    seq_res = np.zeros(n, dtype=float)
+    grad_res = np.zeros((n, 6), dtype=float)
+
+    for i in range(n):
+        sxx = ((c + b) * sig_arr[i, 0] - c * sig_arr[i, 1] - b * sig_arr[i, 2]) / 3.0
+        syy = (-c * sig_arr[i, 0] + (a + c) * sig_arr[i, 1] - a * sig_arr[i, 2]) / 3.0
+        szz = (-b * sig_arr[i, 0] - a * sig_arr[i, 1] + (a + b) * sig_arr[i, 2]) / 3.0
+        sxy = h * sig_arr[i, 3] if sig_arr.shape[1] > 3 else 0.0
+        syz = f * sig_arr[i, 4] if sig_arr.shape[1] > 4 else 0.0
+        szx = g * sig_arr[i, 5] if sig_arr.shape[1] > 5 else 0.0
+
+        S = np.array([
+            [sxx, sxy, szx],
+            [sxy, syy, syz],
+            [szx, syz, szz]
+        ], dtype=float)
+
+        vals, vecs = np.linalg.eigh(S)
+        s1, s2, s3 = vals[0], vals[1], vals[2]
+
+        d12 = s1 - s2
+        d23 = s2 - s3
+        d31 = s3 - s1
+
+        ad12 = abs(d12)
+        ad23 = abs(d23)
+        ad31 = abs(d31)
+
+        phi = ad12**m + ad23**m + ad31**m
+        if phi <= 0.0:
+            continue
+
+        seq = (0.5 * phi) ** (1.0 / m)
+        seq_res[i] = seq
+
+        if seq < _EM20:
+            continue
+
+        psi1 = m * (ad12**(m - 1.0)) * math.copysign(1.0, d12) if ad12 > _EM30 else 0.0
+        psi2 = m * (ad23**(m - 1.0)) * math.copysign(1.0, d23) if ad23 > _EM30 else 0.0
+        psi3 = m * (ad31**(m - 1.0)) * math.copysign(1.0, d31) if ad31 > _EM30 else 0.0
+
+        dphi_ds1 = psi1 - psi3
+        dphi_ds2 = -psi1 + psi2
+        dphi_ds3 = -psi2 + psi3
+
+        M = (dphi_ds1 * np.outer(vecs[:, 0], vecs[:, 0]) +
+             dphi_ds2 * np.outer(vecs[:, 1], vecs[:, 1]) +
+             dphi_ds3 * np.outer(vecs[:, 2], vecs[:, 2]))
+
+        fac = (seq**(1.0 - m)) / (2.0 * m)
+
+        grad_res[i, 0] = fac * (((c + b) * M[0, 0] - c * M[1, 1] - b * M[2, 2]) / 3.0)
+        grad_res[i, 1] = fac * ((-c * M[0, 0] + (a + c) * M[1, 1] - a * M[2, 2]) / 3.0)
+        grad_res[i, 2] = fac * ((-b * M[0, 0] - a * M[1, 1] + (a + b) * M[2, 2]) / 3.0)
+        grad_res[i, 3] = fac * (2.0 * h * M[0, 1])
+        grad_res[i, 4] = fac * (2.0 * f * M[1, 2])
+        grad_res[i, 5] = fac * (2.0 * g * M[2, 0])
+
+    if is_1d:
+        return float(seq_res[0]), grad_res[0]
+    return seq_res, grad_res
+
+
+def barlat1991_r_values(
+    a: float = 1.0,
+    b: float = 1.0,
+    c: float = 1.0,
+    f: float = 1.0,
+    g: float = 1.0,
+    h: float = 1.0,
+    m: float = 6.0,
+) -> Tuple[float, float, float]:
+    """Compute Lankford anisotropy parameters (r0, r45, r90) from Barlat 1991 constants.
+
+    Theory:
+        Uniaxial tension at 0 deg:  sig = [sig, 0, 0, 0, 0, 0]
+            r0 = deps_yy^p / deps_zz^p = N_yy / N_zz
+        Uniaxial tension at 90 deg: sig = [0, sig, 0, 0, 0, 0]
+            r90 = deps_xx^p / deps_zz^p = N_xx / N_zz
+        Uniaxial tension at 45 deg: sig = [sig/2, sig/2, 0, sig/2, 0, 0]
+            r45 = (0.5*(N_xx + N_yy) - 0.5*N_xy) / N_zz
+    """
+    ref_s = 100.0
+    _, g0 = barlat1991_gradient(np.array([ref_s, 0.0, 0.0, 0.0, 0.0, 0.0]), a, b, c, f, g, h, m)
+    r0 = float(g0[1] / g0[2]) if abs(g0[2]) > _EM30 else 1.0
+
+    _, g90 = barlat1991_gradient(np.array([0.0, ref_s, 0.0, 0.0, 0.0, 0.0]), a, b, c, f, g, h, m)
+    r90 = float(g90[0] / g90[2]) if abs(g90[2]) > _EM30 else 1.0
+
+    _, g45 = barlat1991_gradient(np.array([0.5 * ref_s, 0.5 * ref_s, 0.0, 0.5 * ref_s, 0.0, 0.0]), a, b, c, f, g, h, m)
+    eps_w = 0.5 * (g45[0] + g45[1]) - 0.5 * g45[3]
+    r45 = float(eps_w / g45[2]) if abs(g45[2]) > _EM30 else 1.0
+
+    return r0, r45, r90
+
+
+def calibrate_barlat1991(
+    r00: float = 1.0,
+    r45: float = 1.0,
+    r90: float = 1.0,
+    m: float = 6.0,
+) -> Tuple[float, float, float, float, float, float]:
+    """Calibrate Barlat 1991 constants (a, b, c, f, g, h) from Lankford parameters (r00, r45, r90).
+
+    Returns (a, b, c, f, g, h) with c=1.0, f=1.0, g=1.0.
+    """
+    r0_tgt = float(r00) if float(r00) > 0.0 else 1.0
+    r45_tgt = float(r45) if float(r45) > 0.0 else 1.0
+    r90_tgt = float(r90) if float(r90) > 0.0 else 1.0
+    m_val = float(m) if float(m) > 0.0 else 6.0
+
+    if abs(r0_tgt - 1.0) < 1.0e-6 and abs(r45_tgt - 1.0) < 1.0e-6 and abs(r90_tgt - 1.0) < 1.0e-6:
+        return 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+
+    try:
+        from scipy.optimize import least_squares
+
+        def res(x: Sequence[float]) -> List[float]:
+            a_val, b_val, h_val = x
+            r0, r45, r90 = barlat1991_r_values(a_val, b_val, 1.0, 1.0, 1.0, h_val, m_val)
+            return [r0 - r0_tgt, r45 - r45_tgt, r90 - r90_tgt]
+
+        sol = least_squares(res, [1.0, 1.0, 1.0], bounds=([0.05, 0.05, 0.05], [10.0, 10.0, 10.0]))
+        a_fit, b_fit, h_fit = sol.x
+        return float(a_fit), float(b_fit), 1.0, 1.0, 1.0, float(h_fit)
+    except Exception:
+        # Fallback approximation based on Hill48 equivalence
+        h_fit = math.sqrt(max(0.01, (1.0 + 2.0 * r45_tgt) / (1.0 + 2.0 * r0_tgt)))
+        b_fit = math.sqrt(max(0.01, 1.0 / (1.0 + r0_tgt)))
+        a_fit = math.sqrt(max(0.01, 1.0 / (1.0 + r90_tgt)))
+        return float(a_fit), float(b_fit), 1.0, 1.0, 1.0, float(h_fit)
 
 
 # ============================================================================
@@ -389,22 +700,343 @@ def sound_speed_shell_law57(params: Any, rho0: Optional[float] = None,
 
 
 sound_speed_shell = sound_speed_shell_law57
-sound_speed = sound_speed_shell_law57
+
+
+def sound_speed_solid_law57(params: Any, rho0: Optional[float] = None,
+                            extra: Optional[Dict[str, Any]] = None) -> float:
+    """Return 3D solid acoustic longitudinal wave speed: sqrt((K + 4/3*G) / rho0).
+
+    Upstream Fortran reference: sigeps57.F
+    """
+    rho_val = float(rho0) if rho0 is not None else getattr(params, "rho0", getattr(params, "rho", getattr(params, "density", None)))
+    p = _get_params(params)
+    if rho_val is None:
+        rho_val = p.rho0
+    if extra is not None and "rho" in extra and extra["rho"] is not None:
+        try:
+            r_ex = float(np.asarray(extra["rho"]).flatten()[0])
+            if r_ex > 0.0:
+                rho_val = r_ex
+        except Exception:
+            pass
+    rho_val = max(rho_val, _EM20)
+    k = p.bulk
+    g = p.G
+    return float(math.sqrt(max(0.0, (k + (4.0 / 3.0) * g) / rho_val)))
+
+
+def sound_speed(params: Any, rho0: Optional[float] = None,
+                extra: Optional[Dict[str, Any]] = None,
+                is_shell: bool = False, **kwargs: Any) -> float:
+    """Sound speed dispatcher for LAW57."""
+    if is_shell:
+        return sound_speed_shell_law57(params, rho0=rho0, extra=extra)
+    return sound_speed_solid_law57(params, rho0=rho0, extra=extra)
+
+
+class SolidUpdateResult(tuple):
+    """Result tuple for solid_update containing (sig, epsp, c_sound)."""
+    def __new__(cls, sig: Any, epsp: Any, c_sound: Any):
+        return super().__new__(cls, (sig, epsp, c_sound))
+
+    @property
+    def sig(self) -> Any:
+        return self[0]
+
+    @property
+    def epsp(self) -> Any:
+        return self[1]
+
+    @property
+    def pla(self) -> Any:
+        return self[1]
+
+    @property
+    def c_sound(self) -> Any:
+        return self[2]
+
+
+def solid_update(
+    mat: Any,
+    sig: np.ndarray,
+    deps: np.ndarray,
+    epsp: Optional[Union[float, np.ndarray]] = None,
+    dt: float = 0.0,
+    extra: Optional[Dict[str, Any]] = None,
+    return_sound_speed: bool = True,
+    **kwargs: Any,
+) -> Union[SolidUpdateResult, Tuple[np.ndarray, np.ndarray, float], Tuple[np.ndarray, np.ndarray]]:
+    """3D solid constitutive update for Barlat 1991 anisotropic plasticity with radial return.
+
+    Upstream Fortran reference:
+      C:\\OpenRadioss\\source\\OpenRadioss-latest-20260520\\engine\\source\\materials\\mat\\mat057\\sigeps57.F
+
+    Yield surface:
+        Phi = |s1 - s2|^m + |s2 - s3|^m + |s3 - s1|^m = 2 * sigma_y^m
+        sigma_eq = (0.5 * Phi)**(1 / m)
+    Radial return:
+        Newton-Raphson iteration on plastic multiplier dlam.
+        Isochoric plastic flow: tr(deps_p) = 0 => volumetric response is purely elastic.
+    """
+    p = _get_params(mat)
+
+    sig_arr = np.asarray(sig, dtype=float).copy()
+    deps_arr = np.asarray(deps, dtype=float).copy()
+    is_1d = (sig_arr.ndim == 1)
+    if is_1d:
+        sig_arr = sig_arr[None, :]
+        deps_arr = deps_arr[None, :]
+
+    n = sig_arr.shape[0]
+
+    # Plastic strain extraction
+    if extra is not None and "pla57" in extra and extra["pla57"] is not None:
+        pla = np.asarray(extra["pla57"], dtype=float).copy().flatten()
+    elif extra is not None and "pla" in extra and extra["pla"] is not None:
+        pla = np.asarray(extra["pla"], dtype=float).copy().flatten()
+    elif extra is not None and "epsp" in extra and extra["epsp"] is not None:
+        pla = np.asarray(extra["epsp"], dtype=float).copy().flatten()
+    elif epsp is not None:
+        pla = np.asarray(epsp, dtype=float).copy().flatten()
+    else:
+        pla = np.zeros(n, dtype=float)
+
+    if len(pla) == 1 and n > 1:
+        pla = np.full(n, float(pla[0]), dtype=float)
+    elif len(pla) == 0:
+        pla = np.zeros(n, dtype=float)
+
+    # Elastic trial step
+    g = p.G
+    k = p.bulk
+    lam = k - (2.0 / 3.0) * g
+
+    # Volumetric strain trace and trial stress
+    tr_deps = deps_arr[:, 0] + deps_arr[:, 1] + deps_arr[:, 2]
+
+    sig_tr = np.zeros_like(sig_arr)
+    sig_tr[:, 0] = sig_arr[:, 0] + lam * tr_deps + 2.0 * g * deps_arr[:, 0]
+    sig_tr[:, 1] = sig_arr[:, 1] + lam * tr_deps + 2.0 * g * deps_arr[:, 1]
+    sig_tr[:, 2] = sig_arr[:, 2] + lam * tr_deps + 2.0 * g * deps_arr[:, 2]
+    sig_tr[:, 3] = sig_arr[:, 3] + g * deps_arr[:, 3]
+    if sig_arr.shape[1] > 4:
+        sig_tr[:, 4] = sig_arr[:, 4] + g * deps_arr[:, 4]
+    if sig_arr.shape[1] > 5:
+        sig_tr[:, 5] = sig_arr[:, 5] + g * deps_arr[:, 5]
+
+    # Anisotropic parameters
+    bp91 = p.barlat1991
+    a_val = float(kwargs.get("a_barlat", kwargs.get("a", bp91.a)))
+    b_val = float(kwargs.get("b_barlat", kwargs.get("b", bp91.b)))
+    c_val = float(kwargs.get("c_barlat", kwargs.get("c", bp91.c)))
+    f_val = float(kwargs.get("f_barlat", kwargs.get("f", bp91.f)))
+    g_val = float(kwargs.get("g_barlat", kwargs.get("g", bp91.g)))
+    h_val = float(kwargs.get("h_barlat", kwargs.get("h", bp91.h)))
+    m_val = float(kwargs.get("m", bp91.m))
+
+    # Determine strain rate for hardening curves
+    epsd = np.zeros(n, dtype=float)
+    if dt > 0.0:
+        tr3 = tr_deps / 3.0
+        exx = deps_arr[:, 0] - tr3
+        eyy = deps_arr[:, 1] - tr3
+        ezz = deps_arr[:, 2] - tr3
+        exy = 0.5 * deps_arr[:, 3]
+        eyz = 0.5 * deps_arr[:, 4] if deps_arr.shape[1] > 4 else 0.0
+        ezx = 0.5 * deps_arr[:, 5] if deps_arr.shape[1] > 5 else 0.0
+        ee = exx**2 + eyy**2 + ezz**2 + 2.0 * (exy**2 + eyz**2 + ezx**2)
+        epsd = np.sqrt(np.maximum(0.0, (2.0 / 3.0) * ee)) / max(dt, _EM20)
+
+    yld, _, _ = _eval_yield_stress(p, pla, epsd)
+
+    # Newton-Raphson return mapping
+    sig_out = np.zeros_like(sig_tr)
+    epsp_out = pla.copy()
+    dpla = np.zeros(n, dtype=float)
+
+    max_iter = 30
+    tol = 1.0e-7
+
+    for i in range(n):
+        s_tr_i = sig_tr[i]
+        seq_tr, _ = barlat1991_gradient(s_tr_i, a_val, b_val, c_val, f_val, g_val, h_val, m_val)
+        sy_i = yld[i]
+
+        if seq_tr <= sy_i:
+            sig_out[i] = s_tr_i
+            continue
+
+        dlam = 0.0
+        s_cur = s_tr_i.copy()
+
+        for it in range(max_iter):
+            seq_i, N_i = barlat1991_gradient(s_cur, a_val, b_val, c_val, f_val, g_val, h_val, m_val)
+            sy_cur, h_cur, _ = _eval_yield_stress(p, np.array([epsp_out[i] + dlam]), np.array([epsd[i]]))
+            res = seq_i - sy_cur[0]
+
+            if abs(res) < tol * max(sy_i, 1.0) or abs(res) < 1.0e-9:
+                break
+
+            N_star = np.array([N_i[0], N_i[1], N_i[2], 0.5 * N_i[3], 0.5 * N_i[4], 0.5 * N_i[5]])
+            denom = 2.0 * g * float(np.dot(N_i, N_star)) + max(float(h_cur[0]), 0.0)
+            ddlam = res / max(denom, 1.0e-12)
+            dlam += ddlam
+            s_cur -= 2.0 * g * ddlam * N_star
+
+        sig_out[i] = s_cur
+        dpla[i] = dlam
+        epsp_out[i] += dlam
+
+    # Sound speed calculation
+    c_sound_val = sound_speed_solid_law57(p, extra=extra)
+    c_sound = np.full(n, c_sound_val, dtype=float)
+
+    # State update in extra
+    if extra is not None:
+        for k in ("pla57", "pla", "epsp"):
+            if k in extra and isinstance(extra[k], np.ndarray):
+                extra[k].flat = epsp_out
+            elif k in extra:
+                extra[k] = epsp_out[0] if is_1d else epsp_out
+        if not any(k in extra for k in ("pla57", "pla", "epsp")):
+            extra["pla57"] = epsp_out[0] if is_1d else epsp_out.copy()
+
+        for k in ("sig", "sig57"):
+            if k in extra and isinstance(extra[k], np.ndarray):
+                extra[k][:] = sig_out[0] if (extra[k].ndim == 1 and is_1d) else sig_out
+            elif k in extra:
+                extra[k] = sig_out[0] if is_1d else sig_out
+
+    if is_1d:
+        sig_res = sig_out[0]
+        epsp_res = float(epsp_out[0])
+        c_res = float(c_sound[0])
+    else:
+        sig_res = sig_out
+        epsp_res = epsp_out
+        c_res = c_sound
+
+    if not return_sound_speed:
+        return sig_res, epsp_res
+    return SolidUpdateResult(sig_res, epsp_res, c_res)
 
 
 def solid_update_law57(*args: Any, **kwargs: Any) -> Any:
-    """Explicitly reject 3D solid elements: LAW57 is 2D shell plane-stress only."""
-    raise NotImplementedError(
-        "LAW57 (/MAT/LAW57, /MAT/BARLAT3) is a 2D plane-stress anisotropic model "
-        "implemented for shell elements only. 3D solid elements are not supported."
-    )
+    """Solid update entry point with backward compatibility for shell-only materials."""
+    if len(args) == 0:
+        raise NotImplementedError(
+            "LAW57 (/MAT/LAW57, /MAT/BARLAT3) is a 2D plane-stress anisotropic model "
+            "implemented for shell elements only. 3D solid elements are not supported."
+        )
+    if len(args) >= 1:
+        mat = args[0]
+        if not getattr(mat, "is_3d", False) and not (isinstance(mat, dict) and mat.get("is_3d")):
+            raise NotImplementedError(
+                "LAW57 (/MAT/LAW57, /MAT/BARLAT3) is a 2D plane-stress anisotropic model "
+                "implemented for shell elements only. 3D solid elements are not supported."
+            )
+    return solid_update(*args, **kwargs)
 
 
-solid_update = solid_update_law57
+solid_update_3d = solid_update
+solid_update_barlat1991 = solid_update
+solid_update_barlat = solid_update
+
+
+def solid_tangent(
+    mat: Any = None,
+    sig: Optional[np.ndarray] = None,
+    deps: Optional[np.ndarray] = None,
+    epsp: Optional[Union[float, np.ndarray]] = None,
+    epsp_incr: Optional[Union[float, np.ndarray]] = None,
+    dt: float = 0.0,
+    extra: Optional[Dict[str, Any]] = None,
+    *args: Any,
+    symmetric: bool = False,
+    h: float = 1.0e-7,
+    **kwargs: Any,
+) -> np.ndarray:
+    """3D algorithmic consistent tangent tensor for LAW57 Barlat 1991 (6x6).
+
+    When deps is given, computes the algorithmic tangent via central finite differences:
+        D_ij = (sigma_i(deps + h*e_j) - sigma_i(deps - h*e_j)) / (2*h)
+    Otherwise returns the isotropic elastic stiffness matrix C_el (6x6).
+    """
+    p = _get_params(mat)
+
+    if deps is not None:
+        deps_arr = np.asarray(deps, dtype=float).copy()
+        is_1d = (deps_arr.ndim == 1)
+        if is_1d:
+            deps_arr = deps_arr[None, :]
+        n = deps_arr.shape[0]
+
+        sig_arr = np.asarray(sig, dtype=float).copy() if sig is not None else np.zeros((n, 6), dtype=float)
+        if sig_arr.ndim == 1:
+            sig_arr = sig_arr[None, :]
+        if sig_arr.shape[0] == 1 and n > 1:
+            sig_arr = np.repeat(sig_arr, n, axis=0)
+
+        epsp_arr = np.asarray(epsp, dtype=float).copy() if epsp is not None else np.zeros(n, dtype=float)
+        if epsp_arr.ndim == 0:
+            epsp_arr = np.full(n, float(epsp_arr))
+
+        D = np.zeros((n, 6, 6), dtype=float)
+        h_step = float(h)
+
+        for j in range(6):
+            ej = np.zeros_like(deps_arr)
+            ej[:, j] = h_step
+
+            ext_p = _copy_extra(extra)
+            ext_m = _copy_extra(extra)
+
+            res_p = solid_update(p, sig_arr.copy(), deps_arr + ej, epsp=epsp_arr.copy(), dt=dt, extra=ext_p, return_sound_speed=False)
+            res_m = solid_update(p, sig_arr.copy(), deps_arr - ej, epsp=epsp_arr.copy(), dt=dt, extra=ext_m, return_sound_speed=False)
+
+            sp = res_p[0] if isinstance(res_p, tuple) else res_p
+            sm = res_m[0] if isinstance(res_m, tuple) else res_m
+
+            if sp.ndim == 1:
+                sp = sp[None, :]
+                sm = sm[None, :]
+
+            D[:, :, j] = (sp[:, :6] - sm[:, :6]) / (2.0 * h_step)
+
+        if symmetric:
+            D = 0.5 * (D + np.swapaxes(D, -1, -2))
+
+        return D[0] if is_1d else D
+
+    # Elastic 6x6 tangent
+    k = p.bulk
+    g = p.G
+    lam = k - (2.0 / 3.0) * g
+
+    c_mat = np.array([
+        [lam + 2.0 * g, lam, lam, 0.0, 0.0, 0.0],
+        [lam, lam + 2.0 * g, lam, 0.0, 0.0, 0.0],
+        [lam, lam, lam + 2.0 * g, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, g, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 0.0, g, 0.0],
+        [0.0, 0.0, 0.0, 0.0, 0.0, g],
+    ], dtype=float)
+
+    if sig is not None and np.ndim(sig) > 1:
+        n = np.shape(sig)[0]
+        return np.broadcast_to(c_mat, (n, 6, 6)).copy()
+    return c_mat
+
+
+consistent_solid_tangent = solid_tangent
+solid_tangent_law57 = solid_tangent
+tangent_law57_solid = solid_tangent
+tangent = solid_tangent
+
 
 LAW_DISPATCH_METADATA = {
     "plane_stress": True,
-    "solid": False,
+    "solid": True,
     "shell": True,
 }
 
@@ -1396,6 +2028,13 @@ def build_law57(rec: Any = None, **kwargs: Any) -> Law57Params:
     g5 = _get(["G5", "g5"], 0.0)
     shf = _get(["shf", "SHF"], 5.0 / 6.0)
 
+    a_barlat = _get(["a_barlat", "A_BARLAT", "a_bar", "a91", "a"], 1.0)
+    b_barlat = _get(["b_barlat", "B_BARLAT", "b_bar", "b91", "b"], 1.0)
+    c_barlat = _get(["c_barlat", "C_BARLAT", "c_bar", "c91", "c"], 1.0)
+    f_barlat = _get(["f_barlat", "F_BARLAT", "f_bar", "f91", "f"], 1.0)
+    g_barlat = _get(["g_barlat", "G_BARLAT", "g_bar", "g91", "g"], 1.0)
+    h_barlat = _get(["h_barlat", "H_BARLAT", "h_bar", "h91", "h"], 1.0)
+
     # Process curves
     funct_ids: List[int] = []
     yfacs: List[float] = []
@@ -1496,6 +2135,12 @@ def build_law57(rec: Any = None, **kwargs: Any) -> Law57Params:
         E_curve_x=e_cx,
         E_curve_y=e_cy,
         E_curve_s=e_cs,
+        a_barlat=a_barlat,
+        b_barlat=b_barlat,
+        c_barlat=c_barlat,
+        f_barlat=f_barlat,
+        g_barlat=g_barlat,
+        h_barlat=h_barlat,
     )
     return params
 

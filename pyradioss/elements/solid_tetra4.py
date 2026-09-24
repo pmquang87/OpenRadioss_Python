@@ -202,7 +202,7 @@ def _exact_dt_factor(dndx: np.ndarray, vol: np.ndarray, lc: np.ndarray,
         eig = np.linalg.eigvals(C[None, :, :] @ BBt[sl])
         w2max = (4.0 / rho0_val) * eig.real.max(axis=1)   # m = rho*V/4
         dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
-        fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
+        fac[sl] = np.minimum(dt_exact / np.maximum(lc[sl] / c, EM20), 1.0)
     return fac
 
 
@@ -586,7 +586,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             else:
                 K_sl = getattr(mat, "K", 0.0)
                 G_sl = getattr(mat, "G", 0.0)
-                c[sl] = np.sqrt((K_sl + 4.0 * G_sl / 3.0) / rho0_sl)
+                rho_sl = rho[sl] if (rho is not None) else rho0_sl
+                c[sl] = np.sqrt(np.maximum(K_sl + 4.0 * G_sl / 3.0, 0.0) / np.maximum(rho_sl, EM20))
         qa[sl] = getattr(prop, "params", {}).get("qa", 1.1) if hasattr(prop, "params") else getattr(prop, "qa", 1.1)
         qb[sl] = getattr(prop, "params", {}).get("qb", 0.05) if hasattr(prop, "params") else getattr(prop, "qb", 0.05)
     compressing = (trD < 0.0) & alive

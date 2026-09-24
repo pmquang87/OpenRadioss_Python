@@ -23,14 +23,21 @@ from ..model.model import ElementGroup, Model
 # element type name -> (attr on Model, nodes per element, required prop type)
 _ETYPES = {
     "BRICK": ("bricks", 8, 14),
+    "PENTA6": ("penta6s", 6, 14),
     "QUAD": ("quads", 4, 14),
+    "QUAD4": ("quads_full", 4, 14),
     "TETRA4": ("tetras", 4, 14),
     "TETRA10": ("tetra10s", 10, 14),
+    "PYRA": ("pyra5s", 5, 14),
+    "PYRA5": ("pyra5s", 5, 14),
+    "TRIA": ("trias", 3, 14),
+    "TRIA3": ("trias", 3, 14),
     "SHELL": ("shells", 4, 1),
     "SH3N": ("sh3n", 3, 1),
     "TRUSS": ("trusses", 2, 2),
     "SPRING": ("springs", 2, 4),
     "BEAM": ("beams", 3, 3),
+    "TSHELL": ("tshells", 8, 20),
     "SHEL16": ("shel16s", 16, 20),
     "BRIC20": ("bric20s", 20, 23),
 }
@@ -175,19 +182,21 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
         part_ids = np.array([t[1] for t in raw], dtype=np.int64)
 
         # user node ids -> indices (USR2SYS)
-        conn = np.zeros((len(raw), nnode), dtype=np.int64)
-        ok = True
-        for k, (eid, pid, nodes) in enumerate(raw):
+        valid_raw = []
+        valid_conn = []
+        max_nodes = max(len(t[2]) for t in raw) if (etype == "SPRING" and raw) else nnode
+        for eid, pid, nodes in raw:
             try:
                 c_nodes = []
                 for j, n in enumerate(nodes):
                     n_int = int(n)
-                    if n_int == 0:
+                    if n_int == 0 or n_int == -1:
                         is_optional = (
                             (etype == "TETRA10" and j >= 4) or
                             (etype == "BRIC20" and j >= 8) or
                             (etype == "SHEL16" and j >= 8) or
-                            (etype == "BEAM" and j >= 2)
+                            (etype == "BEAM" and j >= 2) or
+                            (etype == "SPRING" and j >= 2)
                         )
                         if is_optional:
                             c_nodes.append(-1)
@@ -197,13 +206,21 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
                             raise KeyError(0)
                     else:
                         c_nodes.append(model._id2idx[n_int])
-                conn[k] = c_nodes
+                if len(c_nodes) < max_nodes:
+                    c_nodes.extend([-1] * (max_nodes - len(c_nodes)))
+                valid_conn.append(c_nodes)
+                valid_raw.append((eid, pid, nodes))
             except KeyError as exc:
                 log.error(f"/{etype} {eid}: unknown node id {exc}",
                           "ELEMENT CHECK")
-                ok = False
-        if not ok:
+        if not valid_raw:
             continue
+
+        raw = valid_raw
+        model.raw_elems[etype] = raw
+        ids = np.array([t[0] for t in raw], dtype=np.int64)
+        part_ids = np.array([t[1] for t in raw], dtype=np.int64)
+        conn = np.array(valid_conn, dtype=np.int64)
 
         # part index + per-part slices with resolved (mat, prop)
         part_idx = np.zeros(len(raw), dtype=np.int64)
@@ -251,8 +268,13 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
         setattr(model, attr, group)
 
     _dispatch_solid_formulations(model, log)
+    _dispatch_tetra_formulations(model, log)
+    _dispatch_penta_formulations(model, log)
+    _dispatch_quad_formulations(model, log)
     _dispatch_shell_formulations(model, log)
     _dispatch_sh3n_formulations(model, log)
+    _dispatch_beam_formulations(model, log)
+
 
 
 def _subset_element_group(src: ElementGroup, mask: np.ndarray) -> ElementGroup:
@@ -286,7 +308,10 @@ def _dispatch_solid_formulations(model: Model, log: MessageLog) -> None:
     masks: Dict[str, np.ndarray] = {}
     for sl, mat, prop in src.state["slices"]:
         isolid = int(prop.params.get("isolid", 0) or 0)
+        ptype = getattr(prop, "type", 14)
         gname = SOLID_ISOLID_GROUPS.get(isolid)
+        if gname is None and ptype in (20, 21, 22):
+            gname = "tshells"
         if gname is not None:
             masks.setdefault(gname, np.zeros(src.n, dtype=bool))[sl] = True
     if not masks:
@@ -295,10 +320,87 @@ def _dispatch_solid_formulations(model: Model, log: MessageLog) -> None:
     for gname, mask in masks.items():
         keep &= ~mask
         setattr(model, gname, _subset_element_group(src, mask))
+        kname = gname.split('_', 1)[1].upper() if '_' in gname else gname.upper()
         log.info(f"     {int(mask.sum())} /BRICK ELEMENT(S) ROUTED TO THE "
-                 f"{gname.split('_', 1)[1].upper()} FORMULATION KERNEL "
+                 f"{kname} FORMULATION KERNEL "
                  f"(Isolid dispatch)")
     model.bricks = _subset_element_group(src, keep) if keep.any() else None
+
+
+def _dispatch_tetra_formulations(model: Model, log: MessageLog) -> None:
+    """Tetrahedral element-technology dispatch: split /TETRA4 parts whose
+    property Itetra4 selects a dedicated formulation kernel (e.g. 3 = SFEM)."""
+    from ..elements import TETRA4_ITETRA4_GROUPS
+    src = model.tetras
+    if src is None or not src.n:
+        return
+    masks: Dict[str, np.ndarray] = {}
+    for sl, mat, prop in src.state["slices"]:
+        itetra4 = int(prop.params.get("itetra4", 0) or 0)
+        gname = TETRA4_ITETRA4_GROUPS.get(itetra4)
+        if gname is not None:
+            masks.setdefault(gname, np.zeros(src.n, dtype=bool))[sl] = True
+    if not masks:
+        return
+    keep = np.ones(src.n, dtype=bool)
+    for gname, mask in masks.items():
+        keep &= ~mask
+        setattr(model, gname, _subset_element_group(src, mask))
+        kname = gname.split('_', 1)[1].upper() if '_' in gname else gname.upper()
+        log.info(f"     {int(mask.sum())} /TETRA4 ELEMENT(S) ROUTED TO THE "
+                 f"{kname} FORMULATION KERNEL (Itetra4 dispatch)")
+    model.tetras = _subset_element_group(src, keep) if keep.any() else None
+
+
+def _dispatch_penta_formulations(model: Model, log: MessageLog) -> None:
+    """Pentahedral element-technology dispatch: split /PENTA6 parts whose
+    property Isolid selects HEPH physical stabilization (Isolid=24)."""
+    from ..elements import PENTA_ISOLID_GROUPS
+    src = model.penta6s
+    if src is None or not src.n:
+        return
+    masks: Dict[str, np.ndarray] = {}
+    for sl, mat, prop in src.state["slices"]:
+        isolid = int(prop.params.get("isolid", 0) or 0)
+        gname = PENTA_ISOLID_GROUPS.get(isolid)
+        if gname is not None:
+            masks.setdefault(gname, np.zeros(src.n, dtype=bool))[sl] = True
+    if not masks:
+        return
+    keep = np.ones(src.n, dtype=bool)
+    for gname, mask in masks.items():
+        keep &= ~mask
+        setattr(model, gname, _subset_element_group(src, mask))
+        kname = gname.split('_', 1)[1].upper() if '_' in gname else gname.upper()
+        log.info(f"     {int(mask.sum())} /PENTA6 ELEMENT(S) ROUTED TO THE "
+                 f"{kname} FORMULATION KERNEL (Isolid dispatch)")
+    model.penta6s = _subset_element_group(src, keep) if keep.any() else None
+
+
+def _dispatch_quad_formulations(model: Model, log: MessageLog) -> None:
+    """Quad 2D element-technology dispatch: split /QUAD parts whose
+    property Iquad selects full 2x2 Gauss integration (Iquad=2)."""
+    from ..elements import QUAD_IQUAD_GROUPS
+    src = model.quads
+    if src is None or not src.n:
+        return
+    masks: Dict[str, np.ndarray] = {}
+    for sl, mat, prop in src.state["slices"]:
+        iquad = int(prop.params.get("iquad", 0) or prop.params.get("isolid", 0) or 0)
+        gname = QUAD_IQUAD_GROUPS.get(iquad)
+        if gname is not None:
+            masks.setdefault(gname, np.zeros(src.n, dtype=bool))[sl] = True
+    if not masks:
+        return
+    keep = np.ones(src.n, dtype=bool)
+    for gname, mask in masks.items():
+        keep &= ~mask
+        setattr(model, gname, _subset_element_group(src, mask))
+        kname = gname.split('_', 1)[1].upper() if '_' in gname else gname.upper()
+        log.info(f"     {int(mask.sum())} /QUAD ELEMENT(S) ROUTED TO THE "
+                 f"{kname} FORMULATION KERNEL (Iquad dispatch)")
+    model.quads = _subset_element_group(src, keep) if keep.any() else None
+
 
 
 def _dispatch_shell_formulations(model: Model, log: MessageLog) -> None:
@@ -354,6 +456,28 @@ def _dispatch_sh3n_formulations(model: Model, log: MessageLog) -> None:
                  f"{gname.split('_', 1)[1].upper()} FORMULATION KERNEL "
                  f"(Ish3n dispatch)")
     model.sh3n = _subset_element_group(src, keep) if keep.any() else None
+
+
+def _dispatch_beam_formulations(model: Model, log: MessageLog) -> None:
+    """Beam element-technology dispatch (M593): split /BEAM parts whose
+    property is /PROP/TYPE18 (/PROP/INT_BEAM) out of the generic beam group
+    into model.beams_fiber (pyradioss.elements.beam_fiber)."""
+    src = model.beams
+    if src is None or not src.n:
+        return
+    mask = np.zeros(src.n, dtype=bool)
+    slices = src.state.get("slices", [])
+    for sl, mat, prop in slices:
+        pt = getattr(prop, "type", 0)
+        if pt == 18:
+            mask[sl] = True
+    if not mask.any():
+        return
+    keep = ~mask
+    model.beams_fiber = _subset_element_group(src, mask)
+    log.info(f"     {int(mask.sum())} /BEAM ELEMENT(S) ROUTED TO THE "
+             f"INTEGRATED FIBER BEAM KERNEL (PROP/TYPE18 dispatch)")
+    model.beams = _subset_element_group(src, keep) if keep.any() else None
 
 
 # ----------------------------------------------------------------------------
@@ -499,6 +623,10 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
             from ..materials import law94_yeoh
             if hasattr(law94_yeoh, "resolve"):
                 law94_yeoh.resolve(mat, model, log)
+        elif mat.law in (90, "90", "LAW90", "HYST_FOAM", "TAB_FOAM", "MAT_LAW90", "MAT_HYST_FOAM", "MAT_TAB_FOAM", "LAW90_HYST_FOAM") or getattr(mat, "law_name", None) in ("90", "LAW90", "HYST_FOAM", "TAB_FOAM", "MAT_LAW90", "MAT_HYST_FOAM", "MAT_TAB_FOAM", "LAW90_HYST_FOAM"):
+            from ..materials import law90_foam
+            if hasattr(law90_foam, "resolve"):
+                law90_foam.resolve(mat, model, log)
 
     for mat_id, fm, source in model.raw_fails:
         mat = model.materials.get(mat_id)
@@ -651,10 +779,11 @@ def _nodes_of_parts(model: Model, part_ids: List[int]) -> np.ndarray:
 _EGROUP_FAMILIES = {
     "SHEL": ("shells", "shells_qbat", "shells_qeph", "shel16s"),
     "SH3N": ("sh3n", "sh3n_dkt18"),
-    "BRIC": ("bricks", "bricks_heph", "tetras", "tetra10s", "bric20s"),
+    "BRIC": ("bricks", "bricks_heph", "tshells", "tetras", "tetra10s", "bric20s", "penta6s"),
+    "TSHELL": ("tshells",),
     "QUAD": ("quads",),
     "TRUS": ("trusses",),
-    "BEAM": ("beams",),
+    "BEAM": ("beams", "beams_fiber"),
     "SPRI": ("springs",),
 }
 
@@ -814,12 +943,6 @@ def _nodes_in_box(model: Model, box, log: MessageLog,
 
     if box.kind == "RECTA":
         cmin, cmax = box.corner_min, box.corner_max
-        if box.node1:
-            p1 = _pt(box.node1, None)
-            p2 = _pt(box.node2, None)
-            if p1 is None or p2 is None:
-                return np.zeros(0, dtype=np.int64)
-            cmin, cmax = np.minimum(p1, p2), np.maximum(p1, p2)
         if box.iskew:
             row = model.skews.index("SKEW", box.iskew)
             if row < 0:
@@ -829,7 +952,17 @@ def _nodes_in_box(model: Model, box, log: MessageLog,
             origin = model.skews.origins[row]
             x_test = (x - origin) @ axes.T
         else:
+            axes = origin = None
             x_test = x
+        if box.node1:
+            p1 = _pt(box.node1, None)
+            p2 = _pt(box.node2, None)
+            if p1 is None or p2 is None:
+                return np.zeros(0, dtype=np.int64)
+            if box.iskew:
+                p1 = (p1 - origin) @ axes.T
+                p2 = (p2 - origin) @ axes.T
+            cmin, cmax = np.minimum(p1, p2), np.maximum(p1, p2)
         inside = np.all((x_test >= cmin) & (x_test <= cmax), axis=1)
         return np.where(inside)[0]
     if box.kind == "SPHER":
@@ -981,7 +1114,7 @@ def _free_faces_of_bricks(model: Model, part_ids: List[int], modifier: str = "EX
     all_owners: List[np.ndarray] = []
     all_attrs: List[np.ndarray] = []
 
-    for attr in ("bricks", "bricks_heph", "bric20s", "shel16s"):
+    for attr in ("bricks", "bricks_heph", "tshells", "bric20s", "shel16s"):
         g = getattr(model, attr, None)
         if g is None:
             continue
@@ -1037,6 +1170,39 @@ def _free_faces_of_tetras(model: Model, part_ids: List[int], modifier: str = "EX
             all_faces.append(np.column_stack([ff, ff[:, 2]]))  # n4 = n3
             all_owners.append(owner[free])
             all_attrs.append(np.full(int(np.sum(free)), attr, dtype="<U16"))
+
+    if not all_faces:
+        return (np.zeros((0, 4), dtype=np.int64),
+                np.zeros(0, dtype=np.int64),
+                np.zeros(0, dtype="<U16"))
+    return np.vstack(all_faces), np.concatenate(all_owners), np.concatenate(all_attrs)
+
+
+def _free_faces_of_wedges(model: Model, part_ids: List[int], modifier: str = "EXT"):
+    """Outer (free) faces of /PENTA6 wedge parts (or all faces if modifier='ALL'),
+    as 4-node segments (triangles degenerate with 3rd node repeated).
+    Returns (faces (n,4), parent element rows (n,), element group names (n,))."""
+    from ..elements.solid_penta6 import _FACES
+    all_faces: List[np.ndarray] = []
+    all_owners: List[np.ndarray] = []
+    all_attrs: List[np.ndarray] = []
+
+    attr = "penta6s"
+    g = getattr(model, attr, None)
+    if g is not None:
+        mask = np.isin(g.state["part_ids"], part_ids)
+        if np.any(mask):
+            erow = np.where(mask)[0]
+            conn = g.conn[mask, :6]
+            faces = conn[:, _FACES.reshape(-1)].reshape(-1, 4)
+            owner = np.repeat(erow, 5)
+            key = np.sort(faces, axis=1)
+            _, inverse, counts = np.unique(key, axis=0, return_inverse=True, return_counts=True)
+            free = (counts[inverse] == 1) if modifier != "ALL" else np.ones(len(faces), dtype=bool)
+            if np.any(free):
+                all_faces.append(faces[free])
+                all_owners.append(owner[free])
+                all_attrs.append(np.full(int(np.sum(free)), attr, dtype="<U16"))
 
     if not all_faces:
         return (np.zeros((0, 4), dtype=np.int64),
@@ -1118,6 +1284,11 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
                 for attr in np.unique(ta):
                     sel = (ta == attr)
                     _add(ft[sel], attr, to[sel])
+            fw, wo, wa = _free_faces_of_wedges(model, pids, mod)
+            if len(fw):
+                for attr in np.unique(wa):
+                    sel = (wa == attr)
+                    _add(fw[sel], attr, wo[sel])
 
         # /SURF/GRSHEL | /SURF/GRSH3N | /SURF/GRBRIC
         for family, gid in s.egroup_refs:
@@ -1142,7 +1313,16 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
                     if np.any(free):
                         ff = faces[free]
                         _add(np.column_stack([ff, ff[:, 2]]), attr, owner[free])
-                elif attr in ("bricks", "bricks_heph", "bric20s", "shel16s"):
+                elif attr == "penta6s":
+                    from ..elements.solid_penta6 import _FACES
+                    faces = conn[:, :6][:, _FACES.reshape(-1)].reshape(-1, 4)
+                    owner = np.repeat(rows, 5)
+                    key = np.sort(faces, axis=1)
+                    _, inv, cnt = np.unique(key, axis=0, return_inverse=True, return_counts=True)
+                    free = (cnt[inv] == 1) if mod != "ALL" else np.ones(len(faces), dtype=bool)
+                    if np.any(free):
+                        _add(faces[free], attr, owner[free])
+                elif attr in ("bricks", "bricks_heph", "tshells", "bric20s", "shel16s"):
                     from ..elements.solid_hexa8 import _FACES
                     faces = conn[:, :8][:, _FACES.reshape(-1)].reshape(-1, 4)
                     owner = np.repeat(rows, 6)
@@ -1165,12 +1345,14 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
                 if box:
                     bn = _nodes_in_box(model, box, log, f"/SURF/{s.id}")
                     box_nodes.update(bn)
-            if box_nodes:
-                all_s = np.vstack(segs)
-                all_gt = np.concatenate(gtypes)
-                all_el = np.concatenate(elems)
-                in_box = np.isin(all_s, list(box_nodes)).all(axis=1)
-                return (all_s[in_box], all_gt[in_box], all_el[in_box])
+            if not box_nodes:
+                return (np.zeros((0, 4), dtype=np.int64),
+                        np.zeros(0, dtype="<U8"), np.zeros(0, dtype=np.int64))
+            all_s = np.vstack(segs)
+            all_gt = np.concatenate(gtypes)
+            all_el = np.concatenate(elems)
+            in_box = np.isin(all_s, list(box_nodes)).all(axis=1)
+            return (all_s[in_box], all_gt[in_box], all_el[in_box])
 
         if segs:
             return (np.vstack(segs), np.concatenate(gtypes),
@@ -1496,9 +1678,11 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
     for name, group in model.element_groups():
         node_idx, mass_c, inertia_c = KERNELS[name].init_group(
             group, model, log)
-        np.add.at(model.mass, node_idx, mass_c)
-        if inertia_c is not None:
-            np.add.at(model.inertia, node_idx, inertia_c)
+        if len(node_idx) > 0:
+            valid = (node_idx >= 0)
+            np.add.at(model.mass, node_idx[valid], mass_c[valid])
+            if inertia_c is not None:
+                np.add.at(model.inertia, node_idx[valid], inertia_c[valid])
             
         from pyradioss.engine.coloring import compute_element_colors
         if group.conn is not None and len(group.conn) > 0:
@@ -1543,14 +1727,19 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
                                 if 0 <= nid < model.numnod:
                                     model.mass[nid] += m_nod
                     continue
-        elif am.mass_type == 3:
-            # Part group distributed
-            grpart = model.egroups.get("PART", {}).get(am.grnod_id) if hasattr(model, "egroups") else None
-            pids = getattr(grpart, "part_ids_resolved", None) if grpart else None
-            if pids is None and grpart:
-                pids = getattr(grpart, "members", [])
-            if not pids and hasattr(model, "parts") and am.grnod_id in model.parts:
+        elif am.mass_type in (3, 4, 6, 7):
+            if am.mass_type in (6, 7):
                 pids = [am.grnod_id]
+            else:
+                # Part group
+                grpart = model.egroups.get("PART", {}).get(am.grnod_id) if hasattr(model, "egroups") else None
+                pids = getattr(grpart, "part_ids_resolved", None) if grpart else None
+                if pids is None and grpart:
+                    pids = getattr(grpart, "members", [])
+                if not pids and hasattr(model, "part_groups") and am.grnod_id in model.part_groups:
+                    pids = model.part_groups[am.grnod_id]
+                if not pids and hasattr(model, "parts") and am.grnod_id in model.parts:
+                    pids = [am.grnod_id]
             if pids:
                 part_nodes = set()
                 for _, grp in model.element_groups():
@@ -1567,6 +1756,9 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
                         if 0 <= n_idx < model.numnod:
                             model.mass[n_idx] += m_per_node
                     continue
+            else:
+                log.error(f"/ADMAS/{am.id}: unknown part or part group {am.grnod_id}", "ADMAS CHECK")
+                continue
 
         g = model.node_groups.get(am.grnod_id)
         if g is None or g.node_idx is None:
@@ -1624,6 +1816,22 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
         else:
             model.v[g.node_idx] = iv.v
 
+    # /GJOINT added mass & inertia (hm_read_gjoint.F 168-173, M594)
+    if hasattr(model, "gjoints"):
+        for gj in model.gjoints.values():
+            for nid, m_add, i_add in [
+                (gj.node_id0, gj.mass0, gj.inertia0),
+                (gj.node_id1, gj.mass1, gj.inertia1),
+                (gj.node_id2, gj.mass2, gj.inertia2),
+                (getattr(gj, "node_id3", 0), getattr(gj, "mass3", 0.0), getattr(gj, "inertia3", 0.0)),
+            ]:
+                if nid and nid in model._id2idx:
+                    idx = model.node_index(nid)
+                    if m_add > 0.0:
+                        model.mass[idx] += m_add
+                    if i_add > 0.0:
+                        model.inertia[idx] += i_add
+
     # massless nodes: harmless if nothing ever loads them, fatal otherwise.
     # The Engine divides force by mass, so give unreferenced nodes a tiny
     # mass and warn (the original errors out for loaded massless nodes).
@@ -1633,6 +1841,15 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
                     f"(not referenced by any element); they are frozen.",
                     "MASS INIT")
         model.mass[massless] = 1e30  # infinite mass = frozen node
+
+    # /INISTA initial stress, strain, and state mapping (hm_read_inista.F, lec_inistate_yfile.F)
+    from .inista import apply_inista
+    apply_inista(model, log=log)
+
+    # /INITEMP initial temperature field (hm_read_initemp.F, initemp_shell.F90, sinit3.F)
+    from .initemp import apply_initemp
+    apply_initemp(model, log=log)
+
 
 
 # ----------------------------------------------------------------------------
@@ -1773,6 +1990,8 @@ def initialize_rigid_bodies(model: Model, log: MessageLog) -> None:
             xg = (m[:, None] * model.x0[rb.slaves]).sum(axis=0)
             xg = (xg + m_master * model.x0[rb.master]) / msum
         else:
+            if len(rb.slaves) == 0:
+                continue
             xg = model.x0[rb.slaves].mean(axis=0)   # massless: geometric
 
         # inertia tensor about xg (point masses + isotropic nodal inertias)

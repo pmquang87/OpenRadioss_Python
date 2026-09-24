@@ -1,10 +1,12 @@
 """
 pyradioss.materials.law14_compso — /MAT/LAW14 (/MAT/COMPSO, /MAT/COMP_SOL).
 
-3D Orthotropic Elastic-Plastic Composite Material for Solid Elements.
+3D Orthotropic Elastic-Plastic Composite Material for Solid Elements and
+Progressive Damage Multi-Layer Composite Shells.
 
 Fortran origin:
   - Starter reader: starter/source/materials/mat/mat014/hm_read_mat14.F
+  - Shell kernel:   engine/source/materials/mat/mat014/sigeps14c.F
   - Engine kernel:  engine/source/materials/mat/mat014/m14law.F
   - Coordinate transformations:
       engine/source/materials/mat/mat014/m14ama.F
@@ -534,6 +536,334 @@ def sound_speed(mat: Any, rho: Optional[Any] = None, extra: Optional[Any] = None
     return math.sqrt(c1 / max(float(r), _EM20))
 
 
+def _rotate_shell_to_mat(
+    sig: np.ndarray, deps: np.ndarray, angle_deg: float
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Rotate in-plane shell stress and strain increments to layer material frame.
+
+    Fortran origin: engine/source/materials/mat/mat014/sigeps14c.F
+    """
+    if abs(angle_deg) < 1.0e-9:
+        return sig.copy(), deps.copy()
+    theta = math.radians(angle_deg)
+    c = math.cos(theta)
+    s = math.sin(theta)
+    c2 = c * c
+    s2 = s * s
+    cs = c * s
+
+    # Strains: [de11, de22, dgamma12]
+    d_mat = np.zeros_like(deps)
+    d_mat[0] = c2 * deps[0] + s2 * deps[1] + cs * deps[2]
+    d_mat[1] = s2 * deps[0] + c2 * deps[1] - cs * deps[2]
+    d_mat[2] = -2.0 * cs * deps[0] + 2.0 * cs * deps[1] + (c2 - s2) * deps[2]
+
+    # Stresses: [s11, s22, s12]
+    s_mat = np.zeros_like(sig)
+    s_mat[0] = c2 * sig[0] + s2 * sig[1] + 2.0 * cs * sig[2]
+    s_mat[1] = s2 * sig[0] + c2 * sig[1] - 2.0 * cs * sig[2]
+    s_mat[2] = -cs * sig[0] + cs * sig[1] + (c2 - s2) * sig[2]
+
+    if len(sig) >= 5 and len(deps) >= 5:
+        # Transverse shears: [..., dgamma23, dgamma31]
+        d_mat[3] = c * deps[3] - s * deps[4]
+        d_mat[4] = s * deps[3] + c * deps[4]
+        s_mat[3] = c * sig[3] - s * sig[4]
+        s_mat[4] = s * sig[3] + c * sig[4]
+
+    return s_mat, d_mat
+
+
+def _rotate_mat_to_shell(sig_mat: np.ndarray, angle_deg: float) -> np.ndarray:
+    """Rotate in-plane layer stress back to shell local coordinate system.
+
+    Fortran origin: engine/source/materials/mat/mat014/sigeps14c.F
+    """
+    if abs(angle_deg) < 1.0e-9:
+        return sig_mat.copy()
+    theta = math.radians(angle_deg)
+    c = math.cos(theta)
+    s = math.sin(theta)
+    c2 = c * c
+    s2 = s * s
+    cs = c * s
+
+    s_shell = np.zeros_like(sig_mat)
+    s_shell[0] = c2 * sig_mat[0] + s2 * sig_mat[1] - 2.0 * cs * sig_mat[2]
+    s_shell[1] = s2 * sig_mat[0] + c2 * sig_mat[1] + 2.0 * cs * sig_mat[2]
+    s_shell[2] = cs * sig_mat[0] - cs * sig_mat[1] + (c2 - s2) * sig_mat[2]
+
+    if len(sig_mat) >= 5:
+        s_shell[3] = c * sig_mat[3] + s * sig_mat[4]
+        s_shell[4] = -s * sig_mat[3] + c * sig_mat[4]
+
+    return s_shell
+
+
+def _update_point_law14_shell(
+    p: Dict[str, Any],
+    sig: np.ndarray,
+    deps: np.ndarray,
+    epsp: float,
+    dt: float,
+    dam: np.ndarray,
+    epe: np.ndarray,
+    epc: np.ndarray,
+    wpla: float,
+    off: float,
+    epsf: float,
+    sigf: float,
+    angle_deg: float = 0.0,
+) -> Tuple[np.ndarray, float, np.ndarray, np.ndarray, np.ndarray, float, float, float, float]:
+    """Single integration point plane-stress constitutive update.
+
+    Fortran origin:
+      - engine/source/materials/mat/mat014/sigeps14c.F
+      - engine/source/materials/mat/mat014/m14law.F
+    """
+    has_5 = (len(sig) >= 5)
+
+    # 1. Rotate to fiber frame
+    s_mat, d_mat = _rotate_shell_to_mat(sig, deps, angle_deg)
+
+    # 2. Decode damage flags (dam[4] encodes kd1..kd4, offset 10000)
+    dam5 = float(dam[4]) if len(dam) >= 5 else 0.0
+    if dam5 >= 10000.0:
+        idam = int(dam5) - 10000
+        kd1 = idam // 1000
+        kdx = idam - kd1 * 1000
+        kd2 = kdx // 100
+        kdx = kdx - kd2 * 100
+        kd3 = kdx // 10
+        kd4 = kdx - kd3 * 10
+    else:
+        kd1, kd2, kd3, kd4 = 0, 0, 0, 0
+
+    dam1 = float(dam[0]) if len(dam) >= 1 else 0.0
+    dam2 = float(dam[1]) if len(dam) >= 2 else 0.0
+    epe1 = float(epe[0]) if len(epe) >= 1 else 0.0
+    epe2 = float(epe[1]) if len(epe) >= 2 else 0.0
+    epc1 = float(epc[0]) if len(epc) >= 1 else 0.0
+    epc2 = float(epc[1]) if len(epc) >= 2 else 0.0
+
+    # 3. In-plane elastic moduli
+    e11 = float(p.get("E11", p.get("MAT_EA", 1.0)))
+    e22 = float(p.get("E22", p.get("MAT_EB", 1.0)))
+    nu12 = float(p.get("nu12", p.get("MAT_PRAB", 0.0)))
+    g12 = float(p.get("G12", p.get("MAT_GAB", 0.0)))
+    g23 = float(p.get("G23", p.get("MAT_GBC", 0.0)))
+    g31 = float(p.get("G31", p.get("MAT_GCA", 0.0)))
+
+    nu21 = nu12 * e22 / max(e11, _EM20) if e11 > 0.0 else 0.0
+    detc = max(1.0e-15, 1.0 - nu12 * nu21)
+    q11 = e11 / detc
+    q22 = e22 / detc
+    q12 = nu12 * e22 / detc
+
+    # 4. Damage parameters & yield limits
+    sigt1 = float(p.get("sigt1", p.get("SIGT1", _INF)))
+    sigt2 = float(p.get("sigt2", p.get("SIGT2", _INF)))
+    delta = float(p.get("delta", p.get("DELTA", 0.05)))
+    cb = float(p.get("cb", p.get("MAT_BETA", 0.0)))
+    cn = float(p.get("cn", p.get("MAT_HARD", 1.0)))
+    fmax = float(p.get("fmax", p.get("MAT_SIG", _INF)))
+    wplaref = float(p.get("wplaref", p.get("WPREF", 1.0)))
+
+    # Strain rate scaling (m14law.F:176-195)
+    c_rate = float(p.get("c", p.get("MAT_SRC", 0.0)))
+    eps0 = float(p.get("eps0", p.get("MAT_SRP", 1.0)))
+    icc = int(p.get("icc", p.get("STRFLAG", 1)))
+
+    dt1 = max(dt, 1.0e-12) if dt > 0.0 else 1.0
+    de1, de2, de4 = d_mat[0], d_mat[1], d_mat[2]
+    rate_ep = max(abs(de1), abs(de2), abs(de4)) / dt1
+    if rate_ep > eps0 and c_rate != 0.0:
+        epsp_fac = 1.0 + c_rate * math.log(rate_ep / max(eps0, 1.0e-15))
+    else:
+        epsp_fac = 1.0
+
+    ca = 1.0 * epsp_fac
+    cb_eff = cb * epsp_fac
+    if icc in (1, 3):
+        sigmx = fmax * epsp_fac
+    else:
+        sigmx = fmax
+
+    pw = wpla if wpla > 0.0 else 0.0
+    sigmy = min(sigmx, ca + cb_eff * (pw ** cn))
+    if sigmy >= sigmx and off == 1.0:
+        off = 0.99
+        kd4 = 2
+
+    # 5. Strain increments & crack strain
+    epe1 += de1
+    epe2 += de2
+
+    # Elastic trial stresses
+    so1, so2, so4 = s_mat[0], s_mat[1], s_mat[2]
+    t1 = so1 + q11 * de1 + q12 * de2
+    t2 = so2 + q12 * de1 + q22 * de2
+    t4 = so4 + g12 * de4
+    if has_5:
+        so5, so6 = s_mat[3], s_mat[4]
+        t5 = so5 + g23 * d_mat[3]
+        t6 = so6 + g31 * d_mat[4]
+    else:
+        so5, so6, t5, t6 = 0.0, 0.0, 0.0, 0.0
+
+    # 6. Direction 1 tensile cracking (fiber)
+    wvec1 = (1.0 - dam1) * sigt1
+    if t1 > wvec1:
+        if epc1 == 0.0:
+            epc1 = max(epe1, 0.0)
+        else:
+            epc1 = max(epc1 + de1, 0.0)
+        t1 = wvec1
+        t2 -= q12 * de1 * dam1
+        if kd1 == 0:
+            kd1 = 1
+        dam1 = min(dam1 + delta, 1.0)
+        if dam1 >= 1.0 and kd1 != 2:
+            kd1 = 2
+    if de1 < 0.0 and dam1 > 0.0:
+        epc1 = max(epc1 + de1, 0.0)
+
+    # 7. Direction 2 tensile cracking (matrix)
+    wvec2 = (1.0 - dam2) * sigt2
+    if t2 > wvec2:
+        if epc2 == 0.0:
+            epc2 = max(epe2, 0.0)
+        else:
+            epc2 = max(epc2 + de2, 0.0)
+        t1 -= q12 * de2 * dam2
+        t2 = wvec2
+        if kd2 == 0:
+            kd2 = 1
+        dam2 = min(dam2 + delta, 1.0)
+        if dam2 >= 1.0 and kd2 != 2:
+            kd2 = 2
+    if de2 < 0.0 and dam2 > 0.0:
+        epc2 = max(epc2 + de2, 0.0)
+
+    # 8. Crack open -> no compression condition (m14law.F:433-449)
+    if t1 < 0.0 and epc1 > 0.0:
+        t1 = 0.0
+        t2 -= q12 * de1 * dam1
+    if t2 < 0.0 and epc2 > 0.0:
+        t1 -= q12 * de2 * dam2
+        t2 = 0.0
+
+    # 9. Tsai-Wu yield evaluation (plane stress)
+    f1 = float(p.get("F1", 0.0))
+    f2 = float(p.get("F2", 0.0))
+    f11 = float(p.get("F11", 0.0))
+    f22 = float(p.get("F22", 0.0))
+    f44 = float(p.get("F44", 0.0))
+    f12 = float(p.get("F12", 0.0))
+
+    wvec = f1 * t1 + f2 * t2 + f11 * (t1**2) + f22 * (t2**2) + 2.0 * f12 * t1 * t2 + f44 * (t4**2)
+    if has_5:
+        f55 = float(p.get("F55", 0.0))
+        f66 = float(p.get("F66", f44))
+        wvec += f55 * (t5**2) + f66 * (t6**2)
+
+    # 10. Plasticity flow & return mapping (m14law.F:463-547)
+    if wvec > sigmy and off == 1.0:
+        if kd4 == 0:
+            kd4 = 1
+        dp1 = f1 + 2.0 * f11 * so1 + 2.0 * f12 * so2
+        dp2 = f2 + 2.0 * f22 * so2 + 2.0 * f12 * so1
+        dp4 = 2.0 * f44 * so4
+        ds1 = t1 - so1
+        ds2 = t2 - so2
+        ds4 = t4 - so4
+
+        num = dp1 * ds1 + dp2 * ds2 + dp4 * ds4
+        if has_5:
+            dp5 = 2.0 * f55 * so5
+            dp6 = 2.0 * f66 * so6
+            ds5 = t5 - so5
+            ds6 = t6 - so6
+            num += dp5 * ds5 + dp6 * ds6
+        else:
+            dp5, dp6 = 0.0, 0.0
+
+        plas = 1.0 if wpla <= 0.0 else (wpla ** (cn - 1.0))
+        denom = (
+            dp1 * (q11 * dp1 + q12 * dp2)
+            + dp2 * (q12 * dp1 + q22 * dp2)
+            + 2.0 * dp4 * g12 * dp4
+            + (so1 * dp1 + so2 * dp2 + 2.0 * so4 * dp4) * cn * cb_eff * plas
+        )
+        if has_5:
+            denom += 2.0 * dp5 * g23 * dp5 + 2.0 * dp6 * g31 * dp6
+            denom += (2.0 * so5 * dp5 + 2.0 * so6 * dp6) * cn * cb_eff * plas
+
+        if denom > 1.0e-20 and num > 0.0:
+            lam = num / denom
+            dp1_lam = lam * dp1
+            dp2_lam = lam * dp2
+            dp4_lam = lam * dp4
+            epe1 -= dp1_lam
+            epe2 -= dp2_lam
+            t1 -= q11 * dp1_lam + q12 * dp2_lam
+            t2 -= q12 * dp1_lam + q22 * dp2_lam
+            t4 -= 2.0 * g12 * dp4_lam
+
+            dwpla = 0.5 * (
+                dp1_lam * (t1 + so1)
+                + dp2_lam * (t2 + so2)
+                + 2.0 * dp4_lam * (t4 + so4)
+            )
+            if has_5:
+                dp5_lam = lam * dp5
+                dp6_lam = lam * dp6
+                t5 -= 2.0 * g23 * dp5_lam
+                t6 -= 2.0 * g31 * dp6_lam
+                dwpla += 0.5 * (
+                    2.0 * dp5_lam * (t5 + so5)
+                    + 2.0 * dp6_lam * (t6 + so6)
+                )
+            wpla += max(0.0, dwpla) / max(wplaref, 1.0e-15)
+
+    # 11. Fiber strain and stress
+    efib = float(p.get("efib", p.get("MAT_EFIB", 0.0)))
+    if efib > 0.0:
+        epsf += de1
+        sigf = efib * epsf
+
+    # 12. Damage & failure degradation
+    if off < 0.1:
+        off = 0.0
+    elif off < 1.0:
+        off = off * 0.8
+
+    if dam1 >= 1.0 or dam2 >= 1.0 or sigmy >= sigmx:
+        if off == 1.0:
+            off = 0.99
+
+    t1 *= off
+    t2 *= off
+    t4 *= off
+    if has_5:
+        t5 *= off
+        t6 *= off
+        s_res = np.array([t1, t2, t4, t5, t6], dtype=float)
+    else:
+        s_res = np.array([t1, t2, t4], dtype=float)
+
+    # 13. Rotate back to shell local axes
+    s_out = _rotate_mat_to_shell(s_res, angle_deg)
+
+    # 14. Pack state arrays
+    dam_code = kd1 * 1000 + kd2 * 100 + kd3 * 10 + kd4 + 10000
+    dam_out = np.array([dam1, dam2, 0.0, wvec, float(dam_code)], dtype=float)
+    epe_out = np.array([epe1, epe2, 0.0], dtype=float)
+    epc_out = np.array([epc1, epc2, 0.0], dtype=float)
+
+    return s_out, wpla, dam_out, epe_out, epc_out, off, epsf, sigf, wvec
+
+
 def shell_update(
     mat: Any,
     sig: np.ndarray,
@@ -541,11 +871,443 @@ def shell_update(
     epsp: Optional[np.ndarray] = None,
     dt: float = 0.0,
     extra: Optional[Dict[str, Any]] = None,
-) -> Any:
-    """Raise error as LAW14 is solid-only."""
-    raise NotImplementedError(
-        "/MAT/LAW14 (COMPSO) is implemented for 3D solid elements only (ANCMSG 305)."
-    )
+) -> Tuple[np.ndarray, np.ndarray, float | np.ndarray]:
+    """Plane-stress (shell) constitutive update for LAW14 (/MAT/COMPSO).
+
+    Fortran origin:
+      - engine/source/materials/mat/mat014/sigeps14c.F
+      - engine/source/materials/mat/mat014/m14law.F
+
+    Parameters:
+      mat: Material instance with LAW14 parameters
+      sig: In-plane stress array (n, 3) = [s11, s22, s12] or (n, 5) or 1D
+      deps: Strain increment array (n, 3) = [de11, de22, dgamma12] or (n, 5) or 1D
+      epsp: Optional plastic strain array (n,) or scalar
+      dt: Simulation time increment
+      extra: Optional dict containing persistent state arrays:
+             - 'dam14': (n, 5) damage per direction and flags
+             - 'epe14': (n, 3) strain in crack directions
+             - 'epc14': (n, 3) crack opening strain
+             - 'wpla14': (n,) accumulated plastic work
+             - 'off14': (n,) active status flag (1.0 active, 0.0 failed)
+             - 'angle': layer orientation angle (degrees)
+             - 'layers': list of layers for multi-layer composite shells
+
+    Returns:
+      (sig_new, epsp_new, sound_speed)
+    """
+    p = getattr(mat, "params", {}) or {}
+    if "D11" not in p and "d_mat" not in p:
+        mat_built = build_law14(mat)
+        p = mat_built.params
+
+    if extra is None:
+        extra = {}
+
+    # Check for multi-layer composite laminate integration
+    layers = extra.get("layers", extra.get("plies"))
+    if layers is not None and isinstance(layers, (list, tuple)) and len(layers) > 0:
+        return multilayer_shell_update(
+            mat=mat,
+            sig=sig,
+            deps=deps,
+            epsp=epsp,
+            dt=dt,
+            extra=extra,
+        )
+
+    is_1d = (sig.ndim == 1)
+    s_in = np.atleast_2d(sig).copy()
+    d_in = np.atleast_2d(deps).copy()
+    n = s_in.shape[0]
+
+    if epsp is None:
+        ep = np.zeros(n, dtype=float)
+    else:
+        ep = np.atleast_1d(epsp).astype(float).copy()
+        if len(ep) == 1 and n > 1:
+            ep = np.full(n, ep[0], dtype=float)
+
+    # State variables
+    dam = extra.get("dam14", extra.get("dam"))
+    if dam is None or np.asarray(dam).shape != (n, 5):
+        dam = np.zeros((n, 5), dtype=float)
+    else:
+        dam = np.atleast_2d(dam).astype(float).copy()
+
+    epe = extra.get("epe14", extra.get("epe"))
+    if epe is None or np.asarray(epe).shape != (n, 3):
+        epe = np.zeros((n, 3), dtype=float)
+    else:
+        epe = np.atleast_2d(epe).astype(float).copy()
+
+    epc = extra.get("epc14", extra.get("epc"))
+    if epc is None or np.asarray(epc).shape != (n, 3):
+        epc = np.zeros((n, 3), dtype=float)
+    else:
+        epc = np.atleast_2d(epc).astype(float).copy()
+
+    wpla = extra.get("wpla14", extra.get("wpla"))
+    if wpla is None or len(np.atleast_1d(wpla)) != n:
+        wpla = np.zeros(n, dtype=float)
+    else:
+        wpla = np.atleast_1d(wpla).astype(float).copy()
+
+    off = extra.get("off14", extra.get("off"))
+    if off is None or len(np.atleast_1d(off)) != n:
+        off = np.ones(n, dtype=float)
+    else:
+        off = np.atleast_1d(off).astype(float).copy()
+
+    epsf = extra.get("epsf14", extra.get("epsf"))
+    if epsf is None or len(np.atleast_1d(epsf)) != n:
+        epsf = np.zeros(n, dtype=float)
+    else:
+        epsf = np.atleast_1d(epsf).astype(float).copy()
+
+    sigf = extra.get("sigf14", extra.get("sigf"))
+    if sigf is None or len(np.atleast_1d(sigf)) != n:
+        sigf = np.zeros(n, dtype=float)
+    else:
+        sigf = np.atleast_1d(sigf).astype(float).copy()
+
+    tsaiwu = extra.get("tsaiwu14", extra.get("tsaiwu"))
+    if tsaiwu is None or len(np.atleast_1d(tsaiwu)) != n:
+        tsaiwu = np.zeros(n, dtype=float)
+    else:
+        tsaiwu = np.atleast_1d(tsaiwu).astype(float).copy()
+
+    # Orientation angle
+    angle_val = extra.get("angle", extra.get("theta", extra.get("phi", 0.0)))
+    if isinstance(angle_val, (int, float)):
+        angles = np.full(n, float(angle_val), dtype=float)
+    else:
+        angles = np.asarray(angle_val, dtype=float).flatten()
+        if len(angles) != n:
+            angles = np.zeros(n, dtype=float)
+
+    s_out = np.zeros_like(s_in)
+    ep_out = np.zeros(n, dtype=float)
+
+    for i in range(n):
+        s_i, wpla_i, dam_i, epe_i, epc_i, off_i, epsf_i, sigf_i, tw_i = _update_point_law14_shell(
+            p=p,
+            sig=s_in[i],
+            deps=d_in[i],
+            epsp=ep[i],
+            dt=dt,
+            dam=dam[i],
+            epe=epe[i],
+            epc=epc[i],
+            wpla=wpla[i],
+            off=off[i],
+            epsf=epsf[i],
+            sigf=sigf[i],
+            angle_deg=angles[i],
+        )
+        s_out[i] = s_i
+        wpla[i] = wpla_i
+        ep_out[i] = wpla_i
+        dam[i] = dam_i
+        epe[i] = epe_i
+        epc[i] = epc_i
+        off[i] = off_i
+        epsf[i] = epsf_i
+        sigf[i] = sigf_i
+        tsaiwu[i] = tw_i
+
+    # Store back in extra
+    for k_14, k_gen, val in (
+        ("dam14", "dam", dam),
+        ("epe14", "epe", epe),
+        ("epc14", "epc", epc),
+        ("wpla14", "wpla", wpla),
+        ("off14", "off", off),
+        ("epsf14", "epsf", epsf),
+        ("sigf14", "sigf", sigf),
+        ("tsaiwu14", "tsaiwu", tsaiwu),
+    ):
+        extra[k_14] = val
+        extra[k_gen] = val
+
+    c = sound_speed(mat)
+    c_arr = np.full(n, float(c), dtype=float)
+
+    if epsp is not None and isinstance(epsp, np.ndarray):
+        epsp[:] = ep_out.reshape(epsp.shape)
+
+    if is_1d:
+        return s_out[0], float(ep_out[0]), float(c_arr[0])
+    return s_out, ep_out, c_arr
+
+
+def multilayer_shell_update(
+    mat: Any,
+    sig: np.ndarray,
+    deps: np.ndarray,
+    epsp: Optional[np.ndarray] = None,
+    dt: float = 0.0,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Tuple[np.ndarray, np.ndarray, float | np.ndarray]:
+    """Through-thickness multi-layer composite shell integration for LAW14.
+
+    Fortran origin: engine/source/materials/mat/mat014/sigeps14c.F
+
+    Evaluates layer constitutive responses for composite laminate shells with:
+      - arbitrary layer thicknesses (t_k)
+      - arbitrary fiber orientation angles (theta_k)
+      - mid-plane strain increments (deps) and optional curvature increments (dkappa)
+      - calculates resultant membrane forces (N) and bending moments (M)
+      - computes homogenized average membrane stresses (s_avg = N / H)
+    """
+    p = getattr(mat, "params", {}) or {}
+    if extra is None:
+        extra = {}
+
+    layers = extra.get("layers", extra.get("plies", []))
+    n_layers = len(layers)
+    if n_layers == 0:
+        return shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+
+    # Thickness and angle extraction
+    thicknesses = np.zeros(n_layers, dtype=float)
+    angles = np.zeros(n_layers, dtype=float)
+    for k, lay in enumerate(layers):
+        if isinstance(lay, dict):
+            thicknesses[k] = float(lay.get("thick", lay.get("thickness", lay.get("t", 1.0))))
+            angles[k] = float(lay.get("angle", lay.get("theta", lay.get("phi", 0.0))))
+        elif isinstance(lay, (list, tuple)):
+            thicknesses[k] = float(lay[0])
+            angles[k] = float(lay[1]) if len(lay) > 1 else 0.0
+        else:
+            thicknesses[k] = getattr(lay, "thick", getattr(lay, "thickness", 1.0))
+            angles[k] = getattr(lay, "angle", 0.0)
+
+    total_thickness = float(np.sum(thicknesses))
+    if total_thickness <= 0.0:
+        total_thickness = 1.0
+
+    # Layer centroids z_k relative to mid-plane
+    z_coords = np.zeros(n_layers, dtype=float)
+    current_z = -0.5 * total_thickness
+    for k in range(n_layers):
+        z_coords[k] = current_z + 0.5 * thicknesses[k]
+        current_z += thicknesses[k]
+
+    # Strains
+    dkappa = extra.get("dkappa", extra.get("curv", np.zeros_like(deps)))
+    dkappa_arr = np.asarray(dkappa, dtype=float)
+
+    # Layer state retrieval or initialization
+    dam_layers = extra.get("dam14_layers", extra.get("layer_dam"))
+    if dam_layers is None or np.asarray(dam_layers).shape != (n_layers, 5):
+        dam_layers = np.zeros((n_layers, 5), dtype=float)
+    else:
+        dam_layers = np.copy(dam_layers)
+
+    epe_layers = extra.get("epe14_layers", np.zeros((n_layers, 3), dtype=float))
+    epc_layers = extra.get("epc14_layers", np.zeros((n_layers, 3), dtype=float))
+    wpla_layers = extra.get("wpla14_layers", np.zeros(n_layers, dtype=float))
+    off_layers = extra.get("off14_layers", np.ones(n_layers, dtype=float))
+    epsf_layers = extra.get("epsf14_layers", np.zeros(n_layers, dtype=float))
+    sigf_layers = extra.get("sigf14_layers", np.zeros(n_layers, dtype=float))
+
+    sig_layers = extra.get("layer_stresses")
+    if sig_layers is None or np.asarray(sig_layers).shape[0] != n_layers:
+        n_comp = len(sig) if sig.ndim == 1 else sig.shape[-1]
+        sig_layers = np.zeros((n_layers, n_comp), dtype=float)
+        if sig.ndim == 1 and np.any(sig != 0.0):
+            for k in range(n_layers):
+                sig_layers[k] = sig.copy()
+    else:
+        sig_layers = np.copy(sig_layers)
+
+    new_sig_layers = np.zeros_like(sig_layers)
+    N_res = np.zeros(sig_layers.shape[1], dtype=float)
+    M_res = np.zeros(sig_layers.shape[1], dtype=float)
+
+    for k in range(n_layers):
+        # Layer strain at centroid
+        zk = z_coords[k]
+        deps_k = np.asarray(deps, dtype=float) + zk * dkappa_arr
+
+        s_k, wpla_k, dam_k, epe_k, epc_k, off_k, epsf_k, sigf_k, _ = _update_point_law14_shell(
+            p=p,
+            sig=sig_layers[k],
+            deps=deps_k,
+            epsp=wpla_layers[k],
+            dt=dt,
+            dam=dam_layers[k],
+            epe=epe_layers[k],
+            epc=epc_layers[k],
+            wpla=wpla_layers[k],
+            off=off_layers[k],
+            epsf=epsf_layers[k],
+            sigf=sigf_layers[k],
+            angle_deg=angles[k],
+        )
+        new_sig_layers[k] = s_k
+        wpla_layers[k] = wpla_k
+        dam_layers[k] = dam_k
+        epe_layers[k] = epe_k
+        epc_layers[k] = epc_k
+        off_layers[k] = off_k
+        epsf_layers[k] = epsf_k
+        sigf_layers[k] = sigf_k
+
+        # Through-thickness integration of stress resultants
+        tk = thicknesses[k]
+        N_res += s_k * tk
+        M_res += s_k * zk * tk
+
+    # Homogenized average stress
+    s_avg = N_res / total_thickness
+
+    # Save layer state in extra
+    extra["layer_stresses"] = new_sig_layers
+    extra["dam14_layers"] = dam_layers
+    extra["epe14_layers"] = epe_layers
+    extra["epc14_layers"] = epc_layers
+    extra["wpla14_layers"] = wpla_layers
+    extra["off14_layers"] = off_layers
+    extra["epsf14_layers"] = epsf_layers
+    extra["sigf14_layers"] = sigf_layers
+    extra["N"] = N_res
+    extra["M"] = M_res
+    extra["total_thickness"] = total_thickness
+
+    c = sound_speed(mat)
+    return s_avg, float(np.mean(wpla_layers)), float(c)
+
+
+def shell_membrane_tangent(mat: Any, extra: Optional[Dict[str, Any]] = None) -> np.ndarray:
+    """(3, 3) orthotropic plane-stress elastic tangent matrix for shells.
+
+    Accounts for layer orientation angle and damage states if provided.
+    Fortran origin: engine/source/materials/mat/mat014/sigeps14c.F
+    """
+    p = getattr(mat, "params", {}) or {}
+    e11 = float(p.get("E11", p.get("MAT_EA", 1.0)))
+    e22 = float(p.get("E22", p.get("MAT_EB", 1.0)))
+    nu12 = float(p.get("nu12", p.get("MAT_PRAB", 0.0)))
+    g12 = float(p.get("G12", p.get("MAT_GAB", 0.0)))
+
+    nu21 = nu12 * e22 / max(e11, _EM20) if e11 > 0.0 else 0.0
+    detc = max(1.0e-15, 1.0 - nu12 * nu21)
+    q11 = e11 / detc
+    q22 = e22 / detc
+    q12 = nu12 * e22 / detc
+
+    off_val = 1.0
+    dam1, dam2 = 0.0, 0.0
+    angle_deg = 0.0
+
+    if extra is not None and isinstance(extra, dict):
+        for off_k in ("off14", "off"):
+            if off_k in extra and extra[off_k] is not None:
+                val = np.asarray(extra[off_k], dtype=float).flatten()
+                if len(val) > 0:
+                    off_val = float(val[0])
+                break
+        for dam_k in ("dam14", "dam"):
+            if dam_k in extra and extra[dam_k] is not None:
+                val = np.asarray(extra[dam_k], dtype=float)
+                if val.ndim == 1 and len(val) >= 2:
+                    dam1, dam2 = float(val[0]), float(val[1])
+                elif val.ndim == 2 and val.shape[1] >= 2:
+                    dam1, dam2 = float(val[0, 0]), float(val[0, 1])
+                break
+        angle_deg = float(extra.get("angle", extra.get("theta", 0.0)))
+
+    if off_val <= 0.0:
+        return np.zeros((3, 3), dtype=float)
+
+    # Directional degradation
+    scale1 = max(0.0, 1.0 - dam1) * off_val
+    scale2 = max(0.0, 1.0 - dam2) * off_val
+
+    Q_mat = np.array([
+        [q11 * scale1, q12 * math.sqrt(scale1 * scale2), 0.0],
+        [q12 * math.sqrt(scale1 * scale2), q22 * scale2, 0.0],
+        [0.0, 0.0, g12 * math.sqrt(scale1 * scale2)],
+    ], dtype=float)
+
+    if abs(angle_deg) < 1.0e-9:
+        return Q_mat
+
+    theta = math.radians(angle_deg)
+    c = math.cos(theta)
+    s = math.sin(theta)
+    c2 = c * c
+    s2 = s * s
+    cs = c * s
+
+    T_sig_inv = np.array([
+        [c2, s2, -2.0 * cs],
+        [s2, c2, 2.0 * cs],
+        [cs, -cs, c2 - s2],
+    ], dtype=float)
+
+    T_eps = np.array([
+        [c2, s2, cs],
+        [s2, c2, -cs],
+        [-2.0 * cs, 2.0 * cs, c2 - s2],
+    ], dtype=float)
+
+    return T_sig_inv @ Q_mat @ T_eps
+
+
+def consistent_shell_tangent(
+    mat: Any,
+    sig: np.ndarray,
+    deps: Optional[np.ndarray] = None,
+    epsp: Optional[np.ndarray] = None,
+    dt: float = 0.0,
+    extra: Optional[Dict[str, Any]] = None,
+    symmetric: bool = True,
+) -> np.ndarray:
+    """Numerical consistent shell tangent matrix by finite difference perturbation."""
+    if deps is None:
+        deps = np.zeros_like(sig)
+
+    is_1d = (sig.ndim == 1)
+    s = np.atleast_2d(sig).copy()
+    d = np.atleast_2d(deps).copy()
+    n = s.shape[0]
+    n_comp = s.shape[1]
+
+    h = 1.0e-7
+    tangents = np.zeros((n, n_comp, n_comp), dtype=float)
+
+    for i in range(n):
+        for j in range(n_comp):
+            d_p = d[i].copy()
+            d_m = d[i].copy()
+            d_p[j] += h
+            d_m[j] -= h
+
+            extra_p = {k: np.copy(v) if isinstance(v, np.ndarray) else v for k, v in (extra or {}).items()}
+            extra_m = {k: np.copy(v) if isinstance(v, np.ndarray) else v for k, v in (extra or {}).items()}
+
+            s_p, _, _ = shell_update(mat, s[i].copy(), d_p, epsp=epsp, dt=dt, extra=extra_p)
+            s_m, _, _ = shell_update(mat, s[i].copy(), d_m, epsp=epsp, dt=dt, extra=extra_m)
+
+            diff = s_p - s_m
+            if np.all(np.isfinite(diff)):
+                tangents[i, :, j] = diff / (2.0 * h)
+            else:
+                tangents[i, :, j] = 0.0
+
+        np.nan_to_num(tangents[i], copy=False)
+        if symmetric:
+            tangents[i] = 0.5 * (tangents[i] + tangents[i].T)
+
+    if is_1d:
+        return tangents[0]
+    return tangents
+
+
+shell_tangent = consistent_shell_tangent
 
 
 # ============================================================================
@@ -1241,6 +2003,31 @@ def consistent_solid_tangent(
 
 
 solid_tangent = consistent_solid_tangent
+
+
+def tangent(group: Any = None, sig: Optional[np.ndarray] = None, **kwargs: Any) -> Optional[np.ndarray]:
+    """Elemental / group tangent interface compliance for LAW14.
+
+    Dispatches to shell_membrane_tangent for shell elements or consistent_solid_tangent
+    for 3D solid elements.
+    """
+    if group is None:
+        return None
+    mat = getattr(group, "mat", group)
+    elem_type = getattr(group, "elem_type", getattr(group, "type", "solid"))
+    if "shell" in str(elem_type).lower():
+        if sig is None:
+            sig = np.zeros(3, dtype=float)
+        try:
+            return shell_membrane_tangent(mat, **kwargs)
+        except Exception:
+            return None
+    if sig is None:
+        sig = np.zeros(6, dtype=float)
+    try:
+        return solid_tangent(mat, sig, **kwargs)
+    except Exception:
+        return None
 
 
 # ============================================================================

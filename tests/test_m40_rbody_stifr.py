@@ -331,15 +331,15 @@ def test_cst_inertia_scaling(make_deck):
     i_before = inertia.copy()
     got = noda.apply(mass_eff, 1.0 / mass_eff, model.v, 0.0,
                      inertia, inv_inertia)
-    assert got == pytest.approx(ctl.dt_min / 0.9, rel=1e-12)
+    assert got == pytest.approx(np.sqrt(1.00001) * ctl.dt_min / 0.9, rel=1e-12)
     assert noda.iner_added > 0.0
     loaded = stifr_before > 0.0
     expect_di = np.maximum(
-        stifr_before[loaded] * (ctl.dt_min / 0.9) ** 2 / 2.0
+        1.00001 * stifr_before[loaded] * (ctl.dt_min / 0.9) ** 2 / 2.0
         - i_before[loaded], 0.0).sum()
     assert noda.iner_added == pytest.approx(expect_di, rel=1e-12)
     assert inertia[loaded] == pytest.approx(
-        stifr_before[loaded] * (ctl.dt_min / 0.9) ** 2 / 2.0, rel=1e-12)
+        1.00001 * stifr_before[loaded] * (ctl.dt_min / 0.9) ** 2 / 2.0, rel=1e-12)
     # the inverse the integrator uses was refreshed in place
     assert inv_inertia[loaded] == pytest.approx(1.0 / inertia[loaded],
                                                 rel=1e-12)

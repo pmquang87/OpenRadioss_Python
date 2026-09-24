@@ -405,8 +405,10 @@ class ContactType24:
         Km_max = np.full(len(self.nodes), self.Km.max() if len(self.Km) else 0.0)
         K_sec = combine_stiffness(itf.istf, itf.stfac, Km_max, self.Ks)
         sec_sub = (self.nodes >= 0) & (self.nodes < len(mass))
-        dt_sec = np.sqrt(2.0 * np.maximum(mass[valid_nodes], 0.0)
-                         / np.maximum(K_sec[sec_sub], EM20)).min()
+        m_sec = mass[valid_nodes]
+        m_sec_pos = m_sec > 0.0
+        K_sec_sub = K_sec[sec_sub]
+        dt_sec = np.sqrt(2.0 * m_sec[m_sec_pos] / np.maximum(K_sec_sub[m_sec_pos], EM20)).min() if np.any(m_sec_pos) else np.inf
         Ks_max = np.full(len(self.segs),
                          self.Ks.max() if len(self.Ks) else 0.0)
         K_main = combine_stiffness(itf.istf, itf.stfac, self.Km, Ks_max)
@@ -414,8 +416,9 @@ class ContactType24:
         if not np.any(valid_segs):
             return float(dt_sec)
         m_corner = mass[self.segs[valid_segs]].min(axis=1)
-        dt_main = np.sqrt(2.0 * np.maximum(m_corner, 0.0)
-                          / np.maximum(K_main[valid_segs], EM20)).min()
+        mc_pos = m_corner > 0.0
+        K_m_sub = K_main[valid_segs]
+        dt_main = np.sqrt(2.0 * m_corner[mc_pos] / np.maximum(K_m_sub[mc_pos], EM20)).min() if np.any(mc_pos) else np.inf
         return float(min(dt_sec, dt_main))
 
     # ------------------------------------------------------------------
@@ -644,7 +647,7 @@ class ContactType24:
                 d13 = x[seg[:, 2]] - x[seg[:, 0]]
                 d24 = x[seg[:, 3]] - x[seg[:, 1]]
                 area = 0.5 * norm3(cross3(d13, d24))
-                pres = Fn_pos / np.maximum(area, EM20)
+                pres = np.where(area > EM20, Fn_pos / np.maximum(area, EM20), 0.0)
                 mu = friction.mu_kinetic(self.mfrot, self.fric,
                                          self.fric_c, pres, vt_mag)
             else:

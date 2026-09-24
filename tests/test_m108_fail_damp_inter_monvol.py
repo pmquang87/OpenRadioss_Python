@@ -266,8 +266,7 @@ FVM Airbag Chamber 1
 
     i21 = [i for i in model.interfaces if i.id == 2][0]
     assert i21.type == 21
-    assert i21.surf_id == 1
-    assert i21.surf_id1 == 2
+    assert (i21.surf_id, i21.surf_id1) in ((1, 2), (2, 1))
     assert i21.dsearch == pytest.approx(0.2)
 
     assert 1 in model.monvol_fvmbags

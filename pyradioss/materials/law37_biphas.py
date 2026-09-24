@@ -69,6 +69,77 @@ def _get_val(p: dict, rec: Any, keys: Union[str, list[str]], default: float = 0.
     return default
 
 
+class Law37Params:
+    """Parameters container for /MAT/LAW37 (BIPHAS / BIPHASIC)."""
+
+    def __init__(
+        self,
+        rho_l0: float = 1000.0,
+        c_l: float = 2.2e9,
+        alpha1: float = 1.0,
+        nu_l: float = 0.0,
+        nu_vol_l: float = 0.0,
+        rho_g0: float = 1.2,
+        gamma: float = 1.4,
+        p0: float = 1.01325e5,
+        nu_g: float = 0.0,
+        nu_vol_g: float = 0.0,
+        rho0: Optional[float] = None,
+        psh: float = 0.0,
+        pshift: Optional[float] = None,
+        isolver: int = 1,
+        pmin: Optional[float] = None,
+    ) -> None:
+        self.rho_l0 = float(rho_l0)
+        self.c_l = float(c_l)
+        self.alpha1 = float(alpha1)
+        self.nu_l = float(nu_l)
+        self.nu_vol_l = float(nu_vol_l)
+        self.rho_g0 = float(rho_g0)
+        self.gamma = float(gamma)
+        self.p0 = float(p0)
+        self.nu_g = float(nu_g)
+        self.nu_vol_g = float(nu_vol_g)
+        if rho0 is not None:
+            self.rho0 = float(rho0)
+        else:
+            self.rho0 = self.rho_l0 * self.alpha1 + (1.0 - self.alpha1) * self.rho_g0
+        self.psh = float(psh)
+        self.pshift = float(pshift) if pshift is not None else (-self.p0 if self.psh == 0.0 else -self.psh)
+        self.isolver = int(isolver)
+        self.pmin = float(pmin) if pmin is not None else -self.p0
+        self.r1 = self.c_l / self.rho_l0 if self.rho_l0 > 0.0 else 0.0
+        self.params: Dict[str, Any] = {
+            "rho_l0": self.rho_l0,
+            "c_l": self.c_l,
+            "alpha1": self.alpha1,
+            "nu_l": self.nu_l,
+            "nu_vol_l": self.nu_vol_l,
+            "rho_g0": self.rho_g0,
+            "gamma": self.gamma,
+            "p0": self.p0,
+            "nu_g": self.nu_g,
+            "nu_vol_g": self.nu_vol_g,
+            "rho0": self.rho0,
+            "psh": self.psh,
+            "pshift": self.pshift,
+            "isolver": self.isolver,
+            "pmin": self.pmin,
+            "r1": self.r1,
+            "R1": self.r1,
+            "PMIN": self.pmin,
+            "PSH": self.psh,
+            "PSHIFT": self.pshift,
+            "ISOLVER": self.isolver,
+            "visa1": self.nu_l,
+            "visb1": self.nu_vol_l,
+            "visa2": self.nu_g,
+            "visb2": self.nu_vol_g,
+        }
+        self.law = 37
+        self.law_name = "LAW37"
+
+
 def build_law37(rec: Any) -> Material:
     """Construct a Material entity for /MAT/LAW37 (/MAT/BIPHAS, /MAT/BIPHASIC).
 
@@ -355,11 +426,12 @@ def solid_update(
     soundsp : np.ndarray
         Speed of sound per element (n,).
     """
+    mat = getattr(mat, "mat", getattr(mat, "material", mat))
     nel = sig.shape[0]
     if nel == 0:
         return sig, epsp, np.zeros(0, dtype=float)
 
-    p = mat.params if mat.params is not None else {}
+    p = mat.params if hasattr(mat, "params") and mat.params is not None else {}
     rho_l0 = float(p.get("rho_l0", 1000.0))
     c_l = float(p.get("c_l", 2.2e9))
     alpha1 = float(p.get("alpha1", 1.0))
@@ -657,7 +729,8 @@ def sound_speed(
     float or np.ndarray
         Speed of sound.
     """
-    p = mat.params if mat.params is not None else {}
+    mat = getattr(mat, "mat", getattr(mat, "material", mat))
+    p = mat.params if hasattr(mat, "params") and mat.params is not None else {}
     c_l = float(p.get("c_l", 2.2e9))
     rho_l0 = float(p.get("rho_l0", 1000.0))
     p0 = float(p.get("p0", 1.01325e5))
@@ -776,7 +849,8 @@ def consistent_solid_tangent(
         else:
             dt = 0.0
 
-    p = mat.params if mat.params is not None else {}
+    mat = getattr(mat, "mat", getattr(mat, "material", mat))
+    p = mat.params if hasattr(mat, "params") and mat.params is not None else {}
     nu_l = float(p.get("nu_l", 0.0))
     nu_vol_l = float(p.get("nu_vol_l", 0.0))
     nu_g = float(p.get("nu_g", 0.0))
@@ -852,6 +926,17 @@ def consistent_solid_tangent(
     return d
 
 
+solid_step = solid_update
+solid_tangent = consistent_solid_tangent
+tangent_law37_solid = consistent_solid_tangent
+
+
+def tangent(group_or_mat: Any = None, **kwargs: Any) -> np.ndarray:
+    """Material law template tangent interface conforming to pyradioss dispatcher."""
+    mat = getattr(group_or_mat, "mat", getattr(group_or_mat, "material", group_or_mat))
+    return consistent_solid_tangent(mat, **kwargs)
+
+
 def _register() -> None:
     """Register LAW37 / BIPHAS / BIPHASIC in the global material physics registry."""
     try:
@@ -867,3 +952,17 @@ def _register() -> None:
 
 
 _register()
+
+__all__ = [
+    "Law37Params",
+    "build_law37",
+    "init_uv37",
+    "solid_step",
+    "solid_update",
+    "shell_update",
+    "sound_speed",
+    "consistent_solid_tangent",
+    "solid_tangent",
+    "tangent_law37_solid",
+    "tangent",
+]

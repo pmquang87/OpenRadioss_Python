@@ -498,8 +498,8 @@ def test_node_mesh_gap_shared_nodes():
     assert np.isclose(gaps[1], 0.8)
     # Node 4: connected only to seg 2 -> min edge of seg 2 is edge 2-1 (length 2.0) -> 0.8
     assert np.isclose(gaps[2], 0.8)
-    # Node 6: unconnected -> inf
-    assert np.isinf(gaps[3])
+    # Node 6: unconnected to segments or elements -> fallback to master local mesh gap 0.8 (BUG-CONT-03)
+    assert np.isclose(gaps[3], 0.8)
 
 
 # ============================================================================

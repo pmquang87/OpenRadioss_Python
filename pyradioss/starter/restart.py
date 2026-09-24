@@ -47,25 +47,79 @@ from typing import Optional, Tuple
 
 from .. import __version__
 from ..model.model import Model
+from .restart_binary import (
+    FortranBinaryFile,
+    is_binary_restart,
+    read_restart_binary,
+    write_restart_binary,
+)
 
 _MAGIC = "pyradioss-restart"
 
+__all__ = [
+    "write_restart",
+    "read_restart",
+    "write_restart_binary",
+    "read_restart_binary",
+    "FortranBinaryFile",
+    "is_binary_restart",
+]
 
-def write_restart(model: Model, path: str,
-                  engine: Optional[dict] = None) -> None:
+
+def write_restart(
+    model: Model,
+    path: str,
+    engine: Optional[dict] = None,
+    format: str = "pickle",
+) -> None:
     """Write a restart: Starter flavour (``engine=None``) or Engine
-    flavour (``engine`` = the accumulated-state dict, see module doc)."""
-    with open(path, "wb") as fh:
-        pickle.dump({"magic": _MAGIC, "version": __version__,
-                     "model": model, "engine": engine}, fh,
-                    protocol=pickle.HIGHEST_PROTOCOL)
+    flavour (``engine`` = the accumulated-state dict, see module doc).
+
+    Parameters
+    ----------
+    model : Model
+        The model to serialize.
+    path : str
+        Target file path.
+    engine : Optional[dict], optional
+        The engine accumulated-state dictionary.
+    format : str, optional
+        Serialization format: 'pickle' (default, backward-compatible) or
+        'binary' (Fortran unformatted sequential binary).
+    """
+    if format == "binary":
+        write_restart_binary(model, path, engine=engine)
+    elif format == "pickle":
+        with open(path, "wb") as fh:
+            pickle.dump(
+                {"magic": _MAGIC, "version": __version__, "model": model, "engine": engine},
+                fh,
+                protocol=pickle.HIGHEST_PROTOCOL,
+            )
+    else:
+        raise ValueError(f"Unknown restart format: {format!r} (expected 'pickle' or 'binary')")
 
 
 def read_restart(path: str) -> Tuple[Model, Optional[dict]]:
     """Read a restart; returns (model, engine_state) with engine_state
-    None for a Starter restart (fresh run from t = 0)."""
+    None for a Starter restart (fresh run from t = 0).
+
+    Auto-detects whether the file is in Fortran binary restart format
+    or Python pickle restart format based on file magic.
+    """
     with open(path, "rb") as fh:
-        data = pickle.load(fh)
+        peek = fh.read(32)
+
+    if is_binary_restart(peek):
+        return read_restart_binary(path)
+
+    with open(path, "rb") as fh:
+        try:
+            data = pickle.load(fh)
+        except Exception as exc:
+            raise ValueError(f"{path} is not a pyradioss restart file: {exc}") from exc
+
     if not (isinstance(data, dict) and data.get("magic") == _MAGIC):
         raise ValueError(f"{path} is not a pyradioss restart file")
     return data["model"], data.get("engine")
+

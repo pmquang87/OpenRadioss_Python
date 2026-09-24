@@ -122,7 +122,7 @@ def forces(group, x, v, vr, dt, fint, mint):
             H = B * n_exp * e ** (n_exp - 1.0) * rate_fac
             over = np.abs(sig[sl]) - sy
             plastic = over > 0.0
-            dl = np.where(plastic, over / (E + np.maximum(H, 0.0)), 0.0)
+            dl = np.where(plastic, over / np.maximum(E + np.maximum(H, 0.0), EM20), 0.0)
             st["epsp"][sl] = epsp + dl
             sig[sl] = np.where(plastic, np.sign(sig[sl]) * (sy + H * dl),
                                sig[sl])

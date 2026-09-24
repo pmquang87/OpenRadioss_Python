@@ -965,12 +965,12 @@ class TestEngineMultiCycleIntegration:
         deck.write(s_path)
 
         engine_deck = f"""/RUN/{run_name}/1
-2.0e-2
+2.0e-1
 /DT
 0.9 0
 /PRINT/-1
 /STOP
-100
+100.0 0.0 100
 /END
 """
         with open(e_path, "w") as f:
@@ -1057,12 +1057,12 @@ class TestEngineMultiCycleIntegration:
         deck.write(s_path)
 
         engine_deck = f"""/RUN/{run_name}/1
-2.0e-2
+2.0e-1
 /DT
 0.9 0
 /PRINT/-1
 /STOP
-100
+100.0 0.0 100
 /END
 """
         with open(e_path, "w") as f:
@@ -1085,3 +1085,135 @@ class TestEngineMultiCycleIntegration:
 
         eint = tetra_g.state["eint"]
         assert np.isfinite(eint).all()
+
+
+# =============================================================================
+# Additional Unit Tests for LAW05 (JWL Explosive EOS)
+# =============================================================================
+
+def test_law05_jwl_equation_of_state_exact_formula():
+    """Verify exact JWL pressure formula: P = A*(1 - w/(R1*V))*exp(-R1*V) + B*(1 - w/(R2*V))*exp(-R2*V) + w*E/V."""
+    A = 3.712e5
+    B = 3.231e3
+    R1 = 4.15
+    R2 = 0.95
+    omega = 0.30
+    rho0 = 1.63e-6
+    e0 = 7.0e3
+    mat = _make_tnt(
+        rho0=rho0,
+        a=A,
+        b=B,
+        r1=R1,
+        r2=R2,
+        omega=omega,
+        e0=e0,
+        ibfrac=0,
+        bulk=0.0,
+    )
+
+    # For fully reacted explosive (bfrac=1.0)
+    for V in [0.8, 1.0, 1.2, 2.0, 5.0]:
+        vol0 = 1.0
+        eint_val = e0 * vol0
+        extra = {
+            "bfrac": np.array([1.0]),
+            "v": np.array([V]),
+            "vol": np.array([V * vol0]),
+            "vol0": np.array([vol0]),
+            "eint": np.array([eint_val]),
+        }
+        sig_init = np.zeros((1, 6))
+        deps = np.zeros((1, 6))
+
+        sig, _, c = law05_jwl.solid_update(
+            mat, sig_init, deps, epsp=None, dt=0.0, extra=extra
+        )
+
+        term1 = A * (1.0 - omega / (R1 * V)) * np.exp(-R1 * V)
+        term2 = B * (1.0 - omega / (R2 * V)) * np.exp(-R2 * V)
+        term3 = omega * eint_val / (V * vol0)
+        expected_p = term1 + term2 + term3
+
+        # Fluid stress: sig = -P * I
+        assert sig[0, 0] == pytest.approx(-expected_p, rel=1e-5)
+        assert sig[0, 1] == pytest.approx(-expected_p, rel=1e-5)
+        assert sig[0, 2] == pytest.approx(-expected_p, rel=1e-5)
+        assert sig[0, 3] == pytest.approx(0.0)
+        assert sig[0, 4] == pytest.approx(0.0)
+        assert sig[0, 5] == pytest.approx(0.0)
+
+
+def test_law05_jwl_unreacted_blend():
+    """Verify linear blending between unreacted explosive and detonation products."""
+    A = 3.712e5
+    B = 3.231e3
+    R1 = 4.15
+    R2 = 0.95
+    omega = 0.30
+    K_unreacted = 1.0e4
+    P0 = 10.0
+    mat = _make_tnt(
+        a=A,
+        b=B,
+        r1=R1,
+        r2=R2,
+        omega=omega,
+        bulk=K_unreacted,
+        p0=P0,
+        ibfrac=2,
+    )
+
+    V = 0.95
+    mu = 1.0 / V - 1.0
+    vol0 = 1.0
+    eint_val = 5.0e3 * vol0
+
+    for bfrac_val in [0.0, 0.25, 0.5, 0.75, 1.0]:
+        extra = {
+            "bfrac": np.array([bfrac_val]),
+            "v": np.array([V]),
+            "vol": np.array([V * vol0]),
+            "vol0": np.array([vol0]),
+            "eint": np.array([eint_val]),
+        }
+        sig, _, _ = law05_jwl.solid_update(
+            mat, np.zeros((1, 6)), np.zeros((1, 6)), epsp=None, dt=0.0, extra=extra
+        )
+
+        p_unreacted = P0 + K_unreacted * mu
+        p_jwl = (
+            A * (1.0 - omega / (R1 * V)) * np.exp(-R1 * V)
+            + B * (1.0 - omega / (R2 * V)) * np.exp(-R2 * V)
+            + omega * eint_val / (V * vol0)
+        )
+        expected_p = (1.0 - bfrac_val) * p_unreacted + bfrac_val * p_jwl
+        assert -sig[0, 0] == pytest.approx(expected_p, rel=1e-5)
+
+
+def test_law05_jwl_cavitation_cutoff():
+    """Verify cavitation cutoff: pressure cannot drop below -psh."""
+    psh = 50.0
+    mat = _make_tnt(
+        a=0.0,
+        b=0.0,
+        e0=0.0,
+        psh=psh,
+        p0=0.0,
+        bulk=1000.0,
+    )
+    # Severe expansion: V = 2.0 -> mu = -0.5 -> P_unreacted = -500.0
+    extra = {
+        "bfrac": np.array([0.0]),
+        "v": np.array([2.0]),
+        "vol": np.array([2.0]),
+        "vol0": np.array([1.0]),
+        "eint": np.array([0.0]),
+    }
+    sig, _, _ = law05_jwl.solid_update(
+        mat, np.zeros((1, 6)), np.zeros((1, 6)), epsp=None, dt=0.0, extra=extra
+    )
+    # P = max(0, P_tot) - Psh = -Psh -> sig = -P * I = Psh * I
+    assert -sig[0, 0] == pytest.approx(-psh, rel=1e-5)
+    assert sig[0, 0] == pytest.approx(psh, rel=1e-5)
+

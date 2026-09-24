@@ -34,6 +34,8 @@ import numpy as np
 
 from ..contact import tracking
 from ..model.model import Model
+from .centri import CentrifugalLoadEngine
+from .impacc import ImposedAccelerationEngine
 
 
 class LoadsAndConstraints:
@@ -155,14 +157,15 @@ class LoadsAndConstraints:
             idx = _grp(i.grnod_id)
             if idx is None or len(idx) == 0:
                 continue
+            sens_id = int(getattr(i, "sens_id", 0) or 0)
             self.impvel.append((idx, i.dof, _get_func(i.funct_id),
                                 i.scale, 1.0 / i.xscale if getattr(i, "xscale", 1.0) not in (0.0, None) else 1.0,
-                                i.tstart, i.tstop))
+                                i.tstart, i.tstop, sens_id))
 
         # /IMPDISP: like /IMPVEL, plus the base coordinate of each node so
         # the target position x0 + d(t) is exact (no velocity-integration
         # drift). Entries: (node_idx, dof, funct, scale, facx, tstart,
-        # tstop, x0_dof).
+        # tstop, x0_dof, sens_id).
         self.impdisp = []
         for i in getattr(model, "impdisp", []):
             if _skewed(i):
@@ -178,9 +181,10 @@ class LoadsAndConstraints:
                    else np.zeros(len(idx)))
             xscale = getattr(i, "xscale", 1.0)
             facx = 1.0 / xscale if xscale not in (0.0, None) else 1.0
+            sens_id = int(getattr(i, "sens_id", 0) or 0)
             self.impdisp.append((idx, i.dof, _get_func(i.funct_id),
                                  i.scale, facx, i.tstart, i.tstop,
-                                 x0d))
+                                 x0d, sens_id))
         # /IMPVEL + /IMPDISP in a /SKEW (M39): the imposed component is the
         # one along the skew's Dir axis (fixvel.F 390-418), so the base
         # coordinate an /IMPDISP lands against is the skew PROJECTION of
@@ -267,7 +271,7 @@ class LoadsAndConstraints:
             if len(segs) == 0 and log is not None:
                 log.warning(f"/PLOAD/{pl.id}: surface {pl.surf_id} has no "
                             f"segments — load inactive", "PLOAD INIT")
-            tri = ((segs[:, 3] == segs[:, 2]) | (segs[:, 3] <= 0)) if len(segs) else \
+            tri = ((segs[:, 3] == segs[:, 2]) | (segs[:, 3] < 0)) if len(segs) else \
                 np.zeros(0, dtype=bool)
             # corner lumping weights: 1/4 per quad corner; triangles put
             # 1/3 on each distinct corner and 0 on the repeated slot
@@ -281,6 +285,21 @@ class LoadsAndConstraints:
             self.ploads.append((segs, wgt, _get_func(pl.funct_id),
                                 pl.scale, gtype, elem, deletable,
                                 pl.sens_id))
+
+        # Centrifugal loads and Imposed accelerations (M595)
+        self.centri_engine = CentrifugalLoadEngine(model, log)
+        self.impacc_engine = ImposedAccelerationEngine(model, log)
+        self.impacc = self.impacc_engine.entries
+
+        # BCS subsystems (M612)
+        from .bcs_nrf import NonReflectingBoundaryEngine
+        from .bcs_cyclic import CyclicBoundaryEngine
+        from .bcs_wall import SlidingWallBcsEngine
+        from .nbcs import NonLinearBcsEngine
+        self.nrf_engine = NonReflectingBoundaryEngine(model, log)
+        self.cyclic_engine = CyclicBoundaryEngine(model, log)
+        self.wall_engine = SlidingWallBcsEngine(model, log)
+        self.nbcs_engine = NonLinearBcsEngine(model, log)
 
     # ------------------------------------------------------------------
     def external_forces(self, t: float, fext: np.ndarray,
@@ -316,7 +335,7 @@ class LoadsAndConstraints:
             if p == 0.0:
                 continue
             xs = x[segs].copy()                                  # (nseg, 4, 3)
-            degen = (segs[:, 3] == segs[:, 2]) | (segs[:, 3] <= 0)
+            degen = (segs[:, 3] == segs[:, 2]) | (segs[:, 3] < 0)
             if np.any(degen):
                 xs[degen, 3] = xs[degen, 2]
             # area vector = 1/2 (d13 x d24): exact for the bilinear quad
@@ -334,12 +353,39 @@ class LoadsAndConstraints:
                     if np.any(valid_nodes):
                         np.add.at(fext, nodes_k[valid_nodes], (wgt[valid_k, k, None] * fseg[valid_k])[valid_nodes])
 
+        # Centrifugal body forces (/LOAD/CENTRI and /CENTRI, M595)
+        self.centri_engine.compute_forces(t, x, fext, sensors)
+
+        # Non-reflecting boundary absorbing dashpot forces (/BCS/NRF and /EBCS/NRF, M612)
+        vel = getattr(self.model, "v", None)
+        if vel is not None and hasattr(self, "nrf_engine"):
+            self.nrf_engine.compute_forces(t, x, vel, fext)
+
+    # ------------------------------------------------------------------
+    @property
+    def impacc_reactions(self):
+        """Reaction forces from /IMPACC imposed accelerations."""
+        return self.impacc_engine.reactions
+
+    def apply_acceleration(self, t: float, dt: float,
+                           acc: np.ndarray, ar: Optional[np.ndarray],
+                           mass: np.ndarray, inertia: Optional[np.ndarray],
+                           v: np.ndarray, vr: Optional[np.ndarray],
+                           v_old: np.ndarray, vr_old: Optional[np.ndarray],
+                           sensors=None) -> float:
+        """Enforce /IMPACC conditions during acceleration update (Step 4, M595),
+        tracking reaction forces and returning external work."""
+        return self.impacc_engine.apply(
+            t, dt, acc, ar, mass, inertia, v, vr, v_old, vr_old, sensors
+        )
+
     # ------------------------------------------------------------------
     def apply_kinematic(self, t: float, v: np.ndarray, vr: np.ndarray,
                         mass: np.ndarray, x: np.ndarray,
                         dt: float, v_old: np.ndarray = None,
                         inertia: np.ndarray = None,
-                        vr_old: np.ndarray = None) -> float:
+                        vr_old: np.ndarray = None,
+                        sensors=None) -> float:
         """Apply /IMPVEL, /IMPDISP and /BCS to the freshly updated
         velocities (``t`` is the END of the step, t_n + dt).
 
@@ -414,21 +460,35 @@ class LoadsAndConstraints:
         # the node is free that cycle (fixvel.F CYCLEs the entry).
         # dof 0..2 overwrite the translational velocity, 3..5 the ANGULAR
         # velocity ``vr`` against the rotational inertia (M39).
-        for idx, dof, fct, scale, facx, tstart, tstop in self.impvel:
-            if len(idx) == 0 or t < tstart or t > tstop:
+        for entry in self.impvel:
+            idx, dof, fct, scale, facx, tstart, tstop = entry[:7]
+            sens_id = entry[7] if len(entry) > 7 else 0
+            if len(idx) == 0:
                 continue
-            t_mid = t - 0.5 * dt
+            if sensors is not None and not sensors.active(sens_id):
+                continue
+            te = t if (sensors is None or sens_id == 0) else sensors.shifted_time(sens_id, t)
+            if te is None or te < tstart or te > tstop:
+                continue
+            t_mid = te - 0.5 * dt
             vimp = scale * fct.eval(t_mid * facx)
             if dof < 3:
                 w += _book(v, mass, v_old, dof, vimp, idx)
             else:
                 w += _book(vr, rot_gen, vr_old, dof - 3, vimp, idx)
         # imposed displacements: land exactly at x0 + d(t_end)
-        for idx, dof, fct, scale, facx, tstart, tstop, x0d in self.impdisp:
-            if len(idx) == 0 or dt <= 0.0 or t < tstart or t > tstop:
+        for entry in self.impdisp:
+            idx, dof, fct, scale, facx, tstart, tstop, x0d = entry[:8]
+            sens_id = entry[8] if len(entry) > 8 else 0
+            if len(idx) == 0 or dt <= 0.0:
+                continue
+            if sensors is not None and not sensors.active(sens_id):
+                continue
+            te = t if (sensors is None or sens_id == 0) else sensors.shifted_time(sens_id, t)
+            if te is None or te < tstart or te > tstop:
                 continue
             if dof < 3:
-                target = x0d + scale * fct.eval(t * facx)
+                target = x0d + scale * fct.eval(te * facx)
                 vimp = (target - x[idx, dof]) / dt
                 w += _book(v, mass, v_old, dof, vimp, idx)
             else:
@@ -436,8 +496,8 @@ class LoadsAndConstraints:
                 # finite-difference rate over this step — there is no stored
                 # nodal angle to read back (the translational branch reads
                 # x[idx,dof]); exact for a DOF driven from d(tstart)=0.
-                vimp = scale * (fct.eval(t * facx)
-                                - fct.eval((t - dt) * facx)) / dt
+                vimp = scale * (fct.eval(te * facx)
+                                - fct.eval((te - dt) * facx)) / dt
                 w += _book(vr, rot_gen, vr_old, dof - 3, vimp, idx)
         # ---- /IMPVEL + /IMPDISP in a /SKEW (fixvel.F 390-418) ------------
         # The curve is imposed on the component ALONG the skew's Dir axis;
@@ -516,4 +576,17 @@ class LoadsAndConstraints:
                 if frot[d]:
                     e = axes[d]
                     vr[idx] -= np.outer(vr[idx] @ e, e)
+
+        # Cyclic sector symmetry boundary conditions (/BCS/CYCLIC, M612)
+        if hasattr(self, "cyclic_engine"):
+            self.cyclic_engine.enforce(x, v, getattr(self.model, "a", None))
+
+        # Dynamic non-linear boundary conditions (/NBCS, M612)
+        if hasattr(self, "nbcs_engine"):
+            self.nbcs_engine.apply(v, vr, getattr(self.model, "a", None))
+
+        # Non-reflecting absorbing work accounting (M612)
+        if hasattr(self, "nrf_engine"):
+            w += getattr(self.nrf_engine, "last_work", 0.0)
+
         return w

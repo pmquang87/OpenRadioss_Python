@@ -112,15 +112,16 @@ def cqc_correlation(omega, zeta):
     (5), the general unequal-damping form)."""
     omega = np.asarray(omega, dtype=float)
     z = np.broadcast_to(np.asarray(zeta, dtype=float), omega.shape)
-    wi = omega[:, None]
-    wk = omega[None, :]
+    wi = np.maximum(omega[:, None], 1e-12)
+    wk = np.maximum(omega[None, :], 1e-12)
     zi = z[:, None]
     zk = z[None, :]
     r = wk / wi                                       # omega_k / omega_i
     num = 8.0 * np.sqrt(zi * zk) * (zi + r * zk) * r ** 1.5
     den = ((1.0 - r ** 2) ** 2 + 4.0 * zi * zk * r * (1.0 + r ** 2)
            + 4.0 * (zi ** 2 + zk ** 2) * r ** 2)
-    rho = num / den
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rho = np.where(den > 1e-14, num / den, np.where(np.abs(r - 1.0) < 1e-6, 1.0, 0.0))
     # numerical guard: the diagonal is exactly 1 (r = 1, zi = zk analytically),
     # clip round-off outside [0, 1]
     rho = np.clip(rho, 0.0, 1.0)
@@ -155,7 +156,7 @@ def modal_peaks(basis, design_spectrum, direction, zeta):
     # spectral ordinate at each modal frequency (Hz); spectral displacement
     # Sd = Sa / omega^2
     Sa = np.asarray(design_spectrum.eval(basis.freqs), dtype=float)
-    Sd = Sa / (omega * omega)
+    Sd = np.where(omega > 1e-12, Sa / (omega * omega), 0.0)
     # modal peak field: column i = Gamma_i * Sd_i * phi_i (eq. (2))
     peaks = Phi * (gamma * Sd)[None, :]
     return peaks, gamma, Sa
@@ -273,9 +274,10 @@ def run_response_spectrum(model, ip, log, result, constr=None, contacts=(),
              "MODAL PEAK(|Gamma Sa/w^2|)")
     for i in range(basis.nmode):
         wi = basis.omega[i]
+        peak = abs(res['gamma'][i] * res['Sa'][i] / (wi * wi)) if wi > 1e-12 else 0.0
         log.info(f"      {i + 1:4d}  {basis.freqs[i]:12.5E} "
                  f"{res['gamma'][i]:12.4E} {res['Sa'][i]:12.5E}  "
-                 f"{abs(res['gamma'][i] * res['Sa'][i] / (wi * wi)):12.5E}")
+                 f"{peak:12.5E}")
     js = int(np.argmax(res["srss"]))
     jc = int(np.argmax(res["cqc"]))
     log.info(f"      PEAK RESPONSE  SRSS / CQC  . . . : "

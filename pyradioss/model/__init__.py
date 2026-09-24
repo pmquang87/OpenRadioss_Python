@@ -23,6 +23,9 @@ from .entities import (  # noqa: F401
     Material, Property, Part, NodeGroup, Surface, BoundaryCondition,
     InitialVelocity, Gravity, ConcentratedLoad, ImposedVelocity,
     RigidWall, Interface, Line, THRequest, Box,
+    PropType12, PropSprPul, PropPulley,
+    PropType35, PropStitch, PropSew,
+    PropType36, PropPredit,
     MatLaw25, MatCompPlas, MatCompsh, MatTsaiWu, MatCrasurv, MatCompositePlas,
     MatLaw58, MatFabrA, MatFabricA,
     MatLaw52, MatGurson, MatPlasGurs,
@@ -34,4 +37,37 @@ from .entities import (  # noqa: F401
     MaterialLaw109, MatLaw109, MatTabPlas, MaterialTabPlas, MatElastoPlasTab, MatLaw109TabPlas,
     MaterialLaw110, MatLaw110, MatVegter, MaterialVegter, MatPlasVegter, MaterialPlasVegter,
 )
+from .drape import (  # noqa: F401
+    DrapeParams,
+    DrapeTable,
+    ElementDrape,
+    apply_draping_to_ply,
+    apply_draping_to_shell_mesh,
+    compute_drape_shear_angle,
+    compute_trellising_thickness,
+)
+try:
+    from .stack import (  # noqa: F401
+        PlyDefinition,
+        StackDefinition,
+        build_stack,
+        reduced_stiffness_matrix,
+        rotate_reduced_stiffness,
+    )
+except ImportError:
+    pass
+
+from .refsta import (  # noqa: F401
+    RefstaData,
+    RefstaManager,
+    compute_deformation_gradient_3d,
+    compute_total_deformation_gradient,
+    compute_green_lagrange_strain,
+    compute_engineering_strain_from_ref,
+    compute_refsta_strains,
+    compute_membrane_refsta_strain,
+    parse_refsta_card,
+)
+
+
 

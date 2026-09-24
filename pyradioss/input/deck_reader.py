@@ -89,6 +89,9 @@ class Card:
     #: cached whitespace tokens
     _tokens: Optional[List[str]] = field(default=None, repr=False)
 
+    def __str__(self) -> str:
+        return self.raw
+
     def tokens(self) -> List[str]:
         """Whitespace-separated tokens (free-format view)."""
         if self._tokens is None:
@@ -239,13 +242,29 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
 
     blocks: List[KeywordBlock] = []
     current: Optional[KeywordBlock] = None
-    base_dir = os.path.dirname(os.path.abspath(path))
+    if isinstance(path, (list, tuple)):
+        if path and isinstance(path[0], KeywordBlock):
+            return list(path)
+        import io
+        base_dir = "."
+        path_name = "<memory>"
+        fh_ctx = io.StringIO("\n".join(path))
+    elif isinstance(path, str) and ("\n" in path or "\r" in path):
+        import io
+        base_dir = "."
+        path_name = "<memory>"
+        fh_ctx = io.StringIO(path)
+    else:
+        base_dir = os.path.dirname(os.path.abspath(path))
+        path_name = str(path)
+        fh_ctx = open(path, "r", encoding="utf-8", errors="replace")
 
-    with open(path, "r", errors="replace") as fh:
+    with fh_ctx as fh:
         for lineno, line in enumerate(fh, start=1):
-            line = line.rstrip("\n")
+            line = line.rstrip("\r\n")
             stripped = line.strip()
-            here = f"{os.path.basename(path)}:{lineno}"
+            here = f"{os.path.basename(path_name)}:{lineno}"
+
 
             if not stripped:
                 # blank line: not a card for the token parsers, but the
@@ -255,33 +274,46 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
                     current.blank_slots.append(len(current.cards))
                 continue
 
-            # -- #include directive (before generic comment handling) -------
+            # -- #include or /INCLUDE directive (before generic comment handling) -------
             low = stripped.lower()
-            if low.startswith("#include"):
-                inc = stripped[len("#include"):].strip().strip('"').strip("'")
-                inc_path = inc if os.path.isabs(inc) else os.path.join(base_dir, inc)
-                # Close the current block: an include splices *blocks*, it
-                # never continues the cards of an open block.
-                if current is not None:
-                    blocks.append(current)
-                    current = None
-                try:
-                    blocks.extend(read_deck(inc_path, _depth + 1))
-                except FileNotFoundError:
-                    # Record a synthetic error block so the caller sees the
-                    # failure (the Fortran starter also flags missing includes
-                    # and continues).  We append a block with keyword
-                    # "__INCLUDE_ERROR__" so read_all_blocks can log it.
-                    err_block = KeywordBlock(
-                        keyword="__INCLUDE_ERROR__",
-                        parts=["__INCLUDE_ERROR__"],
-                        user_id=0,
-                        cards=[],
-                        source=f"{path}:{lineno}",
-                        fixed=False,
-                    )
-                    err_block._include_path = inc_path
-                    blocks.append(err_block)
+            if low.startswith("#include") or (
+                low.startswith("/include")
+                and not low.startswith(("/include_dyna", "/include_ls-dyna", "/incl_dyna"))
+            ):
+                prefix = "#include" if low.startswith("#include") else "/include"
+                inc = stripped[len(prefix):].strip().strip('"').strip("'")
+                if not inc:
+                    # Next line may specify the include path
+                    for next_line in fh:
+                        next_stripped = next_line.rstrip("\r\n").strip()
+                        if not next_stripped or _is_comment(next_stripped):
+                            continue
+                        inc = next_stripped.strip('"').strip("'")
+                        break
+                if inc:
+                    inc_path = inc if os.path.isabs(inc) else os.path.join(base_dir, inc)
+                    # Close the current block: an include splices *blocks*, it
+                    # never continues the cards of an open block.
+                    if current is not None:
+                        blocks.append(current)
+                        current = None
+                    try:
+                        blocks.extend(read_deck(inc_path, _depth + 1))
+                    except FileNotFoundError:
+                        # Record a synthetic error block so the caller sees the
+                        # failure (the Fortran starter also flags missing includes
+                        # and continues).  We append a block with keyword
+                        # "__INCLUDE_ERROR__" so read_all_blocks can log it.
+                        err_block = KeywordBlock(
+                            keyword="__INCLUDE_ERROR__",
+                            parts=["__INCLUDE_ERROR__"],
+                            user_id=0,
+                            cards=[],
+                            source=f"{path}:{lineno}",
+                            fixed=False,
+                        )
+                        err_block._include_path = inc_path
+                        blocks.append(err_block)
                 continue
 
             if _is_comment(stripped):
@@ -306,7 +338,7 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
             if stripped.startswith("/"):
                 if current is not None:
                     blocks.append(current)
-                parts = [p for p in stripped[1:].split("/") if p != ""]
+                parts = [p.strip() for p in stripped[1:].split("/") if p.strip()]
                 # Trailing integer component = user ID (e.g. /BRICK/3).
                 # TWO trailing integers = user ID + local UNIT id
                 # (``/MAT/PLAS_JOHNS/1/1``, the general Radioss

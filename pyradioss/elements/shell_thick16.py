@@ -285,8 +285,8 @@ def s16deri3(xx, dnidr, dnids, dnidt):
         dzdr * drdz
     )
     
-    if det <= 0.0:
-        det = 1.0e-20
+    if det <= 1.0e-20:
+        return [0.0] * 16, [0.0] * 16, [0.0] * 16, 1.0e-20
         
     d = 1.0 / det
     
@@ -1021,7 +1021,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         scatter_add3(fint, conn_flat[valid], -fint_e_flat[valid], st.get('color_indices'), st.get('color_offsets'))
     
     # Calculate stable time step
-    dt_crit = st["lc"] / np.maximum(c_spd, 1e-20)
+    dt_crit = st.get("dtfac", 0.9) * st["lc"] / np.maximum(c_spd, 1e-20)
     return np.where(alive, dt_crit, EP30)
 
 

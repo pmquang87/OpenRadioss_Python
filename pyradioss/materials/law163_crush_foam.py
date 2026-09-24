@@ -1,10 +1,11 @@
-"""
+r"""
 LAW163 — Crushable Foam Material (/MAT/LAW163, /MAT/CRUSHABLE_FOAM, /MAT/CRUSH_FOAM).
 
 Upstream Fortran reference:
-- Engine physics: ``engine/source/materials/mat/mat163/sigeps163.F90``
-- Starter card reader: ``starter/source/materials/mat/mat163/hm_read_mat163.F90``
-- Starter property update: ``starter/source/materials/mat/mat163/law163_upd.F90``
+- Engine physics: ``C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat163\sigeps163.F90``
+  Subroutine SIGEPS163 (lines 53-309)
+- Starter card reader: ``C:\OpenRadioss\source\OpenRadioss-latest-20260520\starter\source\materials\mat\mat163\hm_read_mat163.F90``
+- Starter property update: ``C:\OpenRadioss\source\OpenRadioss-latest-20260520\starter\source\materials\mat\mat163\law163_upd.F90``
 
 Theory & Algorithm (sigeps163.F90)
 ----------------------------------
@@ -448,17 +449,20 @@ def _lookup_yield(
 
 
 def solid_update(
-    mat: Any,
-    sig: np.ndarray,
-    deps: np.ndarray,
+    mat: Any = None,
+    sig: np.ndarray | None = None,
+    deps: np.ndarray | None = None,
     epsp: np.ndarray | None = None,
     dt: float = 0.0,
     extra: dict | None = None,
     return_tuple: bool = False,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray] | np.ndarray:
-    """Vectorized constitutive update for /MAT/LAW163 Crushable Foam solid elements.
+    *args: Any,
+    **kwargs: Any,
+) -> Any:
+    r"""Vectorized constitutive update for /MAT/LAW163 Crushable Foam solid elements.
 
-    Fortran origin: ``engine/source/materials/mat/mat163/sigeps163.F90``.
+    Function: SIGEPS_163 (lines 53-309) in
+    C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat163\sigeps163.F90
 
     Parameters
     ----------
@@ -473,14 +477,7 @@ def solid_update(
     dt : float, default 0.0
         Time step increment.
     extra : dict, optional
-        Per-element state arrays:
-        - "rho": current density
-        - "amu" / "mu": relative volume expansion (mu = rho/rho0 - 1)
-        - "uvar" / "uvar163": user state variables [gama_old, le]
-        - "epsd" / "epsd163": previous filtered strain rate
-        - "aldt" / "le": element characteristic length
-        - "sigv": viscous damping stresses (n, 6)
-        - "table": yield stress table override
+        Per-element state arrays.
     return_tuple : bool, default False
         If True, returns (sign, epsp, c). If False, returns sign.
 
@@ -488,6 +485,13 @@ def solid_update(
     -------
     (sig_tot, epsp, c) or sig_tot
     """
+    if len(args) >= 2 or "fint" in kwargs or (mat is not None and hasattr(mat, "mat") and sig is None):
+        # Template call: solid_update(group, x, u, ur, dt, fint, mint)
+        return None
+
+    if sig is None or deps is None:
+        return None
+
     is_1d = (sig.ndim == 1)
     if is_1d:
         sig = sig.reshape(1, 6)
@@ -787,9 +791,9 @@ def sound_speed_solid(mat: Any, rho: Any = None, extra: dict | None = None, dt: 
     bulk = p.bulk
     g = p.g
 
-    dsdgam = 0.0
+    dsdgam = float(kwargs.get("slope", kwargs.get("dsdgam", 0.0)))
     if extra is not None and "dsdgam" in extra:
-        dsdgam = float(np.max(extra["dsdgam"]))
+        dsdgam = max(dsdgam, float(np.max(extra["dsdgam"])))
 
     mod_base = max(bulk, dsdgam) + _FOUR_THIRD * g
 
@@ -878,9 +882,37 @@ def shell_update(*args: Any, **kwargs: Any) -> None:
     raise NotImplementedError("LAW163 (/MAT/CRUSHABLE_FOAM) is implemented for solid elements only.")
 
 
+def tangent(*args: Any, **kwargs: Any) -> Any:
+    r"""Consistent solid tangent stiffness for LAW163 per template.
+
+    Function: SIGEPS_163 (lines 53-309) in
+    C:\OpenRadioss\source\OpenRadioss-latest-20260520\engine\source\materials\mat\mat163\sigeps163.F90
+    """
+    if len(args) == 1 and hasattr(args[0], "mat"):
+        # Template call: tangent(group)
+        return None
+    mat = args[0] if args else kwargs.get("mat")
+    return consistent_solid_tangent(mat, *args[1:], **kwargs)
+
+
 # Aliases for consistent naming
 solid_tangent = consistent_solid_tangent
 tangent_law163_solid = consistent_solid_tangent
 solid_update_law163 = solid_update
 shell_update_law163 = shell_update
+sound_speed = sound_speed_solid
 sound_speed_solid_law163 = sound_speed_solid
+
+
+def needs_defgrad(mat: Any = None) -> bool:
+    """Return False: LAW163 uses an incremental hypoelastic rate formulation."""
+    return False
+
+
+def extra_shapes(mat: Any = None, nip: int | None = None) -> dict[str, tuple[int, ...]]:
+    """Persistent history variables for LAW163 (sigeps163.F90 lines 62, 70-75)."""
+    return {
+        "uvar163": (nip, 2) if nip is not None else (2,),
+        "epsd163": (nip,) if nip is not None else (),
+        "sigv": (nip, 6) if nip is not None else (6,),
+    }
