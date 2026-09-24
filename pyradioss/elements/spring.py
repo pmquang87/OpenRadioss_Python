@@ -62,7 +62,15 @@ from . import spring_advanced, spring_beam, spring_general, spring_mat, spring_p
 #: groups (``prop_reader.refuse_inactive_properties``) and the Starter
 #: already warns (checks.check_model's PROP CHECK), which is the honest
 #: pair of messages.  Add a type here only together with a reader that fills
-#: its mass AND a Fortran Starter that actually requires it.
+#: its mass AND a Fortran Starter that actually requires it:
+#:   4  hm_read_prop04.F:114 reads MASS -> GEO(1); :137-143 MSGID 229 when
+#:      GEO(1) <= EM15 (rmass.F:64 EMS = HALF*GEO(1)*XL feeds the dt).
+#:   12 hm_read_prop12.F:114 reads MASS -> GEO(1); :150-156 MSGID 229 when
+#:      GEO(1) <= EM15 (rinit3.F:537 routes TYPE12 with TYPE4 to RMASS).
+#:   28 hm_read_prop28.F:139 reads MASS -> RHO; :262-268 MSGID 423 when
+#:      RHO == 0 (mass per unit length of the strands).
+#: An InactiveProperty instance of any of these types is skipped at the
+#: use site (its mass is the placeholder, not a card value).
 _MASS_REQUIRED_SPRING_TYPES = frozenset({4, 12, 28})
 
 #: /PROP spelling per TYPE for the mass message (the card the user wrote)
@@ -200,6 +208,12 @@ def init_group(group, model, log):
     for sl, mat, prop in st["slices"]:
         pt = getattr(prop, "type", 4)
         if pt not in _MASS_REQUIRED_SPRING_TYPES:
+            continue
+        if getattr(prop, "inactive", False):
+            # InactiveProperty: its ``mass`` is _universal_geo_params()'s
+            # placeholder 0.0, not a value read off the card -- checking it
+            # would invent a deck error.  refuse_inactive_properties owns
+            # the honest message for such a group.
             continue
         bad = np.zeros(n, dtype=bool)
         bad[sl] = mass[sl] <= 0.0

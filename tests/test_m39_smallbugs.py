@@ -301,8 +301,16 @@ def test_mass_required_spring_types_scope():
     # M40 (M39-BUG-SPRPRE): TYPE32 removed — the Fortran Starter does not
     # enforce MASS > 0 for /PROP/SPR_PRE (hm_read_prop32.F has no mass check;
     # the cfg CHECK is HyperMesh-GUI-only, confirmed by running starter_win64
-    # on cantilever_completed).  Only TYPE4 /SPRING genuinely requires it.
-    assert spring._MASS_REQUIRED_SPRING_TYPES == frozenset({4})
+    # on cantilever_completed).
+    # TYPE12 and TYPE28 joined once the port READ their mass off the card,
+    # because the Fortran Starter does enforce it for them:
+    #   hm_read_prop12.F:114 HM_GET_FLOATV('MASS',GEO(1)) then :150-156
+    #   ``IF(GEO(1)<=EM15) ANCMSG(MSGID=229)`` ("ERROR IN SPRING PROPERTY
+    #   (MASS)"), the same check as hm_read_prop04.F:137-143;
+    #   hm_read_prop28.F:139 HM_GET_FLOATV('MASS',RHO) then :262-268
+    #   ``IF(RHO==0.) ANCMSG(MSGID=423)``.
+    # Nothing else: SPR_PRE 32, SPR_TORS 19, ... stay out.
+    assert spring._MASS_REQUIRED_SPRING_TYPES == frozenset({4, 12, 28})
 
 
 # ============================================================================

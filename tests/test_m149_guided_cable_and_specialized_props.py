@@ -143,55 +143,59 @@ def test_prop_stitch_parsing(tmp_path):
 
 
 def test_prop_predit_parsing(tmp_path):
-    # itype = 0 (function-based)
-    deck_0 = (
-        "/BEGIN\n"
-        "PROP PREDIT TEST 0\n"
-        "/PROP/PREDIT/60\n"
-        "Predit Delamination Function Prop\n"
-        "#      ITYPE\n"
-        "           0\n"
-        "#   FCT_ID1   FCT_ID2   FCT_ID3\n"
-        "         101       102       103\n"
-        "#             K_INIT\n"
-        "               5.5e4\n"
-        "/END\n"
-    )
-    model_0, log_0 = _parse_starter(tmp_path, deck_0, "predit0_0000.rad")
-    assert len(log_0.errors) == 0
-    p0 = model_0.properties[60]
-    assert p0.type == 36
-    assert p0.params["itype"] == 0
-    assert p0.params["fct_id1"] == 101
-    assert p0.params["fct_id2"] == 102
-    assert p0.params["fct_id3"] == 103
-    assert p0.params["k_init"] == pytest.approx(5.5e4)
-
-    # itype = 1 (analytical parameters)
+    # Card layout: hm_cfg_files/config/CFG/radioss110/PROP/prop_p36_predit.cfg
+    # (FORMAT radioss51) and starter/source/properties/spring/hm_read_prop36.F
+    # lines 103-166: Iutype=1 -> skew_ID prop_ID1 prop_ID2 / Xk ;
+    #                Iutype=2 -> MAT_ID / Area Ixx Iyy Izz Ray.
+    # Iutype = 1 (interface referring to two shell properties)
     deck_1 = (
         "/BEGIN\n"
         "PROP PREDIT TEST 1\n"
-        "/PROP/TYPE36/61\n"
-        "Predit Delamination Analytical Prop\n"
-        "#      ITYPE\n"
-        "           1\n"
-        "#  ITYPE_SUB\n"
-        "           2\n"
-        "#                 P1                  P2                  P3                  P4                  P5\n"
-        "                 1.1                 2.2                 3.3                 4.4                 5.5\n"
+        "/PROP/PREDIT/60\n"
+        "Predit Delamination Interface Prop\n"
+        "#   Iutype\n"
+        "         1\n"
+        "#  skew_ID  prop_ID1  prop_ID2\n"
+        "         2       101       102\n"
+        "#                 Xk\n"
+        "               5.5e4\n"
         "/END\n"
     )
     model_1, log_1 = _parse_starter(tmp_path, deck_1, "predit1_0000.rad")
     assert len(log_1.errors) == 0
-    p1 = model_1.properties[61]
+    p1 = model_1.properties[60]
     assert p1.type == 36
-    assert p1.params["itype"] == 1
-    assert p1.params["itype_sub"] == 2
-    assert p1.params["p1"] == pytest.approx(1.1)
-    assert p1.params["p2"] == pytest.approx(2.2)
-    assert p1.params["p3"] == pytest.approx(3.3)
-    assert p1.params["p4"] == pytest.approx(4.4)
-    assert p1.params["p5"] == pytest.approx(5.5)
+    assert p1.params["lutype"] == 1
+    assert p1.params["skew_id"] == 2
+    assert p1.params["prop_id1"] == 101
+    assert p1.params["prop_id2"] == 102
+    assert p1.params["xk"] == pytest.approx(5.5e4)
+
+    # Iutype = 2 (beam-like section referring to a material)
+    deck_2 = (
+        "/BEGIN\n"
+        "PROP PREDIT TEST 2\n"
+        "/PROP/TYPE36/61\n"
+        "Predit Delamination Section Prop\n"
+        "#   Iutype\n"
+        "         2\n"
+        "#   MAT_ID\n"
+        "         7\n"
+        "#               Area                 Ixx                 Iyy                 Izz                 Ray\n"
+        "                 1.1                 2.2                 3.3                 4.4                 5.5\n"
+        "/END\n"
+    )
+    model_2, log_2 = _parse_starter(tmp_path, deck_2, "predit2_0000.rad")
+    assert len(log_2.errors) == 0
+    p2 = model_2.properties[61]
+    assert p2.type == 36
+    assert p2.params["lutype"] == 2
+    assert p2.params["mat_id"] == 7
+    assert p2.params["area"] == pytest.approx(1.1)
+    assert p2.params["ixx"] == pytest.approx(2.2)
+    assert p2.params["iyy"] == pytest.approx(3.3)
+    assert p2.params["izz"] == pytest.approx(4.4)
+    assert p2.params["ray"] == pytest.approx(5.5)
 
 
 def test_prop_spr_muscle_parsing(tmp_path):

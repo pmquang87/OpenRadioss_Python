@@ -29,6 +29,17 @@ ALL_PORTED_LAWS = sorted(list(
 ))
 
 
+# Laws whose upstream implementation is 3D-solid only: no sigepsNNc.F shell
+# kernel exists and the shell material dispatch (engine/source/materials/
+# mat_share/mulawc.F90 lines 1125-1307) has no branch for them.  The port
+# mirrors this by raising NotImplementedError from shell_update and by having
+# no shell tangent, so the census must not demand a shell path for them:
+#   24  engine/source/materials/mat/mat024/  (m24law.F chain, no sigeps24c.F)
+#   37  engine/source/materials/mat/mat037/  (sigeps37.F only)
+#   90  engine/source/materials/mat/mat090/  (sigeps90.F only)
+_SOLID_ONLY_LAWS = {24, 37, 90}
+
+
 def _make_dummy_material(law_num: int) -> Material:
     """Create a test material entity with standard physical properties."""
     return Material(
@@ -100,6 +111,8 @@ def test_new_law_solid_update(law_num):
 @pytest.mark.parametrize("law_num", list(mats._NEW_PORTED_LAWS.keys()))
 def test_new_law_shell_update(law_num):
     """Verify shell_update executes for all 55 new material laws."""
+    if law_num in _SOLID_ONLY_LAWS:
+        pytest.skip(f"LAW{law_num} is 3D-solid only upstream (no sigeps{law_num}c.F)")
     mat = _make_dummy_material(law_num)
     sig = np.zeros((1, 3), dtype=np.float64)
     deps = np.full((1, 3), 1.0e-4, dtype=np.float64)
@@ -132,6 +145,9 @@ def test_new_law_tangents(law_num):
     assert c_sol.shape[-2:] == (6, 6)
     assert not np.isnan(c_sol).any()
 
+    if law_num in _SOLID_ONLY_LAWS:
+        # no shell kernel upstream -> no shell tangent to verify
+        return
     c_sh = mats.shell_membrane_tangent(mat)
     assert c_sh.shape[-2:] == (3, 3)
     assert not np.isnan(c_sh).any()

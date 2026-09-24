@@ -1110,6 +1110,15 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         extra = {}
 
     p = mat.params if hasattr(mat, "params") and mat.params is not None else {}
+    if "Gc" not in p or "A11c" not in p:
+        # Raw cfg-named material (MAT_E, MAT_NU, MAT_SIGY, ... of
+        # hm_read_mat24.F lines 110-149): derive the PM table the kernel
+        # reads, exactly as the starter does through build_conc, and cache
+        # it on the material so the cycle loop pays this once.
+        p = dict(p)
+        p.update(build_conc(mat).params)
+        if hasattr(mat, "params") and mat.params is not None:
+            mat.params.update(p)
     if str(p.get("DAMAGE_MODEL", "")).upper() in ("SCALAR", "PERIC") or extra.get("scalar_damage", False):
         return peric_damage_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
     young, nu, g = p["E"], p["nu"], p["Gc"]
@@ -1302,8 +1311,10 @@ def _carm24(yms, y0s, ets, epsa, siga, deps_norm):
     siga[:] = np.where(yielded, s_yield_new, s_trial)
 
 
-def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
-    """Shell update is rejected for LAW24 (3D solid elements only)."""
+def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, *args, **kwargs):
+    """Shell update is rejected for LAW24 (3D solid elements only): no
+    sigeps24c.F exists upstream (engine/source/materials/mat/mat024/ holds
+    the m24law.F solid chain only; mulawc.F90 has no LAW24 branch)."""
     raise NotImplementedError(
         "LAW24 (concrete) is implemented for 3D solid elements only."
     )
@@ -1480,7 +1491,7 @@ def build_conc(rec) -> Material:
     ymc = float(q.get("MAT_E") if q.get("MAT_E") is not None else (q.get("e") if q.get("e") is not None else (q.get("E") or 0.0)))
     anuc = float(q.get("MAT_NU") if q.get("MAT_NU") is not None else (q.get("nu") if q.get("nu") is not None else (q.get("NU") or 0.0)))
     icap = int(q.get("Iflag") if q.get("Iflag") is not None else (q.get("icap") if q.get("icap") is not None else (q.get("iflag") or 0)))
-    fc = float(q.get("MAT_SIGY") if q.get("MAT_SIGY") is not None else (q.get("fc") if q.get("fc") is not None else (q.get("sig_y") or 0.0)))
+    fc = float(q.get("MAT_SIGY") if q.get("MAT_SIGY") is not None else (q.get("fc") if q.get("fc") is not None else (q.get("sig_y") if q.get("sig_y") is not None else (q.get("sigy") if q.get("sigy") is not None else (q.get("SIGY") or 0.0)))))
     ft = float(q.get("MAT_FtFc") if q.get("MAT_FtFc") is not None else (q.get("ft") if q.get("ft") is not None else (q.get("ft_fc") or 0.0)))
     fb = float(q.get("MAT_FbFc") if q.get("MAT_FbFc") is not None else (q.get("fb") if q.get("fb") is not None else (q.get("fb_fc") or 0.0)))
     f2d = float(q.get("MAT_F2Fc") if q.get("MAT_F2Fc") is not None else (q.get("f2d") if q.get("f2d") is not None else (q.get("f2_fc") or 0.0)))
