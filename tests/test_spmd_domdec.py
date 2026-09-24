@@ -17,8 +17,8 @@ import numpy as np
 import pytest
 
 from pyradioss.common.messages import MessageLog, StarterError
-from pyradioss.model.entities import (MonitoredVolume, PressureLoad,
-                                      RigidWall, Sensor)
+from pyradioss.model.entities import (GJoint, MonitoredVolume,
+                                      PressureLoad, RigidWall, Sensor)
 from pyradioss.model.model import ElementGroup, Model
 from pyradioss.spmd.domdec import (DomainInfo, check_spmd_support, decompose,
                                    element_weights, slice_model)
@@ -454,3 +454,60 @@ def test_run_starter_np_refuses_before_restart(tmp_path, monkeypatch):
     base = deck[: -len("_0000.rad")]
     assert not os.path.isfile(base + "_0000.rst")
     assert not glob.glob(base + "_0000_*.rst")
+
+def test_gjoint_refused_under_spmd():
+    model = Model()
+    model.gjoints = [GJoint(id=1, subtype="GEAR", node_id0=1, node_id1=2, node_id2=3)]
+    with pytest.raises(StarterError) as exc:
+        check_spmd_support(model, np=2)
+    assert "/GJOINT" in str(exc.value)
+    # Serial (np=1) is supported
+    check_spmd_support(model, np=1)
+
+
+def test_type2_with_fail_refused_under_spmd(tmp_path):
+    from pyradioss.model.entities import Interface
+    deck = _copy_deck(tmp_path, "spot_weld")
+    gm = _starter(deck)
+    check_spmd_support(gm)                      # supported as is (no failure)
+
+    # TYPE2 with failure enabled is refused
+    gm.shells.state["chk_fail"] = True
+    with pytest.raises(StarterError) as exc:
+        check_spmd_support(gm)
+    msg = str(exc.value)
+    assert "/INTER/TYPE2" in msg
+    assert "SPMD_EXCH_IDEL" in msg
+    assert "chkstfn3.F" in msg
+
+    # Reset failure flag
+    gm.shells.state["chk_fail"] = False
+    check_spmd_support(gm)
+
+    # Penalty contacts with idel >= 1 (or idel10 >= 1) are refused under SPMD
+    for itype in (7, 10, 11, 24):
+        if itype == 10:
+            itf = Interface(id=100 + itype, type=itype, idel10=1)
+        else:
+            itf = Interface(id=100 + itype, type=itype, idel=1)
+        gm.interfaces.append(itf)
+        with pytest.raises(StarterError) as exc:
+            check_spmd_support(gm)
+        msg = str(exc.value)
+        assert f"/INTER/TYPE{itype}" in msg
+        assert "SPMD_EXCH_IDEL" in msg
+        assert "chkstfn3.F" in msg
+        gm.interfaces.pop()
+
+
+def test_kjoint_refused_under_spmd():
+    model = Model()
+    model.kjoints = [object()]
+    with pytest.raises(StarterError) as exc:
+        check_spmd_support(model, np=2)
+    msg = str(exc.value)
+    assert "/KJOINT" in msg
+    assert "ruser33.F" in msg
+    # Serial (np=1) is supported
+    check_spmd_support(model, np=1)
+

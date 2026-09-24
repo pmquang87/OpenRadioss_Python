@@ -31,7 +31,7 @@ from pyradioss.common.messages import MessageLog
 from pyradioss.elements import shell_bt4, shell_ortho, spring, spring_general
 from pyradioss.input import mat_reader, prop_reader
 from pyradioss.input.deck_reader import read_deck
-from pyradioss.input.starter_keywords import read_prop
+from pyradioss.input.starter_keywords import read_prop, read_starter_deck
 from pyradioss.model.entities import Material, Part, Property
 from pyradioss.model.model import ElementGroup, Model
 from pyradioss.starter.initialization import build_element_groups
@@ -551,3 +551,18 @@ def test_law19_prop9_corpus_end_to_end(tmp_path):
     shells = model.shells if model.shells is not None else model.shells_qeph
     assert shells is not None
     assert shells.state.get("ortho") is not None
+
+
+def test_duplicate_prop_id_rejected():
+    deck = """/BEGIN
+TEST_DUP_PROP
+/PROP/SHELL/1
+Shell 1
+1.0
+/PROP/SHELL/1
+Shell 1 duplicate
+1.0
+/END
+"""
+    with pytest.raises(ValueError, match="duplicated -- upstream hm_read_properties.F:798 VDOUBLE"):
+        read_starter_deck(deck)

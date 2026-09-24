@@ -633,7 +633,7 @@ class NodeGroup:
     id: int
     title: str = ""
     # Unresolved content, as read from the deck:
-    node_ids: List[int] = field(default_factory=list)   # /GRNOD/NODE
+    node_ids: Union[List[int], np.ndarray] = field(default_factory=list)   # /GRNOD/NODE
     part_ids: List[int] = field(default_factory=list)   # /GRNOD/PART
     box_ids: List[int] = field(default_factory=list)    # /GRNOD/BOX
     surf_ids: List[int] = field(default_factory=list)   # /GRNOD/SURF (M37)
@@ -4927,6 +4927,8 @@ class SetGeneric:
     set_type: str
     title: str = ""
     ids: List[int] = field(default_factory=list)
+    key: str = ""
+    seg_nodes: List[List[int]] = field(default_factory=list)
 
 
 @dataclass

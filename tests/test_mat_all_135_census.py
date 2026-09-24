@@ -34,10 +34,15 @@ ALL_PORTED_LAWS = sorted(list(
 # mat_share/mulawc.F90 lines 1125-1307) has no branch for them.  The port
 # mirrors this by raising NotImplementedError from shell_update and by having
 # no shell tangent, so the census must not demand a shell path for them:
+#   11  engine/source/materials/mat/mat011/  (m11law.F, no sigeps11c.F)
+#   13  engine/source/materials/mat/mat013/  (m13law.F, ALE fluid, no sigeps13c.F)
 #   24  engine/source/materials/mat/mat024/  (m24law.F chain, no sigeps24c.F)
 #   37  engine/source/materials/mat/mat037/  (sigeps37.F only)
+#   51  engine/source/materials/mat/mat051/  (sigeps51.F90 only)
+#   54  engine/source/materials/mat/mat054/  (solid/SPH only)
 #   90  engine/source/materials/mat/mat090/  (sigeps90.F only)
-_SOLID_ONLY_LAWS = {24, 37, 90}
+#   151 engine/source/materials/mat/mat151/ (multimat ALE solid only)
+_SOLID_ONLY_LAWS = {11, 13, 24, 37, 51, 54, 90, 151}
 
 
 def _make_dummy_material(law_num: int) -> Material:

@@ -10056,15 +10056,33 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     else:
         if block.fixed:
             f = cards[0].cut("BCS")
-            s_flags = f[0].strip()
+            s_flags = f[0].strip() if f else ""
+            raw_line = cards[0].raw.rstrip("\r\n") if hasattr(cards[0], "raw") else ""
+            raw_f0 = raw_line[:10] if len(raw_line) >= 10 else (f[0] if f else "")
             if len(s_flags.split()) >= 2:
                 tra, rot = s_flags.split()[:2]
-            elif len(s_flags) == 6 and all(c in "01" for c in s_flags):
+            elif len(s_flags) == 6 and all(c in "012" for c in s_flags):
                 tra, rot = s_flags[:3], s_flags[3:]
+            elif len(raw_f0) >= 6 and any(
+                len(raw_f0) > i and raw_f0[i] in ("1", "2")
+                for i in (3, 4, 5, 7, 8, 9)
+            ):
+                dof1 = 1 if len(raw_f0) > 3 and raw_f0[3] in ("1", "2") else 0
+                dof2 = 1 if len(raw_f0) > 4 and raw_f0[4] in ("1", "2") else 0
+                dof3 = 1 if len(raw_f0) > 5 and raw_f0[5] in ("1", "2") else 0
+                dof4 = 1 if len(raw_f0) > 7 and raw_f0[7] in ("1", "2") else 0
+                dof5 = 1 if len(raw_f0) > 8 and raw_f0[8] in ("1", "2") else 0
+                dof6 = 1 if len(raw_f0) > 9 and raw_f0[9] in ("1", "2") else 0
+                tra = f"{dof1}{dof2}{dof3}"
+                rot = f"{dof4}{dof5}{dof6}"
+            elif s_flags and all(c in "012" for c in s_flags):
+                padded = s_flags.zfill(6)
+                tra, rot = padded[:3], padded[3:]
             else:
-                log.error(f"/BCS/{block.user_id}: Trarot field needs 6 flags or 'TTT RRR', got '{f[0]}'", block.source)
+                log.error(f"/BCS/{block.user_id}: Trarot field needs 6 flags or 'TTT RRR', got '{f[0] if f else ''}'", block.source)
                 return
-            tra, rot, skew, grnod = tra, rot, _ival(f[1]), _ival(f[2])
+            skew = _ival(f[1]) if len(f) > 1 else 0
+            grnod = _ival(f[2]) if len(f) > 2 else 0
         else:
             t = cards[0].tokens()
             if len(t) < 4:
@@ -10072,8 +10090,8 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                           f"'tra rot skew grnod'", block.source)
                 return
             tra, rot, skew, grnod = t[0], t[1], int(t[2]), int(t[3])
-        fix_tra = np.array([ch == "1" for ch in tra.zfill(3)])
-        fix_rot = np.array([ch == "1" for ch in rot.zfill(3)])
+        fix_tra = np.array([ch in ("1", "2") for ch in tra.zfill(3)])
+        fix_rot = np.array([ch in ("1", "2") for ch in rot.zfill(3)])
 
     model.bcs.append(BoundaryCondition(
         id=block.user_id, grnod_id=grnod, fix_tra=fix_tra, fix_rot=fix_rot,
@@ -18236,18 +18254,78 @@ def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         )
     elif stype in ("GENERAL", "GENE"):
         # /SET/GENERAL/id
+        key = ""
+        for p in block.parts[2:]:
+            pu = p.upper()
+            if pu in ("NODE", "NODENS", "SEG", "PART_E", "PART", "SOLID", "SHELL", "QUAD", "BEAM", "TRUSS", "SPRING"):
+                key = pu
+                break
         title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
         ids = []
+        seg_nodes = []
         for c in cards:
             if c.is_blank:
                 continue
-            for t in c.tokens():
-                try:
-                    ids.append(int(float(t)))
-                except ValueError:
-                    pass
+            toks = c.tokens()
+            if not toks:
+                continue
+            if not key:
+                t0 = toks[0].strip().upper()
+                if t0 in ("NODE", "NODENS", "SEG", "PART_E", "PART", "SOLID", "SHELL", "QUAD", "BEAM", "TRUSS", "SPRING"):
+                    key = t0
+                    toks = toks[1:]
+                elif any(t0.startswith(k) for k in ("NODE", "SEG", "PART_E", "PART")):
+                    if t0.startswith("NODE"):
+                        key = "NODE"
+                    elif t0.startswith("SEG"):
+                        key = "SEG"
+                    elif t0.startswith("PART_E"):
+                        key = "PART_E"
+                    elif t0.startswith("PART"):
+                        key = "PART"
+                    else:
+                        key = t0
+                    toks = toks[1:]
+                else:
+                    try:
+                        float(t0)
+                    except ValueError:
+                        key = t0
+                        toks = toks[1:]
+
+            if key == "SEG":
+                card_ints = []
+                for t in toks:
+                    try:
+                        card_ints.append(int(float(t)))
+                    except ValueError:
+                        pass
+                if len(card_ints) == 5:
+                    seg = card_ints[1:5]
+                    seg_nodes.append(seg)
+                    ids.extend(seg)
+                elif len(card_ints) == 3:
+                    seg = [card_ints[0], card_ints[1], card_ints[2], card_ints[2]]
+                    seg_nodes.append(seg)
+                    ids.extend(seg)
+                elif len(card_ints) >= 4 and len(card_ints) % 4 == 0:
+                    for i in range(0, len(card_ints), 4):
+                        seg = list(card_ints[i:i+4])
+                        if seg[3] == 0:
+                            seg[3] = seg[2]
+                        seg_nodes.append(seg)
+                        ids.extend(seg)
+                else:
+                    for val in card_ints:
+                        ids.append(val)
+            else:
+                for t in toks:
+                    try:
+                        ids.append(int(float(t)))
+                    except ValueError:
+                        pass
         model.generic_sets.setdefault("GENERAL", {})[block.user_id] = SetGeneric(
-            id=block.user_id, set_type="GENERAL", title=title, ids=ids
+            id=block.user_id, set_type="GENERAL", title=title, ids=ids, key=key, seg_nodes=seg_nodes
         )
     else:
         log.warning(f"/SET/{stype} not ported", block.source)
@@ -41883,7 +41961,10 @@ def read_mat_law25(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     from .mat_reader import InactiveMaterial
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    if block.fixed:
+        valid_cards = [c for c in cards if not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
+    else:
+        valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
     if not valid_cards:
         log.error(f"/MAT/LAW25/{mat_id}: missing data card", block.source)
         return
@@ -43150,7 +43231,10 @@ def read_prop_type18(block: KeywordBlock, model: Model, log: MessageLog) -> None
 
     prop_id = block.user_id or 1
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    if block.fixed:
+        cards = [c for c in cards if not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
+    else:
+        cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
 
     params = {
         "isflag": 0, "ismstr": 0, "dm": 0.0, "df": 0.0,
@@ -96914,12 +96998,18 @@ def parse_starter_deck(blocks: Union[List[KeywordBlock], str, Any],
         model = Model()
     if log is None:
         log = MessageLog()
+    seen_prop_ids: set[int] = set()
     for block in blocks:
         # M258: handle missing #include files (FileNotFoundError → error, not crash)
         if block.keyword == "__INCLUDE_ERROR__":
             inc_path = getattr(block, "_include_path", "?")
             log.error(f"#include file not found: {inc_path}", block.source)
             continue
+        if block.key0 == "PROP" or block.key0.startswith("PROP_"):
+            prop_id = block.user_id if block.user_id is not None else 1
+            if prop_id in seen_prop_ids:
+                raise ValueError(f"/PROP id {prop_id} is duplicated -- upstream hm_read_properties.F:798 VDOUBLE")
+            seen_prop_ids.add(prop_id)
         joined_key = "_".join(block.parts).upper() if block.parts else block.key0
         parser = KEYWORD_PARSERS.get(joined_key)
         if parser is None and len(block.parts) > 1:

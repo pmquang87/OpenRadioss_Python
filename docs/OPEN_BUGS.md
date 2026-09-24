@@ -1,24 +1,19 @@
 # Open bugs — found, not yet fixed
 
 *Recorded 2026-09-24 at the end of the M615 (SPMD) bug-fix pass, PR #51.
-The maintainer asked for these to be saved, not fixed, so a later session
-can pick them up. Line numbers are as of commit `cf065dc`.*
+Update (2026-09-24): Items fixed in PR #47 / branch `feat/vtk-full-tensors`.*
 
-## How they were found
+## Status Summary
 
-A multi-agent pass had two parts. First it fixed the 15 red tests on `main`,
-in five clusters. Second it hunted bugs in the new SPMD port (`pyradioss/spmd/`
-and the SPMD hooks in `engine/engine.py`, `contact/`, `engine/gjoint.py`,
-`engine/kjoint.py`):
-
-- The finders reported 4 raw findings, still 4 after deduplication.
-- Each finding went to an independent skeptic told to refute it and to check
-  both the code and the upstream Fortran. All 4 survived and none were
-  refuted.
-- SPMD-2 below merges two of the findings, which share one root cause. That
-  leaves **3 distinct SPMD defects**.
-- None of the 4 `tests/test_spmd_*.py` modules covers any of them. That is
-  why the 15 SPMD feature-deck parity runs stayed green.
+- **SPMD-1 (`/GJOINT` under `-np > 1`)**: **FIXED** (commit `ecff9bc`). Refused in `check_spmd_support` citing `lag_mult.F LAG_MULTP L683`.
+- **SPMD-2 (ghost `off` deletion / interface divergence)**: **FIXED (interim refusal)** (commit `4219bdb`). Refused `/INTER/TYPE2` with failure and penalty contacts with `idel >= 1` / `idel10 >= 1` citing `chkstfn3.F SPMD_EXCH_IDEL`. Full port of `SPMD_EXCH_IDEL` tracked for future SPMD enhancement.
+- **SPMD-3 (`/KJOINT` penalty replica double-counting)**: **FIXED** (commit `4c4e80b`). Refused `model.kjoints` in `check_spmd_support` citing `ruser33.F` / `spmd_exch_a.F`.
+- **Item 1 (Dead LAW14 shell tests)**: **FIXED** (commit `e1dbee6`). Removed dead shell tests from `tests/test_law14_compso.py`.
+- **Item 2 (Dead LAW14 shell code)**: **FIXED** (commit `e1dbee6`). Removed `multilayer_shell_update`, `shell_membrane_tangent`, `consistent_shell_tangent` from `pyradioss/materials/law14_compso.py` citing `mulawc.F90:1125-1307` and `hm_read_mat14.F:151-158`.
+- **Item 3 (Duplicate law registration)**: **FIXED** (commit `1f680b5`). Removed duplicate LAW24, LAW37, LAW90 from `_NEW_PORTED_LAWS` in `pyradioss/materials/__init__.py`.
+- **Item 4 (Solid-only audit)**: **FIXED** (commit `1f680b5`). Audited against `mulawc.F90` and added 11, 13, 51, 54, 151 to `_SOLID_ONLY_LAWS` in `tests/test_mat_all_135_census.py`.
+- **Item 5 (Duplicate `/PROP` IDs not rejected at parse time)**: **FIXED** (commit `c6c3b3c`). Added duplicate ID rejection in `pyradioss/input/starter_keywords.py:parse_starter_deck` citing `hm_read_properties.F:798 VDOUBLE`.
+- **Item 6 (LAW4 cfg lookup in Linux dev container)**: Environment issue; passes in Windows environment and GitHub CI (76 passed).
 
 ---
 
