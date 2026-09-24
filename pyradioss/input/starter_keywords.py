@@ -10056,15 +10056,33 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     else:
         if block.fixed:
             f = cards[0].cut("BCS")
-            s_flags = f[0].strip()
+            s_flags = f[0].strip() if f else ""
+            raw_line = cards[0].raw.rstrip("\r\n") if hasattr(cards[0], "raw") else ""
+            raw_f0 = raw_line[:10] if len(raw_line) >= 10 else (f[0] if f else "")
             if len(s_flags.split()) >= 2:
                 tra, rot = s_flags.split()[:2]
-            elif len(s_flags) == 6 and all(c in "01" for c in s_flags):
+            elif len(s_flags) == 6 and all(c in "012" for c in s_flags):
                 tra, rot = s_flags[:3], s_flags[3:]
+            elif len(raw_f0) >= 6 and any(
+                len(raw_f0) > i and raw_f0[i] in ("1", "2")
+                for i in (3, 4, 5, 7, 8, 9)
+            ):
+                dof1 = 1 if len(raw_f0) > 3 and raw_f0[3] in ("1", "2") else 0
+                dof2 = 1 if len(raw_f0) > 4 and raw_f0[4] in ("1", "2") else 0
+                dof3 = 1 if len(raw_f0) > 5 and raw_f0[5] in ("1", "2") else 0
+                dof4 = 1 if len(raw_f0) > 7 and raw_f0[7] in ("1", "2") else 0
+                dof5 = 1 if len(raw_f0) > 8 and raw_f0[8] in ("1", "2") else 0
+                dof6 = 1 if len(raw_f0) > 9 and raw_f0[9] in ("1", "2") else 0
+                tra = f"{dof1}{dof2}{dof3}"
+                rot = f"{dof4}{dof5}{dof6}"
+            elif s_flags and all(c in "012" for c in s_flags):
+                padded = s_flags.zfill(6)
+                tra, rot = padded[:3], padded[3:]
             else:
-                log.error(f"/BCS/{block.user_id}: Trarot field needs 6 flags or 'TTT RRR', got '{f[0]}'", block.source)
+                log.error(f"/BCS/{block.user_id}: Trarot field needs 6 flags or 'TTT RRR', got '{f[0] if f else ''}'", block.source)
                 return
-            tra, rot, skew, grnod = tra, rot, _ival(f[1]), _ival(f[2])
+            skew = _ival(f[1]) if len(f) > 1 else 0
+            grnod = _ival(f[2]) if len(f) > 2 else 0
         else:
             t = cards[0].tokens()
             if len(t) < 4:
@@ -10072,8 +10090,8 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                           f"'tra rot skew grnod'", block.source)
                 return
             tra, rot, skew, grnod = t[0], t[1], int(t[2]), int(t[3])
-        fix_tra = np.array([ch == "1" for ch in tra.zfill(3)])
-        fix_rot = np.array([ch == "1" for ch in rot.zfill(3)])
+        fix_tra = np.array([ch in ("1", "2") for ch in tra.zfill(3)])
+        fix_rot = np.array([ch in ("1", "2") for ch in rot.zfill(3)])
 
     model.bcs.append(BoundaryCondition(
         id=block.user_id, grnod_id=grnod, fix_tra=fix_tra, fix_rot=fix_rot,
