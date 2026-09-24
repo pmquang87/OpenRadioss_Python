@@ -213,6 +213,7 @@ def main():
     parser.add_argument("--backend", type=str, default="numpy", choices=["numpy", "numba", "both"])
     parser.add_argument("--tier", type=int, default=0, help="Benchmark tier: 0 (<100 nodes), 1 (100-10k)")
     parser.add_argument("--standalone", action="store_true", help="Only test decks with no external includes")
+    parser.add_argument("--starter-only", action="store_true", help="Only run Starter stage, skip Engine")
     args = parser.parse_args()
 
     print(f"Loading gold set from {GOLD_SET_PATH}...")
@@ -258,7 +259,7 @@ def main():
             print(f"  Starter: {st_res['status']} in {st_res.get('time_s', 0):.3f}s {nodes_status}")
 
             eng_res = None
-            if st_res["status"] == "PASS":
+            if st_res["status"] == "PASS" and not args.starter_only:
                 backends = ["numpy", "numba"] if args.backend == "both" else [args.backend]
                 eng_res = {}
                 for b in backends:
@@ -268,6 +269,8 @@ def main():
                         print(f"  Engine ({b}): PASS in {b_res.get('time_s', 0):.3f}s (cycles: py={b_res.get('py_cycles')}, ref={cycles})")
                     else:
                         print(f"  Engine ({b}): {b_res['status']} ({b_res.get('error_type')}: {b_res.get('error')})")
+            elif args.starter_only:
+                print("  Engine:  SKIPPED (--starter-only)")
             else:
                 print(f"  Engine:  SKIPPED ({st_res.get('error_type')}: {st_res.get('error')})")
 
