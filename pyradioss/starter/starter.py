@@ -298,10 +298,19 @@ def apply_transforms(model: Model, log: MessageLog) -> None:
             model.x0[idx] = model.x0[idx] @ mat.T + vec
 
 
-def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
+def run_starter(input_file: str, log: MessageLog | None = None,
+                nspmd: int = 1) -> Model:
     """Run the full Starter on ``input_file``; returns the initialized
-    model (and writes the .out listing and .rst restart next to it)."""
+    model (and writes the .out listing and .rst restart next to it).
+
+    ``nspmd > 1`` (``pyradioss-starter -np N``): the model is also
+    decomposed into ``nspmd`` SPMD domains (pyradioss/spmd/domdec.py —
+    domdec1.F / domdec2.F / ddsplit.F) and one restart per domain,
+    ``RunName_0000_0001.rst`` ..., is written next to the global
+    ``RunName_0000.rst``; the decomposition table goes to the listing.
+    The returned model is the global one either way."""
     log = log or MessageLog()
+    nspmd = int(nspmd or 1)
     run_name = run_name_from_input(input_file)
     out_dir = os.path.dirname(os.path.abspath(input_file))
     listing_path = os.path.join(out_dir, f"{run_name}_0000.out")
@@ -376,9 +385,19 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
 
         # 5. restart file — only for a clean model, like the original
         log.check()  # raises StarterError if errors were collected
+        if nspmd > 1:
+            # refuse the SPMD-unsupported features before any restart is
+            # written (no restart for a model the -np run cannot take)
+            from ..spmd.domdec import check_spmd_support
+            check_spmd_support(model)
         rst_path = os.path.join(out_dir, f"{run_name}_0000.rst")
         write_restart(model, rst_path)
         log.info(f" RESTART FILE WRITTEN . . . . . . . . : {rst_path}")
+        if nspmd > 1:
+            # 6. SPMD domain decomposition + one restart per domain
+            #    (domdec1.F, domdec2.F, ddsplit.F)
+            from ..spmd.domdec import write_domain_restarts
+            write_domain_restarts(model, nspmd, out_dir, run_name, log)
         log.info("\n     ------------------------------------------------")
         log.info("     STARTER TERMINATION : NORMAL")
         log.info("     ------------------------------------------------")

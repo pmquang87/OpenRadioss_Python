@@ -301,6 +301,34 @@ class LoadsAndConstraints:
         self.wall_engine = SlidingWallBcsEngine(model, log)
         self.nbcs_engine = NonLinearBcsEngine(model, log)
 
+        #: SPMD ``WEIGHT`` array of the domain (None = serial run).  See
+        #: :meth:`set_spmd_weight`.
+        self.weight = None
+
+    # ------------------------------------------------------------------
+    def set_spmd_weight(self, weight: np.ndarray) -> None:
+        """Attach the SPMD ``WEIGHT`` array (1.0 on the node's main
+        domain, 0.0 on the other holders — see pyradioss/spmd/domdec.py).
+
+        Node-based loads and kinematic conditions act on the LOCAL subset
+        of their node group, so a frontier node sees the same condition on
+        every domain holding it.  Everything that is SUMMED once per node
+        must then carry the weight:
+
+        * gravity and /CLOAD nodal forces (``gravit.F`` multiplies the
+          frontier contributions the same way — the forces are then
+          frontier-summed by spmd_exch_a.F, so a weight-less force would
+          count once per holder);
+        * the work of /IMPVEL, /IMPDISP and /IMPACC (``fixvel.F``
+          ``DW = FOURTH*MS(I)*AXI*WEIGHT(I)``, ``gravit.F``
+          ``WFEXTT = ... *WEIGHT(N1)``).
+
+        The velocity overwrite itself is NOT weighted: every holder
+        applies it, which keeps the replicated velocities identical."""
+        self.weight = np.asarray(weight, dtype=np.float64)
+        self._m_grav_w = self._m_grav * self.weight
+        self.impacc_engine.weight = self.weight
+
     # ------------------------------------------------------------------
     def external_forces(self, t: float, fext: np.ndarray,
                         x: np.ndarray, sensors=None) -> None:
@@ -312,7 +340,10 @@ class LoadsAndConstraints:
         ``sensors`` (M6): /SENSOR-gated loads evaluate their curve at the
         SHIFTED time t - t_fire once their sensor fired, and are silent
         before (see engine/sensors.py)."""
-        m = self._m_grav
+        wgt = self.weight
+        # SPMD: the gravity mass carries WEIGHT (gravit.F) — see
+        # set_spmd_weight; serial: the untouched physical mass
+        m = self._m_grav if wgt is None else self._m_grav_w
         for idx, direction, fct, scale in self.gravity:
             acc = scale * fct.eval(t)
             fext[idx] += (m[idx, None] * acc) * direction[None, :]
@@ -323,7 +354,10 @@ class LoadsAndConstraints:
             if t_scale != 1.0 and t_scale != 0.0:
                 te = te / t_scale
             F = scale * fct.eval(te)
-            fext[idx] += F * direction[None, :]
+            if wgt is None:
+                fext[idx] += F * direction[None, :]
+            else:
+                fext[idx] += (F * wgt[idx])[:, None] * direction[None, :]
         for segs, wgt, fct, scale, gtype, elem, deletable, sens \
                 in self.ploads:
             if len(segs) == 0:
@@ -439,6 +473,7 @@ class LoadsAndConstraints:
         """
         w = 0.0
         skews = getattr(self.model, "skews", None)
+        wgt = self.weight          # SPMD WEIGHT (fixvel.F), None = serial
 
         def _book(vel, gen, gold, d, vimp, idx):
             # shared midstep booking for one imposed DOF ``d`` of the
@@ -448,6 +483,8 @@ class LoadsAndConstraints:
             # J . (gold + vimp)/2 — see the docstring's midstep identity.
             dv = vimp - vel[idx, d]
             g = np.where(self._frozen[idx], 0.0, gen[idx])
+            if wgt is not None:
+                g = g * wgt[idx]
             v_mid = 0.5 * ((gold[idx, d] if gold is not None
                             else vel[idx, d]) + vimp)
             vel[idx, d] = vimp
@@ -546,6 +583,8 @@ class LoadsAndConstraints:
                     vimp = (target - (x[idx] @ e)) / dt
             dv = vimp - vn                            # the impulse / gen
             g = np.where(self._frozen[idx], 0.0, gen[idx])
+            if wgt is not None:
+                g = g * wgt[idx]
             v_mid = 0.5 * ((gold[idx] @ e if gold is not None else vn)
                            + vimp)
             w += float(np.dot(g * dv, v_mid))

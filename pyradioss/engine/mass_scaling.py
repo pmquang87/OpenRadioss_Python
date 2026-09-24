@@ -184,6 +184,14 @@ class NodalTimeStep:
         self.mom_added = np.zeros(3)     # cumulative dm * v
         self.mass0 = float(model.mass[model.mass < 1e29].sum())
         self._reported = 0.0             # last dM/M milestone printed
+        #: SPMD ``WEIGHT`` array (``None`` = serial).  Under a domain
+        #: decomposition every holder of a node adds the SAME mass (the
+        #: frontier-summed STIFN is identical everywhere), so only the
+        #: once-per-node COUNTERS (mass_added, iner_added, e_madd,
+        #: mom_added) carry the weight — like dtnoda.F's DMAST sum which
+        #: loops over the domain's own nodes; the global value is the sum
+        #: over domains (see ``announce`` and engine.py).
+        self.weight: Optional[np.ndarray] = None
         self.log = log
         if self.cst and self.dt_min <= 0.0:
             log.warning("/DT/NODA/CST: dT_min is zero — no mass will ever "
@@ -347,10 +355,16 @@ class NodalTimeStep:
                         model.mass[master] += dm
                         mass_eff[master] += dm
                         inv_mass[master] = 1.0 / mass_eff[master]
-                        self.mass_added += dm
+                        if self.weight is None:
+                            self.mass_added += dm
+                            self.e_madd += float(0.5 * dm * (v[master] ** 2).sum())
+                            self.mom_added += dm * v[master]
+                        else:
+                            wm = float(self.weight[master])
+                            self.mass_added += dm * wm
+                            self.e_madd += float(0.5 * dm * (v[master] ** 2).sum()) * wm
+                            self.mom_added += (dm * wm) * v[master]
                         self.node_added_mass[master] += dm
-                        self.e_madd += float(0.5 * dm * (v[master] ** 2).sum())
-                        self.mom_added += dm * v[master]
                         entry[2] += dm
                         if rb is not None:
                             rb.M += dm
@@ -366,7 +380,8 @@ class NodalTimeStep:
                             inertia[master] += di
                             if inv_inertia is not None:
                                 inv_inertia[master] = 1.0 / inertia[master]
-                        self.iner_added += di
+                        self.iner_added += di if self.weight is None \
+                            else di * float(self.weight[master])
                         entry[3] += di
                         if rb is not None:
                             rb.J0 += np.eye(3) * di
@@ -406,13 +421,22 @@ class NodalTimeStep:
                     model.mass[idx] += dm_vals
                     mass_eff[idx] += dm_vals
                     inv_mass[idx] = 1.0 / mass_eff[idx]
-                    self.mass_added += float(dm_vals.sum())
                     self.node_added_mass[idx] += dm_vals
-                    # the addition creates kinetic energy and momentum at the
-                    # node's current velocity — booked and reported
-                    self.e_madd += float(
-                        0.5 * (dm_vals[:, None] * v[idx] ** 2).sum())
-                    self.mom_added += (dm_vals[:, None] * v[idx]).sum(axis=0)
+                    if self.weight is None:
+                        self.mass_added += float(dm_vals.sum())
+                        # the addition creates kinetic energy and momentum
+                        # at the node's current velocity — booked and
+                        # reported
+                        self.e_madd += float(
+                            0.5 * (dm_vals[:, None] * v[idx] ** 2).sum())
+                        self.mom_added += (dm_vals[:, None] * v[idx]).sum(axis=0)
+                    else:
+                        # SPMD: once-per-node counters (WEIGHT, ecrit.F)
+                        dmw = dm_vals * self.weight[idx]
+                        self.mass_added += float(dmw.sum())
+                        self.e_madd += float(
+                            0.5 * (dmw[:, None] * v[idx] ** 2).sum())
+                        self.mom_added += (dmw[:, None] * v[idx]).sum(axis=0)
             if rot is not None and np.any(rot):
                 # rotational CST: inertia needed so that the rotational
                 # nodal dt holds the target too (dtnoda.F 482-516,
@@ -429,14 +453,21 @@ class NodalTimeStep:
                     inertia[idx] += di_vals          # model.inertia (physical)
                     if inv_inertia is not None:
                         inv_inertia[idx] = 1.0 / inertia[idx]
-                    self.iner_added += float(di_vals.sum())
-            frac = self.mass_added / max(self.mass0, EM20)
-            if frac >= self._reported + 0.01:  # 1%-step announcements
-                self.log.info(
-                    f" -- /DT/NODA/CST: ADDED MASS {self.mass_added:.5E}"
-                    f" ({100.0 * frac:.2f}% OF THE INITIAL MASS)"
-                    f" AT TIME {t:.5E}")
-                self._reported = frac
+                    if self.weight is None:
+                        self.iner_added += float(di_vals.sum())
+                    else:
+                        self.iner_added += float(
+                            (di_vals * self.weight[idx]).sum())
+            if self.weight is None:
+                frac = self.mass_added / max(self.mass0, EM20)
+                if frac >= self._reported + 0.01:  # 1%-step announcements
+                    self.log.info(
+                        f" -- /DT/NODA/CST: ADDED MASS {self.mass_added:.5E}"
+                        f" ({100.0 * frac:.2f}% OF THE INITIAL MASS)"
+                        f" AT TIME {t:.5E}")
+                    self._reported = frac
+            # (SPMD: the local counter is a partial sum — the engine calls
+            # ``announce`` with the global value from the dt packet)
 
         # /DT/NODA/SET acceleration scaling factors
         self._set_factors = {}
@@ -496,6 +527,23 @@ class NodalTimeStep:
         if self._rot:
             self.stifr[:] = 0.0
         return dt
+
+    # ------------------------------------------------------------------
+    def announce(self, mass_added_glob: float, t: float) -> None:
+        """SPMD form of the 1%-step /DT/NODA/CST added-mass announcement:
+        ``mass_added_glob`` is the sum over domains of the weighted local
+        counters (carried by a SUM slot of the spmd_glob_min5.F packet, see
+        engine.py), ``mass0`` the global initial mass.  Identical on every
+        domain, so the ``_reported`` milestone stays in step everywhere."""
+        if not (self.cst and self.dt_min > 0.0 and self.dt_sca > 0.0):
+            return
+        frac = mass_added_glob / max(self.mass0, EM20)
+        if frac >= self._reported + 0.01:  # 1%-step announcements
+            self.log.info(
+                f" -- /DT/NODA/CST: ADDED MASS {mass_added_glob:.5E}"
+                f" ({100.0 * frac:.2f}% OF THE INITIAL MASS)"
+                f" AT TIME {t:.5E}")
+            self._reported = frac
 
     # ------------------------------------------------------------------
     def _compute_set_factors(self) -> Dict[int, float]:

@@ -108,9 +108,15 @@ class Dampers:
 
     # ------------------------------------------------------------------
     def apply(self, t: float, dt: float, v: np.ndarray, vr: np.ndarray,
-              mass: np.ndarray, inertia: np.ndarray) -> float:
+              mass: np.ndarray, inertia: np.ndarray,
+              weight: Optional[np.ndarray] = None) -> float:
         """Damp the group velocities (exact integrating factor) and
         return the kinetic energy removed this cycle.
+
+        ``weight`` (SPMD): the ``WEIGHT`` array of the domain — every
+        holder of a node damps it identically, the dissipation is booked
+        once per node (the ``WEIGHT(N)`` factor of ``damping.F``'s DW
+        accumulation); ``None`` = serial.
 
         Fortran: ``damping.F`` lines 129–171 (translational, ISK<=1, global
         coords) and lines 175–228 (rotational DOFs, IRODDL branch).
@@ -126,14 +132,24 @@ class Dampers:
             if dt <= 0.0 or t < tstart or t > tstop:
                 continue
             fac = np.exp(-alpha * dt)
-            de += float(0.5 * (1.0 - fac * fac)
-                        * (mass[idx, None] * v[idx] ** 2).sum())
+            if weight is None:
+                de += float(0.5 * (1.0 - fac * fac)
+                            * (mass[idx, None] * v[idx] ** 2).sum())
+            else:
+                de += float(0.5 * (1.0 - fac * fac)
+                            * ((weight[idx] * mass[idx])[:, None]
+                               * v[idx] ** 2).sum())
             v[idx] *= fac
             has_in = inertia[idx] > 0.0
             if np.any(has_in):
                 ir = idx[has_in]
-                de += float(0.5 * (1.0 - fac * fac)
-                            * (inertia[ir, None] * vr[ir] ** 2).sum())
+                if weight is None:
+                    de += float(0.5 * (1.0 - fac * fac)
+                                * (inertia[ir, None] * vr[ir] ** 2).sum())
+                else:
+                    de += float(0.5 * (1.0 - fac * fac)
+                                * ((weight[ir] * inertia[ir])[:, None]
+                                   * vr[ir] ** 2).sum())
                 vr[ir] *= fac
         return de
 

@@ -21,7 +21,10 @@ def main(argv=None) -> int:
     ap.add_argument("-nt", "-nthread", dest="nthread", type=int, default=0,
                     help="number of threads (sets numpy thread env vars)")
     ap.add_argument("-np", dest="nspmd", type=int, default=1,
-                    help="MPI domains (ignored: the port has no MPI)")
+                    help="SPMD domains (the Starter's -np): N > 1 runs the "
+                         "decomposed model — one domain per MPI process "
+                         "under mpirun (mpi4py), else N threads of this "
+                         "process")
     ap.add_argument("-backend", "--backend", dest="backend", default=None,
                     choices=["numpy", "numba", "cupy", "auto"],
                     help="compute backend: 'auto' (M40 default — cupy GPU or "
@@ -43,8 +46,6 @@ def main(argv=None) -> int:
         for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
                     "MKL_NUM_THREADS"):
             os.environ[var] = str(args.nthread)
-    if args.nspmd > 1:
-        print(" ** WARNING: -np ignored (no MPI in pyradioss)")
     if args.backend is not None:
         from ..accel import select_backend
         select_backend(args.backend)
@@ -59,7 +60,14 @@ def main(argv=None) -> int:
         print(f"\n     ENGINE TERMINATION : ERROR\n     Engine input file not found: {args.input}")
         return 2
     try:
-        model = run_engine(args.input)
+        from ..spmd.comm import mpi_world_size
+        if args.nspmd > 1 or mpi_world_size() > 1:
+            # SPMD run (radioss2.F / inipar.F): mpirun -> mpi4py domains,
+            # otherwise the in-process thread domains
+            from ..spmd.driver import run_engine_spmd
+            model = run_engine_spmd(args.input, args.nspmd)
+        else:
+            model = run_engine(args.input)
     except Exception as exc:
         print(f"\n     ENGINE TERMINATION : ERROR\n     {exc}")
         return 2

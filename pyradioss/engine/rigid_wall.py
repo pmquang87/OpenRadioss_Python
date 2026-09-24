@@ -246,8 +246,19 @@ class RigidWalls:
 
     # ------------------------------------------------------------------
     def apply(self, x: np.ndarray, v: np.ndarray, v_old: np.ndarray,
-              mass: np.ndarray, dt: float):
+              mass: np.ndarray, dt: float,
+              weight: Optional[np.ndarray] = None):
         """Correct velocities against every wall.
+
+        weight : SPMD ``WEIGHT`` array (``None`` = serial).  Every domain
+                 holding a candidate node applies the same correction
+                 (fixed walls act on the local candidate subset, moving
+                 walls are replicated with ALL their candidates and the
+                 carrier), so only the energy bookings are weighted: the
+                 per-node U terms by the node's weight and the carrier's
+                 kinetic-energy term by the carrier's weight — each node
+                 counted once over the domains (the ``WEIGHT(N)`` factor
+                 of ``rgwal0.F``'s force/work accumulation).
 
         v      : velocities after this cycle's acceleration + kinematic
                  updates (modified in place)
@@ -318,10 +329,16 @@ class RigidWalls:
             # ---- energy injected by the wall this cycle (module doc):
             # U = dKE - f.v_old dt, per node, full vectors — covers the
             # normal landing, the tied drag and the friction impulse
-            U = float((m * (
-                0.5 * np.einsum("nb,nb->n", v[i], v[i])
-                + 0.5 * np.einsum("nb,nb->n", v_old[i], v_old[i])
-                - np.einsum("nb,nb->n", v_trial, v_old[i]))).sum())
+            if weight is None:
+                U = float((m * (
+                    0.5 * np.einsum("nb,nb->n", v[i], v[i])
+                    + 0.5 * np.einsum("nb,nb->n", v_old[i], v_old[i])
+                    - np.einsum("nb,nb->n", v_trial, v_old[i]))).sum())
+            else:
+                U = float((weight[i] * m * (
+                    0.5 * np.einsum("nb,nb->n", v[i], v[i])
+                    + 0.5 * np.einsum("nb,nb->n", v_old[i], v_old[i])
+                    - np.einsum("nb,nb->n", v_trial, v_old[i]))).sum())
 
             if wnode < 0:
                 removed += -U                        # fixed wall (impact work absorbed into contact energy)
@@ -333,9 +350,15 @@ class RigidWalls:
                 # whose in-ledger KE change is then booked exactly
                 J = (m[:, None] * (v[i] - v_trial)).sum(axis=0)
                 v[wnode] = v_w - J / mass[wnode]
-                removed += -U - float(0.5 * mass[wnode]
-                                      * (v[wnode] @ v[wnode]
-                                         - v_w @ v_w))
+                if weight is None:
+                    removed += -U - float(0.5 * mass[wnode]
+                                          * (v[wnode] @ v[wnode]
+                                             - v_w @ v_w))
+                else:
+                    removed += -U - float(0.5 * mass[wnode]
+                                          * (v[wnode] @ v[wnode]
+                                             - v_w @ v_w)) \
+                        * float(weight[wnode])
         return removed, wext
 
 
