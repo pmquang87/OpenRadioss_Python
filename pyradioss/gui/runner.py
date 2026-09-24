@@ -46,6 +46,17 @@ from typing import Dict, List, Optional, Tuple
 _RUN_RE = re.compile(r"(.+)_(\d{4})\.rad$", re.IGNORECASE)
 
 
+def available_cpus() -> int:
+    """CPUs this machine offers the run (the upper bound of the GUI's CPU
+    spinbox): the scheduler affinity when the OS exposes it, else
+    ``os.cpu_count()``, never less than 1."""
+    try:
+        n = len(os.sched_getaffinity(0))          # Linux: honours cgroups/taskset
+    except (AttributeError, OSError):
+        n = os.cpu_count() or 1
+    return max(1, int(n))
+
+
 def derive_engine_deck(starter_deck: str) -> str:
     """``RunName_0000.rad`` -> ``RunName_0001.rad`` (the first Engine run).
 
@@ -335,14 +346,19 @@ def build_deck_summary(deck_path: str) -> Dict[str, object]:
 class GuiConfig:
     """A tiny JSON config in the user home (``~/.pyradioss_gui/config.json``).
 
-    Remembers the last-used directory, backend, thread count and the
-    Results-tab channel selection across sessions. Load/save never raise —
+    Remembers the last-used directory, backend, CPU count (``-np`` SPMD
+    domains), thread count and the Results-tab channel selection across
+    sessions. Load/save never raise —
     a missing or corrupt file falls back to defaults.
     """
 
     DEFAULTS = {
         "last_dir": "",
         "backend": "auto",
+        # CPUs = SPMD domains handed to `starter -np N` / `engine -np N`
+        # (1 = the serial run; N > 1 decomposes the model into N domains
+        # that run as N threads, or as N MPI processes under mpirun).
+        "nspmd": 1,
         "nthread": 0,
         "channels": ["IE", "KE", "EW", "ERR%"],
         # Post-processing: the OpenRadioss Fortran converter exe directory and
@@ -417,11 +433,15 @@ class JobRunner:
                  nthread: int = 0, python_exe: Optional[str] = None,
                  event_queue: Optional["queue.Queue"] = None,
                  post_actions: Optional[List[str]] = None,
-                 exec_dir: Optional[str] = None):
+                 exec_dir: Optional[str] = None, nspmd: int = 1):
         self.starter_deck = os.path.abspath(starter_deck)
         self.engine_deck = derive_engine_deck(self.starter_deck)
         self.backend = backend
         self.nthread = int(nthread)
+        # CPUs: the number of SPMD domains (`-np N` of BOTH the Starter,
+        # which writes one restart per domain, and the Engine, which runs
+        # the domains — pyradioss.spmd). 1 is the plain serial run.
+        self.nspmd = max(1, int(nspmd))
         self.python_exe = python_exe or sys.executable
         self.queue: "queue.Queue" = event_queue or queue.Queue()
         self.work_dir = os.path.dirname(self.starter_deck)
@@ -485,9 +505,17 @@ class JobRunner:
     def _base_cmd(self, module: str) -> List[str]:
         # -u: unbuffered child stdout so lines stream live to the pipe.
         cmd = [self.python_exe, "-u", "-m", module]
+        if self.nspmd > 1:
+            # the Starter decomposes into N domains and the Engine must be
+            # run with the same N (inipar.F coherence test) — one flag,
+            # both programs.
+            cmd += ["-np", str(self.nspmd)]
         if self.nthread > 0:
             cmd += ["-nt", str(self.nthread)]
         return cmd
+
+    def _starter_cmd(self) -> List[str]:
+        return self._base_cmd("pyradioss.starter") + ["-i", self.starter_deck]
 
     def _engine_cmd(self) -> List[str]:
         cmd = self._base_cmd("pyradioss.engine") + ["-i", self.engine_deck]
@@ -501,9 +529,7 @@ class JobRunner:
 
         # phase 1: STARTER
         self._emit(("phase", "starter"))
-        rc = self._run_phase(
-            "starter",
-            self._base_cmd("pyradioss.starter") + ["-i", self.starter_deck])
+        rc = self._run_phase("starter", self._starter_cmd())
         if rc != 0 or self._stop.is_set():
             if self._stop.is_set():
                 rc = -1

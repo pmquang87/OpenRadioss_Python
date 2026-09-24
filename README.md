@@ -135,8 +135,11 @@ python -m pyradioss.gui             # without installing
 
 - **Job panel** — pick a `*_0000.rad` starter deck (the last directory is
   remembered in `~/.pyradioss_gui/config.json`), the `*_0001.rad` engine deck
-  is auto-derived, choose the backend (auto/numpy/numba), then **Run** (Starter
-  then Engine as subprocesses, stdout streamed into the log) / **Stop**.
+  is auto-derived, choose the backend (auto/numpy/numba), the **CPUs** to use
+  (the `-np N` SPMD domain count handed to both the Starter and the Engine —
+  1 = serial, bounded by the CPUs the machine offers, remembered in the
+  config) and the thread count (`-nt`), then **Run** (Starter then Engine as
+  subprocesses, stdout streamed into the log) / **Stop**.
 - **Progress** — the Engine's cycle listing is parsed into a live status bar
   and a progress bar against the `/RUN` end time; the `ENGINE TERMINATION`
   banner is shown prominently (green NORMAL / red ERROR).

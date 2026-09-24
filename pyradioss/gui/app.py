@@ -9,7 +9,10 @@ wires the pure logic in :mod:`pyradioss.gui.runner` and the plotting in
 * **Job panel** — pick a ``*_0000.rad`` starter deck (remembering the last
   directory in the JSON config), auto-derive the ``*_0001.rad`` engine deck,
   choose the compute backend (auto/numpy/numba, ``auto`` preselected to match
-  the M40 default), Run (STARTER then ENGINE) and Stop.
+  the M40 default), the number of CPUs to use (the ``-np N`` SPMD domain
+  count passed to BOTH the Starter and the Engine, 1 = serial, bounded by
+  the CPUs the machine offers) and the thread count (``-nt``), Run (STARTER
+  then ENGINE) and Stop.
 * **Log pane** — the children's stdout, streamed line by line.
 * **Progress** — the parsed cycle/time/dt/error into a status bar and a
   progress bar against the ``/RUN`` end time; the TERMINATION banner shown
@@ -33,8 +36,8 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 from . import postproc
 from .plots import DEFAULT_CHANNELS, ResultsView, available_channels
-from .runner import (GuiConfig, JobRunner, build_deck_summary,
-                     derive_engine_deck, load_t01)
+from .runner import (GuiConfig, JobRunner, available_cpus,
+                     build_deck_summary, derive_engine_deck, load_t01)
 
 _POLL_MS = 100          # queue-drain cadence
 _BACKENDS = ("auto", "numpy", "numba", "cupy")
@@ -92,6 +95,16 @@ class PyradiossGUI:
         self.engine_var = tk.StringVar(value="")
         self.backend_var = tk.StringVar(
             value=str(self.config.get("backend", "auto")))
+        # CPUs = SPMD domains (`-np N`, pyradioss.spmd). Clamp the remembered
+        # value to what THIS machine offers (the config may come from a
+        # bigger box).
+        self.max_cpus = available_cpus()
+        try:
+            remembered_cpus = int(self.config.get("nspmd", 1) or 1)
+        except (TypeError, ValueError):
+            remembered_cpus = 1
+        self.nspmd_var = tk.IntVar(
+            value=min(self.max_cpus, max(1, remembered_cpus)))
         self.nthread_var = tk.IntVar(
             value=int(self.config.get("nthread", 0) or 0))
         self.status_var = tk.StringVar(value="Ready.")
@@ -159,6 +172,21 @@ class PyradiossGUI:
             row=2, column=2, sticky="e", padx=4, pady=4)
         ttk.Spinbox(job, from_=0, to=64, textvariable=self.nthread_var,
                     width=6).grid(row=2, column=3, sticky="w", padx=4, pady=4)
+
+        # CPUs: the SPMD domain count `-np N` (1 = serial run). The spinbox
+        # is bounded by the CPUs this machine offers; the label says so.
+        ttk.Label(job, text=f"CPUs (1..{self.max_cpus}):").grid(
+            row=3, column=0, sticky="w", padx=4, pady=4)
+        cpu_frame = ttk.Frame(job)
+        cpu_frame.grid(row=3, column=1, columnspan=3, sticky="w", padx=4,
+                       pady=4)
+        self.cpu_spin = ttk.Spinbox(cpu_frame, from_=1, to=self.max_cpus,
+                                    textvariable=self.nspmd_var, width=6)
+        self.cpu_spin.pack(side=tk.LEFT)
+        ttk.Label(cpu_frame,
+                  text=f"SPMD domains (-np); {self.max_cpus} CPU(s) "
+                       "detected, 1 = serial",
+                  foreground="#555").pack(side=tk.LEFT, padx=(8, 0))
 
         self.run_btn = ttk.Button(job, text="Run", command=self.run_job)
         self.run_btn.grid(row=2, column=4, padx=4, pady=4, sticky="we")
@@ -418,9 +446,16 @@ class PyradiossGUI:
         except (ValueError, tk.TclError):
             messagebox.showerror("pyradioss", "Thread count must be a non-negative integer.")
             return
+        nspmd = self.cpu_count()
+        if nspmd is None:
+            messagebox.showerror(
+                "pyradioss",
+                f"CPU count must be an integer between 1 and {self.max_cpus}.")
+            return
         # persist current selections
         self.config.set("backend", self.backend_var.get())
         self.config.set("nthread", nthread)
+        self.config.set("nspmd", nspmd)
         self._persist_post_opts()
 
         post_actions = []
@@ -441,10 +476,21 @@ class PyradiossGUI:
 
         self.runner = JobRunner(
             deck, backend=self.backend_var.get(),
-            nthread=nthread,
+            nthread=nthread, nspmd=nspmd,
             post_actions=post_actions,
             exec_dir=self.exec_dir_var.get().strip() or None)
         self.runner.start()
+
+    def cpu_count(self) -> Optional[int]:
+        """The validated CPU-spinbox value (the ``-np`` domain count), or
+        None when the entry is not an integer within ``1..max_cpus``."""
+        try:
+            n = int(self.nspmd_var.get())
+        except (ValueError, tk.TclError):
+            return None
+        if n < 1 or n > self.max_cpus:
+            return None
+        return n
 
     def stop_job(self) -> None:
         if self.runner is not None and self.runner.is_running():
