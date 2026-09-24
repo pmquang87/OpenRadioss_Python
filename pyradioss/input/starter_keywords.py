@@ -18254,18 +18254,78 @@ def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         )
     elif stype in ("GENERAL", "GENE"):
         # /SET/GENERAL/id
+        key = ""
+        for p in block.parts[2:]:
+            pu = p.upper()
+            if pu in ("NODE", "NODENS", "SEG", "PART_E", "PART", "SOLID", "SHELL", "QUAD", "BEAM", "TRUSS", "SPRING"):
+                key = pu
+                break
         title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
         ids = []
+        seg_nodes = []
         for c in cards:
             if c.is_blank:
                 continue
-            for t in c.tokens():
-                try:
-                    ids.append(int(float(t)))
-                except ValueError:
-                    pass
+            toks = c.tokens()
+            if not toks:
+                continue
+            if not key:
+                t0 = toks[0].strip().upper()
+                if t0 in ("NODE", "NODENS", "SEG", "PART_E", "PART", "SOLID", "SHELL", "QUAD", "BEAM", "TRUSS", "SPRING"):
+                    key = t0
+                    toks = toks[1:]
+                elif any(t0.startswith(k) for k in ("NODE", "SEG", "PART_E", "PART")):
+                    if t0.startswith("NODE"):
+                        key = "NODE"
+                    elif t0.startswith("SEG"):
+                        key = "SEG"
+                    elif t0.startswith("PART_E"):
+                        key = "PART_E"
+                    elif t0.startswith("PART"):
+                        key = "PART"
+                    else:
+                        key = t0
+                    toks = toks[1:]
+                else:
+                    try:
+                        float(t0)
+                    except ValueError:
+                        key = t0
+                        toks = toks[1:]
+
+            if key == "SEG":
+                card_ints = []
+                for t in toks:
+                    try:
+                        card_ints.append(int(float(t)))
+                    except ValueError:
+                        pass
+                if len(card_ints) == 5:
+                    seg = card_ints[1:5]
+                    seg_nodes.append(seg)
+                    ids.extend(seg)
+                elif len(card_ints) == 3:
+                    seg = [card_ints[0], card_ints[1], card_ints[2], card_ints[2]]
+                    seg_nodes.append(seg)
+                    ids.extend(seg)
+                elif len(card_ints) >= 4 and len(card_ints) % 4 == 0:
+                    for i in range(0, len(card_ints), 4):
+                        seg = list(card_ints[i:i+4])
+                        if seg[3] == 0:
+                            seg[3] = seg[2]
+                        seg_nodes.append(seg)
+                        ids.extend(seg)
+                else:
+                    for val in card_ints:
+                        ids.append(val)
+            else:
+                for t in toks:
+                    try:
+                        ids.append(int(float(t)))
+                    except ValueError:
+                        pass
         model.generic_sets.setdefault("GENERAL", {})[block.user_id] = SetGeneric(
-            id=block.user_id, set_type="GENERAL", title=title, ids=ids
+            id=block.user_id, set_type="GENERAL", title=title, ids=ids, key=key, seg_nodes=seg_nodes
         )
     else:
         log.warning(f"/SET/{stype} not ported", block.source)

@@ -826,6 +826,58 @@ def _fixpoint(pending: dict, try_resolve, log: MessageLog, kind: str,
         on_cycle(obj)
 
 
+def resolve_generic_sets(model: Model, log: MessageLog) -> None:
+    """Map /SET/GENERAL entity sets to model.node_groups and model.surfaces.
+
+    Upstream Fortran origin: starter/source/model/sets/hm_set.F and fill_igr.F.
+    /SET/GENERAL creates a node group (GRNOD) when KEY == 'NODE'.
+    When KEY == 'SEG' or KEY == 'PART_E', it creates surfaces (SURF).
+    """
+    for set_id, gset in model.generic_sets.get("GENERAL", {}).items():
+        gkey = (getattr(gset, "key", "") or "").strip().upper()
+        if gkey in ("NODE", "NODENS"):
+            if set_id not in model.node_groups:
+                from ..model.entities import NodeGroup
+                model.node_groups[set_id] = NodeGroup(
+                    id=set_id,
+                    title=gset.title or f"SET_{set_id}",
+                    node_ids=np.array(gset.ids, dtype=np.int64),
+                )
+        elif gkey == "SEG":
+            if set_id not in model.surfaces:
+                from ..model.entities import Surface
+                seg_nodes = [list(sn) for sn in getattr(gset, "seg_nodes", [])]
+                if not seg_nodes and gset.ids:
+                    if len(gset.ids) % 4 == 0:
+                        seg_nodes = [list(gset.ids[i:i+4]) for i in range(0, len(gset.ids), 4)]
+                    elif len(gset.ids) % 3 == 0:
+                        seg_nodes = [[gset.ids[i], gset.ids[i+1], gset.ids[i+2], gset.ids[i+2]] for i in range(0, len(gset.ids), 3)]
+                model.surfaces[set_id] = Surface(
+                    id=set_id,
+                    title=gset.title or f"SET_{set_id}",
+                    seg_nodes=seg_nodes,
+                )
+        elif gkey == "PART_E":
+            if set_id not in model.surfaces:
+                from ..model.entities import Surface
+                model.surfaces[set_id] = Surface(
+                    id=set_id,
+                    title=gset.title or f"SET_{set_id}",
+                    part_ids=list(gset.ids),
+                    modifier="EXT",
+                )
+        elif gkey == "PART":
+            from ..model.entities import ElemGroup
+            model.egroups.setdefault("PART", {})
+            if set_id not in model.egroups["PART"]:
+                model.egroups["PART"][set_id] = ElemGroup(
+                    id=set_id,
+                    family="PART",
+                    title=gset.title or f"SET_{set_id}",
+                    part_ids=list(gset.ids),
+                )
+
+
 def resolve_entity_groups(model: Model, log: MessageLog) -> None:
     """ELEMENT groups (/GRSHEL, /GRSH3N, /GRBRIC, ..., /GRPART) ->
     resolved member rows (Fortran hm_lecgre.F + hm_grogro.F).
@@ -835,6 +887,7 @@ def resolve_entity_groups(model: Model, log: MessageLog) -> None:
     are signed: negative ids REMOVE the referenced group's members,
     and removal wins over addition (the upstream BUFTMP = -1 rule);
     cycles are detected by the fixpoint guard."""
+    resolve_generic_sets(model, log)
     for family, groups in model.egroups.items():
         attrs = _EGROUP_FAMILIES.get(family, ())
         if family != "PART" and not attrs and any(
@@ -993,7 +1046,7 @@ def _nodes_in_box(model: Model, box, log: MessageLog,
 def resolve_node_group_base(model: Model, g, log: MessageLog) -> np.ndarray:
     """Evaluate the non-recursive content of a node group."""
     idx: List[np.ndarray] = []
-    if g.node_ids:
+    if g.node_ids is not None and len(g.node_ids) > 0:
         try:
             idx.append(model.node_indices(g.node_ids))
         except KeyError as exc:
@@ -1072,6 +1125,7 @@ def resolve_node_groups(model: Model, log: MessageLog) -> None:
     whatever the order (the upstream BUFTMP = -1 convention).  Groups
     are stored sorted by node index, like the upstream sorted groups.
     """
+    resolve_generic_sets(model, log)
     resolved: dict = {}
     base_cache: dict = {}
 
@@ -1218,6 +1272,7 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
     Supports shells, quads, triangles, solids (bricks, tetras, high-order),
     element groups (/SURF/GR*), selectors (/SURF/MAT, /PROP, /BOX, ALL),
     and surface-of-surfaces (/SURF/SURF)."""
+    resolve_generic_sets(model, log)
     def _base(s):
         segs: List[np.ndarray] = []
         gtypes: List[np.ndarray] = []   # parallel provenance pieces

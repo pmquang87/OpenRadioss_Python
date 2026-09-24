@@ -28,6 +28,7 @@ from .initialization import (build_element_groups,
                              initialize_elements_and_mass,
                              initialize_rigid_bodies,
                              resolve_entity_groups,
+                             resolve_generic_sets,
                              resolve_lines, resolve_materials,
                              resolve_node_groups, resolve_single_node_group,
                              resolve_skews,
@@ -348,6 +349,7 @@ def run_starter(input_file: str, log: MessageLog | None = None,
         resolve_materials(model, log)
         build_element_groups(model, log)
         resolve_entity_groups(model, log)
+        resolve_generic_sets(model, log)
         resolve_surfaces(model, log)
         resolve_lines(model, log)     # after surfaces: /LINE/SURF reads them
         # reference systems (M39): built from the node positions, then
