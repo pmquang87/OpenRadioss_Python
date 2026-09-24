@@ -807,6 +807,7 @@ anked_gaps):
 Parity targets: *(Note: DKT18 and BT-family cdefo3 branches were completed in M47 and M50).*
 
 Smaller known items:
+- **Open bugs found but not yet fixed (2026-09-24): see `docs/OPEN_BUGS.md`.** It lists 3 confirmed SPMD defects: /GJOINT under -np, ghost `off` never exchanged (SPMD_EXCH_IDEL), and /KJOINT counted once per replica. It also lists the leftovers from the PR #51 red-test pass.
 - ~~NAN/INF divergence backstop tests only KE (extend to IE/HE)~~ (Done: M67)
 - ~~V0700 solids ~2A--small explicit dt~~ (Done: IDEGE scaling implemented)
 

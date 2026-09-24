@@ -247,7 +247,7 @@ Drawbead Free
 
 def test_prop_and_th_extensions(tmp_path):
     deck = _BOILERPLATE_FIXED + """\
-/PROP/TYPE27/1
+/PROP/TYPE27/3
 Spring With Damping
                  0.1                                       1         0         0         0         0
                100.0                10.0                 1.0                 0.0                 0.0
@@ -274,8 +274,8 @@ DEF
 """
     model, log = _run(tmp_path, deck)
     assert not log.errors
-    assert 1 in model.properties
-    assert model.properties[1].type == 27
+    assert 3 in model.properties
+    assert model.properties[3].type == 27
     assert 2 in model.properties
     assert model.properties[2].type == 51
 

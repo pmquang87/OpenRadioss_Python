@@ -6,7 +6,7 @@ Progressive Damage Multi-Layer Composite Shells.
 
 Fortran origin:
   - Starter reader: starter/source/materials/mat/mat014/hm_read_mat14.F
-  - Shell kernel:   engine/source/materials/mat/mat014/sigeps14c.F
+  - Shell kernel:   none upstream (solids only; shell_update raises)
   - Engine kernel:  engine/source/materials/mat/mat014/m14law.F
   - Coordinate transformations:
       engine/source/materials/mat/mat014/m14ama.F
@@ -871,174 +871,23 @@ def shell_update(
     epsp: Optional[np.ndarray] = None,
     dt: float = 0.0,
     extra: Optional[Dict[str, Any]] = None,
-) -> Tuple[np.ndarray, np.ndarray, float | np.ndarray]:
-    """Plane-stress (shell) constitutive update for LAW14 (/MAT/COMPSO).
+    *args: Any,
+    **kwargs: Any,
+) -> Any:
+    """LAW14 (/MAT/COMPSO) has no plane-stress kernel upstream.
 
-    Fortran origin:
-      - engine/source/materials/mat/mat014/sigeps14c.F
-      - engine/source/materials/mat/mat014/m14law.F
-
-    Parameters:
-      mat: Material instance with LAW14 parameters
-      sig: In-plane stress array (n, 3) = [s11, s22, s12] or (n, 5) or 1D
-      deps: Strain increment array (n, 3) = [de11, de22, dgamma12] or (n, 5) or 1D
-      epsp: Optional plastic strain array (n,) or scalar
-      dt: Simulation time increment
-      extra: Optional dict containing persistent state arrays:
-             - 'dam14': (n, 5) damage per direction and flags
-             - 'epe14': (n, 3) strain in crack directions
-             - 'epc14': (n, 3) crack opening strain
-             - 'wpla14': (n,) accumulated plastic work
-             - 'off14': (n,) active status flag (1.0 active, 0.0 failed)
-             - 'angle': layer orientation angle (degrees)
-             - 'layers': list of layers for multi-layer composite shells
-
-    Returns:
-      (sig_new, epsp_new, sound_speed)
+    OpenRadioss ships only the 3D continuum kernel for this law
+    (engine/source/materials/mat/mat014/: m14law.F, m14ama.F, m14gtf.F,
+    m14ftg.F — there is no sigeps14c.F, and the shell material dispatch in
+    engine/source/materials/mat_share/mulawc.F90 lines 1125-1307 has no
+    LAW14 branch).  The starter rejects the law outside 3D analysis with
+    ANCMSG 305 (starter/source/materials/mat/mat014/hm_read_mat14.F
+    lines 151-158, "THIS TYPE OF LAW IS NOT AVAILABLE FOR 2D ANALYSIS").
     """
-    p = getattr(mat, "params", {}) or {}
-    if "D11" not in p and "d_mat" not in p:
-        mat_built = build_law14(mat)
-        p = mat_built.params
-
-    if extra is None:
-        extra = {}
-
-    # Check for multi-layer composite laminate integration
-    layers = extra.get("layers", extra.get("plies"))
-    if layers is not None and isinstance(layers, (list, tuple)) and len(layers) > 0:
-        return multilayer_shell_update(
-            mat=mat,
-            sig=sig,
-            deps=deps,
-            epsp=epsp,
-            dt=dt,
-            extra=extra,
-        )
-
-    is_1d = (sig.ndim == 1)
-    s_in = np.atleast_2d(sig).copy()
-    d_in = np.atleast_2d(deps).copy()
-    n = s_in.shape[0]
-
-    if epsp is None:
-        ep = np.zeros(n, dtype=float)
-    else:
-        ep = np.atleast_1d(epsp).astype(float).copy()
-        if len(ep) == 1 and n > 1:
-            ep = np.full(n, ep[0], dtype=float)
-
-    # State variables
-    dam = extra.get("dam14", extra.get("dam"))
-    if dam is None or np.asarray(dam).shape != (n, 5):
-        dam = np.zeros((n, 5), dtype=float)
-    else:
-        dam = np.atleast_2d(dam).astype(float).copy()
-
-    epe = extra.get("epe14", extra.get("epe"))
-    if epe is None or np.asarray(epe).shape != (n, 3):
-        epe = np.zeros((n, 3), dtype=float)
-    else:
-        epe = np.atleast_2d(epe).astype(float).copy()
-
-    epc = extra.get("epc14", extra.get("epc"))
-    if epc is None or np.asarray(epc).shape != (n, 3):
-        epc = np.zeros((n, 3), dtype=float)
-    else:
-        epc = np.atleast_2d(epc).astype(float).copy()
-
-    wpla = extra.get("wpla14", extra.get("wpla"))
-    if wpla is None or len(np.atleast_1d(wpla)) != n:
-        wpla = np.zeros(n, dtype=float)
-    else:
-        wpla = np.atleast_1d(wpla).astype(float).copy()
-
-    off = extra.get("off14", extra.get("off"))
-    if off is None or len(np.atleast_1d(off)) != n:
-        off = np.ones(n, dtype=float)
-    else:
-        off = np.atleast_1d(off).astype(float).copy()
-
-    epsf = extra.get("epsf14", extra.get("epsf"))
-    if epsf is None or len(np.atleast_1d(epsf)) != n:
-        epsf = np.zeros(n, dtype=float)
-    else:
-        epsf = np.atleast_1d(epsf).astype(float).copy()
-
-    sigf = extra.get("sigf14", extra.get("sigf"))
-    if sigf is None or len(np.atleast_1d(sigf)) != n:
-        sigf = np.zeros(n, dtype=float)
-    else:
-        sigf = np.atleast_1d(sigf).astype(float).copy()
-
-    tsaiwu = extra.get("tsaiwu14", extra.get("tsaiwu"))
-    if tsaiwu is None or len(np.atleast_1d(tsaiwu)) != n:
-        tsaiwu = np.zeros(n, dtype=float)
-    else:
-        tsaiwu = np.atleast_1d(tsaiwu).astype(float).copy()
-
-    # Orientation angle
-    angle_val = extra.get("angle", extra.get("theta", extra.get("phi", 0.0)))
-    if isinstance(angle_val, (int, float)):
-        angles = np.full(n, float(angle_val), dtype=float)
-    else:
-        angles = np.asarray(angle_val, dtype=float).flatten()
-        if len(angles) != n:
-            angles = np.zeros(n, dtype=float)
-
-    s_out = np.zeros_like(s_in)
-    ep_out = np.zeros(n, dtype=float)
-
-    for i in range(n):
-        s_i, wpla_i, dam_i, epe_i, epc_i, off_i, epsf_i, sigf_i, tw_i = _update_point_law14_shell(
-            p=p,
-            sig=s_in[i],
-            deps=d_in[i],
-            epsp=ep[i],
-            dt=dt,
-            dam=dam[i],
-            epe=epe[i],
-            epc=epc[i],
-            wpla=wpla[i],
-            off=off[i],
-            epsf=epsf[i],
-            sigf=sigf[i],
-            angle_deg=angles[i],
-        )
-        s_out[i] = s_i
-        wpla[i] = wpla_i
-        ep_out[i] = wpla_i
-        dam[i] = dam_i
-        epe[i] = epe_i
-        epc[i] = epc_i
-        off[i] = off_i
-        epsf[i] = epsf_i
-        sigf[i] = sigf_i
-        tsaiwu[i] = tw_i
-
-    # Store back in extra
-    for k_14, k_gen, val in (
-        ("dam14", "dam", dam),
-        ("epe14", "epe", epe),
-        ("epc14", "epc", epc),
-        ("wpla14", "wpla", wpla),
-        ("off14", "off", off),
-        ("epsf14", "epsf", epsf),
-        ("sigf14", "sigf", sigf),
-        ("tsaiwu14", "tsaiwu", tsaiwu),
-    ):
-        extra[k_14] = val
-        extra[k_gen] = val
-
-    c = sound_speed(mat)
-    c_arr = np.full(n, float(c), dtype=float)
-
-    if epsp is not None and isinstance(epsp, np.ndarray):
-        epsp[:] = ep_out.reshape(epsp.shape)
-
-    if is_1d:
-        return s_out[0], float(ep_out[0]), float(c_arr[0])
-    return s_out, ep_out, c_arr
+    raise NotImplementedError(
+        "LAW14 (/MAT/COMPSO) is implemented for 3D solid elements only "
+        "(no shell kernel upstream; starter ANCMSG 305, hm_read_mat14.F:151-158)."
+    )
 
 
 def multilayer_shell_update(
