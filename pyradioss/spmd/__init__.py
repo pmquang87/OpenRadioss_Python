@@ -30,9 +30,31 @@ from .comm import (  # noqa: F401
     Comm, Request, SerialComm, SERIAL, ThreadComm, Mpi4pyComm,
     mpi_world_size,
 )
+from .domdec import (  # noqa: F401
+    DomainInfo, Decomposition, element_weights, partition_elements,
+    check_spmd_support, decompose, slice_model, domain_restart_path,
+    decomposition_table, write_domain_restarts,
+)
+from .exchange import (  # noqa: F401
+    MSGOFF_EXCH_A, MSGOFF_EXCH_V, MSGOFF_COLLECT,
+    SpmdContext, GlobMin, serial_context,
+    crit_type_table, crit_type_code, crit_type_name,
+)
+from .driver import count_domain_restarts, run_engine_spmd  # noqa: F401
 
 __all__ = [
+    # comm
     "SPMD_MAX", "SPMD_MIN", "SPMD_SUM", "SPMD_PROD",
     "Comm", "Request", "SerialComm", "SERIAL", "ThreadComm", "Mpi4pyComm",
     "mpi_world_size",
+    # domdec (Starter side)
+    "DomainInfo", "Decomposition", "element_weights", "partition_elements",
+    "check_spmd_support", "decompose", "slice_model", "domain_restart_path",
+    "decomposition_table", "write_domain_restarts",
+    # exchange (Engine side)
+    "MSGOFF_EXCH_A", "MSGOFF_EXCH_V", "MSGOFF_COLLECT",
+    "SpmdContext", "GlobMin", "serial_context",
+    "crit_type_table", "crit_type_code", "crit_type_name",
+    # driver
+    "count_domain_restarts", "run_engine_spmd",
 ]

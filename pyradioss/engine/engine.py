@@ -326,8 +326,9 @@ def _refuse_spmd(controls, model) -> None:
     bad = []
     if getattr(controls, "implicit", False):
         bad.append("/IMPL (implicit solver)")
-    if getattr(controls, "impl_eigv", False) or getattr(controls, "eig_off", None) \
+    if getattr(controls, "impl_eigv", False) \
             or getattr(model, "eigen_modes", None):
+        # (/EIG/OFF alone only deactivates modes — nothing to refuse)
         bad.append("/EIG (eigenvalue extraction)")
     if getattr(controls, "dt_ams", False):
         bad.append("/DT/AMS (advanced mass scaling)")

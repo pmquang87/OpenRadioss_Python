@@ -295,7 +295,10 @@ def test_runner_start_then_stop_is_clean(tensile_deck):
 # ---------------------------------------------------------------------------
 
 def _make_root():
-    import tkinter as tk
+    try:
+        import tkinter as tk
+    except ImportError as exc:            # Python built without Tk
+        pytest.skip(f"tkinter unavailable: {exc}")
     try:
         root = tk.Tk()
     except tk.TclError as exc:            # no display available
