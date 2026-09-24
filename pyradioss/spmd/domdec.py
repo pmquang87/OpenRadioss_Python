@@ -30,7 +30,7 @@ Fortran origin
   global node number on both sides so the message packing matches) and
   ``ddsplit.F`` (one restart per domain, ``RunName_0000_0001.rst`` ...).
 
-Conventions (the shared SPMD contract)
+Conventions shared with the Engine side (``pyradioss/spmd/exchange.py``)
 --------------------------------------
 * Element domain decomposition with frontier nodes: an element lives on
   exactly one domain; the NATIVE nodes of a domain are the nodes of its
@@ -40,9 +40,9 @@ Conventions (the shared SPMD contract)
   nowhere takes the lowest rank holding it (rank 0 when nobody does, the
   node is then added there).  ``weight`` = 1 on the main proc, 0 elsewhere.
   (``w_master_proc_weight.F`` takes the lowest rank holding the node,
-  frontplus included; the contract restricts the search to native holders
-  first — both are valid once-only conventions, the engine side relies on
-  the contract's.)
+  frontplus included; this port restricts the search to native holders
+  first — both are valid once-only conventions, the Engine side relies on
+  this one.)
 * Kinematic constraints are REPLICATED (every holder computes them
   identically); penalty interfaces, monitored volumes and pressure-load
   segments are OWNED by one rank that computes them on its partial forces
@@ -50,14 +50,14 @@ Conventions (the shared SPMD contract)
 
 Replication closure
 -------------------
-The contract replicates a kinematic entity (/RBODY, /RBE2, /RBE3, /MPC,
+The base rule replicates a kinematic entity (/RBODY, /RBE2, /RBE3, /MPC,
 /RLINK, /CYL_JOINT, /GJOINT, /KJOINT, moving /RWALL, /INTER/TYPE2) on
 every rank holding NATIVE any of its nodes.  Velocities are never
 exchanged, so a node must be driven by the SAME constraints on every rank
 that holds it — including ranks that only received it by frontplus (for
 instance the owner of a contact receiving a rigid-body slave node).  The
 rule is therefore applied to the HELD node set and iterated to a fixpoint
-(a superset of the contract rule, identical to it when no frontplus node
+(a superset of the base rule, identical to it when no frontplus node
 belongs to a constraint).  Nodes held nowhere after the closure (free
 nodes, /ADMAS-only nodes, rigid bodies made of free nodes only) are added
 to rank 0 and the closure is run once more.
@@ -79,7 +79,7 @@ from __future__ import annotations
 import copy
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -467,8 +467,11 @@ def _nonempty(obj) -> bool:
 
 def check_spmd_support(model: Model) -> None:
     """Raise StarterError listing every model feature the SPMD port does
-    not decompose (contract list + the few kernels whose element buffers
-    hold cross-element or nodal data)."""
+    not decompose (Lagrange-multiplier constraints, SPH, ALE/FSI, FVMBAG,
+    XFEM, centrifugal loads, non-reflecting / cyclic / wall BCs, sensors
+    other than TIME/NOT/AND/OR/DISP/VEL/DIST, moving walls on all nodes,
+    plus the few kernels whose element buffers hold cross-element or
+    nodal data)."""
     bad: List[str] = []
     for itf in getattr(model, "interfaces", []):
         if getattr(itf, "lagmul", False):
@@ -866,13 +869,20 @@ def decompose(model: Model, nspmd: int,
             for p in range(nspmd):
                 keep_on(p, "rwalls", k)
 
-    # --- MAIN_PROC (w_master_proc_weight.F; contract: native first) -----
+    # --- MAIN_PROC (w_master_proc_weight.F; native holders first) --------
     first_held = np.argmax(held, axis=0)
     main_proc = np.where(native_any, first_native, first_held).astype(np.int64)
 
     load = np.zeros(nspmd)
     for name in names:
         np.add.at(load, elem_domain[name], weights[name])
+    if log is not None:
+        empty = [p + 1 for p in range(nspmd)
+                 if not any(np.any(elem_domain[n] == p) for n in names)]
+        if empty:
+            log.warning(f"SPMD: domain(s) {empty} received no element "
+                        f"(NSPMD = {nspmd} is too large for this model)",
+                        "SPMD DOMAIN DECOMPOSITION")
 
     ghost = [{n: np.flatnonzero(ghost_mask[p][n]).astype(np.int64)
               for n in names if ghost_mask[p][n].any()} for p in range(nspmd)]

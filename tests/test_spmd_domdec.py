@@ -17,7 +17,8 @@ import numpy as np
 import pytest
 
 from pyradioss.common.messages import MessageLog, StarterError
-from pyradioss.model.entities import PressureLoad, RigidWall
+from pyradioss.model.entities import (MonitoredVolume, PressureLoad,
+                                      RigidWall, Sensor)
 from pyradioss.model.model import ElementGroup, Model
 from pyradioss.spmd.domdec import (DomainInfo, check_spmd_support, decompose,
                                    element_weights, slice_model)
@@ -267,6 +268,10 @@ def test_contact_rbody_rwall_pload_rules(tmp_path):
     gm.rwalls.append(RigidWall(id=2, point=np.zeros(3), normal=np.array([0, 0, 1.0]),
                                grnod_id=grp_id, node_id=carrier_uid))
     gm.ploads.append(PressureLoad(id=7, surf_id=itf.surf_id, funct_id=1))
+    gm.monitored_volumes[5] = MonitoredVolume(id=5, vol_type="AIRBAG1",
+                                              surf_id=itf.surf_id)
+    sensor_uid = int(gm.node_ids[-1])
+    gm.sensors.append(Sensor(id=3, kind="DISP", node_id=sensor_uid, dmin=1.0))
     check_spmd_support(gm)
 
     dec = decompose(gm, nspmd, MessageLog())
@@ -352,6 +357,19 @@ def test_contact_rbody_rwall_pload_rules(tmp_path):
             gl = lm.spmd.nodglob[li]
             assert np.array_equal(gl, [n for n in g.node_idx if n in set(lm.spmd.nodglob)])
 
+    # monitored volume: kept on the lowest native holder of its surface,
+    # every surface node local there
+    snodes = np.unique(gm.surfaces[itf.surf_id].segments)
+    mv_owner = min(p for p, lm in enumerate(locs)
+                   if np.intersect1d(_native_global(lm), snodes).size)
+    for p, lm in enumerate(locs):
+        assert (5 in lm.monitored_volumes) == (p == mv_owner)
+        assert lm.spmd.owned_monvols == ([5] if p == mv_owner else [])
+    _dense(locs[mv_owner], snodes)
+    # /SENSOR/DISP node on every rank
+    for lm in locs:
+        lm.node_index(sensor_uid)
+
     # pressure load: every segment owned by exactly one rank, on a
     # private surface whose corners are local
     seen = []
@@ -370,23 +388,42 @@ def test_contact_rbody_rwall_pload_rules(tmp_path):
 
 
 def test_tied_interface_replicated(tmp_path):
+    from pyradioss.contact import ContactType2
     from pyradioss.spmd.domdec import _interface_nodes
     deck = _copy_deck(tmp_path, "spot_weld")
     gm = _starter(deck)
-    dec = decompose(gm, 2, MessageLog())
-    locs = [slice_model(gm, dec, p, MessageLog()) for p in range(2)]
+    dec = decompose(gm, 3, MessageLog())
+    locs = [slice_model(gm, dec, p, MessageLog()) for p in range(3)]
     _check_invariants(gm, locs)
     itf = gm.interfaces[0]
     assert itf.type == 2
+    with contextlib.redirect_stdout(io.StringIO()):
+        cg = ContactType2(itf, gm, MessageLog())
     nodes = _interface_nodes(gm, itf)
+    nrep = 0
     for p, lm in enumerate(locs):
         holds = np.intersect1d(_native_global(lm), nodes).size > 0
         if holds:
             assert [i.id for i in lm.interfaces] == [itf.id]
-            _dense(lm, nodes)
-            assert lm.spmd.owned_interfaces == []
-            sec = gm.node_groups[itf.grnod_id].node_idx
-            assert np.array_equal(lm.spmd.nodglob[lm.node_groups[itf.grnod_id].node_idx], sec)
+        if not lm.interfaces:
+            continue
+        nrep += 1
+        _dense(lm, nodes)
+        assert lm.spmd.owned_interfaces == []
+        sec = gm.node_groups[itf.grnod_id].node_idx
+        assert np.array_equal(lm.spmd.nodglob[lm.node_groups[itf.grnod_id].node_idx], sec)
+        # the replica ties the same nodes to the same segments with the
+        # same weights, and sees the same element references (ghost ring)
+        with contextlib.redirect_stdout(io.StringIO()):
+            cl = ContactType2(lm.interfaces[0], lm, MessageLog())
+        ng = lm.spmd.nodglob
+        assert np.array_equal(ng[cl.snode], cg.snode)
+        assert np.array_equal(ng[cl.seg], cg.seg)
+        assert np.array_equal(cl.w, cg.w)
+        assert cl.deletable == cg.deletable
+        if getattr(cg, "ref_total", None) is not None:
+            assert np.array_equal(cl.ref_total[cl.snode], cg.ref_total[cg.snode])
+    assert nrep >= 2
 
 
 # ---------------------------------------------------------------------------
