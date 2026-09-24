@@ -466,15 +466,18 @@ def _nonempty(obj) -> bool:
         return bool(obj)
 
 
-def check_spmd_support(model: Model, np: Optional[int] = None,
-                       nspmd: Optional[int] = None) -> None:
+def check_spmd_support(model: Model, *args, **kwargs) -> None:
     """Raise StarterError listing every model feature the SPMD port does
     not decompose (Lagrange-multiplier constraints, /GJOINT (lag_mult.F LAG_MULTP),
-    SPH, ALE/FSI, FVMBAG, XFEM, centrifugal loads, non-reflecting / cyclic /
-    wall BCs, sensors other than TIME/NOT/AND/OR/DISP/VEL/DIST, moving walls on all
-    nodes, plus the few kernels whose element buffers hold cross-element or
-    nodal data)."""
-    if (np is not None and np <= 1) or (nspmd is not None and nspmd <= 1):
+    /KJOINT (ruser33.F), SPH, ALE/FSI, FVMBAG, XFEM, centrifugal loads,
+    non-reflecting / cyclic / wall BCs, sensors other than
+    TIME/NOT/AND/OR/DISP/VEL/DIST, moving walls on all nodes, plus the few
+    kernels whose element buffers hold cross-element or nodal data)."""
+    nspmd_val = kwargs.get("np", kwargs.get("nspmd", None))
+    if nspmd_val is None and args:
+        nspmd_val = args[0]
+    if nspmd_val is not None and nspmd_val <= 1:
+        return
         return
     bad: List[str] = []
     for itf in getattr(model, "interfaces", []):
@@ -554,7 +557,8 @@ def check_spmd_support(model: Model, np: Optional[int] = None,
                        ("bcs_walls", "/BCS/WALL"),
                        ("nbcs_blocks", "/NBCS"),
                        # lag_mult.F LAG_MULTP L683: IF(ISPMD==0 .AND. NGJOINT>0) CALL ARRET(2)
-                       ("gjoints", "/GJOINT")):
+                       ("gjoints", "/GJOINT"),
+                       ("kjoints", "/KJOINT (ruser33.F)")):
         if _nonempty(getattr(model, attr, None)):
             bad.append(what)
     if getattr(model, "has_ale", False):

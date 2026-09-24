@@ -499,3 +499,15 @@ def test_type2_with_fail_refused_under_spmd(tmp_path):
         assert "chkstfn3.F" in msg
         gm.interfaces.pop()
 
+
+def test_kjoint_refused_under_spmd():
+    model = Model()
+    model.kjoints = [object()]
+    with pytest.raises(StarterError) as exc:
+        check_spmd_support(model, np=2)
+    msg = str(exc.value)
+    assert "/KJOINT" in msg
+    assert "ruser33.F" in msg
+    # Serial (np=1) is supported
+    check_spmd_support(model, np=1)
+
