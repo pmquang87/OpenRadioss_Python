@@ -96914,12 +96914,18 @@ def parse_starter_deck(blocks: Union[List[KeywordBlock], str, Any],
         model = Model()
     if log is None:
         log = MessageLog()
+    seen_prop_ids: set[int] = set()
     for block in blocks:
         # M258: handle missing #include files (FileNotFoundError → error, not crash)
         if block.keyword == "__INCLUDE_ERROR__":
             inc_path = getattr(block, "_include_path", "?")
             log.error(f"#include file not found: {inc_path}", block.source)
             continue
+        if block.key0 == "PROP" or block.key0.startswith("PROP_"):
+            prop_id = block.user_id if block.user_id is not None else 1
+            if prop_id in seen_prop_ids:
+                raise ValueError(f"/PROP id {prop_id} is duplicated -- upstream hm_read_properties.F:798 VDOUBLE")
+            seen_prop_ids.add(prop_id)
         joined_key = "_".join(block.parts).upper() if block.parts else block.key0
         parser = KEYWORD_PARSERS.get(joined_key)
         if parser is None and len(block.parts) > 1:
