@@ -103,7 +103,7 @@ from . import (detonation, eos, law01_elastic, law02_johnson_cook, law03_plas_bo
                mat_gas, mat_void,
                law00_void, law11_fluid_visc, law13_fluid_ale, law16_gray_ewing, law17_orth_elastic,
                law18_plas_iso, law20_rigid, law23_user_mat, law26_honeycomb_sesame, law41_jwl_burn,
-               law45_fabric_membrane, law45_orth_fabric, law46_kin_hard, law51_granular_soil, law53_tab_foam, law54_hyd_visc,
+               law45_fabric_membrane, law45_orth_fabric, law46_kin_hard, law46_les_fluid, law51_granular_soil, law53_tab_foam, law54_hyd_visc,
                law55_shell_orth, law56_orth_fail, law59_spring_rate, law63_composite_shell, law64_rate_comp,
                law65_thermo_visc, law68_tab_plas, law72_hill_mmc, law75_thermo_trans, law77_visc_poly, law77_polymer,
                law78_composite_dmg, law78_yoshida, law80_ramberg, law84_mooney_rivlin, law85_void_pinch, law86_honeycomb_shell,
@@ -1430,6 +1430,26 @@ _register_law66()
 _register_law73()
 
 
+_LAW46_KEYS = (
+    46, "46", "LAW46", "LES_FLUID", "M46_LES_FLUID", "MAT_LES_FLUID",
+    "LAW46_LES_FLUID", "MAT_LAW46", "VISCOUS_FOAM",
+)
+
+
+def _register_law46():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law46_les_fluid, "build_law46", None)
+        if builder is not None:
+            for k in _LAW46_KEYS:
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law46()
+
+
 _LAW71_KEYS = (
     71, "71", "LAW71", "SUPER_ELAS", "NITINOL",
     "MAT_71", "MAT_LAW71", "MAT_SUPER_ELAS", "MAT_NITINOL",
@@ -1987,7 +2007,7 @@ _NEW_PORTED_LAWS: dict[int, Any] = {
     26: law26_honeycomb_sesame,
     41: law41_jwl_burn,
     45: law45_orth_fabric,
-    46: law46_kin_hard,
+    46: law46_les_fluid,
     51: law51_granular_soil,
     53: law53_tab_foam,
     54: law54_hyd_visc,
@@ -3174,6 +3194,8 @@ def needs_env(mat) -> bool:
         return True
     if getattr(mat, "law", None) in _LAW121_KEYS or getattr(mat, "law_name", None) in _LAW121_KEYS:
         return True
+    if getattr(mat, "law", None) in _LAW46_KEYS or getattr(mat, "law_name", None) in _LAW46_KEYS:
+        return True
     return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 21, "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", 49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 50, "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", 52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", 58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", 60, "60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", 62, 66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB", 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", 70, 73, "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL", 74, "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "LAW74_HILL_3D", 79, "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", 81, 82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", 87, "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000", "LAW87_BARLAT2000", 163, "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM", 190, "190", "LAW190", "FOAM_DUBOIS", "DUBOIS", "MAT_LAW190", "MAT_FOAM_DUBOIS", "LAW190_FOAM_DUBOIS")
             or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", "LAW22", "DAMA", "PLAS_DAMA", "MAT_LAW22", "MAT_DAMA", "MAT_PLAS_DAMA", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB", "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", "50", "LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_LAW50", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", "LAW60", "PLAS_T3", "FABRIC", "MAT_LAW60", "MAT_PLAS_T3", "MAT_FABRIC", "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "FOAM_TAB", "MAT_LAW66", "MAT_PLAS_TAB_COSSER", "MAT_PLAS_COSSER", "MAT_FOAM_TAB", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC", "73", "LAW73", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_HILL_THERM", "MAT_THERM_HILL", "LAW73_HILL_THERM", "LAW73_THERM_HILL", "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "LAW74_HILL_3D", "79", "LAW79", "JOHN_HOLM", "JOHNSON_HOLMQUIST", "JH2", "MAT_LAW79", "MAT_JOHN_HOLM", "LAW79_JOHN_HOLM", "87", "LAW87", "BARLAT", "BARLAT2000", "BARLAT_2000", "BARLAT2000_2D", "BARLAT_YLD2000", "MAT_LAW87", "MAT_BARLAT", "MAT_BARLAT2000", "MAT_BARLAT_2000", "MAT_BARLAT2000_2D", "MAT_BARLAT_YLD2000", "LAW87_BARLAT2000", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN", "163", "LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_LAW163", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM", "190", "LAW190", "FOAM_DUBOIS", "DUBOIS", "MAT_LAW190", "MAT_FOAM_DUBOIS", "LAW190_FOAM_DUBOIS"))
 
@@ -3241,6 +3263,11 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
         return law04_hyd_jcook.solid_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 6:
         sig, epsp, c = law06_hyd_visc.solid_update(mat, sig, deps, epsp, dt, extra)
+        return sig, epsp, c
+    if mat.law == 46 or getattr(mat, "law_name", None) in _LAW46_KEYS:
+        if hasattr(mat, "c_kin") or (hasattr(mat, "params") and isinstance(mat.params, dict) and "c_kin" in mat.params):
+            return law46_kin_hard.solid_update(mat, sig, deps, epsp, dt, extra)
+        sig, epsp, c = law46_les_fluid.solid_update(mat, sig, deps, epsp, dt, extra)
         return sig, epsp, c
     if mat.law == 999:
         # /MAT/GAS: zero deviator; the pressure and the sound speed come
@@ -4162,6 +4189,10 @@ def sound_speed(mat, rho=None, extra=None, is_shell: bool = False):
     """Dispatch sound speed calculation to material law."""
     law = getattr(mat, "law", None)
     law_name = getattr(mat, "law_name", None)
+    if law in _LAW46_KEYS or law_name in _LAW46_KEYS:
+        if hasattr(mat, "c_kin") or (hasattr(mat, "params") and isinstance(mat.params, dict) and "c_kin" in mat.params):
+            return law46_kin_hard.sound_speed(mat, rho=rho)
+        return law46_les_fluid.sound_speed(mat, rho=rho, extra=extra, is_shell=is_shell)
     if law in _LAW120_KEYS or law_name in _LAW120_KEYS:
         return law120_sound_speed(mat, rho=rho, extra=extra, is_shell=is_shell)
     if law in _LAW121_KEYS or law_name in _LAW121_KEYS:
@@ -4462,6 +4493,11 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         return law83_spotweld.shell_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 6:
         return law06_hyd_visc.shell_update(mat, sig, deps, epsp, dt, extra)
+    if mat.law == 46 or getattr(mat, "law_name", None) in _LAW46_KEYS:
+        if hasattr(mat, "c_kin") or (hasattr(mat, "params") and isinstance(mat.params, dict) and "c_kin" in mat.params):
+            return law46_kin_hard.shell_update(mat, sig, deps, epsp, dt, extra)
+        res = law46_les_fluid.shell_update(mat, sig, deps, epsp, dt, extra)
+        return res[0], res[1]
     if mat.law == 22 or getattr(mat, "law_name", None) in ("22", "LAW22", "DAMA", "PLAS_DAMA"):
         res = law22_dama.shell_update(mat, sig, deps, epsp, dt, extra)
         return res[0], res[1]
@@ -4777,6 +4813,10 @@ def solid_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
     if mat.law == 6:
         return law06_hyd_visc.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr, extra=extra)
+    if mat.law == 46 or getattr(mat, "law_name", None) in _LAW46_KEYS:
+        if hasattr(mat, "c_kin") or (hasattr(mat, "params") and isinstance(mat.params, dict) and "c_kin" in mat.params):
+            return law46_kin_hard.solid_tangent(mat, deps=None, sig=sig, dt=0.0, extra=extra)
+        return law46_les_fluid.consistent_solid_tangent(mat, deps=None, sig=sig, dt=0.0, extra=extra)
     if mat.law == 33:
         return law33_foamplas.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr, extra)

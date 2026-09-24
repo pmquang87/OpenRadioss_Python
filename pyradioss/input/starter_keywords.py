@@ -995,8 +995,16 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW94", "YEOH", "LAW94_YEOH", "MAT_LAW94", "MAT_YEOH"):
         read_mat_law94(block, model, log)
         return
-    if lawname in ("LAW46", "HYD_VISC", "LES_FLUID", "LAW46_HYD_VISC"):
+    if lawname in ("LAW46", "LES_FLUID", "M46_LES_FLUID", "MAT_LES_FLUID", "LAW46_LES_FLUID", "MAT_LAW46", "VISCOUS_FOAM"):
         read_mat_law46(block, model, log)
+        return
+    if lawname in ("HYD_VISC", "MAT_HYD_VISC"):
+        _title, _cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        _v_cards = [c for c in _cards if not c.is_blank and not c.raw.strip().startswith("#")]
+        if len(_v_cards) <= 3 and len(_v_cards) > 2 and len(_v_cards[1].tokens()) == 2 and len(_v_cards[2].tokens()) <= 3:
+            read_mat_law46(block, model, log)
+            return
+        read_mat_law6(block, model, log)
         return
     if lawname in ("LAW69", "HYP_EXT_COMP", "HYPER_EXT_COMP", "LAW69_HYP_EXT_COMP", "HYP_ELAS", "HYPERELASTIC", "LAW69_HYP_ELAS"):
         read_mat_law69(block, model, log)
@@ -29565,26 +29573,31 @@ def read_mat_law46(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             smag = float(t3[1]) if len(t3) > 1 else 1.0
             cps = float(t3[2]) if len(t3) > 2 else 0.0
 
-    if istf == 0:
-        istf = 1
-    if smag == 0.0:
-        smag = 1.0
+    if refer_rho == 0.0:
+        refer_rho = rho0
+    if istf >= 1 and smag == 0.0:
+        smag = 0.1
+    if istf >= 2 and cps == 0.0:
+        cps = smag
 
     m46 = MaterialLaw46(
         id=mat_id, title=title, rho0=rho0, ref_rho=refer_rho,
         c=c, nu=nu, istf=istf, smag=smag, cps=cps,
     )
     model.mat_law46s[mat_id] = m46
-    k_bulk = rho0 * (c ** 2) if (rho0 > 0.0 and c > 0.0) else 1.0
+    k_bulk = (refer_rho or rho0) * (c ** 2) if ((refer_rho > 0.0 or rho0 > 0.0) and c > 0.0) else 1.0
     e_equiv = 3.0 * k_bulk * (1.0 - 2.0 * 0.495)
     from .mat_reader import GenericMaterialRecord
     mat46 = Material(
         id=mat_id, law=46, rho0=rho0, title=title,
         params={
             "E": e_equiv if e_equiv > 0.0 else 1.0, "nu": 0.495,
+            "MAT_RHO": rho0, "Refer_Rho": refer_rho,
             "MAT_C": c, "MAT_NU": nu, "Istf": istf,
             "MAT_C5": smag, "MAT_CO1": cps,
+            "rho0": rho0, "ref_rho": refer_rho,
             "c": c, "nu": nu, "istf": istf, "smag": smag, "cps": cps,
+            "c1": k_bulk,
         }
     )
     mat46.record = GenericMaterialRecord(

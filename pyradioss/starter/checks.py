@@ -82,6 +82,21 @@ _LAW66_KEYS = {66, "66", "LAW66", "PLAS_TAB_COSSER", "PLAS_COSSER", "MAT_LAW66",
 for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells", "shells_qbat", "shells_qeph", "sh3n"):
     _ALLOWED_LAWS[_fam].update(_LAW66_KEYS)
 
+_LAW6_KEYS = {
+    6, "6", "LAW6", "HYD_VISC", "HYDRO", "K-EPS", "VISC_FLUID",
+    "MAT_LAW6", "MAT_HYD_VISC", "MAT_HYDRO", "MAT_VISC_FLUID",
+    "LAW6_VISC_FLUID", "LAW6_HYDRO",
+}
+for _fam in ("bricks", "tetras", "penta6", "pyra5"):
+    _ALLOWED_LAWS[_fam].update(_LAW6_KEYS)
+
+_LAW46_KEYS = {
+    46, "46", "LAW46", "LES_FLUID", "M46_LES_FLUID", "MAT_LES_FLUID",
+    "LAW46_LES_FLUID", "MAT_LAW46", "VISCOUS_FOAM",
+}
+for _fam in ("bricks", "tetras", "penta6", "pyra5", "shells", "shells_qbat", "shells_qeph", "sh3n"):
+    _ALLOWED_LAWS[_fam].update(_LAW46_KEYS)
+
 _LAW74_KEYS = {
     74, "74", "LAW74", "HILL_3D", "ORTH_PLAS", "THERM_HILL", "HILL_THERM",
     "MAT_LAW74", "MAT_HILL_3D", "MAT_ORTH_PLAS", "MAT_THERM_HILL", "MAT_HILL_THERM",
@@ -3989,6 +4004,63 @@ def check_mat_law66(
 
 
 _check_mat_law66 = check_mat_law66
+
+
+def check_mat_law46(
+    model: Any = None,
+    mat_id: Any = None,
+    mat: Any = None,
+    log: Any = None,
+    **kwargs: Any,
+) -> None:
+    """Validate /MAT/LAW46 (/MAT/LES_FLUID) parameter bounds (M615).
+
+    Fortran origin: starter/source/materials/mat/mat046/hm_read_mat46.F
+    """
+    if mat is None:
+        if model is not None and mat_id is not None:
+            mat = getattr(model, "materials", {}).get(mat_id)
+        if mat is None:
+            return
+    mid = mat_id or getattr(mat, "id", 0)
+    p = getattr(mat, "params", {}) or {}
+    rho0 = getattr(mat, "rho0", None)
+    if rho0 is None:
+        rho0 = p.get("MAT_RHO") if p.get("MAT_RHO") is not None else p.get("rho0", 0.0)
+    try:
+        rho0 = float(rho0)
+    except (TypeError, ValueError):
+        rho0 = 0.0
+    if rho0 <= 0.0:
+        if log:
+            log.error(f"/MAT/LAW46/{mid}: initial density RHO must be > 0 (got {rho0:g})", "MAT CHECK")
+    c = p.get("MAT_C") if p.get("MAT_C") is not None else p.get("c", 0.0)
+    try:
+        c = float(c)
+    except (TypeError, ValueError):
+        c = 0.0
+    if c < 0.0:
+        if log:
+            log.error(f"/MAT/LAW46/{mid}: speed of sound C must be >= 0 (got {c:g})", "MAT CHECK")
+    nu = p.get("MAT_NU") if p.get("MAT_NU") is not None else p.get("nu", 0.0)
+    try:
+        nu = float(nu)
+    except (TypeError, ValueError):
+        nu = 0.0
+    if nu < 0.0:
+        if log:
+            log.error(f"/MAT/LAW46/{mid}: viscosity NU must be >= 0 (got {nu:g})", "MAT CHECK")
+    istf = p.get("Istf") if p.get("Istf") is not None else p.get("istf", 1)
+    try:
+        istf = int(float(istf))
+    except (TypeError, ValueError):
+        istf = 1
+    if istf not in (0, 1, 2, 3):
+        if log:
+            log.error(f"/MAT/LAW46/{mid}: invalid subgrid scale model Istf={istf} (expected 0, 1, 2, or 3)", "MAT CHECK")
+
+
+_check_mat_law46 = check_mat_law46
 
 
 def check_mat_law74(
@@ -8031,6 +8103,14 @@ def check_materials(model: Model, log: MessageLog) -> None:
         if mid not in getattr(model, "materials", {}):
             check_mat_law169(model=model, mat_id=mid, mat=mat169, log=log)
 
+    # M615: Material LAW46 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in _LAW46_KEYS or getattr(mat, "law_name", None) in _LAW46_KEYS:
+            check_mat_law46(model=model, mat_id=mid, mat=mat, log=log)
+    for mid, mat46 in getattr(model, "mat_law46s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law46(model=model, mat_id=mid, mat=mat46, log=log)
+
 
 
 
@@ -8094,7 +8174,13 @@ _MAT_CHECKS: dict[Any, Any] = {
     "ORTH_PLAS": check_mat_law74,
     "MAT_LAW74": check_mat_law74,
     "MAT_HILL_3D": check_mat_law74,
-    "MAT_ORTH_PLAS": check_mat_law74,
+    46: check_mat_law46,
+    "46": check_mat_law46,
+    "LAW46": check_mat_law46,
+    "LES_FLUID": check_mat_law46,
+    "M46_LES_FLUID": check_mat_law46,
+    "MAT_LES_FLUID": check_mat_law46,
+    "MAT_LAW46": check_mat_law46,
     66: check_mat_law66,
     "66": check_mat_law66,
     "LAW66": check_mat_law66,
