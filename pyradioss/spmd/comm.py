@@ -205,8 +205,9 @@ class Comm:
         property the Fortran relies on implicitly (every domain must take
         the same next step, MPI_ALLREDUCE guarantees it for the built-in
         ops and the commutative user op).  Ties on slot 0 resolve to the
-        LOWEST rank, like the Fortran's ``IF(RIN(1) == RINOUT(1))``
-        sequence which keeps the first minimum seen."""
+        HIGHEST rank: the Fortran's ``IF(RIN(1) == RINOUT(1))`` test runs
+        AFTER the MIN, so an exact tie takes the incoming packet, and the
+        port visits the ranks in increasing order (see _glob_min_pair)."""
         pk = np.asarray(packet, dtype=np.float64)
         if pk.shape != (10,):
             raise ValueError("glob_min packet must have 10 slots")
