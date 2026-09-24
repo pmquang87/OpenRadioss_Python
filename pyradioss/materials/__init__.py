@@ -1984,9 +1984,7 @@ _NEW_PORTED_LAWS: dict[int, Any] = {
     18: law18_plas_iso,
     20: law20_rigid,
     23: law23_user_mat,
-    24: law24_concrete,
     26: law26_honeycomb_sesame,
-    37: law37_biphas,
     41: law41_jwl_burn,
     45: law45_orth_fabric,
     46: law46_kin_hard,
@@ -2008,7 +2006,6 @@ _NEW_PORTED_LAWS: dict[int, Any] = {
     84: law84_mooney_rivlin,
     85: law85_void_pinch,
     86: law86_honeycomb_shell,
-    90: law90_foam,
     91: law91_pinch_shell,
     96: law96_thermovp,
     97: law97_orth_nonlinear,
@@ -4401,6 +4398,8 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         return law12_comp3d.shell_update(mat, sig, deps, epsp, dt, extra)
     if getattr(mat, "law", None) in (14, "14", "LAW14", "COMPSO", "COMP_SOL") or getattr(mat, "law_name", None) in ("14", "LAW14", "COMPSO", "COMP_SOL"):
         return law14_compso.shell_update(mat, sig, deps, epsp, dt, extra)
+    if getattr(mat, "law", None) in (24, "24", "LAW24", "CONC", "CONCRETE", "PERIC_CONC") or getattr(mat, "law_name", None) in (24, "24", "LAW24", "CONC", "CONCRETE", "PERIC_CONC"):
+        raise NotImplementedError("LAW24 (concrete) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or getattr(mat, "law_name", None) in ("LAW37", "BIPHAS", "BIPHASIC"):
         raise NotImplementedError("LAW37 (biphasic fluid/gas) is implemented for 3D solid and SPH elements only.")
     if getattr(mat, "law", None) == 28 or getattr(mat, "law_name", None) in ("LAW28", "HONEYCOMB", "HONEYCOMB_SOL"):
@@ -5360,6 +5359,10 @@ def shell_layer_tangent(mat, sig=None, epsp=None, epsp_incr=None, extra=None):
         return law119_seatbelt.consistent_shell_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, extra=extra)
     if getattr(mat, "law", None) in _LAW123_KEYS or getattr(mat, "law_name", None) in _LAW123_KEYS or getattr(mat, "law", None) in _LAW132_KEYS or getattr(mat, "law_name", None) in _LAW132_KEYS:
         return law123_consistent_shell_tangent(mat, sig=sig, deps=extra.get("deps") if extra else None, dt=extra.get("dt", 0.0) if extra else 0.0, extra=extra)
+    if getattr(mat, "law", None) in (24, "24", "LAW24", "CONC", "CONCRETE", "PERIC_CONC") or getattr(mat, "law_name", None) in (24, "24", "LAW24", "CONC", "CONCRETE", "PERIC_CONC"):
+        raise NotImplementedError("LAW24 (concrete) is implemented for 3D solid elements only.")
+    if getattr(mat, "law", None) in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or getattr(mat, "law_name", None) in ("LAW37", "BIPHAS", "BIPHASIC"):
+        raise NotImplementedError("LAW37 (biphasic fluid/gas) is implemented for 3D solid and SPH elements only.")
     if getattr(mat, "law", None) in _LAW90_KEYS or getattr(mat, "law_name", None) in _LAW90_KEYS:
         raise NotImplementedError("LAW90 (tabulated hysteretic foam) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in _LAW190_KEYS or getattr(mat, "law_name", None) in _LAW190_KEYS:
