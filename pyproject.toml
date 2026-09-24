@@ -16,6 +16,11 @@ test = ["pytest>=7", "pytest-xdist>=3", "scipy>=1.8"]
 # the optional M7 accelerated backend (pyradioss/accel): the base install
 # stays NumPy-only; select with PYRADIOSS_BACKEND=numba or -backend numba
 accel = ["numba>=0.59"]
+# the SPMD domain decomposition (pyradioss/spmd): real MPI processes under
+# `mpirun -np N pyradioss-engine -np N ...` need mpi4py (+ an MPI library);
+# without it `-np N` still runs the N domains as threads of one process
+# (pyradioss/spmd/comm.py ThreadComm), so it stays optional.
+mpi = ["mpi4py>=3.1"]
 # the M8 implicit solver (pyradioss/implicit): SciPy is REQUIRED for implicit
 # runs (sparse assembly + SuperLU) but OPTIONAL for the explicit solver, so it
 # lives here rather than in the base deps. scikit-sparse (CHOLMOD) and

@@ -60,6 +60,7 @@ from ..input.mat_reader import refuse_inactive_materials
 from ..input.prop_reader import refuse_inactive_properties
 from ..model.model import EngineControls, Model
 from ..output import TimeHistory, write_anim_state
+from ..spmd.exchange import SpmdContext, serial_context
 from ..starter.restart import read_restart, write_restart
 from .airbag import update_airbag_thermodynamics, update_airbag_volume, apply_airbag_forces
 from .airbag_fvm import update_fvmbag_volume, update_fvmbag_thermodynamics, apply_fvmbag_forces
@@ -112,6 +113,13 @@ class EngineState:
         self.crit_elem_id = 0  # critical element user ID (NELTST)
         self.crit_elem_type = ""  # critical element group name (ITYPTST)
         self.ek_ams = 0.0      # dual kinetic energy under AMS (sms_encin_2.F)
+        self.e0 = None         # balance reference E0 (was _energies.e0)
+        # SPMD (pyradioss/spmd): the domain context while a decomposed run
+        # integrates (None in a serial run). Under SPMD the ledgers above
+        # (wext, econt, e_num, e_madd, e_damp, ndel) are the LOCAL partial
+        # sums of this domain; e0, epeak, t, cycle, dt_prev are global.
+        self.spmd = None
+        self.timet_glob = False  # /STOP/TIMET flag from the dt packet
 
     @property
     def e_ext(self) -> float:
@@ -207,7 +215,16 @@ def _element_energy_sum(model: Model) -> float:
 _ENERGY_START_FLOOR = 1.0e-6
 
 
-def _energies(model: Model, state: EngineState) -> dict:
+def _energies(model: Model, state: EngineState, extra=None) -> dict:
+    # SPMD (decomposed run): local partial sums + ONE all-reduce, see
+    # _energies_spmd. ``extra`` rides along in that reduction (serial:
+    # ignored).
+    sp = getattr(state, "spmd", None)
+    if sp is not None and sp.active:
+        return _energies_spmd(model, state, sp, extra)
+    # the balance reference lives on the state (the function attribute is
+    # kept in step for callers that build an EngineState by hand)
+    e0 = state.e0 if getattr(state, "e0", None) is not None else _energies.e0
     ie = he = 0.0
     for _, group in model.element_groups():
         if "eint" in group.state:
@@ -229,12 +246,12 @@ def _energies(model: Model, state: EngineState) -> dict:
     # would scream divergence where there is none. (The original guards
     # its error the same way, with the initial/reference energy.)
     state.epeak = max(state.epeak, ie + ke)
-    ref = max(abs(state.wext), ke, ie, state.epeak, abs(_energies.e0),
+    ref = max(abs(state.wext), ke, ie, state.epeak, abs(e0),
               1e-12)
     # e_madd: kinetic energy CREATED by /DT/NODA/CST mass additions at
     # moving nodes — an energy input like external work, reported by the
     # mass-scaling summary (the honesty contract of engine/mass_scaling)
-    err = (total - state.wext - state.e_madd - _energies.e0) / ref * 100.0
+    err = (total - state.wext - state.e_madd - e0) / ref * 100.0
     # ERRN: the numerical-dissipation ledger on the same % scale. A
     # diverging run drives EN hard NEGATIVE (the discrete elastic force
     # injects energy the state bookings cannot see) — and because EN is
@@ -250,17 +267,113 @@ def _energies(model: Model, state: EngineState) -> dict:
             "REF": ref}
 
 
-def run_engine(input_file: str, log: Optional[MessageLog] = None) -> Model:
+def _energies_spmd(model: Model, state: EngineState, sp, extra=None) -> dict:
+    """``_energies`` of a decomposed run (``ecrit.F`` under SPMD): every
+    domain sums its own share — the internal/hourglass energies of its
+    elements (partitioned: each element lives on exactly one domain) and
+    the kinetic energy of its nodes times ``WEIGHT`` (``ecrit.F``
+    ``MAS = MS(I)*WEIGHT_MD(I)``) — together with its partial ledgers
+    (contact, numerical dissipation, damping, external work, added-mass
+    energy); ONE all-reduce of that short vector (``spmd_glob_dsum``)
+    gives the global values, from which every domain derives the SAME
+    balance (so the divergence guards decide identically everywhere).
+    ``extra`` values are summed in the same reduction and returned under
+    the key ``"EXTRA"``."""
+    w = sp.weight
+    ie = he = 0.0
+    for _, group in model.element_groups():
+        if "eint" in group.state:
+            ie += float(np.sum(group.state["eint"]))
+        if "ehour" in group.state:
+            he += float(np.sum(group.state["ehour"]))
+    real = model.mass < 1e29
+    ke = float(0.5 * ((w[real] * model.mass[real])[:, None]
+                      * model.v[real] ** 2).sum())
+    if getattr(model, "inertia", None) is not None and \
+            getattr(model, "vr", None) is not None:
+        real_rot = model.inertia < 1e29
+        ke += float(0.5 * ((w[real_rot] * model.inertia[real_rot])[:, None]
+                           * model.vr[real_rot] ** 2).sum())
+    ext = [] if extra is None else [float(x) for x in extra]
+    vec = np.array([ie, he, ke, state.econt, state.e_num, state.e_damp,
+                    state.wext, state.e_madd] + ext, dtype=np.float64)
+    g = sp.sum(vec)
+    ie, he, ke, econt, e_num, e_damp, wext, e_madd = (float(x) for x in g[:8])
+    e0 = state.e0 if state.e0 is not None else _energies.e0
+    total = ie + ke + he + econt + e_num + e_damp
+    state.epeak = max(state.epeak, ie + ke)      # global (identical everywhere)
+    ref = max(abs(wext), ke, ie, state.epeak, abs(e0), 1e-12)
+    err = (total - wext - e_madd - e0) / ref * 100.0
+    return {"IE": ie, "KE": ke, "HE": he, "CE": econt,
+            "EN": e_num, "DE": e_damp, "EW": wext,
+            "ERR": err, "ERRN": e_num / ref * 100.0,
+            "REF": ref, "EXTRA": g[8:]}
+
+
+class _QuietLog(MessageLog):
+    """The message log of a non-root SPMD domain: ``spmd_chkw.F`` — only
+    domain 0 prints; the others keep counting their messages and write to
+    their listing only when one is attached (PYRADIOSS_SPMD_LOG_ALL)."""
+
+    def _emit(self, text: str) -> None:
+        if self._listing is not None:
+            self._listing.write(text + "\n")
+
+
+def _refuse_spmd(controls, model) -> None:
+    """Engine options the SPMD port does not decompose (contract: the
+    Engine refuses them under NSPMD > 1 instead of running them wrong)."""
+    bad = []
+    if getattr(controls, "implicit", False):
+        bad.append("/IMPL (implicit solver)")
+    if getattr(controls, "impl_eigv", False) or getattr(controls, "eig_off", None) \
+            or getattr(model, "eigen_modes", None):
+        bad.append("/EIG (eigenvalue extraction)")
+    if getattr(controls, "dt_ams", False):
+        bad.append("/DT/AMS (advanced mass scaling)")
+    if getattr(controls, "dyrel_active", False):
+        bad.append("/DYREL (dynamic relaxation)")
+    if getattr(controls, "kerel_active", False):
+        bad.append("/KEREL (kinetic relaxation)")
+    if getattr(controls, "adyrel_active", False):
+        bad.append("/ADYREL (adaptive dynamic relaxation)")
+    if bad:
+        raise RuntimeError(
+            "SPMD (NSPMD > 1): not supported by the domain-decomposed "
+            "engine — run with -np 1: " + ", ".join(bad))
+
+
+def run_engine(input_file: str, log: Optional[MessageLog] = None,
+               comm=None) -> Model:
     """Run the Engine on ``RunName_NNNN.rad`` (+ RunName_{NNNN-1}.rst).
 
     Run number 1 starts fresh from the Starter restart; run numbers 2+
     RESUME from the previous engine run's restart (M6 chaining — see
-    starter/restart.py for the contract)."""
-    log = log or MessageLog()
+    starter/restart.py for the contract).
+
+    ``comm`` (SPMD, pyradioss/spmd): a communicator of size NSPMD > 1 —
+    this call then runs domain ``comm.rank`` of a decomposed model
+    (``radioss2.F``/``inipar.F``): it reads its domain restart
+    ``RunName_{NNNN-1}_{rank+1:04d}.rst`` and exchanges with the other
+    domains every cycle; domain 0 writes the listing and every output from
+    the gathered global view and returns that GLOBAL model; the other
+    domains return their local model.  ``comm=None`` (or size 1) is the
+    unchanged serial run."""
+    spmd_on = comm is not None and comm.active
+    log = log or (MessageLog() if not spmd_on or comm.is_root
+                  else _QuietLog())
     run_name, run_num = run_name_from_input(input_file)
     out_dir = os.path.dirname(os.path.abspath(input_file))
 
     listing_path = os.path.join(out_dir, f"{run_name}_{run_num:04d}.out")
+    if spmd_on and not comm.is_root:
+        # spmd_chkw.F: only P0 writes the listing (optional per-domain
+        # listings for debugging)
+        if os.environ.get("PYRADIOSS_SPMD_LOG_ALL", "") == "1":
+            listing_path = os.path.join(
+                out_dir, f"{run_name}_{run_num:04d}_{comm.rank + 1:04d}.out")
+        else:
+            listing_path = os.devnull
     with open(listing_path, "w") as listing:
         log.attach_listing(listing)
         log.info(banner())
@@ -268,9 +381,37 @@ def run_engine(input_file: str, log: Optional[MessageLog] = None) -> Model:
 
         # ---- read controls + restart (engine lectur.F + rdresb.F) --------
         controls = parse_engine_deck(read_deck(input_file), log)
-        rst = os.path.join(out_dir, f"{run_name}_{run_num - 1:04d}.rst")
+        if spmd_on:
+            # radioss2.F: domain ISPMD reads RunName_{run-1}_{ISPMD+1}.rst
+            rst = os.path.join(
+                out_dir, f"{run_name}_{run_num - 1:04d}_{comm.rank + 1:04d}.rst")
+        else:
+            rst = os.path.join(out_dir, f"{run_name}_{run_num - 1:04d}.rst")
         log.info(f" RESTART FILE . . . . . . . . . . . . : {rst}")
         model, saved = read_restart(rst)
+        spmd = None
+        gmodel = None
+        if spmd_on:
+            info = getattr(model, "spmd", None)
+            if info is None or int(getattr(info, "nspmd", 1)) <= 1:
+                raise RuntimeError(
+                    f"SPMD: {rst} is not a domain restart (run the Starter "
+                    f"with -np {comm.size})")
+            _refuse_spmd(controls, model)
+            spmd = SpmdContext(comm, info)
+            log.info(f" SPMD DOMAINS (NSPMD) . . . . . . . . : {spmd.size}"
+                     f"  ({comm.kind})")
+            if spmd.is_root:
+                # the rank-0 OUTPUT VIEW: the global model of the Starter
+                # (spmd_collect.F gathers every domain's rows into it at
+                # each output time). A resumed chain reads the gathered
+                # global restart of the previous run instead.
+                gpath = os.path.join(out_dir,
+                                     f"{run_name}_{run_num - 1:04d}.rst")
+                if not os.path.isfile(gpath):
+                    gpath = info.global_rst
+                gmodel, _ = read_restart(gpath)
+                gmodel.spmd = None
         # M37: a model whose element groups reference a parsed-but-not-
         # implemented material (InactiveMaterial) is honestly not
         # simulatable — refuse loudly BEFORE any engine branch runs,
@@ -316,15 +457,26 @@ def run_engine(input_file: str, log: Optional[MessageLog] = None) -> Model:
                                             run_name, run_num)
         else:
             model = _integrate(model, controls, log, out_dir, run_name,
-                               run_num, saved)
+                               run_num, saved, spmd=spmd, gmodel=gmodel)
     return model
 
 
 def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                out_dir: str, run_name: str, run_num: int = 1,
-               saved: Optional[dict] = None) -> Model:
+               saved: Optional[dict] = None,
+               spmd: Optional[SpmdContext] = None,
+               gmodel: Optional[Model] = None) -> Model:
     state = EngineState()
     n = model.numnod
+    # SPMD context (pyradioss/spmd/exchange.py): a no-op in a serial run —
+    # every decomposition hook below is guarded by ``spmd.active`` so the
+    # serial path is untouched. W is the domain's WEIGHT array (None serial).
+    if spmd is None:
+        spmd = serial_context()
+    if spmd.active:
+        state.spmd = spmd
+    W = spmd.weight
+    is_root = spmd.is_root
     resumed = saved is not None
     # reference physical masses (pre-/DT/NODA/CST) — older restarts and
     # hand-built models may not carry them
@@ -358,6 +510,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
 
     # ---- engine-side setup (resol_init) ----------------------------------
     loads = LoadsAndConstraints(model, log, controls=controls)
+    if spmd.active:
+        loads.set_spmd_weight(W)     # gravit.F / fixvel.F WEIGHT
     walls = RigidWalls(model, log)
     # contact: penalty interfaces (TYPE7/TYPE11, force-based) and tied
     # interfaces (TYPE2, kinematic) hook into the cycle differently
@@ -382,7 +536,12 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     rlinks = build_rlinks(model, log)          # /RLINK (M586)
     gjoints = build_gjoints(model, log)        # /GJOINT (M594)
     kjoints = build_kjoints(model, log)        # /PROP/TYPE33, /PROP/TYPE45 (M602)
-    sections = SectionForces(model, log)
+    if spmd.active:
+        # /SECT and /TH are evaluated by domain 0 on the gathered GLOBAL
+        # view (spmd_collect.F); the other domains carry no output object
+        sections = SectionForces(gmodel, log) if is_root else None
+    else:
+        sections = SectionForces(model, log)
     # /DT/NODA[/CST] (M6): nodal time step + mass scaling. Nodes whose
     # motion a constraint prescribes carry no stability constraint of
     # their own (see engine/mass_scaling.py).
@@ -399,6 +558,14 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             sensors.status[sid] = True
     ams = AMSManager(model, controls) if getattr(controls, "dt_ams", False) else None
     noda = NodalTimeStep(model, controls, log) if controls.dt_noda else None
+    if noda is not None and spmd.active:
+        # counters once per node (WEIGHT); the initial mass reference is
+        # the GLOBAL physical mass (a resume overwrites it with the saved
+        # global value below)
+        noda.weight = W
+        real_n = model.mass < 1e29
+        noda.mass0 = float(spmd.sum(float(
+            (W[real_n] * model.mass[real_n]).sum())))
     if noda is not None:
         for rb in rbodies:
             slave_mask = rb.nodes != rb.master
@@ -424,8 +591,24 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             noda._reported = sv["reported"]
     # each run of a chain writes its own T-file (T01, T02, ... — the
     # Radioss numbering convention)
-    th = TimeHistory(os.path.join(out_dir, f"{run_name}T{run_num:02d}.csv"),
-                     model, log)
+    if spmd.active:
+        # domain 0 writes the T-file from the gathered global view; which
+        # data the output gathers must carry is decided once on domain 0
+        # and broadcast (every domain must take part in the same gathers)
+        if is_root:
+            th = TimeHistory(
+                os.path.join(out_dir, f"{run_name}T{run_num:02d}.csv"),
+                gmodel, log)
+            out_flags = (len(sections) > 0,
+                         bool(th._part_req or th._other_req),
+                         any(req[1] == "RBODY" for req in th._other_req))
+        else:
+            th = None
+            out_flags = None
+        sect_on, th_groups, th_rb = spmd.bcast(out_flags)
+    else:
+        th = TimeHistory(os.path.join(out_dir, f"{run_name}T{run_num:02d}.csv"),
+                         model, log)
 
     fint = np.zeros((n, 3))    # -internal forces (see elements pkg doc)
     mint = np.zeros((n, 3))    # -internal moments (shell rotations)
@@ -476,7 +659,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                     "e_num", "e_madd", "e_damp"):
             setattr(state, key, saved[key])
         state.dt_prev = saved.get("dt_prev", None)
-        _energies.e0 = saved["e0"]
+        state.e0 = saved["e0"]
+        _energies.e0 = state.e0
         if saved.get("dyn_relax"):
             dyn_relax.ke_prev = saved["dyn_relax"].get("ke_prev", 0.0)
         dt = saved["dt"]
@@ -488,11 +672,23 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     else:
         # initial energy = reference E0 of the balance: kinetic + any
         # initial internal energy (an /EOS with E0/P0 starts charged, M6)
-        ke0 = float(0.5 * (model.mass[real, None] * model.v[real] ** 2).sum())
-        if getattr(model, "inertia", None) is not None and getattr(model, "vr", None) is not None:
-            real_rot = model.inertia < 1e29
-            ke0 += float(0.5 * (model.inertia[real_rot, None] * model.vr[real_rot] ** 2).sum())
-        _energies.e0 = ke0 + _element_energy_sum(model)
+        if spmd.active:
+            # the GLOBAL reference: weighted nodal KE + this domain's
+            # element energies, summed over the domains (ecrit.F)
+            ke0 = float(0.5 * ((W[real] * model.mass[real])[:, None]
+                               * model.v[real] ** 2).sum())
+            if getattr(model, "inertia", None) is not None and getattr(model, "vr", None) is not None:
+                real_rot = model.inertia < 1e29
+                ke0 += float(0.5 * ((W[real_rot] * model.inertia[real_rot])[:, None]
+                                    * model.vr[real_rot] ** 2).sum())
+            state.e0 = float(spmd.sum(ke0 + _element_energy_sum(model)))
+        else:
+            ke0 = float(0.5 * (model.mass[real, None] * model.v[real] ** 2).sum())
+            if getattr(model, "inertia", None) is not None and getattr(model, "vr", None) is not None:
+                real_rot = model.inertia < 1e29
+                ke0 += float(0.5 * (model.inertia[real_rot, None] * model.vr[real_rot] ** 2).sum())
+            state.e0 = ke0 + _element_energy_sum(model)
+        _energies.e0 = state.e0
 
         # ---- priming pass: dt=0 'cycle' just to collect the initial
         # critical time step from every kernel (no state advances at 0).
@@ -523,6 +719,10 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             # inertia arrays enable the ROTATIONAL nodal dt sqrt(2 IN/
             # STIFR) and its CST inertia scaling (dtnoda.F 452-516, M40)
             noda.assemble(claims)
+            if spmd.active:
+                # frontier sum of the nodal stiffness (spmd_exch_a.F STIFN/
+                # STIFR slots) before the nodal dt / initial mass addition
+                spmd.exch_forces(None, stifn=noda.stifn, stifr=noda.stifr)
             dt_next = noda.apply(mass_eff, inv_mass, model.v, 0.0,
                                  model.inertia, inv_inertia, ams_nodes)
             state.e_madd = noda.e_madd
@@ -535,6 +735,13 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         for ct in contacts:
             if sensors.active(ct.itf.sens_id):
                 dt_next = min(dt_next, ct.dt_bound)
+        if spmd.active:
+            # global initial step (spmd_glob_min5.F)
+            gm = spmd.glob_min(dt_next, "", 0, False,
+                               noda.mass_added if noda is not None else 0.0)
+            dt_next = gm.dt
+            if noda is not None:
+                noda.announce(gm.sums[0], 0.0)
         fint[:] = 0.0
         mint[:] = 0.0
         dt = controls.dt_scale * dt_next
@@ -562,7 +769,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             "t": state.t, "cycle": state.cycle, "wext": state.wext,
             "econt": state.econt, "epeak": state.epeak, "ndel": state.ndel,
             "e_num": state.e_num, "e_madd": state.e_madd,
-            "e_damp": state.e_damp, "e0": _energies.e0, "dt": dt,
+            "e_damp": state.e_damp, "e0": state.e0, "dt": dt,
             "dt_prev": state.dt_prev,
             "next_th": next_th, "next_anim": next_anim, "anim_no": anim_no,
             "next_state": next_state,
@@ -582,20 +789,97 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         }
 
     rst_path = os.path.join(out_dir, f"{run_name}_{run_num:04d}.rst")
+    if spmd.active:
+        # wrrestp.F: domain ISPMD writes RunName_{run}_{ISPMD+1:04d}.rst;
+        # domain 0 also writes the gathered GLOBAL RunName_{run}.rst
+        rst_glob = rst_path
+        rst_path = os.path.join(
+            out_dir, f"{run_name}_{run_num:04d}_{spmd.rank + 1:04d}.rst")
+
+    def _write_restarts():
+        """The engine restart(s): serial — one file; SPMD — this domain's
+        local restart + (collective) the rank-0 global one."""
+        snap = _engine_snapshot()
+        write_restart(model, rst_path, engine=snap)
+        if not spmd.active:
+            return
+        gsnap = _global_snapshot(snap)
+        spmd.gather_model_view(model, gmodel)
+        if is_root:
+            write_restart(gmodel, rst_glob, engine=gsnap)
+
+    def _global_snapshot(snap):
+        """The accumulated state of the GLOBAL restart: partial ledgers
+        and /DT/NODA counters summed over the domains (rank order), rigid
+        bodies merged (identical replicas — lowest domain wins). ONE
+        all-gather."""
+        vec = np.array([state.wext, state.econt, state.e_num, state.e_madd,
+                        state.e_damp, float(_deleted_count(model))]
+                       + ([noda.mass_added, noda.iner_added, noda.e_madd]
+                          + list(noda.mom_added) if noda is not None
+                          else [0.0] * 6), dtype=np.float64)
+        parts = spmd.allgather((vec, snap["rbodies"]))
+        tot = np.zeros_like(vec)
+        rbm = {}
+        for pv, prb in parts:
+            tot += pv
+            for k, val in prb.items():
+                rbm.setdefault(k, val)
+        g = dict(snap)
+        (g["wext"], g["econt"], g["e_num"], g["e_madd"],
+         g["e_damp"]) = (float(x) for x in tot[:5])
+        g["ndel"] = int(round(tot[5]))
+        g["rbodies"] = rbm
+        if noda is not None and snap.get("noda") is not None:
+            gn = dict(snap["noda"])
+            gn["mass_added"], gn["iner_added"], gn["e_madd"] = \
+                (float(x) for x in tot[6:9])
+            gn["mom_added"] = tot[9:12].copy()
+            g["noda"] = gn
+        return g
     # dt-collapse guard reference: a run whose step implodes by many
     # orders of magnitude is dead whatever the ledgers say — without
     # this, a deck with dT_min = 0 can spin forever at dt ~ 1e-18
     dt_ref = dt
     t_wall0 = time.time()
 
+    def _th_write_spmd(t_out):
+        """SPMD time-history record (collective): global energies by
+        reduction, then the gathered global view on domain 0 (nodal
+        arrays, and element states / rigid bodies / moments only when the
+        T-file asks for them) feeds the UNCHANGED TimeHistory/SectionForces."""
+        e_th = _energies(model, state)
+        ex = spmd.gather_model_view(
+            model, gmodel, nodal=True, groups=th_groups,
+            extra_nodal={"mint": mint} if sect_on else None,
+            rigid_bodies=th_rb)
+        if is_root:
+            real_g = gmodel.mass < 1e29
+            mom_g = (gmodel.mass[real_g, None] * gmodel.v[real_g]).sum(axis=0)
+            svals_g = sections.compute(gmodel.x, gmodel.fint, ex["mint"]) \
+                if sect_on else None
+            th.write(t_out, e_th, float(gmodel.mass[real_g].sum()), mom_g,
+                     svals_g)
+
+    def _anim_write_spmd(path_a):
+        """SPMD animation frame (collective gather, domain 0 writes)."""
+        spmd.gather_model_view(model, gmodel)
+        if is_root:
+            write_anim_state(path_a, gmodel, state.t,
+                             controls.anim_vect, controls.anim_elem,
+                             cycle=state.cycle)
+
     # Write t = 0.0 initial state to TimeHistory (BUG-OUT-04)
     if not resumed and controls.th_dt > 0:
         model.fint = fint
         model.fext = fext
-        e0 = _energies(model, state)
-        mom0 = (model.mass[real, None] * model.v[real]).sum(axis=0)
-        svals0 = sections.compute(model.x, fint, mint) if len(sections) else None
-        th.write(0.0, e0, float(model.mass[real].sum()), mom0, svals0)
+        if spmd.active:
+            _th_write_spmd(0.0)
+        else:
+            e0 = _energies(model, state)
+            mom0 = (model.mass[real, None] * model.v[real]).sum(axis=0)
+            svals0 = sections.compute(model.x, fint, mint) if len(sections) else None
+            th.write(0.0, e0, float(model.mass[real].sum()), mom0, svals0)
         while next_th <= state.t:
             next_th += controls.th_dt
 
@@ -614,7 +898,11 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         if controls.stop_tstop > 0 and state.t >= controls.stop_tstop * (1.0 - 1e-14):
             state.stop_reason = f"/STOP/TSTOP REACHED (TIME {state.t:.5E})"
             break
-        if controls.stop_timet > 0 and (time.time() - t_wall0) >= controls.stop_timet:
+        if controls.stop_timet > 0 and (
+                state.timet_glob if spmd.active else
+                (time.time() - t_wall0) >= controls.stop_timet):
+            # (SPMD: the wall clock differs per domain — the flag was
+            # MAX-reduced in the previous cycle's dt packet, MSTOP2 slot)
             state.stop_reason = f"/STOP/TIMET REACHED (ELAPSED {time.time() - t_wall0:.1f}s)"
             break
 
@@ -703,8 +991,11 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                     state.crit_elem_type = name
             if state.stop_reason:
                 break
-        if state.stop_reason:
+        if state.stop_reason and not spmd.active:
             break
+        # (SPMD: a local /DT/<elem>/STOP is NOT a local break — every
+        # domain must reach the same collectives; the flag rides the dt
+        # packet below and all domains stop together)
 
         # /SPHCEL / SPH particle step (M_SPH)
         if hasattr(model, 'sph_cells') and model.sph_cells:
@@ -827,6 +1118,22 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
 
         if noda is not None:
             noda.assemble(claims)
+
+        # ---- 3c'. SPMD frontier exchange (spmd_exch_a.F, resol.F 4740) --
+        # Every partial-force producer of this domain has run (elements,
+        # the owned contacts/monvols/pressure segments, the weighted
+        # gravity/cload, the linear transfers of the replicated tied/RBE3/
+        # joints) and the nodal stiffness is assembled: sum the frontier
+        # rows over the domains so every holder of a node carries its
+        # COMPLETE force and stiffness from here on (acceleration, mass
+        # scaling, rigid bodies and walls then run identically on every
+        # holder — no velocity exchange is needed).
+        if spmd.active:
+            spmd.exch_forces(fint, fext, fcont, mint,
+                             noda.stifn if noda is not None else None,
+                             noda.stifr if noda is not None else None)
+
+        if noda is not None:
             if getattr(controls, "damp_alpha", 0.0) > 0.0 or getattr(controls, "damp_beta", 0.0) > 0.0:
                 noda.apply_rayleigh_damping_stiffness(getattr(controls, "damp_alpha", 0.0),
                                                       getattr(controls, "damp_beta", 0.0))
@@ -838,6 +1145,30 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                 state.crit_elem_type = "NODE"
             if getattr(noda, "stopped", False):
                 state.stop_reason = f"/DT/NODA/STOP: NODE {noda.stop_node} TIME STEP BELOW MINIMUM {noda.dt_min:.3E}"
+                if not spmd.active:
+                    break
+
+        # ---- 3c''. SPMD global time step (spmd_glob_min5.F, resol.F 6137)
+        # dt min + the winning critical element, the stop flags (MSTOP1 =
+        # any local stop, MSTOP2 = the /STOP/TIMET wall clock) and the
+        # global /DT/NODA/CST added mass (a SUM slot).
+        if spmd.active:
+            gm = spmd.glob_min(
+                dt_next, state.crit_elem_type, state.crit_elem_id,
+                bool(state.stop_reason),
+                noda.mass_added if noda is not None else 0.0,
+                timet=(controls.stop_timet > 0 and
+                       (time.time() - t_wall0) >= controls.stop_timet))
+            dt_next = gm.dt
+            state.crit_elem_type, state.crit_elem_id = gm.crit_type, gm.crit_id
+            state.timet_glob = gm.timet
+            if noda is not None:
+                noda.announce(gm.sums[0], state.t)
+            if gm.stop:
+                # every domain stops at this same point; the reason text of
+                # the lowest domain that raised one is reported everywhere
+                reasons = spmd.allgather(state.stop_reason)
+                state.stop_reason = next(r for r in reasons if r)
                 break
 
         dt_prev = state.dt_prev if state.dt_prev is not None else dt
@@ -920,7 +1251,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             v_star = model.v.copy()          # pre-damping velocities
             vr_star = model.vr.copy() if getattr(model, "vr", None) is not None else None
             state.e_damp += dampers.apply(state.t, dt, model.v, model.vr,
-                                          model.mass, model.inertia)
+                                          model.mass, model.inertia,
+                                          weight=W)
             # attribution correction on the damped nodes: the force-stage
             # work bookings (EW at the end-of-cycle velocity, the 6c
             # internal-work ledger at (v_old+v_new)/2) assume the update
@@ -932,13 +1264,23 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             # (f_int+f_ext).(v_old+v_star)/2, so the residual booked by
             # the other ledgers is measured here and moved into EN:
             di = dampers.all_idx
-            resid = float(
-                np.einsum("nb,nb->", fext[di],
-                          model.v[di] - 0.5 * (v_old[di] + v_star[di]))
-                + np.einsum("nb,nb->", fint[di],
-                            0.5 * (model.v[di] - v_star[di]))) * dt
-            if getattr(model, "vr", None) is not None and vr_star is not None:
-                resid += float(np.einsum("nb,nb->", mint[di], 0.5 * (model.vr[di] - vr_star[di]))) * dt
+            if W is None:
+                resid = float(
+                    np.einsum("nb,nb->", fext[di],
+                              model.v[di] - 0.5 * (v_old[di] + v_star[di]))
+                    + np.einsum("nb,nb->", fint[di],
+                                0.5 * (model.v[di] - v_star[di]))) * dt
+                if getattr(model, "vr", None) is not None and vr_star is not None:
+                    resid += float(np.einsum("nb,nb->", mint[di], 0.5 * (model.vr[di] - vr_star[di]))) * dt
+            else:
+                wd = W[di]
+                resid = float(
+                    np.einsum("n,nb,nb->", wd, fext[di],
+                              model.v[di] - 0.5 * (v_old[di] + v_star[di]))
+                    + np.einsum("n,nb,nb->", wd, fint[di],
+                                0.5 * (model.v[di] - v_star[di]))) * dt
+                if getattr(model, "vr", None) is not None and vr_star is not None:
+                    resid += float(np.einsum("n,nb,nb->", wd, mint[di], 0.5 * (model.vr[di] - vr_star[di]))) * dt
             state.e_num += resid
 
         # ---- 4c. dynamic relaxation (/DYREL /KEREL) -----------------------
@@ -953,8 +1295,12 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # work booking, the fext work) sees the velocities the body nodes
         # actually move with. Books only the master /IMPVEL drive work.
         for rb in rbodies:
-            state.wext += rb.advance(fint, fext, fcont, mint, model.v,
-                                     model.vr, model.x, dt, state.t + dt)
+            w_rb = rb.advance(fint, fext, fcont, mint, model.v,
+                              model.vr, model.x, dt, state.t + dt)
+            # SPMD: the body is replicated on every domain holding one of
+            # its nodes; its drive work is booked once, by the master's
+            # main domain (WEIGHT of the master, rbyvit.F/rbycor.F)
+            state.wext += w_rb if W is None else w_rb * float(W[rb.master])
             w_sq = float(np.sum(rb.w ** 2))
             if dt ** 2 * w_sq > 1.0:
                 log.warning(f"** WARNING: RIGID BODY {rb.rb.id} ROTATION ANGLE PER STEP EXCEEDS STABILITY LIMIT (DT^2*OMEGA^2 = {dt**2 * w_sq:.3f} > 1.0)")
@@ -969,7 +1315,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                                             model.inertia, vr_old,
                                             sensors=sensors)
         de_wall, dw_wall = walls.apply(model.x, model.v, v_old,
-                                       model.mass, dt)
+                                       model.mass, dt, weight=W)
         state.econt += de_wall
         state.wext += dw_wall
 
@@ -985,13 +1331,24 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # remaining CE drift is the real damper/friction dissipation.
         # (The original accumulates interface energies from the same
         # assembled forces in its FSAV blocks.)
-        if contacts:
-            state.econt -= float(np.einsum(
-                "nb,nb->", fcont, 0.5 * (v_old + model.v))) * dt12
+        if W is None:
+            if contacts:
+                state.econt -= float(np.einsum(
+                    "nb,nb->", fcont, 0.5 * (v_old + model.v))) * dt12
 
-        # external work of the loads: force x actual displacement, booked with
-        # midstep average velocity (resol.F:6289, force.F90:322)
-        state.wext += float(np.einsum("nb,nb->", fext, 0.5 * (v_old + model.v))) * dt12
+            # external work of the loads: force x actual displacement, booked with
+            # midstep average velocity (resol.F:6289, force.F90:322)
+            state.wext += float(np.einsum("nb,nb->", fext, 0.5 * (v_old + model.v))) * dt12
+        else:
+            # SPMD: fcont/fext are the frontier-summed COMPLETE forces on
+            # every holder — booked once per node (WEIGHT, ecrit.F). The
+            # contact booking runs on EVERY domain (a domain that owns no
+            # interface still holds contact force on its frontier nodes).
+            v_mid = 0.5 * (v_old + model.v)
+            state.econt -= float(np.einsum("n,nb,nb->", W, fcont,
+                                           v_mid)) * dt12
+            state.wext += float(np.einsum("n,nb,nb->", W, fext,
+                                          v_mid)) * dt12
 
         # /MPC and /LAGMUL velocity cleanup: enforce constraints on velocities
         # BEFORE position update to prevent geometric drift (BUG-ENG-05)
@@ -1059,9 +1416,16 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         #   law that misbooks its own work now surfaces in EN instead of
         #   ERR; EN is printed in the listing and T01 so it cannot hide.
         e_booked = _element_energy_sum(model)
-        w_leave = -0.5 * dt12 * (
-            float(np.einsum("nb,nb->", fint, v_old + model.v))
-            + float(np.einsum("nb,nb->", mint, vr_old + model.vr)))
+        if W is None:
+            w_leave = -0.5 * dt12 * (
+                float(np.einsum("nb,nb->", fint, v_old + model.v))
+                + float(np.einsum("nb,nb->", mint, vr_old + model.vr)))
+        else:
+            # SPMD: complete nodal forces, once per node (WEIGHT); the
+            # element bookings e_booked are this domain's own elements
+            w_leave = -0.5 * dt12 * (
+                float(np.einsum("n,nb,nb->", W, fint, v_old + model.v))
+                + float(np.einsum("n,nb,nb->", W, mint, vr_old + model.vr)))
         state.e_num += w_leave - (e_booked - state.e_booked_prev)
         state.e_booked_prev = e_booked
 
@@ -1079,27 +1443,38 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         state.cycle += 1
 
         # ---- 7. outputs ----------------------------------------------------
+        # (SPMD: every output trigger below depends on t/cycle only, which
+        # are identical on all domains — the collectives inside line up)
         if state.t >= next_th and controls.th_dt > 0:
-            e = _energies(model, state)
-            mom = (model.mass[real, None] * model.v[real]).sum(axis=0)
-            # /SECT resultants from this cycle's assembled internal forces
-            svals = sections.compute(model.x, fint, mint) if len(sections) \
-                else None
-            th.write(state.t, e, float(model.mass[real].sum()), mom, svals)
+            if spmd.active:
+                _th_write_spmd(state.t)
+            else:
+                e = _energies(model, state)
+                mom = (model.mass[real, None] * model.v[real]).sum(axis=0)
+                # /SECT resultants from this cycle's assembled internal forces
+                svals = sections.compute(model.x, fint, mint) if len(sections) \
+                    else None
+                th.write(state.t, e, float(model.mass[real].sum()), mom, svals)
             while next_th <= state.t:
                 next_th += controls.th_dt
         if controls.anim_dt > 0 and state.t >= next_anim:
             path = os.path.join(out_dir, f"{run_name}A{anim_no:03d}.vtk")
-            write_anim_state(path, model, state.t,
-                             controls.anim_vect, controls.anim_elem,
-                             cycle=state.cycle)
+            if spmd.active:
+                _anim_write_spmd(path)
+            else:
+                write_anim_state(path, model, state.t,
+                                 controls.anim_vect, controls.anim_elem,
+                                 cycle=state.cycle)
             anim_no += 1
             while next_anim <= state.t:
                 next_anim += controls.anim_dt
         if controls.state_dt > 0 and state.t >= next_state:
             # /STATE/DT snapshot: a full restart, resumable by the next
             # run of the chain (and the crash-recovery point)
-            write_restart(model, rst_path, engine=_engine_snapshot())
+            if spmd.active:
+                _write_restarts()
+            else:
+                write_restart(model, rst_path, engine=_engine_snapshot())
             log.info(f" -- /STATE: RESTART SNAPSHOT WRITTEN AT TIME "
                      f"{state.t:12.5E}")
             while next_state <= state.t and controls.state_dt > 0:
@@ -1109,12 +1484,26 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             # element-deletion report (the original prints a "RUPTURE /
             # DELETE ELEMENT" message per element; the port reports the
             # running total at the listing frequency)
-            ndel = _deleted_count(model)
-            if ndel > state.ndel:
-                log.info(f" -- ELEMENT DELETION: {ndel - state.ndel} "
-                         f"ELEMENT(S) DELETED (TOTAL {ndel})")
+            if spmd.active:
+                # the deletion counts and the added mass ride along in the
+                # (single) energy reduction; state.ndel stays this domain's
+                ndel = _deleted_count(model)
+                e = _energies(model, state, extra=[
+                    float(ndel), float(state.ndel),
+                    noda.mass_added if noda is not None else 0.0])
+                ndel_g, ndel_prev_g, madd_g = (float(x) for x in e["EXTRA"])
+                if ndel_g > ndel_prev_g:
+                    log.info(f" -- ELEMENT DELETION: "
+                             f"{int(round(ndel_g - ndel_prev_g))} "
+                             f"ELEMENT(S) DELETED (TOTAL {int(round(ndel_g))})")
                 state.ndel = ndel
-            e = _energies(model, state)
+            else:
+                ndel = _deleted_count(model)
+                if ndel > state.ndel:
+                    log.info(f" -- ELEMENT DELETION: {ndel - state.ndel} "
+                             f"ELEMENT(S) DELETED (TOTAL {ndel})")
+                    state.ndel = ndel
+                e = _energies(model, state)
             log.info(f" {state.cycle:6d} {state.t:12.5E} {dt:12.5E} "
                      f"{e['IE']:12.5E} {e['KE']:12.5E} {e['HE']:12.5E} "
                      f"{e['CE']:12.5E} {e['EN']:12.5E} {e['EW']:12.5E} "
@@ -1154,12 +1543,16 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                         f"RUN UNSTABLE")
                     break
             if controls.mass_error_stop > 0.0 and noda is not None:
-                frac_m = 100.0 * noda.mass_added / max(noda.mass0, 1e-20)
+                madd = madd_g if spmd.active else noda.mass_added
+                frac_m = 100.0 * madd / max(noda.mass0, 1e-20)
                 if frac_m > controls.mass_error_stop:
                     state.stop_reason = f"/STOP: MASS ERROR {frac_m:.2f}% EXCEEDED LIMIT {controls.mass_error_stop:.2f}%"
                     break
             if controls.nodal_mass_error_stop > 0.0 and noda is not None:
-                top_nodes = noda.get_top_mass_nodes(1)
+                if spmd.active:
+                    top_nodes = _noda_top_nodes(noda, spmd, 1)
+                else:
+                    top_nodes = noda.get_top_mass_nodes(1)
                 if top_nodes and top_nodes[0][2] * 100.0 > controls.nodal_mass_error_stop:
                     state.stop_reason = f"/STOP: NODAL MASS ERROR {top_nodes[0][2]*100.0:.2f}% ON NODE {top_nodes[0][0]} EXCEEDED LIMIT {controls.nodal_mass_error_stop:.2f}%"
                     break
@@ -1193,15 +1586,23 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     # final state + termination summary (like the original's final page)
     if controls.anim_dt > 0:
         path = os.path.join(out_dir, f"{run_name}A{anim_no:03d}.vtk")
-        write_anim_state(path, model, state.t,
-                         controls.anim_vect, controls.anim_elem,
-                         cycle=state.cycle)
-    th.close()
+        if spmd.active:
+            _anim_write_spmd(path)
+        else:
+            write_anim_state(path, model, state.t,
+                             controls.anim_vect, controls.anim_elem,
+                             cycle=state.cycle)
+    if th is not None:
+        th.close()
     # the ENGINE restart (M6 chaining contract): RunName_{nn+1}.rad
     # resumes from this file — written on ERROR stops too, so a diverged
     # run can be re-tried from its last state with different controls
-    write_restart(model, rst_path, engine=_engine_snapshot())
-    log.info(f" RESTART FILE WRITTEN . . . . . . . . : {rst_path}")
+    if spmd.active:
+        _write_restarts()
+        log.info(f" RESTART FILE WRITTEN . . . . . . . . : {rst_glob}")
+    else:
+        write_restart(model, rst_path, engine=_engine_snapshot())
+        log.info(f" RESTART FILE WRITTEN . . . . . . . . : {rst_path}")
     # expose the exact accumulated state to callers/tests (not pickled —
     # attached after the restart write)
     model.engine_state = state
@@ -1229,8 +1630,59 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     log.info(f"     DAMPING DISSIPATION . . . : {e['DE']:14.7E}")
     log.info(f"     EXTERNAL WORK . . . . . . : {e['EW']:14.7E}")
     if noda is not None:
-        noda.summary(log)
+        if spmd.active:
+            _noda_global_view(noda, spmd).summary(log)
+        else:
+            noda.summary(log)
     log.info(f"     ELAPSED TIME  . . . . . . : "
              f"{time.time() - t_wall0:10.3f} s")
     log.info("     ------------------------------------------------")
+    if spmd.active:
+        # detach the context (no collective may run after the loop), and
+        # hand domain 0's caller the GLOBAL view with the reduced ledgers
+        red = spmd.reduce_state(state)
+        state.spmd = None
+        if is_root:
+            gmodel.engine_state = red
+            gmodel.spmd_local_model = model
+            return gmodel
     return model
+
+
+def _noda_top_nodes(noda, spmd, n: int = 5):
+    """Global top-``n`` nodes by added mass (``sortie_error.F``) of a
+    decomposed run: each domain proposes its own OWNED nodes (WEIGHT == 1,
+    so a frontier node is counted once), one all-gather, merged by added
+    mass (identical on every domain)."""
+    w = spmd.weight
+    nam = getattr(noda, "node_added_mass", None)
+    cand = []
+    if nam is not None and len(nam):
+        act = np.where((nam > 0.0) & (w > 0.0))[0]
+        order = act[np.argsort(-nam[act])][:n]
+        m0 = getattr(noda, "initial_nodal_mass", None)
+        for idx in order:
+            nid = int(noda.model.node_ids[idx])
+            dm = float(nam[idx])
+            mi = float(m0[idx]) if m0 is not None and len(m0) > idx else 0.0
+            rel = dm / max(mi, 1e-20) if mi > 0.0 else dm / max(noda.mass0, 1e-20)
+            cand.append((nid, dm, rel))
+    merged = [c for part in spmd.allgather(cand) for c in part]
+    merged.sort(key=lambda c: (-c[1], c[0]))
+    return merged[:n]
+
+
+def _noda_global_view(noda, spmd):
+    """A shallow copy of the /DT/NODA machinery carrying the GLOBAL
+    counters (summed over the domains) and the global top-mass list, for
+    the termination-page ``summary`` of a decomposed run (collective)."""
+    import copy as _copy
+    vec = np.array([noda.mass_added, noda.iner_added, noda.e_madd]
+                   + list(noda.mom_added), dtype=np.float64)
+    g = spmd.sum(vec)
+    top = _noda_top_nodes(noda, spmd, 5)
+    view = _copy.copy(noda)
+    view.mass_added, view.iner_added, view.e_madd = (float(x) for x in g[:3])
+    view.mom_added = np.array(g[3:6], dtype=np.float64)
+    view.get_top_mass_nodes = lambda n=5: top[:n]
+    return view

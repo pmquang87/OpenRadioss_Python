@@ -2,8 +2,9 @@
 Command-line entry point:  pyradioss-starter -i RunName_0000.rad
 
 Mirrors the original Starter command line (starter_linux64_gf -i ... -np N
--nt N); -np is accepted-but-ignored (no MPI in the port), -nt sets NumPy's
-thread count environment variables as a best effort.
+-nt N); -np N decomposes the model into N SPMD domains and writes one
+restart per domain (RunName_0000_0001.rst ..., pyradioss/spmd/domdec.py),
+-nt sets NumPy's thread count environment variables as a best effort.
 """
 
 from __future__ import annotations
@@ -23,15 +24,13 @@ def main(argv=None) -> int:
     ap.add_argument("-nt", "-nthread", dest="nthread", type=int, default=0,
                     help="number of threads (sets numpy thread env vars)")
     ap.add_argument("-np", dest="nspmd", type=int, default=1,
-                    help="MPI domains (ignored: the port has no MPI)")
+                    help="number of SPMD domains (one restart per domain)")
     args = ap.parse_args(argv)
 
     if args.nthread > 0:
         for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
                     "MKL_NUM_THREADS"):
             os.environ[var] = str(args.nthread)
-    if args.nspmd > 1:
-        print(" ** WARNING: -np ignored (no MPI in pyradioss)")
 
     from ..common.messages import StarterError
     from .starter import run_starter
@@ -39,7 +38,7 @@ def main(argv=None) -> int:
         print(f"\n     STARTER TERMINATION : ERROR\n     Starter input file not found: {args.input}")
         return 2
     try:
-        res = run_starter(args.input)
+        res = run_starter(args.input, nspmd=max(1, args.nspmd))
         if isinstance(res, int) and res != 0:
             return 2
     except (StarterError, FileNotFoundError) as exc:

@@ -30,6 +30,39 @@ import numpy as np
 
 from ..model.model import Model
 
+#: provenance prefix of a segment whose parent element is a GHOST copy
+#: (SPMD: a non-local element kept on the interface owner, see
+#: pyradioss/spmd/domdec.py) — the element lives in ``model.spmd_ghost``
+GHOST_PREFIX = "ghost:"
+
+
+def _resolve_group(model: Model, gname: str):
+    """Element group named by a segment provenance: a regular group
+    attribute of the model, or ``"ghost:<group>"`` for the SPMD ghost-ring
+    copy in ``model.spmd_ghost`` (serial models have no ghost ring)."""
+    gname = str(gname)
+    if gname.startswith(GHOST_PREFIX):
+        ghosts = getattr(model, "spmd_ghost", None) or {}
+        return ghosts.get(gname[len(GHOST_PREFIX):])
+    return getattr(model, gname, None)
+
+
+def _base_name(gname: str) -> str:
+    """Group family of a provenance name ("ghost:shells" -> "shells")."""
+    gname = str(gname)
+    return gname[len(GHOST_PREFIX):] if gname.startswith(GHOST_PREFIX) else gname
+
+
+def _all_groups(model: Model):
+    """(name, group) over the model's element groups, then the SPMD ghost
+    ring groups (same family names) — for the loops that must see every
+    element touching a node.  Serial models: element_groups() only."""
+    yield from model.element_groups()
+    ghosts = getattr(model, "spmd_ghost", None) or {}
+    for name, group in ghosts.items():
+        if group is not None and group.n:
+            yield name, group
+
 
 def alive_segment_mask(model: Model, seg_gtype: np.ndarray,
                        seg_elem: np.ndarray) -> np.ndarray:
@@ -42,7 +75,7 @@ def alive_segment_mask(model: Model, seg_gtype: np.ndarray,
     for gname in np.unique(seg_gtype):
         if gname == "":
             continue
-        group = getattr(model, gname, None)
+        group = _resolve_group(model, gname)
         if group is None or getattr(group, "state", None) is None:
             continue
         off = group.state.get("off")
@@ -66,14 +99,14 @@ def any_deletable(model: Model, seg_gtype: np.ndarray,
     for gname in np.unique(seg_gtype):
         if gname == "":
             continue
-        group = getattr(model, gname, None)
+        group = _resolve_group(model, gname)
         if group is not None and group.state.get("off") is not None and group.state.get(
                 "chk_fail", False):
             return True
     # Secondary-node check: scan all element groups for any that contain
     # a secondary node AND have failure capability.
     if sec_nodes is not None and len(sec_nodes) > 0 and hasattr(model, "element_groups"):
-        for gname, group in model.element_groups():
+        for gname, group in _all_groups(model):
             if group.state.get("off") is None or not group.state.get(
                     "chk_fail", False):
                 continue
@@ -86,7 +119,7 @@ def node_reference_counts(model: Model, alive_only: bool) -> np.ndarray:
     """How many elements reference each node (all groups). With
     ``alive_only`` the count is restricted to elements with off > 0."""
     cnt = np.zeros(model.numnod, dtype=np.int64)
-    for _, group in model.element_groups():
+    for _, group in _all_groups(model):
         conn = group.conn
         if alive_only:
             off = group.state.get("off")

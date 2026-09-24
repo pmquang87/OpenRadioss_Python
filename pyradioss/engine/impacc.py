@@ -35,6 +35,10 @@ class ImposedAccelerationEngine:
         self.reactions: Dict[int, np.ndarray] = {}  # {impacc_id: reaction_forces}
         self.total_reaction_tra = np.zeros((model.numnod, 3), dtype=np.float64)
         self.total_reaction_rot = np.zeros((model.numnod, 3), dtype=np.float64)
+        #: SPMD ``WEIGHT`` array (None = serial): the constraint acts on
+        #: every holder of a node, its work is booked once per node
+        #: (fixvel.F's ``WEIGHT(I)`` factor on DW)
+        self.weight: Optional[np.ndarray] = None
 
         def _node_idx(nid: int) -> int:
             if nid <= 0:
@@ -183,7 +187,10 @@ class ImposedAccelerationEngine:
                     # Work booking: R . v_mid * dt
                     # v_mid = v_old + 0.5 * acc * dt
                     v_mid = 0.5 * (v_old[idx] + (v_old[idx] + acc[idx] * dt))
-                    w += float(np.sum(R * v_mid)) * dt
+                    if self.weight is None:
+                        w += float(np.sum(R * v_mid)) * dt
+                    else:
+                        w += float(np.sum(self.weight[idx, None] * R * v_mid)) * dt
                 else:
                     # Rotational about skew axis
                     if ar is not None:
@@ -196,7 +203,10 @@ class ImposedAccelerationEngine:
                         self.reactions[entry["id"]] = R
                         vr_base = vr_old[idx] if vr_old is not None else (vr[idx] if vr is not None else 0.0)
                         vr_mid = 0.5 * (vr_base + (vr_base + ar[idx] * dt))
-                        w += float(np.sum(R * vr_mid)) * dt
+                        if self.weight is None:
+                            w += float(np.sum(R * vr_mid)) * dt
+                        else:
+                            w += float(np.sum(self.weight[idx, None] * R * vr_mid)) * dt
             else:
                 # Cartesian global DOF
                 if dof < 3:
@@ -211,7 +221,10 @@ class ImposedAccelerationEngine:
                     v_base = v_old[idx, dof]
                     v_new = v_base + aimp * dt
                     v_mid = 0.5 * (v_base + v_new)
-                    w += float(np.dot(R, v_mid)) * dt
+                    if self.weight is None:
+                        w += float(np.dot(R, v_mid)) * dt
+                    else:
+                        w += float(np.dot(R * self.weight[idx], v_mid)) * dt
                 else:
                     dof_rot = dof - 3
                     if ar is not None:
@@ -226,7 +239,10 @@ class ImposedAccelerationEngine:
                         vr_base = vr_old[idx, dof_rot] if vr_old is not None else (vr[idx, dof_rot] if vr is not None else 0.0)
                         vr_new = vr_base + aimp * dt
                         vr_mid = 0.5 * (vr_base + vr_new)
-                        w += float(np.dot(R, vr_mid)) * dt
+                        if self.weight is None:
+                            w += float(np.dot(R, vr_mid)) * dt
+                        else:
+                            w += float(np.dot(R * self.weight[idx], vr_mid)) * dt
 
         # Expose reactions on model for post-processing / interrogation
         self.model.impacc_reactions = self.reactions

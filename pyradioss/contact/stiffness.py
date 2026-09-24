@@ -47,6 +47,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..model.model import Model
+from .tracking import _all_groups, _base_name, _resolve_group
 
 
 def _fallback_modulus(model: Model) -> float:
@@ -125,11 +126,11 @@ def segment_stiffness_gap(model: Model, segments: np.ndarray,
         if gname == "":
             K[sel] = stfac * _fallback_modulus(model) * np.sqrt(area[sel])
             continue
-        group = getattr(model, gname, None)
+        group = _resolve_group(model, gname)
         if group is None:
             continue
         erow = seg_elem[sel]
-        if gname in _SHELL_GROUPS:
+        if _base_name(gname) in _SHELL_GROUPS:
             # K = 0.5 * Stfac * E * t ;  gap contribution = t / 2
             E = _per_element(group, lambda m, p: getattr(m, 'E', 0.0))[erow]
             t = group.state["thick"][erow]
@@ -158,7 +159,7 @@ def node_stiffness_gap(model: Model, stfac: float, fscale_gap: float = 1.0):
     """
     K = np.zeros(model.numnod)
     gap = np.zeros(model.numnod)
-    for gname, group in model.element_groups():
+    for gname, group in _all_groups(model):
         if gname in _SHELL_GROUPS:
             E = _per_element(group, lambda m, p: getattr(m, 'E', 0.0))
             k_e = 0.5 * stfac * E * group.state["thick"]
@@ -218,7 +219,7 @@ def node_mesh_gap(model: Model, segments: np.ndarray, nodes: np.ndarray, percent
 
     inf_mask = np.isinf(node_gap[nodes])
     if np.any(inf_mask):
-        for gname, group in model.element_groups():
+        for gname, group in _all_groups(model):
             if not hasattr(group, "conn") or group.conn is None or len(group.conn) == 0:
                 continue
             conn = group.conn
@@ -287,11 +288,11 @@ def edge_stiffness_gap(model: Model, edges: np.ndarray,
                 L = np.ones(np.sum(sel))
             K[sel] = stfac * _fallback_modulus(model) * L
             continue
-        group = getattr(model, gname, None)
+        group = _resolve_group(model, gname)
         if group is None:
             continue
         erow = seg_elem[sel]
-        if gname in _SHELL_GROUPS:
+        if _base_name(gname) in _SHELL_GROUPS:
             E = _per_element(group, lambda m, p: getattr(m, 'E', 0.0))[erow]
             t = group.state["thick"][erow]
             K[sel] = 0.5 * stfac * E * t

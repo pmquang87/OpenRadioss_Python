@@ -17,6 +17,7 @@ Faithful port of OpenRadioss Fortran source:
 """
 
 import numpy as np
+from typing import Any, Dict, Optional
 from scipy.spatial import cKDTree
 
 
