@@ -62,7 +62,9 @@ def test_bug_elem_01_qeph_post_kernel_signature_and_execution():
     a11 = np.full(n, 2.1e11)
     a12 = np.full(n, 0.3 * 2.1e11)
     gs = np.zeros(n)
-    vg = np.zeros((n, 6))
+    # GBUF%HOURG (VGLAS) has 12 slots for QEPH: czfintn.F:43-44,62 and
+    # elbuf_ini.F:1622-1623 (JHBE=23 -> G_HOURG=12).
+    vg = np.zeros((n, 12))
 
     fg, mg, dt_e = qeph_post(
         thick, Nres, Mres, qres, st_amu, st_cspd, st_yld, st_fmat, vhg, dt, alive,

@@ -1398,9 +1398,11 @@ def test_embedded_polynomial_eos_integration():
     assert mat.eos.params["pmin"] == -200.0
 
     # Test eos.initial_state
+    # Starter stores the shifted constant term C0-PSH (hm_read_mat04.F:171,182
+    # and hm_read_eos_polynomial.F:120,152), so P0 = (C0 - PSH) + C4*E0.
     e0_init, p0_init = eos.initial_state(mat.eos)
     assert e0_init == 12.0
-    assert p0_init == pytest.approx(1.5 + 0.4 * 12.0)
+    assert p0_init == pytest.approx((1.5 - 3.0) + 0.4 * 12.0)
 
     # Test eos.update
     mu = np.array([0.02])
