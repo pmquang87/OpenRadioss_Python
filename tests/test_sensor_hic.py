@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 from pyradioss.common.messages import MessageLog
+from pyradioss.common.npcompat import trapezoid
 from pyradioss.engine.biomech_sensors import (
     HicParams,
     HicSensor,
@@ -79,7 +80,7 @@ def test_hic_half_sine_pulse():
     # 1. Full-pulse duration fixed window check
     t_full = t[pulse_mask]
     a_full = accel[pulse_mask]
-    avg_full = np.trapezoid(a_full, t_full) / (g * t0)
+    avg_full = trapezoid(a_full, t_full) / (g * t0)
     hic_full = t0 * (avg_full ** 2.5)
     expected_full = t0 * (((2.0 * 50.0) / np.pi) ** 2.5)
     assert pytest.approx(hic_full, rel=0.005) == expected_full
