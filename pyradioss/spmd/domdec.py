@@ -71,7 +71,8 @@ look-ups of ``pyradioss/contact/stiffness.py`` and ``tracking.py`` see
 exactly what the serial run sees.  Ghost elements produce no force.
 Known limitation: a ghost element's ``off`` flag is never updated during
 the run (the deletion of a non-local parent element is not seen by the
-contact that references it).
+contact that references it).  Refused under SPMD (-np > 1) via
+``check_spmd_support`` until ``SPMD_EXCH_IDEL`` (chkstfn3.F) is ported.
 """
 
 from __future__ import annotations
@@ -477,10 +478,45 @@ def check_spmd_support(model: Model, np: Optional[int] = None,
         return
     bad: List[str] = []
     for itf in getattr(model, "interfaces", []):
+        itype = int(getattr(itf, "type", 7))
         if getattr(itf, "lagmul", False):
-            bad.append(f"/INTER/LAGMUL/TYPE{itf.type}/{itf.id}")
-        elif int(getattr(itf, "type", 7)) in _UNSUPPORTED_INTER_TYPES:
-            bad.append(f"/INTER/TYPE{itf.type}/{itf.id}")
+            bad.append(f"/INTER/LAGMUL/TYPE{itype}/{itf.id}")
+        elif itype in _UNSUPPORTED_INTER_TYPES:
+            bad.append(f"/INTER/TYPE{itype}/{itf.id}")
+        elif itype in (7, 10, 11, 24):
+            idel = int(getattr(itf, "idel", 0) or 0)
+            idel10 = int(getattr(itf, "idel10", 0) or 0)
+            if idel >= 1 or idel10 >= 1:
+                flag = f"Idel10={idel10}" if (itype == 10 and idel10 >= 1) else f"Idel={idel or idel10}"
+                bad.append(
+                    f"/INTER/TYPE{itype}/{itf.id} with {flag} "
+                    f"(chkstfn3.F SPMD_EXCH_IDEL: ghost element deletion "
+                    f"exchange not yet implemented)"
+                )
+        elif itype == 2:
+            surf = getattr(model, "surfaces", {}).get(getattr(itf, "surf_id", 0))
+            seg_gtype = getattr(surf, "seg_gtype", None)
+            if seg_gtype is None:
+                seg_gtype = np.zeros(0, dtype="<U8")
+            grp = getattr(model, "node_groups", {}).get(getattr(itf, "grnod_id", 0))
+            sec_nodes = getattr(grp, "node_idx", None)
+            from ..contact import tracking
+            is_deletable = tracking.any_deletable(model, seg_gtype, sec_nodes=sec_nodes)
+            if not is_deletable and hasattr(model, "element_groups"):
+                for _, g in model.element_groups():
+                    st = getattr(g, "state", None)
+                    if isinstance(st, dict) and st.get("chk_fail", False):
+                        is_deletable = True
+                        break
+                    if getattr(g, "chk_fail", False):
+                        is_deletable = True
+                        break
+            if is_deletable:
+                bad.append(
+                    f"/INTER/TYPE2/{itf.id} with element deletion "
+                    f"(chkstfn3.F SPMD_EXCH_IDEL: ghost element 'off' "
+                    f"refresh not yet implemented)"
+                )
     if _nonempty(getattr(model, "guided_cables", None)):
         bad.append("/INTER/GUIDED_CABLE")
     for rb in getattr(model, "rbodies", []):
